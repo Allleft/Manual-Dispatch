@@ -1,11 +1,11 @@
 ﻿# Manual Dispatch Board
 
-Manual Dispatch Board is a manual office workflow for assigning Orders to Driver + Trip + Vehicle. This repository is currently in Phase 3: frontend-only in-memory manual assignment flow.
+Manual Dispatch Board is a manual office workflow for assigning Orders to Driver + Trip + Vehicle. This repository is currently in Phase 4: frontend-only in-memory vehicle selection.
 
 ## Current Phase
-- Phase: 3
-- Status: frontend-only in-memory assignment behavior
-- No backend API, database tables, runtime database connection, persistence, or optimization logic is implemented in this phase.
+- Phase: 4
+- Status: frontend-only in-memory Driver + Dispatch Date vehicle selection
+- No backend API, database tables, runtime database connection, persistence, localStorage, or optimization logic is implemented in this phase.
 
 ## Layout Decision
 The future Manual Dispatch Board layout must be top-bottom:
@@ -46,9 +46,11 @@ Phase 1 data model details are documented in `docs/manual-dispatch-board-data-mo
 Phase 1 schema design notes are documented in `docs/manual-dispatch-board-schema.md`.
 Phase 2 frontend skeleton details are documented in `docs/manual-dispatch-board-phase2.md`.
 Phase 3 frontend-only assignment behavior is documented in `docs/manual-dispatch-board-phase3.md`.
+Phase 4 frontend-only vehicle selection behavior is documented in `docs/manual-dispatch-board-phase4.md`.
 
 ## Validation
 Phase 0 uses document and Git validation only. Functional tests should not be run until test, frontend, or backend implementation files exist.
 Phase 1 also uses document and Git validation only because implementation files do not exist yet.
 Phase 2 uses frontend syntax validation and static file review only. Real assignment behavior belongs to Phase 3.
 Phase 3 uses frontend syntax validation plus manual browser checks. Assignment state is in memory only and is not persisted after refresh.
+Phase 4 uses frontend syntax validation plus manual browser checks. Vehicle selection state is in memory only and is not persisted after refresh.

@@ -239,9 +239,29 @@ button:disabled {
   gap: 0.4rem;
 }
 
+.vehicle-status,
+.vehicle-hint {
+  margin-bottom: 0;
+  border-radius: var(--radius-sm);
+  padding: 0.65rem 0.75rem;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.vehicle-status {
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  font-weight: 800;
+}
+
+.vehicle-hint {
+  color: #6b4b00;
+  background: var(--warning-soft);
+}
+
 .trip-columns {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 0.75rem;
 }
 

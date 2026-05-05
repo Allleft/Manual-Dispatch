@@ -1,4 +1,5 @@
 const state = {
+  dispatchDate: "2026-05-05",
   orders: [
     {
       order_id: "ORD-001",
@@ -30,6 +31,7 @@ const state = {
     { vehicle_id: "VEH-003", rego: "MCC001" },
   ],
   assignments: [],
+  driverVehicleAssignments: [],
 };
 
 let nextAssignmentNumber = 1;
@@ -66,6 +68,56 @@ function getUnassignedOrders() {
 
 function getOrderByTaskId(taskId) {
   return state.orders.find((order) => order.order_id === taskId);
+}
+
+function getVehicleById(vehicleId) {
+  return state.vehicles.find((vehicle) => vehicle.vehicle_id === vehicleId);
+}
+
+function getDriverVehicleAssignment(driverId) {
+  return state.driverVehicleAssignments.find(
+    (assignment) =>
+      assignment.dispatch_date === state.dispatchDate && assignment.driver_id === driverId,
+  );
+}
+
+function upsertDriverVehicleAssignment(driverId, vehicleId) {
+  const existingIndex = state.driverVehicleAssignments.findIndex(
+    (assignment) =>
+      assignment.dispatch_date === state.dispatchDate && assignment.driver_id === driverId,
+  );
+
+  if (!vehicleId) {
+    if (existingIndex >= 0) {
+      state.driverVehicleAssignments.splice(existingIndex, 1);
+    }
+    return;
+  }
+
+  const nextAssignment = {
+    dispatch_date: state.dispatchDate,
+    driver_id: driverId,
+    vehicle_id: vehicleId,
+  };
+
+  if (existingIndex >= 0) {
+    state.driverVehicleAssignments[existingIndex] = nextAssignment;
+  } else {
+    state.driverVehicleAssignments.push(nextAssignment);
+  }
+}
+
+function isVehicleSelectedByAnotherDriver(driverId, vehicleId) {
+  if (!vehicleId) {
+    return false;
+  }
+
+  return state.driverVehicleAssignments.some(
+    (assignment) =>
+      assignment.dispatch_date === state.dispatchDate &&
+      assignment.driver_id !== driverId &&
+      assignment.vehicle_id === vehicleId,
+  );
 }
 
 function createAssignmentId() {
@@ -185,18 +237,50 @@ function renderDriverSummary() {
     const name = document.createElement("h3");
     name.textContent = driver.name;
 
+    const vehicleAssignment = getDriverVehicleAssignment(driver.driver_id);
+    const selectedVehicle = vehicleAssignment
+      ? getVehicleById(vehicleAssignment.vehicle_id)
+      : null;
+
     const vehicleWrap = document.createElement("label");
     vehicleWrap.className = "vehicle-select";
     vehicleWrap.textContent = "Choose Vehicle";
 
     const vehicleSelect = document.createElement("select");
-    vehicleSelect.append(createOption("", "Select rego", true));
+    vehicleSelect.append(createOption("", "Select vehicle", !selectedVehicle));
     state.vehicles.forEach((vehicle) => {
-      vehicleSelect.append(createOption(vehicle.vehicle_id, vehicle.rego));
+      vehicleSelect.append(
+        createOption(
+          vehicle.vehicle_id,
+          vehicle.rego,
+          selectedVehicle ? selectedVehicle.vehicle_id === vehicle.vehicle_id : false,
+        ),
+      );
+    });
+
+    const vehicleStatus = document.createElement("p");
+    vehicleStatus.className = "vehicle-status";
+    vehicleStatus.textContent = selectedVehicle
+      ? `Selected Vehicle: ${selectedVehicle.rego}`
+      : "No vehicle selected";
+
+    const duplicateHint = document.createElement("p");
+    duplicateHint.className = "vehicle-hint";
+    duplicateHint.textContent =
+      selectedVehicle && isVehicleSelectedByAnotherDriver(driver.driver_id, selectedVehicle.vehicle_id)
+        ? "Vehicle also selected by another driver."
+        : "";
+
+    vehicleSelect.addEventListener("change", () => {
+      upsertDriverVehicleAssignment(driver.driver_id, vehicleSelect.value);
+      renderDriverSummary();
     });
 
     vehicleWrap.append(vehicleSelect);
-    header.append(name, vehicleWrap);
+    header.append(name, vehicleWrap, vehicleStatus);
+    if (duplicateHint.textContent) {
+      header.append(duplicateHint);
+    }
 
     const trips = document.createElement("div");
     trips.className = "trip-columns";
