@@ -93,6 +93,8 @@ Future task types may include:
 
 ## 9. GitHub Push Rules
 - After completing a task, commit and push to the current feature branch.
+- After every completed phase, commit and push the current feature branch to `https://github.com/Allleft/Manual-Dispatch.git` unless the user explicitly says not to push.
+- Use `origin` for `https://github.com/Allleft/Manual-Dispatch.git`; if `origin` is missing, add it before pushing.
 - Use clear commit messages.
 - Example commit messages:
   - `docs: add manual dispatch board governance`
