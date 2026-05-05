@@ -1,11 +1,11 @@
 ﻿# Manual Dispatch Board
 
-Manual Dispatch Board is a manual office workflow for assigning Orders to Driver + Trip + Vehicle. This repository is currently in Phase 2: static frontend page skeleton only.
+Manual Dispatch Board is a manual office workflow for assigning Orders to Driver + Trip + Vehicle. This repository is currently in Phase 3: frontend-only in-memory manual assignment flow.
 
 ## Current Phase
-- Phase: 2
-- Status: static frontend skeleton only
-- No backend API, database tables, runtime database connection, assignment logic, persistence, or optimization logic is implemented in this phase.
+- Phase: 3
+- Status: frontend-only in-memory assignment behavior
+- No backend API, database tables, runtime database connection, persistence, or optimization logic is implemented in this phase.
 
 ## Layout Decision
 The future Manual Dispatch Board layout must be top-bottom:
@@ -45,8 +45,10 @@ Phase 0 details are documented in `docs/manual-dispatch-board-phase0.md`.
 Phase 1 data model details are documented in `docs/manual-dispatch-board-data-model.md`.
 Phase 1 schema design notes are documented in `docs/manual-dispatch-board-schema.md`.
 Phase 2 frontend skeleton details are documented in `docs/manual-dispatch-board-phase2.md`.
+Phase 3 frontend-only assignment behavior is documented in `docs/manual-dispatch-board-phase3.md`.
 
 ## Validation
 Phase 0 uses document and Git validation only. Functional tests should not be run until test, frontend, or backend implementation files exist.
 Phase 1 also uses document and Git validation only because implementation files do not exist yet.
 Phase 2 uses frontend syntax validation and static file review only. Real assignment behavior belongs to Phase 3.
+Phase 3 uses frontend syntax validation plus manual browser checks. Assignment state is in memory only and is not persisted after refresh.

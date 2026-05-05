@@ -205,6 +205,7 @@ button {
   border-radius: var(--radius-sm);
   color: #fff;
   background: var(--accent);
+  cursor: pointer;
   font-weight: 800;
 }
 
@@ -212,6 +213,15 @@ button:disabled {
   cursor: not-allowed;
   color: rgba(255, 255, 255, 0.72);
   background: #8ca197;
+}
+
+.button-secondary {
+  min-height: 38px;
+  border: 1px solid rgba(39, 93, 69, 0.18);
+  padding: 0 0.75rem;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  font-size: 0.82rem;
 }
 
 .driver-card {
@@ -255,6 +265,44 @@ button:disabled {
   line-height: 1.5;
 }
 
+.empty-board {
+  grid-column: 1 / -1;
+  margin-bottom: 0;
+  border: 1px dashed rgba(39, 93, 69, 0.28);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  color: var(--muted);
+  background: #f8fbf6;
+}
+
+.assigned-task-list {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.assigned-task {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid rgba(39, 93, 69, 0.14);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem;
+  background: var(--panel);
+}
+
+.assigned-suburb {
+  margin-bottom: 0.15rem;
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.assigned-pallet {
+  margin-bottom: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
 @media (max-width: 900px) {
   .page-hero,
   .section-heading {
@@ -282,6 +330,10 @@ button:disabled {
   }
 
   .trip-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .assigned-task {
     grid-template-columns: 1fr;
   }
 }

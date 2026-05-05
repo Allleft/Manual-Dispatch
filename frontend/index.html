@@ -12,10 +12,10 @@
         <p class="eyebrow">Manual office workflow</p>
         <h1>Manual Dispatch Board</h1>
         <p class="hero-copy">
-          Static Phase 2 skeleton for assigning Orders to Driver, Trip, and Vehicle later.
+          Phase 3 frontend-only flow for manually assigning Orders in memory.
         </p>
       </div>
-      <div class="phase-badge" aria-label="Current phase">Phase 2 skeleton</div>
+      <div class="phase-badge" aria-label="Current phase">Phase 3 in-memory</div>
     </header>
 
     <main class="board-shell" aria-label="Manual Dispatch Board">
@@ -25,7 +25,7 @@
             <p class="section-kicker">Top section</p>
             <h2 id="task-pool-title">Task Pool</h2>
           </div>
-          <p class="section-note">Unassigned Orders. Assign is intentionally disabled in Phase 2.</p>
+          <p class="section-note">Unassigned Orders. Choose a driver and trip, then assign manually.</p>
         </div>
         <div id="task-pool-list" class="task-grid" aria-live="polite"></div>
       </section>
@@ -36,7 +36,7 @@
             <p class="section-kicker">Bottom section</p>
             <h2 id="driver-summary-title">Driver Summary</h2>
           </div>
-          <p class="section-note">Static driver cards with vehicle and trip placeholders.</p>
+          <p class="section-note">Driver cards show in-memory assignments by trip. Refresh clears changes.</p>
         </div>
         <div id="driver-summary-list" class="driver-grid" aria-live="polite"></div>
       </section>
