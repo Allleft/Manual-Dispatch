@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Manual Dispatch Board</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="page-hero">
+      <div>
+        <p class="eyebrow">Manual office workflow</p>
+        <h1>Manual Dispatch Board</h1>
+        <p class="hero-copy">
+          Static Phase 2 skeleton for assigning Orders to Driver, Trip, and Vehicle later.
+        </p>
+      </div>
+      <div class="phase-badge" aria-label="Current phase">Phase 2 skeleton</div>
+    </header>
+
+    <main class="board-shell" aria-label="Manual Dispatch Board">
+      <section class="board-section task-pool" aria-labelledby="task-pool-title">
+        <div class="section-heading">
+          <div>
+            <p class="section-kicker">Top section</p>
+            <h2 id="task-pool-title">Task Pool</h2>
+          </div>
+          <p class="section-note">Unassigned Orders. Assign is intentionally disabled in Phase 2.</p>
+        </div>
+        <div id="task-pool-list" class="task-grid" aria-live="polite"></div>
+      </section>
+
+      <section class="board-section driver-summary" aria-labelledby="driver-summary-title">
+        <div class="section-heading">
+          <div>
+            <p class="section-kicker">Bottom section</p>
+            <h2 id="driver-summary-title">Driver Summary</h2>
+          </div>
+          <p class="section-note">Static driver cards with vehicle and trip placeholders.</p>
+        </div>
+        <div id="driver-summary-list" class="driver-grid" aria-live="polite"></div>
+      </section>
+    </main>
+
+    <script src="app.js" defer></script>
+  </body>
+</html>
