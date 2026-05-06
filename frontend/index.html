@@ -12,10 +12,10 @@
         <p class="eyebrow">Manual office workflow</p>
         <h1>Manual Dispatch Board</h1>
         <p class="hero-copy">
-          Phase 8 backend-connected flow with SQLite persistence and non-blocking business hints.
+          Phase 9 backend-connected flow with SQLite persistence, non-blocking hints, and Excel export.
         </p>
       </div>
-      <div class="phase-badge" aria-label="Current phase">Phase 8 backend connected</div>
+      <div class="phase-badge" aria-label="Current phase">Phase 9 Excel export</div>
     </header>
 
     <main class="board-shell" aria-label="Manual Dispatch Board">
@@ -28,6 +28,7 @@
           <label for="dispatch-date">Dispatch date</label>
           <input id="dispatch-date" type="date" value="2026-05-05">
           <button id="load-board-button" type="button">Load Board</button>
+          <button id="export-excel-button" class="button-export" type="button">Export Excel</button>
           <button id="retry-board-button" class="button-secondary" type="button">Retry</button>
         </div>
         <p id="board-status" class="board-status" aria-live="polite">Loading board data...</p>

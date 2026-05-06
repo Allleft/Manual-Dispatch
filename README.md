@@ -1,17 +1,22 @@
 ﻿# Manual Dispatch Board
 
-Manual Dispatch Board is a manual office workflow for assigning Orders to Driver + Trip + Vehicle. This repository is currently in Phase 8: Frontend-Backend Integration.
+Manual Dispatch Board is a manual office workflow for assigning Orders to Driver + Trip + Vehicle. This repository is currently in Phase 9: Excel Export.
 
 ## Current Phase
-- Phase: 8
-- Status: frontend connected to backend API with SQLite persistence
+- Phase: 9
+- Status: backend Excel export for assigned Orders
 - Frontend now loads board data from the backend API.
 - Assign, Unassign, and Choose Vehicle actions now call the backend API.
 - SQLite persistence means refresh can preserve assignments and Driver + Dispatch Date vehicle selections.
 - Business hints remain non-blocking.
+- Export Excel button is available near the Dispatch Date controls.
+- Excel export uses backend SQLite assignment data.
+- Excel export includes only assigned Orders.
+- Empty Drivers and empty Trips are not exported.
+- Location column is not included in the export.
+- No separate Review Summary UI was added.
 - Backend now has SQLite persistence support for demo/master data, manual task assignments, and Driver + Dispatch Date vehicle assignments.
 - Runtime SQLite database files are local and ignored by Git.
-- Review/export is not implemented yet.
 - No automatic assignment, blocking rules, localStorage, or optimization logic is implemented in this phase.
 
 ## Layout Decision
@@ -58,6 +63,7 @@ Phase 5 backend API skeleton details are documented in `docs/manual-dispatch-boa
 Phase 6 SQLite persistence details are documented in `docs/manual-dispatch-board-phase6.md`.
 Phase 7 frontend business hints are documented in `docs/manual-dispatch-board-phase7.md`.
 Phase 8 frontend-backend integration is documented in `docs/manual-dispatch-board-phase8.md`.
+Phase 9 Excel export is documented in `docs/manual-dispatch-board-phase9.md`.
 
 ## Validation
 Phase 0 uses document and Git validation only. Functional tests should not be run until test, frontend, or backend implementation files exist.
@@ -69,3 +75,4 @@ Phase 5 uses Python compile checks, backend service unit tests, frontend syntax 
 Phase 6 uses Python compile checks, backend repository/service unit tests, frontend syntax validation, and static file review. SQLite runtime database files must not be committed.
 Phase 7 uses frontend syntax validation, backend regression tests, static file review, and manual browser checks for non-blocking hints.
 Phase 8 uses frontend syntax validation, backend regression tests, static safety checks, and browser/manual checks when tooling is available.
+Phase 9 uses backend Excel export unit tests, backend regression tests, frontend syntax validation, static safety checks, and browser/manual checks when tooling is available.

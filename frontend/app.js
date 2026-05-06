@@ -99,6 +99,18 @@ async function apiAssignDriverVehicle(payload) {
   });
 }
 
+function getExcelExportUrl(dispatchDate) {
+  return getApiUrl("/api/manual-dispatch/export-excel", {
+    dispatch_date: dispatchDate,
+  });
+}
+
+function getExportFilename(response, dispatchDate) {
+  const disposition = response.headers.get("Content-Disposition") || "";
+  const match = disposition.match(/filename="?([^"]+)"?/i);
+  return match ? match[1] : `manual-dispatch-${dispatchDate}.xlsx`;
+}
+
 async function loadBoard(dispatchDate = state.dispatchDate) {
   state.dispatchDate = dispatchDate || DEFAULT_DISPATCH_DATE;
   state.isLoading = true;
@@ -123,6 +135,45 @@ function showError(message) {
 
 function clearError() {
   state.errorMessage = "";
+}
+
+async function handleExportExcel() {
+  if (state.isLoading || state.isSaving) {
+    return;
+  }
+
+  state.isSaving = true;
+  clearError();
+  renderBoard();
+
+  try {
+    const response = await fetch(getExcelExportUrl(state.dispatchDate));
+    if (!response.ok) {
+      let message = `Export failed with status ${response.status}`;
+      try {
+        const payload = await response.json();
+        message = payload.detail || message;
+      } catch (error) {
+        message = response.statusText || message;
+      }
+      throw new Error(message);
+    }
+
+    const blob = await response.blob();
+    const downloadUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = downloadUrl;
+    link.download = getExportFilename(response, state.dispatchDate);
+    document.body.append(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(downloadUrl);
+  } catch (error) {
+    showError(`Unable to export Excel. ${error.message}`);
+  } finally {
+    state.isSaving = false;
+    renderBoard();
+  }
 }
 
 function getDisplayPalletQuantity(order) {
@@ -354,7 +405,7 @@ async function handleVehicleChange(driverId, vehicleId) {
   }
 
   if (!vehicleId) {
-    showError("Select a vehicle rego to update this Driver. Clearing vehicle selection is not part of Phase 8.");
+    showError("Select a vehicle rego to update this Driver. Clearing vehicle selection is not part of the current MVP.");
     renderBoard();
     return;
   }
@@ -380,18 +431,21 @@ async function handleVehicleChange(driverId, vehicleId) {
 function renderBoardControls() {
   const dateInput = document.querySelector("#dispatch-date");
   const loadButton = document.querySelector("#load-board-button");
+  const exportButton = document.querySelector("#export-excel-button");
   const retryButton = document.querySelector("#retry-board-button");
   const status = document.querySelector("#board-status");
   const error = document.querySelector("#board-error");
 
-  if (!dateInput || !loadButton || !retryButton || !status || !error) {
+  if (!dateInput || !loadButton || !exportButton || !retryButton || !status || !error) {
     return;
   }
 
   dateInput.value = state.dispatchDate;
   dateInput.disabled = state.isLoading || state.isSaving;
   loadButton.disabled = state.isLoading || state.isSaving;
+  exportButton.disabled = state.isLoading || state.isSaving;
   retryButton.disabled = state.isLoading || state.isSaving;
+  exportButton.textContent = state.isSaving ? "Preparing..." : "Export Excel";
 
   status.textContent = state.isLoading
     ? "Loading board data..."
@@ -404,6 +458,9 @@ function renderBoardControls() {
 
   loadButton.onclick = () => {
     loadBoard(dateInput.value || DEFAULT_DISPATCH_DATE);
+  };
+  exportButton.onclick = () => {
+    handleExportExcel();
   };
   retryButton.onclick = () => {
     loadBoard(state.dispatchDate);

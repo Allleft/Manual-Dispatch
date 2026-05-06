@@ -132,7 +132,7 @@ h1 {
 
 .dispatch-date-controls {
   display: grid;
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: 1fr auto auto auto;
   gap: 0.55rem;
   align-items: end;
 }
@@ -353,6 +353,12 @@ select:disabled {
   color: var(--accent-strong);
   background: var(--accent-soft);
   font-size: 0.82rem;
+}
+
+.button-export {
+  border: 1px solid rgba(39, 93, 69, 0.28);
+  color: var(--accent-strong);
+  background: var(--warning-soft);
 }
 
 .driver-card {

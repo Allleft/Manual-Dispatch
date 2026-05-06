@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import Response
 
 from backend.schemas import (
     AssignDriverVehicleRequest,
@@ -9,6 +10,7 @@ from backend.schemas import (
 from backend.repositories.sqlite_manual_dispatch_repository import (
     SQLiteManualDispatchRepository,
 )
+from backend.services.excel_export_service import build_manual_dispatch_excel
 from backend.services.manual_dispatch_service import ManualDispatchService
 
 router = APIRouter(prefix="/api/manual-dispatch", tags=["manual-dispatch"])
@@ -18,6 +20,20 @@ service = ManualDispatchService(SQLiteManualDispatchRepository())
 @router.get("/board")
 def get_board(dispatch_date: str):
     return to_dict(service.get_board(dispatch_date))
+
+
+@router.get("/export-excel")
+def export_excel(dispatch_date: str):
+    workbook_bytes = build_manual_dispatch_excel(
+        service.get_board(dispatch_date),
+        dispatch_date,
+    )
+    filename = f"manual-dispatch-{dispatch_date}.xlsx"
+    return Response(
+        content=workbook_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post("/assign")
