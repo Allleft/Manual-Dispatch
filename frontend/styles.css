@@ -201,7 +201,9 @@ h1 {
 }
 
 .task-grid {
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(360px, 360px));
+  align-items: start;
+  justify-content: start;
 }
 
 .driver-grid {
@@ -218,6 +220,8 @@ h1 {
 .order-card {
   display: grid;
   gap: 0.7rem;
+  width: 100%;
+  max-width: 360px;
   padding: 0.8rem;
   cursor: pointer;
   transition:
@@ -654,9 +658,18 @@ select:disabled {
     text-align: left;
   }
 
-  .task-grid,
   .driver-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .task-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .task-grid .order-card {
+    max-width: none;
   }
 
   .order-card-compact {
