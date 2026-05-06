@@ -1,13 +1,17 @@
 ﻿# Manual Dispatch Board
 
-Manual Dispatch Board is a manual office workflow for assigning Orders to Driver + Trip + Vehicle. This repository is currently in Phase 10A-0: Order Card UI Refinement.
+Manual Dispatch Board is a manual office workflow for assigning Orders to Driver + Trip + Vehicle. This repository is currently in Phase 10A-1: Add Order.
 
 ## Current Phase
-- Phase: 10A-0
-- Status: compact Order cards, Trip Summary refinement, and non-blocking exceptions
+- Phase: 10A-1
+- Status: minimal Add Order workflow with SQLite persistence
 - Frontend now loads board data from the backend API.
 - Assign, Unassign, and Choose Vehicle actions now call the backend API.
 - SQLite persistence means refresh can preserve assignments and Driver + Dispatch Date vehicle selections.
+- Add Order popup card is available.
+- New Orders are saved to SQLite.
+- New Orders appear in Task Pool after the board reloads.
+- Newly added Orders are not exported until assigned.
 - Business hints remain non-blocking.
 - Order cards are now compact and show Invoice #, Company, Suburb, urgency, note preview, and start time.
 - Clicking an Order card opens a read-only full detail popup.
@@ -22,7 +26,8 @@ Manual Dispatch Board is a manual office workflow for assigning Orders to Driver
 - Empty Drivers and empty Trips are not exported.
 - Location column is not included in the export.
 - No separate Review Summary UI was added.
-- Full Add/Edit/Delete Order is not implemented yet.
+- Full Edit/Delete Order is not implemented yet.
+- Driver and Vehicle management are not implemented yet.
 - Backend now has SQLite persistence support for demo/master data, manual task assignments, and Driver + Dispatch Date vehicle assignments.
 - Runtime SQLite database files are local and ignored by Git.
 - No automatic assignment, blocking rules, localStorage, or optimization logic is implemented in this phase.
@@ -73,6 +78,7 @@ Phase 7 frontend business hints are documented in `docs/manual-dispatch-board-ph
 Phase 8 frontend-backend integration is documented in `docs/manual-dispatch-board-phase8.md`.
 Phase 9 Excel export is documented in `docs/manual-dispatch-board-phase9.md`.
 Phase 10A-0 Order card UI refinement is documented in `docs/manual-dispatch-board-phase10a0-ui-refinement.md`.
+Phase 10A-1 Add Order is documented in `docs/manual-dispatch-board-phase10a1-add-order.md`.
 
 ## Validation
 Phase 0 uses document and Git validation only. Functional tests should not be run until test, frontend, or backend implementation files exist.
@@ -86,3 +92,4 @@ Phase 7 uses frontend syntax validation, backend regression tests, static file r
 Phase 8 uses frontend syntax validation, backend regression tests, static safety checks, and browser/manual checks when tooling is available.
 Phase 9 uses backend Excel export unit tests, backend regression tests, frontend syntax validation, static safety checks, and browser/manual checks when tooling is available.
 Phase 10A-0 uses backend schema/migration tests, frontend syntax validation, static safety checks, and browser/manual checks when tooling is available.
+Phase 10A-1 uses backend create-order tests, backend regression tests, frontend syntax validation, static safety checks, and browser/manual checks when tooling is available.

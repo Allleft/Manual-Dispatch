@@ -12,10 +12,10 @@
         <p class="eyebrow">Manual office workflow</p>
         <h1>Manual Dispatch Board</h1>
         <p class="hero-copy">
-          Phase 10A-0 compact Order cards, Trip Summary, read-only details, and non-blocking exceptions.
+          Phase 10A-1 adds a minimal Add Order popup while keeping dispatch decisions manual.
         </p>
       </div>
-      <div class="phase-badge" aria-label="Current phase">Phase 10A-0 UI refinement</div>
+      <div class="phase-badge" aria-label="Current phase">Phase 10A-1 Add Order</div>
     </header>
 
     <main class="board-shell" aria-label="Manual Dispatch Board">
@@ -41,7 +41,10 @@
             <p class="section-kicker">Top section</p>
             <h2 id="task-pool-title">Task Pool</h2>
           </div>
-          <p class="section-note">Backend Orders with compact hints. Choose a driver and trip manually.</p>
+          <div class="section-actions">
+            <p class="section-note">Backend Orders with compact hints. Choose a driver and trip manually.</p>
+            <button id="add-order-button" type="button">Add Order</button>
+          </div>
         </div>
         <div id="task-pool-list" class="task-grid" aria-live="polite"></div>
       </section>
@@ -59,6 +62,7 @@
     </main>
 
     <div id="order-detail-root"></div>
+    <div id="add-order-root"></div>
     <script src="app.js" defer></script>
   </body>
 </html>

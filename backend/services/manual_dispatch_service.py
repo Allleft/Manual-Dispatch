@@ -1,7 +1,7 @@
 from backend.repositories.in_memory_manual_dispatch_repository import (
     InMemoryManualDispatchRepository,
 )
-from backend.schemas import ManualDispatchBoardResponse
+from backend.schemas import ManualDispatchBoardResponse, Order
 
 
 SUPPORTED_TASK_TYPES = {"ORDER"}
@@ -57,6 +57,41 @@ class ManualDispatchService:
             vehicle_id=request.vehicle_id,
         )
 
+    def create_order(self, request):
+        suburb = self._clean_required_text(request.suburb, "suburb")
+        delivery_date = self._clean_required_text(
+            request.delivery_date,
+            "delivery_date",
+        )
+        pallet_quantity = self._quantity_or_default(
+            request.pallet_quantity,
+            "pallet_quantity",
+        )
+        loose_bags_quantity = self._quantity_or_default(
+            request.loose_bags_quantity,
+            "loose_bags_quantity",
+        )
+
+        order = Order(
+            order_id=self._generate_order_id(delivery_date),
+            invoice_number=self._clean_optional_text(request.invoice_number),
+            company_name=self._clean_optional_text(request.company_name) or "",
+            phone=self._clean_optional_text(request.phone),
+            delivery_address=self._clean_optional_text(request.delivery_address) or "",
+            suburb=suburb,
+            postcode=self._clean_optional_text(request.postcode) or "",
+            delivery_date=delivery_date,
+            zone=self._clean_optional_text(request.zone) or "",
+            urgency=self._clean_optional_text(request.urgency) or "Normal",
+            preferred_driver_id=self._clean_optional_text(request.preferred_driver_id),
+            pallet_quantity=pallet_quantity,
+            loose_bags_quantity=loose_bags_quantity,
+            start_time=self._clean_optional_text(request.start_time),
+            end_time=self._clean_optional_text(request.end_time),
+            note=self._clean_optional_text(request.note),
+        )
+        return self.repository.create_order(order)
+
     def _validate_task_type(self, task_type):
         if task_type not in SUPPORTED_TASK_TYPES:
             raise ValueError(f"Unsupported task_type: {task_type}")
@@ -76,3 +111,47 @@ class ManualDispatchService:
     def _validate_trip_no(self, trip_no):
         if trip_no not in SUPPORTED_TRIPS:
             raise ValueError(f"Invalid trip_no: {trip_no}")
+
+    def _clean_required_text(self, value, field_name):
+        text = self._clean_optional_text(value)
+        if not text:
+            raise ValueError(f"{field_name} is required")
+        return text
+
+    def _clean_optional_text(self, value):
+        if value is None:
+            return None
+        text = str(value).strip()
+        return text or None
+
+    def _quantity_or_default(self, value, field_name):
+        if value in (None, ""):
+            return 0
+        try:
+            quantity = int(value)
+        except (TypeError, ValueError) as error:
+            raise ValueError(f"{field_name} must be a whole number") from error
+        if quantity < 0:
+            raise ValueError(f"{field_name} cannot be negative")
+        return quantity
+
+    def _generate_order_id(self, delivery_date):
+        date_token = "".join(character for character in delivery_date if character.isdigit())
+        if not date_token:
+            raise ValueError("delivery_date must include a date value")
+
+        prefix = f"ORD-{date_token}-"
+        highest_number = 0
+        for order in self.repository.list_orders():
+            if not order.order_id.startswith(prefix):
+                continue
+            suffix = order.order_id.replace(prefix, "", 1)
+            if suffix.isdigit():
+                highest_number = max(highest_number, int(suffix))
+
+        next_number = highest_number + 1
+        order_id = f"{prefix}{next_number:03d}"
+        while self.repository.get_order(order_id):
+            next_number += 1
+            order_id = f"{prefix}{next_number:03d}"
+        return order_id

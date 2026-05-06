@@ -93,6 +93,51 @@ class SQLiteManualDispatchRepository:
             return self.get_order(task_id)
         return None
 
+    def create_order(self, order):
+        with connect(self.db_path) as connection:
+            connection.execute(
+                """
+                INSERT INTO manual_orders (
+                    order_id,
+                    invoice_number,
+                    company_name,
+                    phone,
+                    delivery_address,
+                    suburb,
+                    postcode,
+                    delivery_date,
+                    zone,
+                    urgency,
+                    preferred_driver_id,
+                    pallet_quantity,
+                    loose_bags_quantity,
+                    start_time,
+                    end_time,
+                    note
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    order.order_id,
+                    order.invoice_number,
+                    order.company_name,
+                    order.phone,
+                    order.delivery_address,
+                    order.suburb,
+                    order.postcode,
+                    order.delivery_date,
+                    order.zone,
+                    order.urgency,
+                    order.preferred_driver_id,
+                    order.pallet_quantity,
+                    order.loose_bags_quantity,
+                    order.start_time,
+                    order.end_time,
+                    order.note,
+                ),
+            )
+            connection.commit()
+        return self.get_order(order.order_id)
+
     def upsert_assignment(self, dispatch_date, task_type, task_id, driver_id, trip_no):
         timestamp = self._timestamp()
 

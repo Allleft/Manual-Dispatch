@@ -4,6 +4,7 @@ from fastapi.responses import Response
 from backend.schemas import (
     AssignDriverVehicleRequest,
     AssignTaskRequest,
+    CreateOrderRequest,
     UnassignTaskRequest,
     to_dict,
 )
@@ -56,6 +57,14 @@ def unassign_task(request: UnassignTaskRequest):
 def assign_driver_vehicle(request: AssignDriverVehicleRequest):
     try:
         return to_dict(service.assign_vehicle_to_driver(request))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.post("/orders")
+def create_order(request: CreateOrderRequest):
+    try:
+        return to_dict(service.create_order(request))
     except ValueError as error:
         raise _to_http_exception(error) from error
 

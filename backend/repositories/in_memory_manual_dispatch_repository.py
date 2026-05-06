@@ -178,6 +178,12 @@ class InMemoryManualDispatchRepository:
             return self.get_order(task_id)
         return None
 
+    def create_order(self, order):
+        if self.get_order(order.order_id):
+            raise ValueError(f"Order already exists: {order.order_id}")
+        self.orders.append(order)
+        return order
+
     def upsert_assignment(self, dispatch_date, task_type, task_id, driver_id, trip_no):
         existing = self.get_assignment(dispatch_date, task_type, task_id)
         if existing:

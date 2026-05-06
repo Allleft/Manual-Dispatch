@@ -15,6 +15,9 @@ const state = {
   driverVehicleAssignments: [],
   pendingSelections: {},
   activeOrderDetailId: "",
+  isAddOrderOpen: false,
+  addOrderError: "",
+  addOrderForm: {},
 };
 
 function getApiUrl(path, query = {}) {
@@ -102,6 +105,13 @@ async function apiAssignDriverVehicle(payload) {
   });
 }
 
+async function apiCreateOrder(payload) {
+  return requestJson("/api/manual-dispatch/orders", {
+    method: "POST",
+    body: payload,
+  });
+}
+
 function getExcelExportUrl(dispatchDate) {
   return getApiUrl("/api/manual-dispatch/export-excel", {
     dispatch_date: dispatchDate,
@@ -140,6 +150,55 @@ function clearError() {
   state.errorMessage = "";
 }
 
+function getDefaultAddOrderForm() {
+  return {
+    invoice_number: "",
+    company_name: "",
+    phone: "",
+    delivery_address: "",
+    suburb: "",
+    postcode: "",
+    delivery_date: state.dispatchDate || DEFAULT_DISPATCH_DATE,
+    zone: "",
+    urgency: "Normal",
+    preferred_driver_id: "",
+    pallet_quantity: "0",
+    loose_bags_quantity: "0",
+    start_time: "",
+    end_time: "",
+    note: "",
+  };
+}
+
+function openAddOrder() {
+  state.isAddOrderOpen = true;
+  state.addOrderError = "";
+  state.addOrderForm = getDefaultAddOrderForm();
+  renderAddOrderPopup();
+}
+
+function closeAddOrder() {
+  state.isAddOrderOpen = false;
+  state.addOrderError = "";
+  state.addOrderForm = {};
+  renderAddOrderPopup();
+}
+
+function updateAddOrderForm(field, value) {
+  state.addOrderForm = {
+    ...state.addOrderForm,
+    [field]: value,
+  };
+}
+
+function getAddOrderPayload() {
+  return {
+    ...state.addOrderForm,
+    pallet_quantity: Number(state.addOrderForm.pallet_quantity || 0),
+    loose_bags_quantity: Number(state.addOrderForm.loose_bags_quantity || 0),
+  };
+}
+
 async function handleExportExcel() {
   if (state.isLoading || state.isSaving) {
     return;
@@ -176,6 +235,26 @@ async function handleExportExcel() {
   } finally {
     state.isSaving = false;
     renderBoard();
+  }
+}
+
+async function handleCreateOrder() {
+  if (state.isSaving) {
+    return;
+  }
+
+  state.isSaving = true;
+  state.addOrderError = "";
+  renderAddOrderPopup();
+
+  try {
+    await apiCreateOrder(getAddOrderPayload());
+    closeAddOrder();
+    await loadBoard(state.dispatchDate);
+  } catch (error) {
+    state.isSaving = false;
+    state.addOrderError = `Unable to save Order. ${error.message}`;
+    renderAddOrderPopup();
   }
 }
 
@@ -496,10 +575,19 @@ function renderBoardControls() {
   const loadButton = document.querySelector("#load-board-button");
   const exportButton = document.querySelector("#export-excel-button");
   const retryButton = document.querySelector("#retry-board-button");
+  const addOrderButton = document.querySelector("#add-order-button");
   const status = document.querySelector("#board-status");
   const error = document.querySelector("#board-error");
 
-  if (!dateInput || !loadButton || !exportButton || !retryButton || !status || !error) {
+  if (
+    !dateInput ||
+    !loadButton ||
+    !exportButton ||
+    !retryButton ||
+    !addOrderButton ||
+    !status ||
+    !error
+  ) {
     return;
   }
 
@@ -508,6 +596,7 @@ function renderBoardControls() {
   loadButton.disabled = state.isLoading || state.isSaving;
   exportButton.disabled = state.isLoading || state.isSaving;
   retryButton.disabled = state.isLoading || state.isSaving;
+  addOrderButton.disabled = state.isLoading || state.isSaving;
   exportButton.textContent = state.isSaving ? "Preparing..." : "Export Excel";
 
   status.textContent = state.isLoading
@@ -527,6 +616,9 @@ function renderBoardControls() {
   };
   retryButton.onclick = () => {
     loadBoard(state.dispatchDate);
+  };
+  addOrderButton.onclick = () => {
+    openAddOrder();
   };
 }
 
@@ -865,6 +957,175 @@ function createAssignedTask(assignment, order) {
   return row;
 }
 
+function createAddOrderField(label, field, options = {}) {
+  const wrapper = document.createElement("label");
+  wrapper.className = options.wide ? "form-field form-field-wide" : "form-field";
+  wrapper.textContent = label;
+
+  const input = document.createElement(options.multiline ? "textarea" : "input");
+  input.name = field;
+  input.value = state.addOrderForm[field] ?? "";
+  input.disabled = state.isSaving;
+  if (!options.multiline) {
+    input.type = options.type || "text";
+  }
+  if (options.required) {
+    input.required = true;
+  }
+  if (options.min !== undefined) {
+    input.min = options.min;
+  }
+  input.addEventListener("input", () => {
+    updateAddOrderForm(field, input.value);
+  });
+
+  wrapper.append(input);
+  return wrapper;
+}
+
+function createAddOrderSelect(label, field, options) {
+  const wrapper = document.createElement("label");
+  wrapper.className = "form-field";
+  wrapper.textContent = label;
+
+  const select = document.createElement("select");
+  select.name = field;
+  select.disabled = state.isSaving;
+  options.forEach((option) => {
+    select.append(createOption(option.value, option.label, state.addOrderForm[field] === option.value));
+  });
+  select.addEventListener("change", () => {
+    updateAddOrderForm(field, select.value);
+  });
+
+  wrapper.append(select);
+  return wrapper;
+}
+
+function renderAddOrderPopup() {
+  const root = document.querySelector("#add-order-root");
+  if (!root) {
+    return;
+  }
+
+  root.innerHTML = "";
+  if (!state.isAddOrderOpen) {
+    return;
+  }
+
+  const backdrop = document.createElement("div");
+  backdrop.className = "detail-backdrop";
+  backdrop.addEventListener("click", () => {
+    if (!state.isSaving) {
+      closeAddOrder();
+    }
+  });
+
+  const modal = document.createElement("article");
+  modal.className = "order-detail-modal";
+  modal.setAttribute("role", "dialog");
+  modal.setAttribute("aria-modal", "true");
+  modal.setAttribute("aria-labelledby", "add-order-title");
+  modal.addEventListener("click", (event) => event.stopPropagation());
+
+  const header = document.createElement("div");
+  header.className = "detail-header";
+
+  const titleWrap = document.createElement("div");
+  const kicker = document.createElement("p");
+  kicker.className = "section-kicker";
+  kicker.textContent = "Manual entry";
+
+  const title = document.createElement("h2");
+  title.id = "add-order-title";
+  title.textContent = "Add New Order";
+
+  titleWrap.append(kicker, title);
+
+  const closeButton = document.createElement("button");
+  closeButton.type = "button";
+  closeButton.className = "button-secondary detail-close";
+  closeButton.textContent = "Cancel";
+  closeButton.disabled = state.isSaving;
+  closeButton.addEventListener("click", closeAddOrder);
+
+  header.append(titleWrap, closeButton);
+
+  const form = document.createElement("form");
+  form.className = "order-form";
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    handleCreateOrder();
+  });
+
+  const formGrid = document.createElement("div");
+  formGrid.className = "form-grid";
+
+  const preferredDriverOptions = [
+    { value: "", label: "No preferred driver" },
+    ...state.drivers.map((driver) => ({
+      value: driver.driver_id,
+      label: driver.name,
+    })),
+  ];
+
+  formGrid.append(
+    createAddOrderField("Invoice #", "invoice_number"),
+    createAddOrderField("Company Name", "company_name"),
+    createAddOrderField("Phone", "phone", { type: "tel" }),
+    createAddOrderField("Delivery Address", "delivery_address"),
+    createAddOrderField("Suburb", "suburb", { required: true }),
+    createAddOrderField("Postcode", "postcode"),
+    createAddOrderField("Delivery Date", "delivery_date", {
+      type: "date",
+      required: true,
+    }),
+    createAddOrderField("Zone", "zone"),
+    createAddOrderSelect("Urgency", "urgency", [
+      { value: "Normal", label: "Normal" },
+      { value: "Urgent", label: "Urgent" },
+    ]),
+    createAddOrderSelect("Preferred Driver", "preferred_driver_id", preferredDriverOptions),
+    createAddOrderField("Pallet Quantity", "pallet_quantity", {
+      type: "number",
+      min: "0",
+    }),
+    createAddOrderField("Loose Bags Quantity", "loose_bags_quantity", {
+      type: "number",
+      min: "0",
+    }),
+    createAddOrderField("Start Time", "start_time", { type: "time" }),
+    createAddOrderField("End Time", "end_time", { type: "time" }),
+    createAddOrderField("Note", "note", { multiline: true, wide: true }),
+  );
+
+  const error = document.createElement("p");
+  error.className = "board-error";
+  error.hidden = !state.addOrderError;
+  error.textContent = state.addOrderError;
+
+  const actions = document.createElement("div");
+  actions.className = "form-actions";
+
+  const cancelButton = document.createElement("button");
+  cancelButton.type = "button";
+  cancelButton.className = "button-secondary";
+  cancelButton.textContent = "Cancel";
+  cancelButton.disabled = state.isSaving;
+  cancelButton.addEventListener("click", closeAddOrder);
+
+  const saveButton = document.createElement("button");
+  saveButton.type = "submit";
+  saveButton.textContent = state.isSaving ? "Saving..." : "Save Order";
+  saveButton.disabled = state.isSaving;
+
+  actions.append(cancelButton, saveButton);
+  form.append(formGrid, error, actions);
+  modal.append(header, form);
+  backdrop.append(modal);
+  root.append(backdrop);
+}
+
 function renderOrderDetailPopup() {
   let root = document.querySelector("#order-detail-root");
   if (!root) {
@@ -948,6 +1209,7 @@ function renderBoard() {
   renderTaskPool();
   renderDriverSummary();
   renderOrderDetailPopup();
+  renderAddOrderPopup();
 }
 
 renderBoard();
