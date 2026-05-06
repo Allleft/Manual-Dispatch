@@ -1,16 +1,18 @@
 ﻿# Manual Dispatch Board
 
-Manual Dispatch Board is a manual office workflow for assigning Orders to Driver + Trip + Vehicle. This repository is currently in Phase 7: Business Hints.
+Manual Dispatch Board is a manual office workflow for assigning Orders to Driver + Trip + Vehicle. This repository is currently in Phase 8: Frontend-Backend Integration.
 
 ## Current Phase
-- Phase: 7
-- Status: frontend business hints with backend SQLite persistence support from Phase 6
-- UI now shows non-blocking business hints for manual dispatch decisions.
-- Assignment remains manual and frontend in-memory.
+- Phase: 8
+- Status: frontend connected to backend API with SQLite persistence
+- Frontend now loads board data from the backend API.
+- Assign, Unassign, and Choose Vehicle actions now call the backend API.
+- SQLite persistence means refresh can preserve assignments and Driver + Dispatch Date vehicle selections.
+- Business hints remain non-blocking.
 - Backend now has SQLite persistence support for demo/master data, manual task assignments, and Driver + Dispatch Date vehicle assignments.
 - Runtime SQLite database files are local and ignored by Git.
-- The frontend is not integrated with the backend yet.
-- No automatic assignment, blocking rules, frontend-backend integration, localStorage, or optimization logic is implemented in this phase.
+- Review/export is not implemented yet.
+- No automatic assignment, blocking rules, localStorage, or optimization logic is implemented in this phase.
 
 ## Layout Decision
 The future Manual Dispatch Board layout must be top-bottom:
@@ -55,6 +57,7 @@ Phase 4 frontend-only vehicle selection behavior is documented in `docs/manual-d
 Phase 5 backend API skeleton details are documented in `docs/manual-dispatch-board-phase5.md`.
 Phase 6 SQLite persistence details are documented in `docs/manual-dispatch-board-phase6.md`.
 Phase 7 frontend business hints are documented in `docs/manual-dispatch-board-phase7.md`.
+Phase 8 frontend-backend integration is documented in `docs/manual-dispatch-board-phase8.md`.
 
 ## Validation
 Phase 0 uses document and Git validation only. Functional tests should not be run until test, frontend, or backend implementation files exist.
@@ -65,3 +68,4 @@ Phase 4 uses frontend syntax validation plus manual browser checks. Vehicle sele
 Phase 5 uses Python compile checks, backend service unit tests, frontend syntax validation, and static file review.
 Phase 6 uses Python compile checks, backend repository/service unit tests, frontend syntax validation, and static file review. SQLite runtime database files must not be committed.
 Phase 7 uses frontend syntax validation, backend regression tests, static file review, and manual browser checks for non-blocking hints.
+Phase 8 uses frontend syntax validation, backend regression tests, static safety checks, and browser/manual checks when tooling is available.

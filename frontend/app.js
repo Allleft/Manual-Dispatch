@@ -1,79 +1,129 @@
+const DEFAULT_DISPATCH_DATE = "2026-05-05";
+const API_BASE_URL =
+  window.MANUAL_DISPATCH_API_BASE_URL ||
+  (window.location.protocol === "file:" ? "http://127.0.0.1:8000" : "");
+
 const state = {
-  dispatchDate: "2026-05-05",
-  orders: [
-    {
-      order_id: "ORD-001",
-      suburb: "Dandenong",
-      pallet_quantity: 2,
-      loose_bags_quantity: 0,
-      zone: "South East",
-      urgency: "Urgent",
-      preferred_driver_id: "D001",
-      start_time: "08:00",
-      end_time: "12:00",
-      note: "Call before delivery",
-    },
-    {
-      order_id: "ORD-002",
-      suburb: "Clayton",
-      pallet_quantity: 0,
-      loose_bags_quantity: 12,
-      zone: "South East",
-      urgency: "Normal",
-      preferred_driver_id: "D002",
-      start_time: "10:00",
-      end_time: "14:00",
-      note: "Loose bags only",
-    },
-    {
-      order_id: "ORD-003",
-      suburb: "Springvale",
-      pallet_quantity: 3,
-      loose_bags_quantity: 0,
-      zone: "South East",
-      urgency: "Normal",
-      preferred_driver_id: null,
-      start_time: "09:00",
-      end_time: "15:00",
-      note: "",
-    },
-  ],
-  drivers: [
-    {
-      driver_id: "D001",
-      name: "John",
-      start_time: "08:00",
-      end_time: "16:00",
-      is_available: true,
-      preferred_zone: "South East",
-    },
-    {
-      driver_id: "D002",
-      name: "Tony",
-      start_time: "08:00",
-      end_time: "16:00",
-      is_available: true,
-      preferred_zone: "West",
-    },
-    {
-      driver_id: "D003",
-      name: "David",
-      start_time: "09:00",
-      end_time: "15:00",
-      is_available: true,
-      preferred_zone: "North",
-    },
-  ],
-  vehicles: [
-    { vehicle_id: "V001", rego: "ABC123", pallet_capacity: 10 },
-    { vehicle_id: "V002", rego: "XYZ888", pallet_capacity: 4 },
-    { vehicle_id: "V003", rego: "MCC001", pallet_capacity: 6 },
-  ],
+  dispatchDate: DEFAULT_DISPATCH_DATE,
+  isLoading: false,
+  isSaving: false,
+  errorMessage: "",
+  orders: [],
+  drivers: [],
+  vehicles: [],
   assignments: [],
   driverVehicleAssignments: [],
 };
 
-let nextAssignmentNumber = 1;
+function getApiUrl(path, query = {}) {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const baseUrl = API_BASE_URL ? API_BASE_URL.replace(/\/$/, "") : window.location.origin;
+  const url = new URL(`${baseUrl}${normalizedPath}`);
+  Object.entries(query).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      url.searchParams.set(key, value);
+    }
+  });
+  return url.toString();
+}
+
+async function requestJson(path, options = {}) {
+  const response = await fetch(getApiUrl(path, options.query), {
+    method: options.method || "GET",
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+    body: options.body ? JSON.stringify(options.body) : undefined,
+  });
+
+  if (!response.ok) {
+    let message = `Request failed with status ${response.status}`;
+    try {
+      const payload = await response.json();
+      message = payload.detail || message;
+    } catch (error) {
+      message = response.statusText || message;
+    }
+    throw new Error(message);
+  }
+
+  return response.json();
+}
+
+function normalizeBoardResponse(payload) {
+  return {
+    dispatchDate: payload.dispatch_date || state.dispatchDate,
+    orders: payload.orders || [],
+    drivers: payload.drivers || [],
+    vehicles: payload.vehicles || [],
+    assignments: payload.assignments || [],
+    driverVehicleAssignments: payload.driver_vehicle_assignments || [],
+  };
+}
+
+function applyBoardResponse(payload) {
+  const board = normalizeBoardResponse(payload);
+  state.dispatchDate = board.dispatchDate;
+  state.orders = board.orders;
+  state.drivers = board.drivers;
+  state.vehicles = board.vehicles;
+  state.assignments = board.assignments;
+  state.driverVehicleAssignments = board.driverVehicleAssignments;
+}
+
+async function apiGetBoard(dispatchDate) {
+  return requestJson("/api/manual-dispatch/board", {
+    query: { dispatch_date: dispatchDate },
+  });
+}
+
+async function apiAssignTask(payload) {
+  return requestJson("/api/manual-dispatch/assign", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+async function apiUnassignTask(payload) {
+  return requestJson("/api/manual-dispatch/unassign", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+async function apiAssignDriverVehicle(payload) {
+  return requestJson("/api/manual-dispatch/driver-vehicle", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+async function loadBoard(dispatchDate = state.dispatchDate) {
+  state.dispatchDate = dispatchDate || DEFAULT_DISPATCH_DATE;
+  state.isLoading = true;
+  state.errorMessage = "";
+  renderBoard();
+
+  try {
+    const payload = await apiGetBoard(state.dispatchDate);
+    applyBoardResponse(payload);
+  } catch (error) {
+    showError(`Unable to load board data. ${error.message}`);
+  } finally {
+    state.isLoading = false;
+    state.isSaving = false;
+    renderBoard();
+  }
+}
+
+function showError(message) {
+  state.errorMessage = message;
+}
+
+function clearError() {
+  state.errorMessage = "";
+}
 
 function getDisplayPalletQuantity(order) {
   const palletQuantity = Number(order.pallet_quantity);
@@ -148,32 +198,6 @@ function getSelectedVehicleForDriver(driverId) {
   return assignment ? findVehicleById(assignment.vehicle_id) : null;
 }
 
-function upsertDriverVehicleAssignment(driverId, vehicleId) {
-  const existingIndex = state.driverVehicleAssignments.findIndex(
-    (assignment) =>
-      assignment.dispatch_date === state.dispatchDate && assignment.driver_id === driverId,
-  );
-
-  if (!vehicleId) {
-    if (existingIndex >= 0) {
-      state.driverVehicleAssignments.splice(existingIndex, 1);
-    }
-    return;
-  }
-
-  const nextAssignment = {
-    dispatch_date: state.dispatchDate,
-    driver_id: driverId,
-    vehicle_id: vehicleId,
-  };
-
-  if (existingIndex >= 0) {
-    state.driverVehicleAssignments[existingIndex] = nextAssignment;
-  } else {
-    state.driverVehicleAssignments.push(nextAssignment);
-  }
-}
-
 function isVehicleSelectedByAnotherDriver(driverId, vehicleId) {
   if (!vehicleId) {
     return false;
@@ -190,6 +214,15 @@ function isVehicleSelectedByAnotherDriver(driverId, vehicleId) {
 function getOrderPreferredDriverName(order) {
   const driver = order.preferred_driver_id ? findDriverById(order.preferred_driver_id) : null;
   return driver ? driver.name : "";
+}
+
+function isUrgent(order) {
+  return String(order.urgency || "").toLowerCase() === "urgent";
+}
+
+function getUrgencyLabel(order) {
+  const urgency = order.urgency || "Normal";
+  return urgency.charAt(0).toUpperCase() + urgency.slice(1).toLowerCase();
 }
 
 function isZoneDifferent(order, driver) {
@@ -267,46 +300,142 @@ function isVehicleCapacityExceeded(driverId) {
   return calculateDriverTotals(driverId).pallets > Number(selectedVehicle.pallet_capacity || 0);
 }
 
-function createAssignmentId() {
-  const assignmentId = `A-${String(nextAssignmentNumber).padStart(3, "0")}`;
-  nextAssignmentNumber += 1;
-  return assignmentId;
-}
-
-function assignOrder(orderId, driverId, tripNo) {
-  if (!driverId || getAssignmentForOrder({ order_id: orderId })) {
+async function handleAssign(orderId, driverId, tripNo) {
+  if (!driverId || state.isSaving) {
     return;
   }
 
-  state.assignments.push({
-    assignment_id: createAssignmentId(),
-    task_type: "ORDER",
-    task_id: orderId,
-    driver_id: driverId,
-    trip_no: tripNo || "trip1",
-  });
-
+  state.isSaving = true;
+  clearError();
   renderBoard();
+
+  try {
+    await apiAssignTask({
+      dispatch_date: state.dispatchDate,
+      task_type: "ORDER",
+      task_id: orderId,
+      driver_id: driverId,
+      trip_no: tripNo || "trip1",
+    });
+    await loadBoard(state.dispatchDate);
+  } catch (error) {
+    state.isSaving = false;
+    showError(`Unable to assign task. ${error.message}`);
+    renderBoard();
+  }
 }
 
-function unassignOrder(assignmentId) {
-  state.assignments = state.assignments.filter(
-    (assignment) => assignment.assignment_id !== assignmentId,
-  );
+async function handleUnassign(taskType, taskId) {
+  if (state.isSaving) {
+    return;
+  }
 
+  state.isSaving = true;
+  clearError();
   renderBoard();
+
+  try {
+    await apiUnassignTask({
+      dispatch_date: state.dispatchDate,
+      task_type: taskType,
+      task_id: taskId,
+    });
+    await loadBoard(state.dispatchDate);
+  } catch (error) {
+    state.isSaving = false;
+    showError(`Unable to unassign task. ${error.message}`);
+    renderBoard();
+  }
+}
+
+async function handleVehicleChange(driverId, vehicleId) {
+  if (state.isSaving) {
+    return;
+  }
+
+  if (!vehicleId) {
+    showError("Select a vehicle rego to update this Driver. Clearing vehicle selection is not part of Phase 8.");
+    renderBoard();
+    return;
+  }
+
+  state.isSaving = true;
+  clearError();
+  renderBoard();
+
+  try {
+    await apiAssignDriverVehicle({
+      dispatch_date: state.dispatchDate,
+      driver_id: driverId,
+      vehicle_id: vehicleId,
+    });
+    await loadBoard(state.dispatchDate);
+  } catch (error) {
+    state.isSaving = false;
+    showError(`Unable to update vehicle selection. ${error.message}`);
+    renderBoard();
+  }
+}
+
+function renderBoardControls() {
+  const dateInput = document.querySelector("#dispatch-date");
+  const loadButton = document.querySelector("#load-board-button");
+  const retryButton = document.querySelector("#retry-board-button");
+  const status = document.querySelector("#board-status");
+  const error = document.querySelector("#board-error");
+
+  if (!dateInput || !loadButton || !retryButton || !status || !error) {
+    return;
+  }
+
+  dateInput.value = state.dispatchDate;
+  dateInput.disabled = state.isLoading || state.isSaving;
+  loadButton.disabled = state.isLoading || state.isSaving;
+  retryButton.disabled = state.isLoading || state.isSaving;
+
+  status.textContent = state.isLoading
+    ? "Loading board data..."
+    : state.isSaving
+      ? "Saving manual dispatch change..."
+      : `Dispatch Date: ${state.dispatchDate}`;
+
+  error.hidden = !state.errorMessage;
+  error.textContent = state.errorMessage;
+
+  loadButton.onclick = () => {
+    loadBoard(dateInput.value || DEFAULT_DISPATCH_DATE);
+  };
+  retryButton.onclick = () => {
+    loadBoard(state.dispatchDate);
+  };
 }
 
 function renderTaskPool() {
   const taskPoolList = document.querySelector("#task-pool-list");
   taskPoolList.innerHTML = "";
 
+  if (state.isLoading && state.orders.length === 0) {
+    const loadingState = document.createElement("p");
+    loadingState.className = "empty-board";
+    loadingState.textContent = "Loading Orders from backend...";
+    taskPoolList.append(loadingState);
+    return;
+  }
+
+  if (state.errorMessage && state.orders.length === 0) {
+    const errorState = document.createElement("p");
+    errorState.className = "empty-board";
+    errorState.textContent = "Board data is unavailable. Use Retry after the backend is running.";
+    taskPoolList.append(errorState);
+    return;
+  }
+
   const unassignedOrders = getUnassignedOrders();
 
   if (unassignedOrders.length === 0) {
     const emptyState = document.createElement("p");
     emptyState.className = "empty-board";
-    emptyState.textContent = "All demo Orders are currently assigned.";
+    emptyState.textContent = "All Orders are currently assigned.";
     taskPoolList.append(emptyState);
     return;
   }
@@ -332,7 +461,7 @@ function renderTaskPool() {
     const badgeRow = document.createElement("div");
     badgeRow.className = "hint-badge-row";
     badgeRow.append(
-      createBadge(order.urgency || "Normal", order.urgency === "Urgent" ? "urgent" : "neutral"),
+      createBadge(getUrgencyLabel(order), isUrgent(order) ? "urgent" : "neutral"),
       createBadge(`Zone: ${order.zone || "Not set"}`),
     );
 
@@ -358,6 +487,7 @@ function renderTaskPool() {
 
     const driverSelect = document.createElement("select");
     driverSelect.id = `driver-${order.order_id}`;
+    driverSelect.disabled = state.isSaving || state.isLoading;
     driverSelect.append(createOption("", "Select driver", true));
     state.drivers.forEach((driver) => {
       driverSelect.append(createOption(driver.driver_id, driver.name));
@@ -369,13 +499,14 @@ function renderTaskPool() {
 
     const tripSelect = document.createElement("select");
     tripSelect.id = `trip-${order.order_id}`;
+    tripSelect.disabled = state.isSaving || state.isLoading;
     tripSelect.append(createOption("trip1", "trip1", true));
     tripSelect.append(createOption("trip2", "trip2"));
 
     const assignButton = document.createElement("button");
     assignButton.type = "button";
     assignButton.disabled = true;
-    assignButton.textContent = "Assign";
+    assignButton.textContent = state.isSaving ? "Saving..." : "Assign";
     assignButton.title = "Select a driver to enable Assign";
 
     const selectionHints = document.createElement("div");
@@ -403,7 +534,7 @@ function renderTaskPool() {
     };
 
     driverSelect.addEventListener("change", () => {
-      assignButton.disabled = driverSelect.value === "";
+      assignButton.disabled = driverSelect.value === "" || state.isSaving || state.isLoading;
       assignButton.title = driverSelect.value
         ? "Assign this Order to the selected Driver and Trip"
         : "Select a driver to enable Assign";
@@ -411,7 +542,7 @@ function renderTaskPool() {
     });
 
     assignButton.addEventListener("click", () => {
-      assignOrder(order.order_id, driverSelect.value, tripSelect.value);
+      handleAssign(order.order_id, driverSelect.value, tripSelect.value);
     });
 
     controls.append(
@@ -430,6 +561,22 @@ function renderTaskPool() {
 function renderDriverSummary() {
   const driverSummaryList = document.querySelector("#driver-summary-list");
   driverSummaryList.innerHTML = "";
+
+  if (state.isLoading && state.drivers.length === 0) {
+    const loadingState = document.createElement("p");
+    loadingState.className = "empty-board";
+    loadingState.textContent = "Loading Drivers from backend...";
+    driverSummaryList.append(loadingState);
+    return;
+  }
+
+  if (state.errorMessage && state.drivers.length === 0) {
+    const errorState = document.createElement("p");
+    errorState.className = "empty-board";
+    errorState.textContent = "Driver Summary is unavailable until backend data loads.";
+    driverSummaryList.append(errorState);
+    return;
+  }
 
   state.drivers.forEach((driver) => {
     const card = document.createElement("article");
@@ -463,6 +610,7 @@ function renderDriverSummary() {
     vehicleWrap.textContent = "Choose Vehicle";
 
     const vehicleSelect = document.createElement("select");
+    vehicleSelect.disabled = state.isSaving || state.isLoading;
     vehicleSelect.append(createOption("", "Select vehicle", !selectedVehicle));
     state.vehicles.forEach((vehicle) => {
       vehicleSelect.append(
@@ -500,8 +648,7 @@ function renderDriverSummary() {
       : "";
 
     vehicleSelect.addEventListener("change", () => {
-      upsertDriverVehicleAssignment(driver.driver_id, vehicleSelect.value);
-      renderDriverSummary();
+      handleVehicleChange(driver.driver_id, vehicleSelect.value);
     });
 
     vehicleWrap.append(vehicleSelect);
@@ -582,9 +729,10 @@ function createAssignedTask(assignment, order) {
   const unassignButton = document.createElement("button");
   unassignButton.type = "button";
   unassignButton.className = "button-secondary";
-  unassignButton.textContent = "Unassign";
+  unassignButton.disabled = state.isSaving || state.isLoading;
+  unassignButton.textContent = state.isSaving ? "Saving..." : "Unassign";
   unassignButton.addEventListener("click", () => {
-    unassignOrder(assignment.assignment_id);
+    handleUnassign(assignment.task_type, assignment.task_id);
   });
 
   row.append(details, unassignButton);
@@ -592,8 +740,10 @@ function createAssignedTask(assignment, order) {
 }
 
 function renderBoard() {
+  renderBoardControls();
   renderTaskPool();
   renderDriverSummary();
 }
 
 renderBoard();
+loadBoard(state.dispatchDate);

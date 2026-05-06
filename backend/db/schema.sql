@@ -86,13 +86,13 @@ INSERT OR IGNORE INTO manual_orders (
         '3175',
         '2026-05-05',
         'South East',
-        'normal',
-        NULL,
+        'Urgent',
+        'D001',
         2,
         0,
-        NULL,
-        NULL,
-        NULL
+        '08:00',
+        '12:00',
+        'Call before delivery'
     ),
     (
         'ORD-002',
@@ -102,12 +102,12 @@ INSERT OR IGNORE INTO manual_orders (
         '3168',
         '2026-05-05',
         'South East',
-        'normal',
-        NULL,
+        'Normal',
+        'D002',
         0,
         12,
-        NULL,
-        NULL,
+        '10:00',
+        '14:00',
         'Loose Bags only'
     ),
     (
@@ -118,12 +118,12 @@ INSERT OR IGNORE INTO manual_orders (
         '3171',
         '2026-05-05',
         'South East',
-        'normal',
+        'Normal',
         NULL,
         3,
         0,
-        NULL,
-        NULL,
+        '09:00',
+        '15:00',
         NULL
     );
 
@@ -135,9 +135,9 @@ INSERT OR IGNORE INTO manual_drivers (
     is_available,
     preferred_zone
 ) VALUES
-    ('D001', 'John', NULL, NULL, 1, NULL),
-    ('D002', 'Tony', NULL, NULL, 1, NULL),
-    ('D003', 'David', NULL, NULL, 1, NULL);
+    ('D001', 'John', '08:00', '16:00', 1, 'South East'),
+    ('D002', 'Tony', '08:00', '16:00', 1, 'West'),
+    ('D003', 'David', '09:00', '15:00', 1, 'North');
 
 INSERT OR IGNORE INTO manual_vehicles (
     vehicle_id,
@@ -149,6 +149,6 @@ INSERT OR IGNORE INTO manual_vehicles (
     trolley_capacity,
     stillage_capacity
 ) VALUES
-    ('V001', 'ABC123', 'truck', 1, 0, 0, 0, 0),
-    ('V002', 'XYZ888', 'truck', 1, 0, 0, 0, 0),
-    ('V003', 'MCC001', 'truck', 1, 0, 0, 0, 0);
+    ('V001', 'ABC123', 'truck', 1, 10, 0, 0, 0),
+    ('V002', 'XYZ888', 'truck', 1, 4, 0, 0, 0),
+    ('V003', 'MCC001', 'truck', 1, 6, 0, 0, 0);

@@ -12,20 +12,35 @@
         <p class="eyebrow">Manual office workflow</p>
         <h1>Manual Dispatch Board</h1>
         <p class="hero-copy">
-          Phase 7 frontend-only flow with non-blocking business hints for manual dispatch decisions.
+          Phase 8 backend-connected flow with SQLite persistence and non-blocking business hints.
         </p>
       </div>
-      <div class="phase-badge" aria-label="Current phase">Phase 7 business hints</div>
+      <div class="phase-badge" aria-label="Current phase">Phase 8 backend connected</div>
     </header>
 
     <main class="board-shell" aria-label="Manual Dispatch Board">
+      <section class="board-section board-controls" aria-labelledby="board-controls-title">
+        <div>
+          <p class="section-kicker">Backend source of truth</p>
+          <h2 id="board-controls-title">Dispatch Date</h2>
+        </div>
+        <div class="dispatch-date-controls">
+          <label for="dispatch-date">Dispatch date</label>
+          <input id="dispatch-date" type="date" value="2026-05-05">
+          <button id="load-board-button" type="button">Load Board</button>
+          <button id="retry-board-button" class="button-secondary" type="button">Retry</button>
+        </div>
+        <p id="board-status" class="board-status" aria-live="polite">Loading board data...</p>
+        <p id="board-error" class="board-error" aria-live="assertive" hidden></p>
+      </section>
+
       <section class="board-section task-pool" aria-labelledby="task-pool-title">
         <div class="section-heading">
           <div>
             <p class="section-kicker">Top section</p>
             <h2 id="task-pool-title">Task Pool</h2>
           </div>
-          <p class="section-note">Unassigned Orders with compact hints. Choose a driver and trip manually.</p>
+          <p class="section-note">Backend Orders with compact hints. Choose a driver and trip manually.</p>
         </div>
         <div id="task-pool-list" class="task-grid" aria-live="polite"></div>
       </section>
@@ -36,7 +51,7 @@
             <p class="section-kicker">Bottom section</p>
             <h2 id="driver-summary-title">Driver Summary</h2>
           </div>
-          <p class="section-note">Driver cards show load hints, trip totals, and in-memory vehicle choices.</p>
+          <p class="section-note">Driver cards show persisted vehicle choices, load hints, and trip totals.</p>
         </div>
         <div id="driver-summary-list" class="driver-grid" aria-live="polite"></div>
       </section>

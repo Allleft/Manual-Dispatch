@@ -34,11 +34,13 @@ body {
 }
 
 button,
+input,
 select {
   font: inherit;
 }
 
 button:focus-visible,
+input:focus-visible,
 select:focus-visible {
   outline: 3px solid rgba(39, 93, 69, 0.4);
   outline-offset: 2px;
@@ -113,6 +115,61 @@ h1 {
   background: rgba(255, 255, 255, 0.78);
   box-shadow: var(--shadow);
   backdrop-filter: blur(14px);
+}
+
+.board-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 420px);
+  align-items: end;
+  gap: 1rem;
+}
+
+.board-controls h2 {
+  margin-bottom: 0;
+  font-size: clamp(1.35rem, 3vw, 2rem);
+  letter-spacing: -0.03em;
+}
+
+.dispatch-date-controls {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 0.55rem;
+  align-items: end;
+}
+
+.dispatch-date-controls label {
+  grid-column: 1 / -1;
+}
+
+.dispatch-date-controls input {
+  min-height: 44px;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0 0.75rem;
+  color: var(--ink);
+  background: var(--field);
+}
+
+.board-status,
+.board-error {
+  grid-column: 1 / -1;
+  margin-bottom: 0;
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 0.85rem;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.board-status {
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+}
+
+.board-error {
+  color: var(--danger);
+  background: var(--danger-soft);
+  font-weight: 800;
 }
 
 .section-heading {
@@ -283,6 +340,12 @@ button:disabled {
   background: #8ca197;
 }
 
+input:disabled,
+select:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
 .button-secondary {
   min-height: 38px;
   border: 1px solid rgba(39, 93, 69, 0.18);
@@ -404,8 +467,13 @@ button:disabled {
 
 @media (max-width: 900px) {
   .page-hero,
+  .board-controls,
   .section-heading {
     display: grid;
+  }
+
+  .dispatch-date-controls {
+    grid-template-columns: 1fr;
   }
 
   .section-note {
