@@ -6,29 +6,68 @@ const state = {
       suburb: "Dandenong",
       pallet_quantity: 2,
       loose_bags_quantity: 0,
+      zone: "South East",
+      urgency: "Urgent",
+      preferred_driver_id: "D001",
+      start_time: "08:00",
+      end_time: "12:00",
+      note: "Call before delivery",
     },
     {
       order_id: "ORD-002",
       suburb: "Clayton",
       pallet_quantity: 0,
       loose_bags_quantity: 12,
+      zone: "South East",
+      urgency: "Normal",
+      preferred_driver_id: "D002",
+      start_time: "10:00",
+      end_time: "14:00",
+      note: "Loose bags only",
     },
     {
       order_id: "ORD-003",
       suburb: "Springvale",
       pallet_quantity: 3,
       loose_bags_quantity: 0,
+      zone: "South East",
+      urgency: "Normal",
+      preferred_driver_id: null,
+      start_time: "09:00",
+      end_time: "15:00",
+      note: "",
     },
   ],
   drivers: [
-    { driver_id: "DRV-001", name: "John" },
-    { driver_id: "DRV-002", name: "Tony" },
-    { driver_id: "DRV-003", name: "David" },
+    {
+      driver_id: "D001",
+      name: "John",
+      start_time: "08:00",
+      end_time: "16:00",
+      is_available: true,
+      preferred_zone: "South East",
+    },
+    {
+      driver_id: "D002",
+      name: "Tony",
+      start_time: "08:00",
+      end_time: "16:00",
+      is_available: true,
+      preferred_zone: "West",
+    },
+    {
+      driver_id: "D003",
+      name: "David",
+      start_time: "09:00",
+      end_time: "15:00",
+      is_available: true,
+      preferred_zone: "North",
+    },
   ],
   vehicles: [
-    { vehicle_id: "VEH-001", rego: "ABC123" },
-    { vehicle_id: "VEH-002", rego: "XYZ888" },
-    { vehicle_id: "VEH-003", rego: "MCC001" },
+    { vehicle_id: "V001", rego: "ABC123", pallet_capacity: 10 },
+    { vehicle_id: "V002", rego: "XYZ888", pallet_capacity: 4 },
+    { vehicle_id: "V003", rego: "MCC001", pallet_capacity: 6 },
   ],
   assignments: [],
   driverVehicleAssignments: [],
@@ -47,12 +86,31 @@ function getDisplayPalletQuantity(order) {
   return Number.isFinite(palletQuantity) ? palletQuantity : 0;
 }
 
+function getLooseBagsQuantity(order) {
+  const looseBagsQuantity = Number(order.loose_bags_quantity);
+  return Number.isFinite(looseBagsQuantity) ? looseBagsQuantity : 0;
+}
+
 function createOption(value, label, selected = false) {
   const option = document.createElement("option");
   option.value = value;
   option.textContent = label;
   option.selected = selected;
   return option;
+}
+
+function createBadge(text, variant = "neutral") {
+  const badge = document.createElement("span");
+  badge.className = `hint-badge hint-badge-${variant}`;
+  badge.textContent = text;
+  return badge;
+}
+
+function createHint(text, variant = "neutral") {
+  const hint = document.createElement("p");
+  hint.className = `hint-row hint-row-${variant}`;
+  hint.textContent = text;
+  return hint;
 }
 
 function getAssignmentForOrder(order) {
@@ -70,7 +128,11 @@ function getOrderByTaskId(taskId) {
   return state.orders.find((order) => order.order_id === taskId);
 }
 
-function getVehicleById(vehicleId) {
+function findDriverById(driverId) {
+  return state.drivers.find((driver) => driver.driver_id === driverId);
+}
+
+function findVehicleById(vehicleId) {
   return state.vehicles.find((vehicle) => vehicle.vehicle_id === vehicleId);
 }
 
@@ -79,6 +141,11 @@ function getDriverVehicleAssignment(driverId) {
     (assignment) =>
       assignment.dispatch_date === state.dispatchDate && assignment.driver_id === driverId,
   );
+}
+
+function getSelectedVehicleForDriver(driverId) {
+  const assignment = getDriverVehicleAssignment(driverId);
+  return assignment ? findVehicleById(assignment.vehicle_id) : null;
 }
 
 function upsertDriverVehicleAssignment(driverId, vehicleId) {
@@ -118,6 +185,86 @@ function isVehicleSelectedByAnotherDriver(driverId, vehicleId) {
       assignment.driver_id !== driverId &&
       assignment.vehicle_id === vehicleId,
   );
+}
+
+function getOrderPreferredDriverName(order) {
+  const driver = order.preferred_driver_id ? findDriverById(order.preferred_driver_id) : null;
+  return driver ? driver.name : "";
+}
+
+function isZoneDifferent(order, driver) {
+  return Boolean(order.zone && driver && driver.preferred_zone && order.zone !== driver.preferred_zone);
+}
+
+function timeToMinutes(timeValue) {
+  if (!timeValue) {
+    return null;
+  }
+
+  const [hours, minutes] = timeValue.split(":").map(Number);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) {
+    return null;
+  }
+
+  return hours * 60 + minutes;
+}
+
+function isOutsideDriverHours(order, driver) {
+  if (!driver) {
+    return false;
+  }
+
+  const orderStart = timeToMinutes(order.start_time);
+  const orderEnd = timeToMinutes(order.end_time);
+  const driverStart = timeToMinutes(driver.start_time);
+  const driverEnd = timeToMinutes(driver.end_time);
+
+  if ([orderStart, orderEnd, driverStart, driverEnd].some((value) => value === null)) {
+    return false;
+  }
+
+  return orderStart < driverStart || orderEnd > driverEnd;
+}
+
+function getAssignedOrdersForDriver(driverId) {
+  return state.assignments
+    .filter((assignment) => assignment.driver_id === driverId)
+    .map((assignment) => getOrderByTaskId(assignment.task_id))
+    .filter(Boolean);
+}
+
+function getAssignedOrdersForTrip(driverId, tripNo) {
+  return state.assignments
+    .filter((assignment) => assignment.driver_id === driverId && assignment.trip_no === tripNo)
+    .map((assignment) => getOrderByTaskId(assignment.task_id))
+    .filter(Boolean);
+}
+
+function calculateTotals(orders) {
+  return orders.reduce(
+    (totals, order) => ({
+      pallets: totals.pallets + getDisplayPalletQuantity(order),
+      looseBags: totals.looseBags + getLooseBagsQuantity(order),
+    }),
+    { pallets: 0, looseBags: 0 },
+  );
+}
+
+function calculateDriverTotals(driverId) {
+  return calculateTotals(getAssignedOrdersForDriver(driverId));
+}
+
+function calculateTripTotals(driverId, tripNo) {
+  return calculateTotals(getAssignedOrdersForTrip(driverId, tripNo));
+}
+
+function isVehicleCapacityExceeded(driverId) {
+  const selectedVehicle = getSelectedVehicleForDriver(driverId);
+  if (!selectedVehicle) {
+    return false;
+  }
+
+  return calculateDriverTotals(driverId).pallets > Number(selectedVehicle.pallet_capacity || 0);
 }
 
 function createAssignmentId() {
@@ -169,6 +316,9 @@ function renderTaskPool() {
     card.className = "order-card";
     card.setAttribute("aria-labelledby", `order-${order.order_id}`);
 
+    const header = document.createElement("div");
+    header.className = "order-card-header";
+
     const suburb = document.createElement("h3");
     suburb.id = `order-${order.order_id}`;
     suburb.textContent = order.suburb;
@@ -176,6 +326,28 @@ function renderTaskPool() {
     const pallet = document.createElement("p");
     pallet.className = "metric-pill";
     pallet.textContent = `Pallet: ${getDisplayPalletQuantity(order)}`;
+
+    header.append(suburb, pallet);
+
+    const badgeRow = document.createElement("div");
+    badgeRow.className = "hint-badge-row";
+    badgeRow.append(
+      createBadge(order.urgency || "Normal", order.urgency === "Urgent" ? "urgent" : "neutral"),
+      createBadge(`Zone: ${order.zone || "Not set"}`),
+    );
+
+    const hintList = document.createElement("div");
+    hintList.className = "order-hints";
+    hintList.append(createHint(`Window: ${order.start_time || "--"}-${order.end_time || "--"}`));
+
+    const preferredDriverName = getOrderPreferredDriverName(order);
+    if (preferredDriverName) {
+      hintList.append(createHint(`Preferred: ${preferredDriverName}`));
+    }
+
+    if (order.note) {
+      hintList.append(createHint(`Note: ${order.note}`));
+    }
 
     const controls = document.createElement("div");
     controls.className = "order-controls";
@@ -206,19 +378,51 @@ function renderTaskPool() {
     assignButton.textContent = "Assign";
     assignButton.title = "Select a driver to enable Assign";
 
+    const selectionHints = document.createElement("div");
+    selectionHints.className = "selection-hints";
+
+    const renderSelectionHints = () => {
+      const selectedDriver = findDriverById(driverSelect.value);
+      selectionHints.innerHTML = "";
+
+      if (!selectedDriver) {
+        return;
+      }
+
+      if (preferredDriverName && selectedDriver.driver_id !== order.preferred_driver_id) {
+        selectionHints.append(createHint(`Preferred driver is ${preferredDriverName}`, "warning"));
+      }
+
+      if (isZoneDifferent(order, selectedDriver)) {
+        selectionHints.append(createHint("Zone differs from driver preference", "warning"));
+      }
+
+      if (isOutsideDriverHours(order, selectedDriver)) {
+        selectionHints.append(createHint("Outside driver hours", "warning"));
+      }
+    };
+
     driverSelect.addEventListener("change", () => {
       assignButton.disabled = driverSelect.value === "";
       assignButton.title = driverSelect.value
         ? "Assign this Order to the selected Driver and Trip"
         : "Select a driver to enable Assign";
+      renderSelectionHints();
     });
 
     assignButton.addEventListener("click", () => {
       assignOrder(order.order_id, driverSelect.value, tripSelect.value);
     });
 
-    controls.append(driverLabel, driverSelect, tripLabel, tripSelect, assignButton);
-    card.append(suburb, pallet, controls);
+    controls.append(
+      driverLabel,
+      driverSelect,
+      tripLabel,
+      tripSelect,
+      selectionHints,
+      assignButton,
+    );
+    card.append(header, badgeRow, hintList, controls);
     taskPoolList.append(card);
   });
 }
@@ -237,10 +441,22 @@ function renderDriverSummary() {
     const name = document.createElement("h3");
     name.textContent = driver.name;
 
-    const vehicleAssignment = getDriverVehicleAssignment(driver.driver_id);
-    const selectedVehicle = vehicleAssignment
-      ? getVehicleById(vehicleAssignment.vehicle_id)
-      : null;
+    const driverBadges = document.createElement("div");
+    driverBadges.className = "hint-badge-row";
+    driverBadges.append(
+      createBadge(driver.is_available ? "Available" : "Not available", driver.is_available ? "good" : "warning"),
+      createBadge(`Preferred zone: ${driver.preferred_zone || "Not set"}`),
+    );
+
+    const driverTotals = calculateDriverTotals(driver.driver_id);
+    const loadSummary = document.createElement("div");
+    loadSummary.className = "load-summary";
+    loadSummary.append(
+      createHint(`Total pallets assigned: ${driverTotals.pallets}`),
+      createHint(`Total loose bags assigned: ${driverTotals.looseBags}`),
+    );
+
+    const selectedVehicle = getSelectedVehicleForDriver(driver.driver_id);
 
     const vehicleWrap = document.createElement("label");
     vehicleWrap.className = "vehicle-select";
@@ -264,6 +480,12 @@ function renderDriverSummary() {
       ? `Selected Vehicle: ${selectedVehicle.rego}`
       : "No vehicle selected";
 
+    const vehicleCapacity = document.createElement("p");
+    vehicleCapacity.className = "vehicle-status vehicle-capacity";
+    vehicleCapacity.textContent = selectedVehicle
+      ? `Capacity: ${selectedVehicle.pallet_capacity} pallets`
+      : "Capacity: select a vehicle to view";
+
     const duplicateHint = document.createElement("p");
     duplicateHint.className = "vehicle-hint";
     duplicateHint.textContent =
@@ -271,15 +493,24 @@ function renderDriverSummary() {
         ? "Vehicle also selected by another driver."
         : "";
 
+    const capacityWarning = document.createElement("p");
+    capacityWarning.className = "vehicle-hint";
+    capacityWarning.textContent = isVehicleCapacityExceeded(driver.driver_id)
+      ? "Capacity warning: assigned pallets exceed selected vehicle pallet capacity."
+      : "";
+
     vehicleSelect.addEventListener("change", () => {
       upsertDriverVehicleAssignment(driver.driver_id, vehicleSelect.value);
       renderDriverSummary();
     });
 
     vehicleWrap.append(vehicleSelect);
-    header.append(name, vehicleWrap, vehicleStatus);
+    header.append(name, driverBadges, loadSummary, vehicleWrap, vehicleStatus, vehicleCapacity);
     if (duplicateHint.textContent) {
       header.append(duplicateHint);
+    }
+    if (capacityWarning.textContent) {
+      header.append(capacityWarning);
     }
 
     const trips = document.createElement("div");
@@ -298,6 +529,11 @@ function createTripGroup(driverId, tripNo, title) {
 
   const heading = document.createElement("h4");
   heading.textContent = title;
+
+  const tripTotals = calculateTripTotals(driverId, tripNo);
+  const tripSummary = document.createElement("p");
+  tripSummary.className = "trip-summary";
+  tripSummary.textContent = `Pallets: ${tripTotals.pallets} | Loose bags: ${tripTotals.looseBags}`;
 
   const assignedTasks = state.assignments.filter(
     (assignment) => assignment.driver_id === driverId && assignment.trip_no === tripNo,
@@ -322,7 +558,7 @@ function createTripGroup(driverId, tripNo, title) {
     });
   }
 
-  group.append(heading, taskList);
+  group.append(heading, tripSummary, taskList);
   return group;
 }
 
@@ -339,7 +575,7 @@ function createAssignedTask(assignment, order) {
 
   const pallet = document.createElement("p");
   pallet.className = "assigned-pallet";
-  pallet.textContent = `Pallet: ${getDisplayPalletQuantity(order)}`;
+  pallet.textContent = `Pallet: ${getDisplayPalletQuantity(order)} | Loose bags: ${getLooseBagsQuantity(order)}`;
 
   details.append(suburb, pallet);
 

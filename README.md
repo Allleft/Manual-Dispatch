@@ -1,14 +1,16 @@
 ﻿# Manual Dispatch Board
 
-Manual Dispatch Board is a manual office workflow for assigning Orders to Driver + Trip + Vehicle. This repository is currently in Phase 6: SQLite Database Persistence.
+Manual Dispatch Board is a manual office workflow for assigning Orders to Driver + Trip + Vehicle. This repository is currently in Phase 7: Business Hints.
 
 ## Current Phase
-- Phase: 6
-- Status: backend API skeleton with SQLite persistence support
+- Phase: 7
+- Status: frontend business hints with backend SQLite persistence support from Phase 6
+- UI now shows non-blocking business hints for manual dispatch decisions.
+- Assignment remains manual and frontend in-memory.
 - Backend now has SQLite persistence support for demo/master data, manual task assignments, and Driver + Dispatch Date vehicle assignments.
 - Runtime SQLite database files are local and ignored by Git.
 - The frontend is not integrated with the backend yet.
-- No frontend data-source changes, localStorage, automatic assignment, or optimization logic is implemented in this phase.
+- No automatic assignment, blocking rules, frontend-backend integration, localStorage, or optimization logic is implemented in this phase.
 
 ## Layout Decision
 The future Manual Dispatch Board layout must be top-bottom:
@@ -52,6 +54,7 @@ Phase 3 frontend-only assignment behavior is documented in `docs/manual-dispatch
 Phase 4 frontend-only vehicle selection behavior is documented in `docs/manual-dispatch-board-phase4.md`.
 Phase 5 backend API skeleton details are documented in `docs/manual-dispatch-board-phase5.md`.
 Phase 6 SQLite persistence details are documented in `docs/manual-dispatch-board-phase6.md`.
+Phase 7 frontend business hints are documented in `docs/manual-dispatch-board-phase7.md`.
 
 ## Validation
 Phase 0 uses document and Git validation only. Functional tests should not be run until test, frontend, or backend implementation files exist.
@@ -61,3 +64,4 @@ Phase 3 uses frontend syntax validation plus manual browser checks. Assignment s
 Phase 4 uses frontend syntax validation plus manual browser checks. Vehicle selection state is in memory only and is not persisted after refresh.
 Phase 5 uses Python compile checks, backend service unit tests, frontend syntax validation, and static file review.
 Phase 6 uses Python compile checks, backend repository/service unit tests, frontend syntax validation, and static file review. SQLite runtime database files must not be committed.
+Phase 7 uses frontend syntax validation, backend regression tests, static file review, and manual browser checks for non-blocking hints.

@@ -12,10 +12,10 @@
         <p class="eyebrow">Manual office workflow</p>
         <h1>Manual Dispatch Board</h1>
         <p class="hero-copy">
-          Phase 4 frontend-only flow for assigning Orders and choosing Driver vehicles in memory.
+          Phase 7 frontend-only flow with non-blocking business hints for manual dispatch decisions.
         </p>
       </div>
-      <div class="phase-badge" aria-label="Current phase">Phase 4 in-memory</div>
+      <div class="phase-badge" aria-label="Current phase">Phase 7 business hints</div>
     </header>
 
     <main class="board-shell" aria-label="Manual Dispatch Board">
@@ -25,7 +25,7 @@
             <p class="section-kicker">Top section</p>
             <h2 id="task-pool-title">Task Pool</h2>
           </div>
-          <p class="section-note">Unassigned Orders. Choose a driver and trip, then assign manually.</p>
+          <p class="section-note">Unassigned Orders with compact hints. Choose a driver and trip manually.</p>
         </div>
         <div id="task-pool-list" class="task-grid" aria-live="polite"></div>
       </section>
@@ -36,7 +36,7 @@
             <p class="section-kicker">Bottom section</p>
             <h2 id="driver-summary-title">Driver Summary</h2>
           </div>
-          <p class="section-note">Driver cards keep vehicle choices and trip assignments in memory.</p>
+          <p class="section-note">Driver cards show load hints, trip totals, and in-memory vehicle choices.</p>
         </div>
         <div id="driver-summary-list" class="driver-grid" aria-live="polite"></div>
       </section>
