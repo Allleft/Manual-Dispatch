@@ -50,11 +50,48 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
             ["Dandenong", "Clayton", "Springvale"],
             [order.suburb for order in board.orders],
         )
+        self.assertEqual(
+            ["INV-1001", "INV-1002", "INV-1003"],
+            [order.invoice_number for order in board.orders],
+        )
+        self.assertEqual(
+            ["0400 000 001", "0400 000 002", "0400 000 003"],
+            [order.phone for order in board.orders],
+        )
         self.assertEqual(["John", "Tony", "David"], [driver.name for driver in board.drivers])
+        self.assertEqual([False, True, False], [driver.pallet_only for driver in board.drivers])
         self.assertEqual(
             ["ABC123", "XYZ888", "MCC001"],
             [vehicle.rego for vehicle in board.vehicles],
         )
+
+    def test_existing_database_without_new_columns_is_upgraded(self):
+        legacy_path = self.temp_dir / "legacy_manual_dispatch.sqlite3"
+        self._create_legacy_database(legacy_path)
+
+        repository = SQLiteManualDispatchRepository(legacy_path)
+        board = ManualDispatchService(repository).get_board("2026-05-05")
+
+        legacy_order = next(order for order in board.orders if order.order_id == "ORD-OLD")
+        legacy_driver = next(driver for driver in board.drivers if driver.driver_id == "DOLD")
+
+        self.assertIsNone(legacy_order.invoice_number)
+        self.assertIsNone(legacy_order.phone)
+        self.assertFalse(legacy_driver.pallet_only)
+
+        with sqlite3.connect(legacy_path) as connection:
+            order_columns = {
+                row[1]
+                for row in connection.execute("PRAGMA table_info(manual_orders)").fetchall()
+            }
+            driver_columns = {
+                row[1]
+                for row in connection.execute("PRAGMA table_info(manual_drivers)").fetchall()
+            }
+
+        self.assertIn("invoice_number", order_columns)
+        self.assertIn("phone", order_columns)
+        self.assertIn("pallet_only", driver_columns)
 
     def test_assign_task_persists_assignment(self):
         self.service.assign_task(
@@ -180,6 +217,87 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
                     vehicle_id="V999",
                 )
             )
+
+    def _create_legacy_database(self, db_path):
+        with sqlite3.connect(db_path) as connection:
+            connection.executescript(
+                """
+                CREATE TABLE manual_orders (
+                    order_id TEXT PRIMARY KEY,
+                    company_name TEXT,
+                    delivery_address TEXT,
+                    suburb TEXT NOT NULL,
+                    postcode TEXT,
+                    delivery_date TEXT,
+                    zone TEXT,
+                    urgency TEXT,
+                    preferred_driver_id TEXT,
+                    pallet_quantity INTEGER NOT NULL DEFAULT 0,
+                    loose_bags_quantity INTEGER NOT NULL DEFAULT 0,
+                    start_time TEXT,
+                    end_time TEXT,
+                    note TEXT
+                );
+
+                CREATE TABLE manual_drivers (
+                    driver_id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    start_time TEXT,
+                    end_time TEXT,
+                    is_available INTEGER NOT NULL DEFAULT 1,
+                    preferred_zone TEXT
+                );
+
+                INSERT INTO manual_orders (
+                    order_id,
+                    company_name,
+                    delivery_address,
+                    suburb,
+                    postcode,
+                    delivery_date,
+                    zone,
+                    urgency,
+                    preferred_driver_id,
+                    pallet_quantity,
+                    loose_bags_quantity,
+                    start_time,
+                    end_time,
+                    note
+                ) VALUES (
+                    'ORD-OLD',
+                    'Legacy Customer',
+                    '9 Legacy Street',
+                    'Moorabbin',
+                    '3189',
+                    '2026-05-05',
+                    'South East',
+                    'Normal',
+                    NULL,
+                    1,
+                    0,
+                    '08:00',
+                    '10:00',
+                    'Legacy row'
+                );
+
+                INSERT INTO manual_drivers (
+                    driver_id,
+                    name,
+                    start_time,
+                    end_time,
+                    is_available,
+                    preferred_zone
+                ) VALUES (
+                    'DOLD',
+                    'Legacy Driver',
+                    '08:00',
+                    '16:00',
+                    1,
+                    'South East'
+                );
+                """
+            )
+            connection.commit()
 
 
 if __name__ == "__main__":

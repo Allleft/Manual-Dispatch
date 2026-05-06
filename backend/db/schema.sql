@@ -2,7 +2,9 @@ PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS manual_orders (
     order_id TEXT PRIMARY KEY,
+    invoice_number TEXT,
     company_name TEXT,
+    phone TEXT,
     delivery_address TEXT,
     suburb TEXT NOT NULL,
     postcode TEXT,
@@ -23,7 +25,8 @@ CREATE TABLE IF NOT EXISTS manual_drivers (
     start_time TEXT,
     end_time TEXT,
     is_available INTEGER NOT NULL DEFAULT 1,
-    preferred_zone TEXT
+    preferred_zone TEXT,
+    pallet_only INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS manual_vehicles (
@@ -64,7 +67,9 @@ CREATE TABLE IF NOT EXISTS manual_driver_vehicle_assignments (
 
 INSERT OR IGNORE INTO manual_orders (
     order_id,
+    invoice_number,
     company_name,
+    phone,
     delivery_address,
     suburb,
     postcode,
@@ -80,7 +85,9 @@ INSERT OR IGNORE INTO manual_orders (
 ) VALUES
     (
         'ORD-001',
+        'INV-1001',
         'Demo Customer A',
+        '0400 000 001',
         '1 Demo Street',
         'Dandenong',
         '3175',
@@ -96,7 +103,9 @@ INSERT OR IGNORE INTO manual_orders (
     ),
     (
         'ORD-002',
+        'INV-1002',
         'Demo Customer B',
+        '0400 000 002',
         '2 Demo Street',
         'Clayton',
         '3168',
@@ -112,7 +121,9 @@ INSERT OR IGNORE INTO manual_orders (
     ),
     (
         'ORD-003',
+        'INV-1003',
         'Demo Customer C',
+        '0400 000 003',
         '3 Demo Street',
         'Springvale',
         '3171',
@@ -133,11 +144,12 @@ INSERT OR IGNORE INTO manual_drivers (
     start_time,
     end_time,
     is_available,
-    preferred_zone
+    preferred_zone,
+    pallet_only
 ) VALUES
-    ('D001', 'John', '08:00', '16:00', 1, 'South East'),
-    ('D002', 'Tony', '08:00', '16:00', 1, 'West'),
-    ('D003', 'David', '09:00', '15:00', 1, 'North');
+    ('D001', 'John', '08:00', '16:00', 1, 'South East', 0),
+    ('D002', 'Tony', '08:00', '16:00', 1, 'West', 1),
+    ('D003', 'David', '09:00', '15:00', 1, 'North', 0);
 
 INSERT OR IGNORE INTO manual_vehicles (
     vehicle_id,

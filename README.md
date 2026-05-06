@@ -1,20 +1,28 @@
 ﻿# Manual Dispatch Board
 
-Manual Dispatch Board is a manual office workflow for assigning Orders to Driver + Trip + Vehicle. This repository is currently in Phase 9: Excel Export.
+Manual Dispatch Board is a manual office workflow for assigning Orders to Driver + Trip + Vehicle. This repository is currently in Phase 10A-0: Order Card UI Refinement.
 
 ## Current Phase
-- Phase: 9
-- Status: backend Excel export for assigned Orders
+- Phase: 10A-0
+- Status: compact Order cards, Trip Summary refinement, and non-blocking exceptions
 - Frontend now loads board data from the backend API.
 - Assign, Unassign, and Choose Vehicle actions now call the backend API.
 - SQLite persistence means refresh can preserve assignments and Driver + Dispatch Date vehicle selections.
 - Business hints remain non-blocking.
+- Order cards are now compact and show Invoice #, Company, Suburb, urgency, note preview, and start time.
+- Clicking an Order card opens a read-only full detail popup.
+- Invoice # and Phone are supported in the Order data model.
+- The lower section is now labelled Trip Summary.
+- Preferred Zone is hidden on the frontend.
+- Pallet-only driver and vehicle capacity exceptions are display-only and non-blocking.
+- Pending Driver/Trip selections are preserved after assigning another Order.
 - Export Excel button is available near the Dispatch Date controls.
 - Excel export uses backend SQLite assignment data.
 - Excel export includes only assigned Orders.
 - Empty Drivers and empty Trips are not exported.
 - Location column is not included in the export.
 - No separate Review Summary UI was added.
+- Full Add/Edit/Delete Order is not implemented yet.
 - Backend now has SQLite persistence support for demo/master data, manual task assignments, and Driver + Dispatch Date vehicle assignments.
 - Runtime SQLite database files are local and ignored by Git.
 - No automatic assignment, blocking rules, localStorage, or optimization logic is implemented in this phase.
@@ -22,7 +30,7 @@ Manual Dispatch Board is a manual office workflow for assigning Orders to Driver
 ## Layout Decision
 The future Manual Dispatch Board layout must be top-bottom:
 - Top: Task Pool
-- Bottom: Driver Summary
+- Bottom: Trip Summary
 
 Do not use a left-right layout unless explicitly requested.
 
@@ -33,8 +41,8 @@ Do not use a left-right layout unless explicitly requested.
 - Each Order card allows selecting Driver and `trip1` or `trip2`.
 - Default trip is `trip1`.
 - Assign moves the Order into the selected Driver card.
-- Driver Summary shows one card per Driver.
-- Each Driver card groups Orders by `trip1` and `trip2`.
+- Trip Summary currently shows one card per Driver.
+- Each Trip Summary card groups Orders by `trip1` and `trip2`.
 - Each Driver card has a Choose Vehicle dropdown.
 - Vehicle dropdown options show vehicle rego.
 - Vehicle assignment is at Driver + Dispatch Date level.
@@ -64,6 +72,7 @@ Phase 6 SQLite persistence details are documented in `docs/manual-dispatch-board
 Phase 7 frontend business hints are documented in `docs/manual-dispatch-board-phase7.md`.
 Phase 8 frontend-backend integration is documented in `docs/manual-dispatch-board-phase8.md`.
 Phase 9 Excel export is documented in `docs/manual-dispatch-board-phase9.md`.
+Phase 10A-0 Order card UI refinement is documented in `docs/manual-dispatch-board-phase10a0-ui-refinement.md`.
 
 ## Validation
 Phase 0 uses document and Git validation only. Functional tests should not be run until test, frontend, or backend implementation files exist.
@@ -76,3 +85,4 @@ Phase 6 uses Python compile checks, backend repository/service unit tests, front
 Phase 7 uses frontend syntax validation, backend regression tests, static file review, and manual browser checks for non-blocking hints.
 Phase 8 uses frontend syntax validation, backend regression tests, static safety checks, and browser/manual checks when tooling is available.
 Phase 9 uses backend Excel export unit tests, backend regression tests, frontend syntax validation, static safety checks, and browser/manual checks when tooling is available.
+Phase 10A-0 uses backend schema/migration tests, frontend syntax validation, static safety checks, and browser/manual checks when tooling is available.

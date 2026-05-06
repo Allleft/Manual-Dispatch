@@ -13,6 +13,8 @@ const state = {
   vehicles: [],
   assignments: [],
   driverVehicleAssignments: [],
+  pendingSelections: {},
+  activeOrderDetailId: "",
 };
 
 function getApiUrl(path, query = {}) {
@@ -70,6 +72,7 @@ function applyBoardResponse(payload) {
   state.vehicles = board.vehicles;
   state.assignments = board.assignments;
   state.driverVehicleAssignments = board.driverVehicleAssignments;
+  cleanupPendingSelections();
 }
 
 async function apiGetBoard(dispatchDate) {
@@ -192,6 +195,18 @@ function getLooseBagsQuantity(order) {
   return Number.isFinite(looseBagsQuantity) ? looseBagsQuantity : 0;
 }
 
+function formatOptional(value, fallback = "-") {
+  return value === undefined || value === null || value === "" ? fallback : value;
+}
+
+function truncateText(value, maxLength = 44) {
+  const text = formatOptional(value, "");
+  if (text.length <= maxLength) {
+    return text;
+  }
+  return `${text.slice(0, maxLength - 1)}...`;
+}
+
 function createOption(value, label, selected = false) {
   const option = document.createElement("option");
   option.value = value;
@@ -212,6 +227,20 @@ function createHint(text, variant = "neutral") {
   hint.className = `hint-row hint-row-${variant}`;
   hint.textContent = text;
   return hint;
+}
+
+function createDetailField(label, value) {
+  const field = document.createElement("div");
+  field.className = "detail-field";
+
+  const labelElement = document.createElement("dt");
+  labelElement.textContent = label;
+
+  const valueElement = document.createElement("dd");
+  valueElement.textContent = formatOptional(value);
+
+  field.append(labelElement, valueElement);
+  return field;
 }
 
 function getAssignmentForOrder(order) {
@@ -276,40 +305,6 @@ function getUrgencyLabel(order) {
   return urgency.charAt(0).toUpperCase() + urgency.slice(1).toLowerCase();
 }
 
-function isZoneDifferent(order, driver) {
-  return Boolean(order.zone && driver && driver.preferred_zone && order.zone !== driver.preferred_zone);
-}
-
-function timeToMinutes(timeValue) {
-  if (!timeValue) {
-    return null;
-  }
-
-  const [hours, minutes] = timeValue.split(":").map(Number);
-  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) {
-    return null;
-  }
-
-  return hours * 60 + minutes;
-}
-
-function isOutsideDriverHours(order, driver) {
-  if (!driver) {
-    return false;
-  }
-
-  const orderStart = timeToMinutes(order.start_time);
-  const orderEnd = timeToMinutes(order.end_time);
-  const driverStart = timeToMinutes(driver.start_time);
-  const driverEnd = timeToMinutes(driver.end_time);
-
-  if ([orderStart, orderEnd, driverStart, driverEnd].some((value) => value === null)) {
-    return false;
-  }
-
-  return orderStart < driverStart || orderEnd > driverEnd;
-}
-
 function getAssignedOrdersForDriver(driverId) {
   return state.assignments
     .filter((assignment) => assignment.driver_id === driverId)
@@ -351,8 +346,73 @@ function isVehicleCapacityExceeded(driverId) {
   return calculateDriverTotals(driverId).pallets > Number(selectedVehicle.pallet_capacity || 0);
 }
 
-async function handleAssign(orderId, driverId, tripNo) {
-  if (!driverId || state.isSaving) {
+function getDriverExceptions(driver) {
+  const messages = [];
+  const assignedOrders = getAssignedOrdersForDriver(driver.driver_id);
+
+  if (driver.pallet_only && assignedOrders.some((order) => getLooseBagsQuantity(order) > 0)) {
+    messages.push("Exception: Driver only handles pallet orders");
+  }
+
+  if (isVehicleCapacityExceeded(driver.driver_id)) {
+    messages.push("Exception: Assigned pallets exceed selected vehicle capacity");
+  }
+
+  return messages;
+}
+
+function getPendingSelection(orderId) {
+  if (!state.pendingSelections[orderId]) {
+    state.pendingSelections[orderId] = { driver_id: "", trip_no: "trip1" };
+  }
+  return state.pendingSelections[orderId];
+}
+
+function updatePendingSelection(orderId, updates) {
+  state.pendingSelections[orderId] = {
+    ...getPendingSelection(orderId),
+    ...updates,
+  };
+}
+
+function cleanupPendingSelections() {
+  const orderIds = new Set(state.orders.map((order) => order.order_id));
+  const assignedOrderIds = new Set(
+    state.assignments
+      .filter((assignment) => assignment.task_type === "ORDER")
+      .map((assignment) => assignment.task_id),
+  );
+  const driverIds = new Set(state.drivers.map((driver) => driver.driver_id));
+
+  Object.entries(state.pendingSelections).forEach(([orderId, selection]) => {
+    if (!orderIds.has(orderId) || assignedOrderIds.has(orderId)) {
+      delete state.pendingSelections[orderId];
+      return;
+    }
+
+    if (selection.driver_id && !driverIds.has(selection.driver_id)) {
+      selection.driver_id = "";
+    }
+
+    if (!["trip1", "trip2"].includes(selection.trip_no)) {
+      selection.trip_no = "trip1";
+    }
+  });
+}
+
+function openOrderDetail(orderId) {
+  state.activeOrderDetailId = orderId;
+  renderOrderDetailPopup();
+}
+
+function closeOrderDetail() {
+  state.activeOrderDetailId = "";
+  renderOrderDetailPopup();
+}
+
+async function handleAssign(orderId) {
+  const selection = getPendingSelection(orderId);
+  if (!selection.driver_id || state.isSaving) {
     return;
   }
 
@@ -365,9 +425,11 @@ async function handleAssign(orderId, driverId, tripNo) {
       dispatch_date: state.dispatchDate,
       task_type: "ORDER",
       task_id: orderId,
-      driver_id: driverId,
-      trip_no: tripNo || "trip1",
+      driver_id: selection.driver_id,
+      trip_no: selection.trip_no || "trip1",
     });
+    delete state.pendingSelections[orderId];
+    closeOrderDetail();
     await loadBoard(state.dispatchDate);
   } catch (error) {
     state.isSaving = false;
@@ -391,6 +453,7 @@ async function handleUnassign(taskType, taskId) {
       task_type: taskType,
       task_id: taskId,
     });
+    updatePendingSelection(taskId, { driver_id: "", trip_no: "trip1" });
     await loadBoard(state.dispatchDate);
   } catch (error) {
     state.isSaving = false;
@@ -498,45 +561,52 @@ function renderTaskPool() {
   }
 
   unassignedOrders.forEach((order) => {
+    const selection = getPendingSelection(order.order_id);
     const card = document.createElement("article");
-    card.className = "order-card";
-    card.setAttribute("aria-labelledby", `order-${order.order_id}`);
+    card.className = "order-card order-card-compact";
+    card.tabIndex = 0;
+    card.setAttribute("role", "button");
+    card.setAttribute("aria-label", `View details for ${order.invoice_number || order.order_id}`);
+    card.addEventListener("click", () => openOrderDetail(order.order_id));
+    card.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        openOrderDetail(order.order_id);
+      }
+    });
 
-    const header = document.createElement("div");
-    header.className = "order-card-header";
+    const content = document.createElement("div");
+    content.className = "compact-order-main";
+
+    const invoice = document.createElement("p");
+    invoice.className = "compact-invoice";
+    invoice.textContent = `Invoice # ${formatOptional(order.invoice_number)}`;
+
+    const company = document.createElement("p");
+    company.className = "compact-company";
+    company.textContent = formatOptional(order.company_name);
 
     const suburb = document.createElement("h3");
-    suburb.id = `order-${order.order_id}`;
-    suburb.textContent = order.suburb;
+    suburb.className = "compact-suburb";
+    suburb.textContent = formatOptional(order.suburb);
 
-    const pallet = document.createElement("p");
-    pallet.className = "metric-pill";
-    pallet.textContent = `Pallet: ${getDisplayPalletQuantity(order)}`;
-
-    header.append(suburb, pallet);
-
-    const badgeRow = document.createElement("div");
-    badgeRow.className = "hint-badge-row";
-    badgeRow.append(
+    const meta = document.createElement("div");
+    meta.className = "compact-meta";
+    meta.append(
       createBadge(getUrgencyLabel(order), isUrgent(order) ? "urgent" : "neutral"),
-      createBadge(`Zone: ${order.zone || "Not set"}`),
+      createBadge(`Start: ${formatOptional(order.start_time)}`),
     );
 
-    const hintList = document.createElement("div");
-    hintList.className = "order-hints";
-    hintList.append(createHint(`Window: ${order.start_time || "--"}-${order.end_time || "--"}`));
+    const note = document.createElement("p");
+    note.className = "compact-note";
+    note.textContent = `Note: ${truncateText(order.note || "None")}`;
 
-    const preferredDriverName = getOrderPreferredDriverName(order);
-    if (preferredDriverName) {
-      hintList.append(createHint(`Preferred: ${preferredDriverName}`));
-    }
-
-    if (order.note) {
-      hintList.append(createHint(`Note: ${order.note}`));
-    }
+    content.append(invoice, company, suburb, meta, note);
 
     const controls = document.createElement("div");
-    controls.className = "order-controls";
+    controls.className = "order-controls compact-order-controls";
+    controls.addEventListener("click", (event) => event.stopPropagation());
+    controls.addEventListener("keydown", (event) => event.stopPropagation());
 
     const driverLabel = document.createElement("label");
     driverLabel.textContent = "Driver";
@@ -545,9 +615,9 @@ function renderTaskPool() {
     const driverSelect = document.createElement("select");
     driverSelect.id = `driver-${order.order_id}`;
     driverSelect.disabled = state.isSaving || state.isLoading;
-    driverSelect.append(createOption("", "Select driver", true));
+    driverSelect.append(createOption("", "Select driver", selection.driver_id === ""));
     state.drivers.forEach((driver) => {
-      driverSelect.append(createOption(driver.driver_id, driver.name));
+      driverSelect.append(createOption(driver.driver_id, driver.name, selection.driver_id === driver.driver_id));
     });
 
     const tripLabel = document.createElement("label");
@@ -557,60 +627,36 @@ function renderTaskPool() {
     const tripSelect = document.createElement("select");
     tripSelect.id = `trip-${order.order_id}`;
     tripSelect.disabled = state.isSaving || state.isLoading;
-    tripSelect.append(createOption("trip1", "trip1", true));
-    tripSelect.append(createOption("trip2", "trip2"));
+    tripSelect.append(createOption("trip1", "trip1", selection.trip_no !== "trip2"));
+    tripSelect.append(createOption("trip2", "trip2", selection.trip_no === "trip2"));
 
     const assignButton = document.createElement("button");
     assignButton.type = "button";
-    assignButton.disabled = true;
+    assignButton.disabled = !selection.driver_id || state.isSaving || state.isLoading;
     assignButton.textContent = state.isSaving ? "Saving..." : "Assign";
-    assignButton.title = "Select a driver to enable Assign";
-
-    const selectionHints = document.createElement("div");
-    selectionHints.className = "selection-hints";
-
-    const renderSelectionHints = () => {
-      const selectedDriver = findDriverById(driverSelect.value);
-      selectionHints.innerHTML = "";
-
-      if (!selectedDriver) {
-        return;
-      }
-
-      if (preferredDriverName && selectedDriver.driver_id !== order.preferred_driver_id) {
-        selectionHints.append(createHint(`Preferred driver is ${preferredDriverName}`, "warning"));
-      }
-
-      if (isZoneDifferent(order, selectedDriver)) {
-        selectionHints.append(createHint("Zone differs from driver preference", "warning"));
-      }
-
-      if (isOutsideDriverHours(order, selectedDriver)) {
-        selectionHints.append(createHint("Outside driver hours", "warning"));
-      }
-    };
+    assignButton.title = selection.driver_id
+      ? "Assign this Order to the selected Driver and Trip"
+      : "Select a driver to enable Assign";
 
     driverSelect.addEventListener("change", () => {
+      updatePendingSelection(order.order_id, { driver_id: driverSelect.value });
       assignButton.disabled = driverSelect.value === "" || state.isSaving || state.isLoading;
       assignButton.title = driverSelect.value
         ? "Assign this Order to the selected Driver and Trip"
         : "Select a driver to enable Assign";
-      renderSelectionHints();
     });
 
-    assignButton.addEventListener("click", () => {
-      handleAssign(order.order_id, driverSelect.value, tripSelect.value);
+    tripSelect.addEventListener("change", () => {
+      updatePendingSelection(order.order_id, { trip_no: tripSelect.value || "trip1" });
     });
 
-    controls.append(
-      driverLabel,
-      driverSelect,
-      tripLabel,
-      tripSelect,
-      selectionHints,
-      assignButton,
-    );
-    card.append(header, badgeRow, hintList, controls);
+    assignButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      handleAssign(order.order_id);
+    });
+
+    controls.append(driverLabel, driverSelect, tripLabel, tripSelect, assignButton);
+    card.append(content, controls);
     taskPoolList.append(card);
   });
 }
@@ -630,14 +676,14 @@ function renderDriverSummary() {
   if (state.errorMessage && state.drivers.length === 0) {
     const errorState = document.createElement("p");
     errorState.className = "empty-board";
-    errorState.textContent = "Driver Summary is unavailable until backend data loads.";
+    errorState.textContent = "Trip Summary is unavailable until backend data loads.";
     driverSummaryList.append(errorState);
     return;
   }
 
   state.drivers.forEach((driver) => {
     const card = document.createElement("article");
-    card.className = "driver-card";
+    card.className = "driver-card trip-summary-card";
 
     const header = document.createElement("div");
     header.className = "driver-card-header";
@@ -649,8 +695,10 @@ function renderDriverSummary() {
     driverBadges.className = "hint-badge-row";
     driverBadges.append(
       createBadge(driver.is_available ? "Available" : "Not available", driver.is_available ? "good" : "warning"),
-      createBadge(`Preferred zone: ${driver.preferred_zone || "Not set"}`),
     );
+    if (driver.pallet_only) {
+      driverBadges.append(createBadge("Pallet-only driver", "warning"));
+    }
 
     const driverTotals = calculateDriverTotals(driver.driver_id);
     const loadSummary = document.createElement("div");
@@ -698,11 +746,15 @@ function renderDriverSummary() {
         ? "Vehicle also selected by another driver."
         : "";
 
-    const capacityWarning = document.createElement("p");
-    capacityWarning.className = "vehicle-hint";
-    capacityWarning.textContent = isVehicleCapacityExceeded(driver.driver_id)
-      ? "Capacity warning: assigned pallets exceed selected vehicle pallet capacity."
-      : "";
+    const exceptions = getDriverExceptions(driver);
+    const exceptionList = document.createElement("div");
+    exceptionList.className = "exception-list";
+    exceptions.forEach((message) => {
+      const item = document.createElement("p");
+      item.className = "exception-item";
+      item.textContent = message;
+      exceptionList.append(item);
+    });
 
     vehicleSelect.addEventListener("change", () => {
       handleVehicleChange(driver.driver_id, vehicleSelect.value);
@@ -713,8 +765,8 @@ function renderDriverSummary() {
     if (duplicateHint.textContent) {
       header.append(duplicateHint);
     }
-    if (capacityWarning.textContent) {
-      header.append(capacityWarning);
+    if (exceptions.length > 0) {
+      header.append(exceptionList);
     }
 
     const trips = document.createElement("div");
@@ -796,10 +848,89 @@ function createAssignedTask(assignment, order) {
   return row;
 }
 
+function renderOrderDetailPopup() {
+  let root = document.querySelector("#order-detail-root");
+  if (!root) {
+    root = document.createElement("div");
+    root.id = "order-detail-root";
+    document.body.append(root);
+  }
+
+  root.innerHTML = "";
+  if (!state.activeOrderDetailId) {
+    return;
+  }
+
+  const order = getOrderByTaskId(state.activeOrderDetailId);
+  if (!order) {
+    state.activeOrderDetailId = "";
+    return;
+  }
+
+  const backdrop = document.createElement("div");
+  backdrop.className = "detail-backdrop";
+  backdrop.addEventListener("click", closeOrderDetail);
+
+  const modal = document.createElement("article");
+  modal.className = "order-detail-modal";
+  modal.setAttribute("role", "dialog");
+  modal.setAttribute("aria-modal", "true");
+  modal.setAttribute("aria-labelledby", "order-detail-title");
+  modal.addEventListener("click", (event) => event.stopPropagation());
+
+  const header = document.createElement("div");
+  header.className = "detail-header";
+
+  const titleWrap = document.createElement("div");
+  const kicker = document.createElement("p");
+  kicker.className = "section-kicker";
+  kicker.textContent = "Order details";
+
+  const title = document.createElement("h2");
+  title.id = "order-detail-title";
+  title.textContent = `${formatOptional(order.invoice_number)} - ${formatOptional(order.suburb)}`;
+
+  titleWrap.append(kicker, title);
+
+  const closeButton = document.createElement("button");
+  closeButton.type = "button";
+  closeButton.className = "button-secondary detail-close";
+  closeButton.textContent = "Close";
+  closeButton.addEventListener("click", closeOrderDetail);
+
+  header.append(titleWrap, closeButton);
+
+  const details = document.createElement("dl");
+  details.className = "detail-grid";
+  details.append(
+    createDetailField("Order ID", order.order_id),
+    createDetailField("Invoice #", order.invoice_number),
+    createDetailField("Company Name", order.company_name),
+    createDetailField("Phone", order.phone),
+    createDetailField("Delivery Address", order.delivery_address),
+    createDetailField("Suburb", order.suburb),
+    createDetailField("Postcode", order.postcode),
+    createDetailField("Delivery Date", order.delivery_date),
+    createDetailField("Zone", order.zone),
+    createDetailField("Urgency", getUrgencyLabel(order)),
+    createDetailField("Preferred Driver", getOrderPreferredDriverName(order)),
+    createDetailField("Pallet Quantity", getDisplayPalletQuantity(order)),
+    createDetailField("Loose Bags Quantity", getLooseBagsQuantity(order)),
+    createDetailField("Start Time", order.start_time),
+    createDetailField("End Time", order.end_time),
+    createDetailField("Note", order.note),
+  );
+
+  modal.append(header, details);
+  backdrop.append(modal);
+  root.append(backdrop);
+}
+
 function renderBoard() {
   renderBoardControls();
   renderTaskPool();
   renderDriverSummary();
+  renderOrderDetailPopup();
 }
 
 renderBoard();

@@ -17,7 +17,9 @@ class InMemoryManualDispatchRepository:
         self.orders = [
             Order(
                 order_id="ORD-001",
+                invoice_number="INV-1001",
                 company_name="Demo Customer A",
+                phone="0400 000 001",
                 delivery_address="1 Demo Street",
                 suburb="Dandenong",
                 postcode="3175",
@@ -33,7 +35,9 @@ class InMemoryManualDispatchRepository:
             ),
             Order(
                 order_id="ORD-002",
+                invoice_number="INV-1002",
                 company_name="Demo Customer B",
+                phone="0400 000 002",
                 delivery_address="2 Demo Street",
                 suburb="Clayton",
                 postcode="3168",
@@ -49,7 +53,9 @@ class InMemoryManualDispatchRepository:
             ),
             Order(
                 order_id="ORD-003",
+                invoice_number="INV-1003",
                 company_name="Demo Customer C",
+                phone="0400 000 003",
                 delivery_address="3 Demo Street",
                 suburb="Springvale",
                 postcode="3171",
@@ -72,6 +78,7 @@ class InMemoryManualDispatchRepository:
                 end_time=None,
                 is_available=True,
                 preferred_zone=None,
+                pallet_only=False,
             ),
             Driver(
                 driver_id="D002",
@@ -80,6 +87,7 @@ class InMemoryManualDispatchRepository:
                 end_time=None,
                 is_available=True,
                 preferred_zone=None,
+                pallet_only=True,
             ),
             Driver(
                 driver_id="D003",
@@ -88,6 +96,7 @@ class InMemoryManualDispatchRepository:
                 end_time=None,
                 is_available=True,
                 preferred_zone=None,
+                pallet_only=False,
             ),
         ]
         self.vehicles = [

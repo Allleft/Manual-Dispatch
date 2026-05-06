@@ -5,7 +5,9 @@ from typing import List, Optional
 @dataclass
 class Order:
     order_id: str
+    invoice_number: Optional[str]
     company_name: str
+    phone: Optional[str]
     delivery_address: str
     suburb: str
     postcode: str
@@ -28,6 +30,7 @@ class Driver:
     end_time: Optional[str]
     is_available: bool
     preferred_zone: Optional[str]
+    pallet_only: bool
 
 
 @dataclass

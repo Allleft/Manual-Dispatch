@@ -21,7 +21,16 @@ class ManualDispatchServiceTest(unittest.TestCase):
 
         self.assertEqual("2026-05-05", board.dispatch_date)
         self.assertEqual(["Dandenong", "Clayton", "Springvale"], [order.suburb for order in board.orders])
+        self.assertEqual(
+            ["INV-1001", "INV-1002", "INV-1003"],
+            [order.invoice_number for order in board.orders],
+        )
+        self.assertEqual(
+            ["0400 000 001", "0400 000 002", "0400 000 003"],
+            [order.phone for order in board.orders],
+        )
         self.assertEqual(["John", "Tony", "David"], [driver.name for driver in board.drivers])
+        self.assertEqual([False, True, False], [driver.pallet_only for driver in board.drivers])
         self.assertEqual(["ABC123", "XYZ888", "MCC001"], [vehicle.rego for vehicle in board.vehicles])
 
     def test_assign_task_creates_assignment_with_task_type_and_task_id(self):

@@ -222,7 +222,9 @@ class SQLiteManualDispatchRepository:
     def _row_to_order(self, row):
         return Order(
             order_id=row["order_id"],
+            invoice_number=row["invoice_number"],
             company_name=row["company_name"],
+            phone=row["phone"],
             delivery_address=row["delivery_address"],
             suburb=row["suburb"],
             postcode=row["postcode"],
@@ -245,6 +247,7 @@ class SQLiteManualDispatchRepository:
             end_time=row["end_time"],
             is_available=bool(row["is_available"]),
             preferred_zone=row["preferred_zone"],
+            pallet_only=bool(row["pallet_only"]),
         )
 
     def _row_to_vehicle(self, row):
