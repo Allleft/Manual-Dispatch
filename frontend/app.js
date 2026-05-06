@@ -685,6 +685,7 @@ function renderTaskPool() {
     const meta = document.createElement("div");
     meta.className = "compact-meta";
     meta.append(
+      createBadge(`Pallet: ${getDisplayPalletQuantity(order)}`),
       createBadge(getUrgencyLabel(order), isUrgent(order) ? "urgent" : "neutral"),
       createBadge(`Start: ${formatOptional(order.start_time)}`),
     );
