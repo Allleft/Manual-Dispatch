@@ -201,7 +201,7 @@ h1 {
 }
 
 .task-grid {
-  grid-template-columns: repeat(auto-fill, minmax(360px, 360px));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: start;
   justify-content: start;
 }
@@ -557,6 +557,19 @@ select:disabled {
   border-radius: var(--radius-sm);
   padding: 0.75rem;
   background: var(--panel);
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
+}
+
+.assigned-task:hover,
+.assigned-task:focus-visible {
+  border-color: rgba(39, 93, 69, 0.42);
+  box-shadow: 0 10px 22px rgba(37, 55, 45, 0.1);
+  outline: none;
+  transform: translateY(-1px);
 }
 
 .assigned-suburb {
@@ -643,6 +656,10 @@ select:disabled {
 }
 
 @media (max-width: 900px) {
+  .task-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .page-hero,
   .board-controls,
   .section-heading {

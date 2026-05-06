@@ -821,7 +821,20 @@ function createTripGroup(driverId, tripNo, title) {
 function createAssignedTask(assignment, order) {
   const row = document.createElement("article");
   row.className = "assigned-task";
-  row.setAttribute("aria-label", `${order.suburb}, Pallet ${getDisplayPalletQuantity(order)}`);
+  row.tabIndex = 0;
+  row.setAttribute("role", "button");
+  row.setAttribute("title", "View order details");
+  row.setAttribute(
+    "aria-label",
+    `View details for ${order.invoice_number || order.order_id}, ${order.suburb}, Pallet ${getDisplayPalletQuantity(order)}`,
+  );
+  row.addEventListener("click", () => openOrderDetail(order.order_id));
+  row.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      openOrderDetail(order.order_id);
+    }
+  });
 
   const details = document.createElement("div");
 
@@ -840,8 +853,12 @@ function createAssignedTask(assignment, order) {
   unassignButton.className = "button-secondary";
   unassignButton.disabled = state.isSaving || state.isLoading;
   unassignButton.textContent = state.isSaving ? "Saving..." : "Unassign";
-  unassignButton.addEventListener("click", () => {
+  unassignButton.addEventListener("click", (event) => {
+    event.stopPropagation();
     handleUnassign(assignment.task_type, assignment.task_id);
+  });
+  unassignButton.addEventListener("keydown", (event) => {
+    event.stopPropagation();
   });
 
   row.append(details, unassignButton);
