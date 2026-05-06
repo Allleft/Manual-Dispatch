@@ -6,10 +6,13 @@ from backend.schemas import (
     UnassignTaskRequest,
     to_dict,
 )
+from backend.repositories.sqlite_manual_dispatch_repository import (
+    SQLiteManualDispatchRepository,
+)
 from backend.services.manual_dispatch_service import ManualDispatchService
 
 router = APIRouter(prefix="/api/manual-dispatch", tags=["manual-dispatch"])
-service = ManualDispatchService()
+service = ManualDispatchService(SQLiteManualDispatchRepository())
 
 
 @router.get("/board")
