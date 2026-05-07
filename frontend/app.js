@@ -400,6 +400,19 @@ async function loadSpecifications() {
   }
 }
 
+function showSpecificationError(message) {
+  state.specificationError = message;
+  const errorElement = document.querySelector("#specification-error");
+  if (errorElement) {
+    errorElement.hidden = !message;
+    errorElement.textContent = message || "";
+  }
+}
+
+function clearSpecificationError() {
+  showSpecificationError("");
+}
+
 function startAddDriverSpecification() {
   state.specificationActiveTab = "drivers";
   state.driverSpecificationEditingId = "";
@@ -673,7 +686,7 @@ async function handleSaveDriverSpecification() {
 
 async function handleToggleDriverAvailability(driver, isAvailable, checkbox) {
   const previousValue = driver.is_available !== false;
-  state.specificationError = "";
+  clearSpecificationError();
   if (checkbox) {
     checkbox.disabled = true;
   }
@@ -695,8 +708,7 @@ async function handleToggleDriverAvailability(driver, isAvailable, checkbox) {
       checkbox.checked = previousValue;
     }
 
-    state.specificationError = `Unable to update Driver availability. ${error.message}`;
-    renderSpecificationModal();
+    showSpecificationError(`Unable to update Driver availability. ${error.message}`);
   } finally {
     if (checkbox) {
       checkbox.disabled = false;
@@ -754,7 +766,7 @@ async function handleSaveVehicleSpecification() {
 
 async function handleToggleVehicleAvailability(vehicle, isAvailable, checkbox) {
   const previousValue = vehicle.is_available !== false;
-  state.specificationError = "";
+  clearSpecificationError();
   if (checkbox) {
     checkbox.disabled = true;
   }
@@ -776,8 +788,7 @@ async function handleToggleVehicleAvailability(vehicle, isAvailable, checkbox) {
       checkbox.checked = previousValue;
     }
 
-    state.specificationError = `Unable to update Vehicle availability. ${error.message}`;
-    renderSpecificationModal();
+    showSpecificationError(`Unable to update Vehicle availability. ${error.message}`);
   } finally {
     if (checkbox) {
       checkbox.disabled = false;
@@ -2228,12 +2239,12 @@ function renderSpecificationModal() {
     loading.textContent = "Loading Driver and Vehicle specifications...";
     body.append(loading);
   } else {
-    if (state.specificationError) {
-      const error = document.createElement("p");
-      error.className = "board-error";
-      error.textContent = state.specificationError;
-      body.append(error);
-    }
+    const error = document.createElement("p");
+    error.id = "specification-error";
+    error.className = "board-error";
+    error.hidden = !state.specificationError;
+    error.textContent = state.specificationError || "";
+    body.append(error);
 
     body.append(
       state.specificationActiveTab === "drivers"
