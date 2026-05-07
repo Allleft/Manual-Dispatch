@@ -454,6 +454,18 @@ function updateVehicleSpecificationForm(field, value) {
   };
 }
 
+function updateSpecificationDriverLocal(driverId, updates) {
+  state.specificationDrivers = state.specificationDrivers.map((driver) =>
+    driver.driver_id === driverId ? { ...driver, ...updates } : driver,
+  );
+}
+
+function updateSpecificationVehicleLocal(vehicleId, updates) {
+  state.specificationVehicles = state.specificationVehicles.map((vehicle) =>
+    vehicle.vehicle_id === vehicleId ? { ...vehicle, ...updates } : vehicle,
+  );
+}
+
 function updateAddOrderForm(field, value) {
   state.addOrderForm = {
     ...state.addOrderForm,
@@ -659,21 +671,23 @@ async function handleSaveDriverSpecification() {
   }
 }
 
-async function handleToggleDriverAvailability(driver, isAvailable) {
-  state.specificationSaving = true;
+async function handleToggleDriverAvailability(driver, isAvailable, checkbox) {
+  const previousValue = driver.is_available !== false;
   state.specificationError = "";
-  renderSpecificationModal();
+  state.specificationDirty = true;
+  updateSpecificationDriverLocal(driver.driver_id, { is_available: isAvailable });
 
   try {
     await apiUpdateDriver(driver.driver_id, {
       ...getDefaultDriverSpecificationForm(driver),
       is_available: isAvailable,
     });
-    await refreshSpecificationsOnly();
   } catch (error) {
+    updateSpecificationDriverLocal(driver.driver_id, { is_available: previousValue });
+    if (checkbox) {
+      checkbox.checked = previousValue;
+    }
     state.specificationError = `Unable to update Driver availability. ${error.message}`;
-  } finally {
-    state.specificationSaving = false;
     renderSpecificationModal();
   }
 }
@@ -726,21 +740,23 @@ async function handleSaveVehicleSpecification() {
   }
 }
 
-async function handleToggleVehicleAvailability(vehicle, isAvailable) {
-  state.specificationSaving = true;
+async function handleToggleVehicleAvailability(vehicle, isAvailable, checkbox) {
+  const previousValue = vehicle.is_available !== false;
   state.specificationError = "";
-  renderSpecificationModal();
+  state.specificationDirty = true;
+  updateSpecificationVehicleLocal(vehicle.vehicle_id, { is_available: isAvailable });
 
   try {
     await apiUpdateVehicle(vehicle.vehicle_id, {
       ...getDefaultVehicleSpecificationForm(vehicle),
       is_available: isAvailable,
     });
-    await refreshSpecificationsOnly();
   } catch (error) {
+    updateSpecificationVehicleLocal(vehicle.vehicle_id, { is_available: previousValue });
+    if (checkbox) {
+      checkbox.checked = previousValue;
+    }
     state.specificationError = `Unable to update Vehicle availability. ${error.message}`;
-  } finally {
-    state.specificationSaving = false;
     renderSpecificationModal();
   }
 }
@@ -2246,8 +2262,8 @@ section.append(heading);
   state.specificationDrivers.forEach((driver) => {
     const row = document.createElement("tr");
     row.append(
-      createAvailabilityCell(driver.is_available, (checked) =>
-        handleToggleDriverAvailability(driver, checked),
+      createAvailabilityCell(driver.is_available, (checked, checkbox) =>
+        handleToggleDriverAvailability(driver, checked, checkbox),
       ),
       createTextCell(driver.driver_id),
       createTextCell(driver.name),
@@ -2308,8 +2324,8 @@ section.append(heading);
   state.specificationVehicles.forEach((vehicle) => {
     const row = document.createElement("tr");
     row.append(
-      createAvailabilityCell(vehicle.is_available, (checked) =>
-        handleToggleVehicleAvailability(vehicle, checked),
+      createAvailabilityCell(vehicle.is_available, (checked, checkbox) =>
+        handleToggleVehicleAvailability(vehicle, checked, checkbox),
       ),
       createTextCell(vehicle.vehicle_id),
       createTextCell(vehicle.rego),
@@ -2455,7 +2471,7 @@ function createAvailabilityCell(isAvailable, onChange) {
   input.checked = Boolean(isAvailable);
   input.disabled = state.specificationSaving;
   input.addEventListener("change", () => {
-    onChange(input.checked);
+    onChange(input.checked, input);
   });
   cell.append(input);
   return cell;
