@@ -56,10 +56,20 @@
       <section class="board-section driver-summary" aria-labelledby="trip-summary-title">
         <div class="section-heading">
           <div>
-            <h2 id="trip-summary-title">Driver Summary</h2>
+            <h2 id="trip-summary-title">Trip Summary</h2>
           </div>
         </div>
         <div id="driver-summary-list" class="driver-grid" aria-live="polite"></div>
+      </section>
+
+      <section class="board-section final-trip-summary" aria-labelledby="final-trip-summary-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="final-trip-summary-title">Final Trip Summary</h2>
+          </div>
+          <p class="section-note">Locked generated snapshots. They do not auto-update from later board changes.</p>
+        </div>
+        <div id="final-trip-summary-list" class="final-summary-grid" aria-live="polite"></div>
       </section>
     </main>
 

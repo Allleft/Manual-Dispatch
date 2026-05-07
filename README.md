@@ -1,6 +1,6 @@
 ﻿# Manual Dispatch Board
 
-Manual Dispatch Board is a manual office workflow for assigning Orders to Driver + Trip + Vehicle. This repository is currently in Phase 10A-5: Order Search and Filter.
+Manual Dispatch Board is a manual office workflow for assigning Orders to Driver + Trip + Vehicle. This repository now includes frontend-only locked Final Trip Summary snapshots.
 
 ## Current Phase
 - Phase: 10A-5
@@ -23,6 +23,12 @@ Manual Dispatch Board is a manual office workflow for assigning Orders to Driver
 - Task Pool now has frontend-only Order search.
 - Task Pool now has frontend-only Urgency filtering.
 - Search/filter affects only unassigned Orders and does not hide assigned Orders in Trip Summary.
+- Driver cards can generate a locked Final Trip Summary snapshot from current assigned Orders.
+- Generate captures the Driver, selected vehicle rego, trip grouping, totals, and Order table rows before unassigning.
+- Generated Orders are unassigned through the existing backend API and removed from editable Trip Summary.
+- Generated Orders are hidden from Task Pool in the same browser session using frontend memory.
+- Final Trip Summary snapshots are read-only and do not auto-update from later board changes.
+- Final Trip Summary persistence is not implemented yet; refresh may clear generated summaries.
 - Business hints remain non-blocking.
 - Order cards are now compact and show Invoice #, Company, Suburb, urgency, note preview, and start time.
 - Clicking an Order card opens a read-only full detail popup.
@@ -93,6 +99,7 @@ Phase 10A-1 Add Order is documented in `docs/manual-dispatch-board-phase10a1-add
 Phase 10A-3 Edit Order is documented in `docs/manual-dispatch-board-phase10a3-edit-order.md`.
 Phase 10A-4 Cancel Order is documented in `docs/manual-dispatch-board-phase10a4-cancel-order.md`.
 Phase 10A-5 Order Search and Filter is documented in `docs/manual-dispatch-board-phase10a5-order-filter.md`.
+Final Trip Summary snapshot behavior is documented in `docs/manual-dispatch-board-final-trip-summary.md`.
 
 ## Validation
 Phase 0 uses document and Git validation only. Functional tests should not be run until test, frontend, or backend implementation files exist.

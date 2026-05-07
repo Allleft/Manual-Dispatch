@@ -16,6 +16,8 @@ const state = {
   pendingSelections: {},
   taskPoolSearch: "",
   urgencyFilter: "All",
+  finalTripSummaries: {},
+  generatedTaskKeys: new Set(),
   activeOrderDetailId: "",
   isAddOrderOpen: false,
   addOrderError: "",
@@ -476,8 +478,18 @@ function getAssignmentForOrder(order) {
   );
 }
 
+function getTaskKey(taskType, taskId) {
+  return `${taskType}:${taskId}`;
+}
+
+function isGeneratedTask(taskType, taskId) {
+  return state.generatedTaskKeys.has(getTaskKey(taskType, taskId));
+}
+
 function getUnassignedOrders() {
-  return state.orders.filter((order) => !getAssignmentForOrder(order));
+  return state.orders.filter(
+    (order) => !getAssignmentForOrder(order) && !isGeneratedTask("ORDER", order.order_id),
+  );
 }
 
 function normalizeSearchText(value) {
@@ -575,6 +587,18 @@ function getAssignedOrdersForTrip(driverId, tripNo) {
     .filter((assignment) => assignment.driver_id === driverId && assignment.trip_no === tripNo)
     .map((assignment) => getOrderByTaskId(assignment.task_id))
     .filter(Boolean);
+}
+
+function getAssignmentsForDriver(driverId) {
+  return state.assignments.filter(
+    (assignment) =>
+      assignment.driver_id === driverId &&
+      (!assignment.dispatch_date || assignment.dispatch_date === state.dispatchDate),
+  );
+}
+
+function getAssignmentsForDriverTrip(driverId, tripNo) {
+  return getAssignmentsForDriver(driverId).filter((assignment) => assignment.trip_no === tripNo);
 }
 
 function calculateTotals(orders) {
@@ -749,6 +773,122 @@ async function handleVehicleChange(driverId, vehicleId) {
   }
 }
 
+function buildFinalTripSummarySnapshot(driverId) {
+  const driver = findDriverById(driverId);
+  if (!driver) {
+    throw new Error(`Driver does not exist: ${driverId}`);
+  }
+
+  const selectedVehicle = getSelectedVehicleForDriver(driverId);
+  const assignments = getAssignmentsForDriver(driverId);
+  const trips = ["trip1", "trip2"]
+    .map((tripNo) => {
+      const tripOrders = assignments
+        .filter((assignment) => assignment.trip_no === tripNo)
+        .map((assignment) => {
+          const order = getOrderByTaskId(assignment.task_id);
+          if (!order) {
+            return null;
+          }
+          return {
+            task_type: assignment.task_type,
+            task_id: assignment.task_id,
+            order_id: order.order_id,
+            company_name: order.company_name || "",
+            suburb: order.suburb || "",
+            invoice_number: order.invoice_number || "",
+            pallet_quantity: getDisplayPalletQuantity(order),
+            loose_bags_quantity: getLooseBagsQuantity(order),
+            product: "",
+          };
+        })
+        .filter(Boolean);
+
+      return {
+        trip_no: tripNo,
+        orders: tripOrders,
+      };
+    })
+    .filter((trip) => trip.orders.length > 0);
+
+  const allOrders = trips.flatMap((trip) => trip.orders);
+
+  return {
+    generated_at: new Date().toISOString(),
+    dispatch_date: state.dispatchDate,
+    driver_id: driver.driver_id,
+    driver_name: driver.name,
+    vehicle_rego: selectedVehicle ? selectedVehicle.rego : "No vehicle selected",
+    total_pallets: allOrders.reduce((total, order) => total + Number(order.pallet_quantity || 0), 0),
+    total_loose_bags: allOrders.reduce((total, order) => total + Number(order.loose_bags_quantity || 0), 0),
+    trips,
+  };
+}
+
+async function handleGenerateDriverSummary(driverId) {
+  if (state.isSaving || state.isLoading) {
+    return;
+  }
+
+  if (state.finalTripSummaries[driverId]) {
+    showError("Final Trip Summary for this driver is already generated and locked.");
+    renderBoard();
+    return;
+  }
+
+  const assignedOrders = getAssignedOrdersForDriver(driverId);
+  if (assignedOrders.length === 0) {
+    showError("Assign at least one Order before generating a Final Trip Summary.");
+    renderBoard();
+    return;
+  }
+
+  let snapshot;
+  try {
+    snapshot = buildFinalTripSummarySnapshot(driverId);
+  } catch (error) {
+    showError(`Unable to generate Final Trip Summary. ${error.message}`);
+    renderBoard();
+    return;
+  }
+
+  if (snapshot.trips.length === 0) {
+    showError("No Order tasks are available to include in the Final Trip Summary.");
+    renderBoard();
+    return;
+  }
+
+  state.finalTripSummaries[driverId] = snapshot;
+  snapshot.trips.forEach((trip) => {
+    trip.orders.forEach((order) => {
+      state.generatedTaskKeys.add(getTaskKey(order.task_type, order.task_id));
+    });
+  });
+
+  state.isSaving = true;
+  clearError();
+  renderBoard();
+
+  const generatedTasks = snapshot.trips.flatMap((trip) => trip.orders);
+
+  try {
+    await Promise.all(
+      generatedTasks.map((order) =>
+        apiUnassignTask({
+          dispatch_date: state.dispatchDate,
+          task_type: order.task_type,
+          task_id: order.task_id,
+        }),
+      ),
+    );
+    await loadBoard(state.dispatchDate);
+  } catch (error) {
+    state.isSaving = false;
+    showError(`Final Trip Summary was captured, but clearing editable assignments failed. ${error.message}`);
+    renderBoard();
+  }
+}
+
 function renderBoardControls() {
   const dateInput = document.querySelector("#dispatch-date");
   const exportButton = document.querySelector("#export-excel-button");
@@ -860,7 +1000,7 @@ function renderTaskPool() {
   if (unassignedOrders.length === 0) {
     const emptyState = document.createElement("p");
     emptyState.className = "empty-board";
-    emptyState.textContent = "All Orders are currently assigned.";
+    emptyState.textContent = "No unassigned Orders available in the Task Pool.";
     taskPoolList.append(emptyState);
     return;
   }
@@ -1014,7 +1154,9 @@ function renderDriverSummary() {
       driverBadges.append(createBadge("Pallet-only driver", "warning"));
     }
 
-    const driverTotals = calculateDriverTotals(driver.driver_id);
+    const assignedOrders = getAssignedOrdersForDriver(driver.driver_id);
+    const hasLockedFinalSummary = Boolean(state.finalTripSummaries[driver.driver_id]);
+    const driverTotals = calculateTotals(assignedOrders);
     const loadSummary = document.createElement("div");
     loadSummary.className = "load-summary";
     loadSummary.append(
@@ -1070,6 +1212,21 @@ function renderDriverSummary() {
       exceptionList.append(item);
     });
 
+    const finalLockHint = document.createElement("p");
+    finalLockHint.className = "vehicle-hint final-lock-hint";
+    finalLockHint.textContent = hasLockedFinalSummary
+      ? "Final Trip Summary for this driver is already generated and locked."
+      : "";
+
+    const generateButton = document.createElement("button");
+    generateButton.type = "button";
+    generateButton.className = "button-secondary generate-summary-button";
+    generateButton.textContent = state.isSaving ? "Generating..." : "Generate";
+    generateButton.disabled = state.isSaving || state.isLoading;
+    generateButton.addEventListener("click", () => {
+      handleGenerateDriverSummary(driver.driver_id);
+    });
+
     vehicleSelect.addEventListener("change", () => {
       handleVehicleChange(driver.driver_id, vehicleSelect.value);
     });
@@ -1082,11 +1239,29 @@ function renderDriverSummary() {
     if (exceptions.length > 0) {
       header.append(exceptionList);
     }
+    if (assignedOrders.length > 0 && !hasLockedFinalSummary) {
+      header.append(generateButton);
+    }
+    if (finalLockHint.textContent) {
+      header.append(finalLockHint);
+    }
 
     const trips = document.createElement("div");
     trips.className = "trip-columns";
-    trips.append(createTripGroup(driver.driver_id, "trip1", "Trip 1"));
-    trips.append(createTripGroup(driver.driver_id, "trip2", "Trip 2"));
+    if (assignedOrders.length === 0) {
+      const emptyState = document.createElement("p");
+      emptyState.className = "empty-trip editable-empty-state";
+      emptyState.textContent = hasLockedFinalSummary
+        ? "No editable tasks. Locked Final Trip Summary is shown below."
+        : "No editable tasks assigned to this driver.";
+      trips.append(emptyState);
+    } else {
+      ["trip1", "trip2"].forEach((tripNo) => {
+        if (getAssignmentsForDriverTrip(driver.driver_id, tripNo).length > 0) {
+          trips.append(createTripGroup(driver.driver_id, tripNo, tripNo === "trip1" ? "Trip 1" : "Trip 2"));
+        }
+      });
+    }
 
     card.append(header, trips);
     driverSummaryList.append(card);
@@ -1177,6 +1352,130 @@ function createAssignedTask(assignment, order) {
 
   row.append(details, unassignButton);
   return row;
+}
+
+function formatGeneratedAt(value) {
+  if (!value) {
+    return "-";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleString();
+}
+
+function renderFinalTripSummaries() {
+  const finalSummaryList = document.querySelector("#final-trip-summary-list");
+  if (!finalSummaryList) {
+    return;
+  }
+
+  finalSummaryList.innerHTML = "";
+  const summaries = Object.values(state.finalTripSummaries);
+
+  if (summaries.length === 0) {
+    const emptyState = document.createElement("p");
+    emptyState.className = "empty-board";
+    emptyState.textContent = "No locked Final Trip Summary snapshots generated in this session.";
+    finalSummaryList.append(emptyState);
+    return;
+  }
+
+  summaries
+    .sort((first, second) => first.driver_name.localeCompare(second.driver_name))
+    .forEach((summary) => {
+      finalSummaryList.append(createFinalTripSummaryCard(summary));
+    });
+}
+
+function createFinalTripSummaryCard(summary) {
+  const card = document.createElement("article");
+  card.className = "final-summary-card";
+
+  const header = document.createElement("div");
+  header.className = "final-summary-header";
+
+  const titleWrap = document.createElement("div");
+  const kicker = document.createElement("p");
+  kicker.className = "section-kicker";
+  kicker.textContent = "Locked snapshot";
+
+  const title = document.createElement("h3");
+  title.textContent = summary.driver_name;
+
+  titleWrap.append(kicker, title);
+
+  const lockedBadge = createBadge("Locked", "good");
+  header.append(titleWrap, lockedBadge);
+
+  const meta = document.createElement("dl");
+  meta.className = "final-summary-meta";
+  meta.append(
+    createDetailField("Date", summary.dispatch_date),
+    createDetailField("Driver", summary.driver_name),
+    createDetailField("Rego #", summary.vehicle_rego),
+    createDetailField("Generated At", formatGeneratedAt(summary.generated_at)),
+    createDetailField("Total Pallets", summary.total_pallets),
+    createDetailField("Total Loose Bags", summary.total_loose_bags),
+  );
+
+  const trips = document.createElement("div");
+  trips.className = "final-summary-trips";
+
+  let rowNumber = 1;
+  summary.trips.forEach((trip) => {
+    if (trip.orders.length === 0) {
+      return;
+    }
+
+    const tripSection = document.createElement("section");
+    tripSection.className = "final-trip-section";
+
+    const heading = document.createElement("h4");
+    heading.textContent = trip.trip_no === "trip1" ? "Trip 1" : "Trip 2";
+
+    const table = document.createElement("table");
+    table.className = "final-trip-table";
+
+    const thead = document.createElement("thead");
+    const headerRow = document.createElement("tr");
+    ["No.", "Customer Name", "Suburb", "Invoice #", "Product", "Pallets"].forEach((label) => {
+      const th = document.createElement("th");
+      th.scope = "col";
+      th.textContent = label;
+      headerRow.append(th);
+    });
+    thead.append(headerRow);
+
+    const tbody = document.createElement("tbody");
+    trip.orders.forEach((order) => {
+      const row = document.createElement("tr");
+      [
+        rowNumber,
+        formatOptional(order.company_name, ""),
+        formatOptional(order.suburb, ""),
+        formatOptional(order.invoice_number, ""),
+        "",
+        order.pallet_quantity,
+      ].forEach((value) => {
+        const td = document.createElement("td");
+        td.textContent = value;
+        row.append(td);
+      });
+      tbody.append(row);
+      rowNumber += 1;
+    });
+
+    table.append(thead, tbody);
+    tripSection.append(heading, table);
+    trips.append(tripSection);
+  });
+
+  card.append(header, meta, trips);
+  return card;
 }
 
 function createAddOrderField(label, field, options = {}) {
@@ -1598,6 +1897,7 @@ function renderBoard() {
   renderTaskPoolFilters();
   renderTaskPool();
   renderDriverSummary();
+  renderFinalTripSummaries();
   renderOrderDetailPopup();
   renderAddOrderPopup();
 }
