@@ -93,7 +93,15 @@ class UnassignTaskRequest:
 class AssignDriverVehicleRequest:
     dispatch_date: str
     driver_id: str
-    vehicle_id: str
+    vehicle_id: Optional[str] = None
+
+
+@dataclass
+class ManualDriverVehicleClearResponse:
+    dispatch_date: str
+    driver_id: str
+    vehicle_id: Optional[str] = None
+    cleared: bool = True
 
 
 @dataclass

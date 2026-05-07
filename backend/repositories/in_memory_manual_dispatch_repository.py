@@ -270,6 +270,18 @@ class InMemoryManualDispatchRepository:
         self.driver_vehicle_assignments.append(assignment)
         return assignment
 
+    def remove_driver_vehicle_assignment(self, dispatch_date, driver_id):
+        before_count = len(self.driver_vehicle_assignments)
+        self.driver_vehicle_assignments = [
+            assignment
+            for assignment in self.driver_vehicle_assignments
+            if not (
+                assignment.dispatch_date == dispatch_date
+                and assignment.driver_id == driver_id
+            )
+        ]
+        return len(self.driver_vehicle_assignments) != before_count
+
     def _create_assignment_id(self):
         assignment_id = f"A-{self._next_assignment_number:03d}"
         self._next_assignment_number += 1

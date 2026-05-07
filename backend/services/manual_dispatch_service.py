@@ -1,7 +1,11 @@
 from backend.repositories.in_memory_manual_dispatch_repository import (
     InMemoryManualDispatchRepository,
 )
-from backend.schemas import ManualDispatchBoardResponse, Order
+from backend.schemas import (
+    ManualDispatchBoardResponse,
+    ManualDriverVehicleClearResponse,
+    Order,
+)
 
 
 SUPPORTED_TASK_TYPES = {"ORDER"}
@@ -48,13 +52,31 @@ class ManualDispatchService:
         return self.get_board(request.dispatch_date)
 
     def assign_vehicle_to_driver(self, request):
-        self._validate_driver_exists(request.driver_id)
-        self._validate_vehicle_exists(request.vehicle_id)
+        dispatch_date = self._clean_required_text(request.dispatch_date, "dispatch_date")
+        driver_id = self._clean_required_text(request.driver_id, "driver_id")
+        vehicle_id = self._clean_optional_text(getattr(request, "vehicle_id", None))
+
+        self._validate_driver_exists(driver_id)
+
+        if not vehicle_id:
+            return self.clear_driver_vehicle_assignment(dispatch_date, driver_id)
+
+        self._validate_vehicle_exists(vehicle_id)
 
         return self.repository.upsert_driver_vehicle_assignment(
-            dispatch_date=request.dispatch_date,
-            driver_id=request.driver_id,
-            vehicle_id=request.vehicle_id,
+            dispatch_date=dispatch_date,
+            driver_id=driver_id,
+            vehicle_id=vehicle_id,
+        )
+
+    def clear_driver_vehicle_assignment(self, dispatch_date, driver_id):
+        dispatch_date = self._clean_required_text(dispatch_date, "dispatch_date")
+        driver_id = self._clean_required_text(driver_id, "driver_id")
+        self._validate_driver_exists(driver_id)
+        self.repository.remove_driver_vehicle_assignment(dispatch_date, driver_id)
+        return ManualDriverVehicleClearResponse(
+            dispatch_date=dispatch_date,
+            driver_id=driver_id,
         )
 
     def create_order(self, request):

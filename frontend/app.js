@@ -699,12 +699,6 @@ async function handleVehicleChange(driverId, vehicleId) {
     return;
   }
 
-  if (!vehicleId) {
-    showError("Select a vehicle rego to update this Driver. Clearing vehicle selection is not part of the current MVP.");
-    renderBoard();
-    return;
-  }
-
   state.isSaving = true;
   clearError();
   renderBoard();
@@ -713,7 +707,7 @@ async function handleVehicleChange(driverId, vehicleId) {
     await apiAssignDriverVehicle({
       dispatch_date: state.dispatchDate,
       driver_id: driverId,
-      vehicle_id: vehicleId,
+      vehicle_id: vehicleId || null,
     });
     await loadBoard(state.dispatchDate);
   } catch (error) {

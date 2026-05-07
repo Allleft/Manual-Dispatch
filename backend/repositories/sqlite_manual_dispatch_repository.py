@@ -317,6 +317,18 @@ class SQLiteManualDispatchRepository:
             vehicle_id=vehicle_id,
         )
 
+    def remove_driver_vehicle_assignment(self, dispatch_date, driver_id):
+        with connect(self.db_path) as connection:
+            cursor = connection.execute(
+                """
+                DELETE FROM manual_driver_vehicle_assignments
+                WHERE dispatch_date = ? AND driver_id = ?
+                """,
+                (dispatch_date, driver_id),
+            )
+            connection.commit()
+        return cursor.rowcount > 0
+
     def _fetch_assignment_row(self, connection, dispatch_date, task_type, task_id):
         return connection.execute(
             """
