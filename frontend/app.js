@@ -674,21 +674,33 @@ async function handleSaveDriverSpecification() {
 async function handleToggleDriverAvailability(driver, isAvailable, checkbox) {
   const previousValue = driver.is_available !== false;
   state.specificationError = "";
-  state.specificationDirty = true;
-  updateSpecificationDriverLocal(driver.driver_id, { is_available: isAvailable });
+  if (checkbox) {
+    checkbox.disabled = true;
+  }
 
   try {
     await apiUpdateDriver(driver.driver_id, {
       ...getDefaultDriverSpecificationForm(driver),
       is_available: isAvailable,
     });
+
+    updateSpecificationDriverLocal(driver.driver_id, { is_available: isAvailable });
+    driver.is_available = isAvailable;
+    state.specificationDirty = true;
   } catch (error) {
     updateSpecificationDriverLocal(driver.driver_id, { is_available: previousValue });
+    driver.is_available = previousValue;
+
     if (checkbox) {
       checkbox.checked = previousValue;
     }
+
     state.specificationError = `Unable to update Driver availability. ${error.message}`;
     renderSpecificationModal();
+  } finally {
+    if (checkbox) {
+      checkbox.disabled = false;
+    }
   }
 }
 
@@ -743,21 +755,33 @@ async function handleSaveVehicleSpecification() {
 async function handleToggleVehicleAvailability(vehicle, isAvailable, checkbox) {
   const previousValue = vehicle.is_available !== false;
   state.specificationError = "";
-  state.specificationDirty = true;
-  updateSpecificationVehicleLocal(vehicle.vehicle_id, { is_available: isAvailable });
+  if (checkbox) {
+    checkbox.disabled = true;
+  }
 
   try {
     await apiUpdateVehicle(vehicle.vehicle_id, {
       ...getDefaultVehicleSpecificationForm(vehicle),
       is_available: isAvailable,
     });
+
+    updateSpecificationVehicleLocal(vehicle.vehicle_id, { is_available: isAvailable });
+    vehicle.is_available = isAvailable;
+    state.specificationDirty = true;
   } catch (error) {
     updateSpecificationVehicleLocal(vehicle.vehicle_id, { is_available: previousValue });
+    vehicle.is_available = previousValue;
+
     if (checkbox) {
       checkbox.checked = previousValue;
     }
+
     state.specificationError = `Unable to update Vehicle availability. ${error.message}`;
     renderSpecificationModal();
+  } finally {
+    if (checkbox) {
+      checkbox.disabled = false;
+    }
   }
 }
 
@@ -2464,16 +2488,16 @@ function createTextCell(value) {
   return cell;
 }
 
-function createAvailabilityCell(isAvailable, onChange) {
+function createAvailabilityCell(isAvailable, handler) {
   const cell = document.createElement("td");
-  const input = document.createElement("input");
-  input.type = "checkbox";
-  input.checked = Boolean(isAvailable);
-  input.disabled = state.specificationSaving;
-  input.addEventListener("change", () => {
-    onChange(input.checked, input);
+  const checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.checked = Boolean(isAvailable);
+  checkbox.disabled = state.specificationSaving;
+  checkbox.addEventListener("change", () => {
+    handler(checkbox.checked, checkbox);
   });
-  cell.append(input);
+  cell.append(checkbox);
   return cell;
 }
 
