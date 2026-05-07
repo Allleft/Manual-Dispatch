@@ -359,44 +359,50 @@ async function openSpecificationModal() {
   state.isSpecificationModalOpen = true;
   state.specificationError = "";
   state.specificationDirty = false;
+  state.specificationLoading = false;
   state.driverSpecificationForm = null;
   state.driverSpecificationEditingId = "";
   state.vehicleSpecificationForm = null;
   state.vehicleSpecificationEditingId = "";
-  renderSpecificationModal();
-  await loadSpecifications();
+  renderSpecificationShell();
+  renderSpecificationPanel();
+  await loadSpecificationsIntoState();
+  renderSpecificationPanel();
 }
 
 async function closeSpecificationModal() {
   const shouldReloadBoard = state.specificationDirty;
+  const root = document.querySelector("#specification-root");
   state.isSpecificationModalOpen = false;
   state.specificationError = "";
   state.specificationDirty = false;
+  state.specificationLoading = false;
+  state.specificationSaving = false;
   state.driverSpecificationForm = null;
   state.driverSpecificationEditingId = "";
   state.vehicleSpecificationForm = null;
   state.vehicleSpecificationEditingId = "";
-  renderSpecificationModal();
+  if (root) {
+    root.innerHTML = "";
+  }
 
   if (shouldReloadBoard) {
     await loadBoard(state.dispatchDate);
   }
 }
 
-async function loadSpecifications() {
+async function loadSpecificationsIntoState() {
   state.specificationLoading = true;
-  state.specificationError = "";
-  renderSpecificationModal();
+  clearSpecificationError();
 
   try {
     const payload = await apiGetSpecifications();
     state.specificationDrivers = payload.drivers || [];
     state.specificationVehicles = payload.vehicles || [];
   } catch (error) {
-    state.specificationError = `Unable to load specifications. ${error.message}`;
+    showSpecificationError(`Unable to load specifications. ${error.message}`);
   } finally {
     state.specificationLoading = false;
-    renderSpecificationModal();
   }
 }
 
@@ -417,20 +423,22 @@ function startAddDriverSpecification() {
   state.specificationActiveTab = "drivers";
   state.driverSpecificationEditingId = "";
   state.driverSpecificationForm = getDefaultDriverSpecificationForm();
-  renderSpecificationModal();
+  updateSpecificationTabButtons();
+  renderSpecificationPanel({ preserveScroll: true });
 }
 
 function startEditDriverSpecification(driver) {
   state.specificationActiveTab = "drivers";
   state.driverSpecificationEditingId = driver.driver_id;
   state.driverSpecificationForm = getDefaultDriverSpecificationForm(driver);
-  renderSpecificationModal();
+  updateSpecificationTabButtons();
+  renderSpecificationPanel({ preserveScroll: true });
 }
 
 function cancelDriverSpecificationForm() {
   state.driverSpecificationEditingId = "";
   state.driverSpecificationForm = null;
-  renderSpecificationModal();
+  renderSpecificationPanel({ preserveScroll: true });
 }
 
 function updateDriverSpecificationForm(field, value) {
@@ -444,20 +452,22 @@ function startAddVehicleSpecification() {
   state.specificationActiveTab = "vehicles";
   state.vehicleSpecificationEditingId = "";
   state.vehicleSpecificationForm = getDefaultVehicleSpecificationForm();
-  renderSpecificationModal();
+  updateSpecificationTabButtons();
+  renderSpecificationPanel({ preserveScroll: true });
 }
 
 function startEditVehicleSpecification(vehicle) {
   state.specificationActiveTab = "vehicles";
   state.vehicleSpecificationEditingId = vehicle.vehicle_id;
   state.vehicleSpecificationForm = getDefaultVehicleSpecificationForm(vehicle);
-  renderSpecificationModal();
+  updateSpecificationTabButtons();
+  renderSpecificationPanel({ preserveScroll: true });
 }
 
 function cancelVehicleSpecificationForm() {
   state.vehicleSpecificationEditingId = "";
   state.vehicleSpecificationForm = null;
-  renderSpecificationModal();
+  renderSpecificationPanel({ preserveScroll: true });
 }
 
 function updateVehicleSpecificationForm(field, value) {
@@ -654,7 +664,8 @@ async function refreshSpecificationsOnly({ markDirty = true } = {}) {
   if (markDirty) {
     state.specificationDirty = true;
   }
-  await loadSpecifications();
+  await loadSpecificationsIntoState();
+  renderSpecificationPanel({ preserveScroll: true });
 }
 
 async function handleSaveDriverSpecification() {
@@ -664,7 +675,7 @@ async function handleSaveDriverSpecification() {
 
   state.specificationSaving = true;
   state.specificationError = "";
-  renderSpecificationModal();
+  renderSpecificationPanel({ preserveScroll: true });
 
   try {
     const payload = getDriverSpecificationPayload(state.driverSpecificationForm);
@@ -678,9 +689,10 @@ async function handleSaveDriverSpecification() {
     await refreshSpecificationsOnly();
   } catch (error) {
     state.specificationError = `Unable to save Driver. ${error.message}`;
+    showSpecificationError(state.specificationError);
   } finally {
     state.specificationSaving = false;
-    renderSpecificationModal();
+    renderSpecificationPanel({ preserveScroll: true });
   }
 }
 
@@ -724,16 +736,17 @@ async function handleDeleteDriverSpecification(driverId) {
 
   state.specificationSaving = true;
   state.specificationError = "";
-  renderSpecificationModal();
+  renderSpecificationPanel({ preserveScroll: true });
 
   try {
     await apiDeleteDriver(driverId);
     await refreshSpecificationsOnly();
   } catch (error) {
     state.specificationError = `Unable to delete Driver. ${error.message}`;
+    showSpecificationError(state.specificationError);
   } finally {
     state.specificationSaving = false;
-    renderSpecificationModal();
+    renderSpecificationPanel({ preserveScroll: true });
   }
 }
 
@@ -744,7 +757,7 @@ async function handleSaveVehicleSpecification() {
 
   state.specificationSaving = true;
   state.specificationError = "";
-  renderSpecificationModal();
+  renderSpecificationPanel({ preserveScroll: true });
 
   try {
     const payload = getVehicleSpecificationPayload(state.vehicleSpecificationForm);
@@ -758,9 +771,10 @@ async function handleSaveVehicleSpecification() {
     await refreshSpecificationsOnly();
   } catch (error) {
     state.specificationError = `Unable to save Vehicle. ${error.message}`;
+    showSpecificationError(state.specificationError);
   } finally {
     state.specificationSaving = false;
-    renderSpecificationModal();
+    renderSpecificationPanel({ preserveScroll: true });
   }
 }
 
@@ -804,16 +818,17 @@ async function handleDeleteVehicleSpecification(vehicleId) {
 
   state.specificationSaving = true;
   state.specificationError = "";
-  renderSpecificationModal();
+  renderSpecificationPanel({ preserveScroll: true });
 
   try {
     await apiDeleteVehicle(vehicleId);
     await refreshSpecificationsOnly();
   } catch (error) {
     state.specificationError = `Unable to delete Vehicle. ${error.message}`;
+    showSpecificationError(state.specificationError);
   } finally {
     state.specificationSaving = false;
-    renderSpecificationModal();
+    renderSpecificationPanel({ preserveScroll: true });
   }
 }
 
@@ -2164,16 +2179,34 @@ function createFinalTripSummaryCard(summary, options = {}) {
 }
 
 function renderSpecificationModal() {
+  if (!state.isSpecificationModalOpen) {
+    const root = document.querySelector("#specification-root");
+    if (root) {
+      root.innerHTML = "";
+    }
+    return;
+  }
+
+  renderSpecificationShell();
+  renderSpecificationPanel();
+}
+
+function renderSpecificationShell() {
   const root = document.querySelector("#specification-root");
   if (!root) {
     return;
   }
 
-  root.innerHTML = "";
   if (!state.isSpecificationModalOpen) {
+    root.innerHTML = "";
     return;
   }
 
+  if (root.querySelector(".specification-modal")) {
+    return;
+  }
+
+  root.innerHTML = "";
   const backdrop = document.createElement("div");
   backdrop.className = "detail-backdrop";
   backdrop.addEventListener("click", (event) => {
@@ -2212,6 +2245,7 @@ function renderSpecificationModal() {
   header.append(titleWrap, closeButton);
 
   const tabs = document.createElement("div");
+  tabs.id = "specification-tabs";
   tabs.className = "spec-tabs";
   [
     { id: "drivers", label: "Drivers" },
@@ -2223,39 +2257,99 @@ function renderSpecificationModal() {
       state.specificationActiveTab === tab.id ? "spec-tab spec-tab-active" : "spec-tab";
     button.textContent = tab.label;
     button.addEventListener("click", () => {
-      state.specificationActiveTab = tab.id;
-      renderSpecificationModal();
+      setSpecificationTab(tab.id);
     });
     tabs.append(button);
   });
 
   const body = document.createElement("div");
   body.className = "spec-body";
+  const error = document.createElement("p");
+  error.id = "specification-error";
+  error.className = "board-error";
+  error.hidden = !state.specificationError;
+  error.textContent = state.specificationError || "";
+
+  const panel = document.createElement("div");
+  panel.id = "specification-panel";
+  panel.className = "spec-panel";
+  body.append(error, panel);
+
+  card.append(header, tabs, body);
+  backdrop.append(card);
+  root.append(backdrop);
+}
+
+function renderSpecificationPanel({ preserveScroll = false } = {}) {
+  if (!state.isSpecificationModalOpen) {
+    return;
+  }
+
+  let panel = document.querySelector("#specification-panel");
+  if (!panel) {
+    renderSpecificationShell();
+    panel = document.querySelector("#specification-panel");
+  }
+
+  if (!panel) {
+    return;
+  }
+
+  const previousScrollTop = preserveScroll ? getActiveSpecificationScrollTop() : 0;
+  panel.innerHTML = "";
+
   const hasSpecificationData =
     state.specificationDrivers.length > 0 || state.specificationVehicles.length > 0;
   if (state.specificationLoading && !hasSpecificationData) {
     const loading = document.createElement("p");
     loading.className = "empty-board";
     loading.textContent = "Loading Driver and Vehicle specifications...";
-    body.append(loading);
+    panel.append(loading);
   } else {
-    const error = document.createElement("p");
-    error.id = "specification-error";
-    error.className = "board-error";
-    error.hidden = !state.specificationError;
-    error.textContent = state.specificationError || "";
-    body.append(error);
-
-    body.append(
+    panel.append(
       state.specificationActiveTab === "drivers"
         ? createDriverSpecificationSection()
         : createVehicleSpecificationSection(),
     );
   }
 
-  card.append(header, tabs, body);
-  backdrop.append(card);
-  root.append(backdrop);
+  updateSpecificationTabButtons();
+  showSpecificationError(state.specificationError);
+
+  if (preserveScroll) {
+    requestAnimationFrame(() => {
+      restoreActiveSpecificationScrollTop(previousScrollTop);
+    });
+  }
+}
+
+function setSpecificationTab(tabName) {
+  state.specificationActiveTab = tabName;
+  state.driverSpecificationForm = null;
+  state.driverSpecificationEditingId = "";
+  state.vehicleSpecificationForm = null;
+  state.vehicleSpecificationEditingId = "";
+  updateSpecificationTabButtons();
+  renderSpecificationPanel();
+}
+
+function updateSpecificationTabButtons() {
+  document.querySelectorAll("#specification-tabs .spec-tab").forEach((button) => {
+    const isActive = button.textContent.toLowerCase() === state.specificationActiveTab;
+    button.className = isActive ? "spec-tab spec-tab-active" : "spec-tab";
+  });
+}
+
+function getActiveSpecificationScrollTop() {
+  const wrap = document.querySelector(".specification-modal .spec-table-wrap");
+  return wrap ? wrap.scrollTop : 0;
+}
+
+function restoreActiveSpecificationScrollTop(scrollTop) {
+  const wrap = document.querySelector(".specification-modal .spec-table-wrap");
+  if (wrap) {
+    wrap.scrollTop = scrollTop;
+  }
 }
 
 function createDriverSpecificationSection() {

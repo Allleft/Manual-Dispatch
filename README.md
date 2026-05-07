@@ -3,8 +3,8 @@
 Manual Dispatch Board is a manual office workflow for assigning Orders to Driver + Trip + Vehicle. This repository now includes Driver & Vehicle Specification master-data management.
 
 ## Current Phase
-- Phase: 12
-- Status: UI Stability and Deferred Specification Refresh
+- Phase: 12C
+- Status: Driver & Vehicle Specification modal rebuild
 - Frontend now loads board data from the backend API.
 - Assign, Unassign, and Choose Vehicle actions now call the backend API.
 - SQLite persistence means refresh can preserve assignments and Driver + Dispatch Date vehicle selections.
@@ -37,6 +37,7 @@ Manual Dispatch Board is a manual office workflow for assigning Orders to Driver
 - Driver & Vehicle Specification modal is available from the top board controls.
 - Drivers can be added, edited, safely deleted, and marked available/unavailable.
 - Vehicles can be added, edited, safely deleted, and marked available/unavailable.
+- Driver & Vehicle Specification now uses a stable modal shell, tabs, error banner, and panel rendering architecture.
 - Driver & Vehicle Specification changes refresh the modal immediately and defer the main board reload until the modal closes.
 - Unavailable Drivers are hidden from the main Driver dropdown and Trip Summary.
 - Unavailable Vehicles are hidden from the Choose Vehicle dropdown.
@@ -115,6 +116,7 @@ Final Trip Summary snapshot behavior is documented in `docs/manual-dispatch-boar
 Phase 10G Final Trip Summary persistence is documented in `docs/manual-dispatch-board-phase10g-final-summary-persistence.md`.
 Driver & Vehicle Specification is documented in `docs/manual-dispatch-board-driver-vehicle-specification.md`.
 Phase 12 UI stability and deferred specification refresh is documented in `docs/manual-dispatch-board-phase12-ui-stability.md`.
+Phase 12C Driver & Vehicle Specification modal rebuild is documented in `docs/manual-dispatch-board-phase12c-specification-modal-rebuild.md`.
 
 ## Validation
 Phase 0 uses document and Git validation only. Functional tests should not be run until test, frontend, or backend implementation files exist.
@@ -135,3 +137,4 @@ Phase 10A-5 uses frontend syntax validation, backend regression tests, static sa
 Phase 10G uses backend final-summary persistence tests, backend regression tests, frontend syntax validation, static safety checks, and browser/manual checks when tooling is available.
 Phase 10B/C uses backend driver/vehicle specification tests, backend regression tests, frontend syntax validation, static safety checks, and browser/manual checks when tooling is available.
 Phase 12 uses frontend syntax validation, backend regression tests, static safety checks, and browser/manual checks when tooling is available.
+Phase 12C uses frontend syntax validation, backend regression tests when available, static safety checks, and browser/manual checks when tooling is available.
