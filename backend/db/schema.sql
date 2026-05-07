@@ -23,11 +23,15 @@ CREATE TABLE IF NOT EXISTS manual_orders (
 CREATE TABLE IF NOT EXISTS manual_drivers (
     driver_id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
+    license_no TEXT,
+    email TEXT,
+    phone_number TEXT,
     start_time TEXT,
     end_time TEXT,
     is_available INTEGER NOT NULL DEFAULT 1,
     preferred_zone TEXT,
-    pallet_only INTEGER NOT NULL DEFAULT 0
+    pallet_only INTEGER NOT NULL DEFAULT 0,
+    is_deleted INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS manual_vehicles (
@@ -38,7 +42,8 @@ CREATE TABLE IF NOT EXISTS manual_vehicles (
     pallet_capacity INTEGER NOT NULL DEFAULT 0,
     tub_capacity INTEGER NOT NULL DEFAULT 0,
     trolley_capacity INTEGER NOT NULL DEFAULT 0,
-    stillage_capacity INTEGER NOT NULL DEFAULT 0
+    stillage_capacity INTEGER NOT NULL DEFAULT 0,
+    is_deleted INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS manual_dispatch_assignments (
@@ -181,15 +186,19 @@ INSERT OR IGNORE INTO manual_orders (
 INSERT OR IGNORE INTO manual_drivers (
     driver_id,
     name,
+    license_no,
+    email,
+    phone_number,
     start_time,
     end_time,
     is_available,
     preferred_zone,
-    pallet_only
+    pallet_only,
+    is_deleted
 ) VALUES
-    ('D001', 'John', '08:00', '16:00', 1, 'South East', 0),
-    ('D002', 'Tony', '08:00', '16:00', 1, 'West', 1),
-    ('D003', 'David', '09:00', '15:00', 1, 'North', 0);
+    ('D001', 'John', 'LIC-D001', 'john@example.com', '0400 100 001', '08:00', '16:00', 1, 'South East', 0, 0),
+    ('D002', 'Tony', 'LIC-D002', 'tony@example.com', '0400 100 002', '08:00', '16:00', 1, 'West', 1, 0),
+    ('D003', 'David', 'LIC-D003', 'david@example.com', '0400 100 003', '09:00', '15:00', 1, 'North', 0, 0);
 
 INSERT OR IGNORE INTO manual_vehicles (
     vehicle_id,
@@ -199,8 +208,9 @@ INSERT OR IGNORE INTO manual_vehicles (
     pallet_capacity,
     tub_capacity,
     trolley_capacity,
-    stillage_capacity
+    stillage_capacity,
+    is_deleted
 ) VALUES
-    ('V001', 'ABC123', 'truck', 1, 10, 0, 0, 0),
-    ('V002', 'XYZ888', 'truck', 1, 4, 0, 0, 0),
-    ('V003', 'MCC001', 'truck', 1, 6, 0, 0, 0);
+    ('V001', 'ABC123', 'truck', 1, 10, 0, 0, 0, 0),
+    ('V002', 'XYZ888', 'truck', 1, 4, 0, 0, 0, 0),
+    ('V003', 'MCC001', 'truck', 1, 6, 0, 0, 0, 0);

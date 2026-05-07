@@ -774,6 +774,113 @@ select:disabled {
   background: var(--accent-strong);
 }
 
+.specification-modal {
+  max-width: min(1120px, calc(100vw - 2rem));
+}
+
+.spec-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.spec-tab {
+  border: 1px solid rgba(39, 93, 69, 0.18);
+  padding: 0 1rem;
+  color: var(--accent-strong);
+  background: #fff;
+}
+
+.spec-tab-active {
+  color: #fff;
+  background: var(--accent-strong);
+}
+
+.spec-body,
+.spec-section {
+  display: grid;
+  gap: 1rem;
+}
+
+.spec-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.spec-section-heading h3 {
+  margin-bottom: 0;
+  color: var(--accent-strong);
+}
+
+.spec-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  border: 1px solid rgba(39, 93, 69, 0.16);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  background: #f8fbf6;
+}
+
+.spec-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+}
+
+.spec-checkbox input,
+.spec-table input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--accent);
+}
+
+.spec-form-actions {
+  display: flex;
+  align-items: end;
+  gap: 0.55rem;
+}
+
+.spec-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: #fff;
+}
+
+.spec-table {
+  width: 100%;
+  min-width: 980px;
+  border-collapse: collapse;
+}
+
+.spec-table th,
+.spec-table td {
+  border-bottom: 1px solid var(--line);
+  padding: 0.7rem 0.75rem;
+  text-align: left;
+  vertical-align: middle;
+  font-size: 0.88rem;
+}
+
+.spec-table th {
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  font-size: 0.76rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.spec-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
 .detail-backdrop {
   position: fixed;
   inset: 0;
@@ -928,6 +1035,10 @@ select:disabled {
   .final-summary-meta {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .spec-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 700px) {
@@ -974,6 +1085,10 @@ select:disabled {
   }
 
   .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .spec-form {
     grid-template-columns: 1fr;
   }
 

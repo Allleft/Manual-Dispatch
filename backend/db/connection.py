@@ -56,6 +56,21 @@ def _ensure_manual_dispatch_columns(connection):
         "pallet_only",
         "INTEGER NOT NULL DEFAULT 0",
     )
+    _ensure_column(connection, "manual_drivers", "license_no", "TEXT")
+    _ensure_column(connection, "manual_drivers", "email", "TEXT")
+    _ensure_column(connection, "manual_drivers", "phone_number", "TEXT")
+    _ensure_column(
+        connection,
+        "manual_drivers",
+        "is_deleted",
+        "INTEGER NOT NULL DEFAULT 0",
+    )
+    _ensure_column(
+        connection,
+        "manual_vehicles",
+        "is_deleted",
+        "INTEGER NOT NULL DEFAULT 0",
+    )
 
 
 def _ensure_column(connection, table_name, column_name, column_definition):

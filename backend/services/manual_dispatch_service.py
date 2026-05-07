@@ -2,10 +2,13 @@ from backend.repositories.in_memory_manual_dispatch_repository import (
     InMemoryManualDispatchRepository,
 )
 from backend.schemas import (
+    Driver,
     ManualDispatchBoardResponse,
     ManualDriverVehicleClearResponse,
+    ManualDispatchSpecificationResponse,
     Order,
     SaveFinalTripSummaryRequest,
+    Vehicle,
 )
 
 
@@ -27,6 +30,12 @@ class ManualDispatchService:
             driver_vehicle_assignments=self.repository.list_driver_vehicle_assignments(
                 dispatch_date
             ),
+        )
+
+    def get_specifications(self):
+        return ManualDispatchSpecificationResponse(
+            drivers=self.repository.list_specification_drivers(),
+            vehicles=self.repository.list_specification_vehicles(),
         )
 
     def assign_task(self, request):
@@ -165,6 +174,134 @@ class ManualDispatchService:
 
         return self.repository.cancel_order(order_id)
 
+    def create_driver(self, request):
+        driver = Driver(
+            driver_id=self._generate_driver_id(),
+            name=self._clean_required_text(request.name, "name"),
+            start_time=self._clean_optional_text(request.start_time),
+            end_time=self._clean_optional_text(request.end_time),
+            is_available=self._bool_or_default(request.is_available, True),
+            preferred_zone=self._clean_optional_text(request.preferred_zone),
+            pallet_only=self._bool_or_default(request.pallet_only, False),
+            license_no=self._clean_optional_text(request.license_no),
+            email=self._clean_optional_text(request.email),
+            phone_number=self._clean_optional_text(request.phone_number),
+            is_deleted=False,
+        )
+        return self.repository.create_driver(driver)
+
+    def update_driver(self, driver_id, request):
+        existing = self.repository.get_driver(driver_id)
+        if not existing or existing.is_deleted:
+            raise ValueError(f"Driver does not exist: {driver_id}")
+
+        is_available = self._bool_or_default(request.is_available, True)
+        if not is_available and existing.is_available:
+            self._ensure_driver_can_be_made_unavailable(driver_id)
+
+        driver = Driver(
+            driver_id=existing.driver_id,
+            name=self._clean_required_text(request.name, "name"),
+            start_time=self._clean_optional_text(request.start_time),
+            end_time=self._clean_optional_text(request.end_time),
+            is_available=is_available,
+            preferred_zone=self._clean_optional_text(request.preferred_zone),
+            pallet_only=self._bool_or_default(request.pallet_only, False),
+            license_no=self._clean_optional_text(request.license_no),
+            email=self._clean_optional_text(request.email),
+            phone_number=self._clean_optional_text(request.phone_number),
+            is_deleted=False,
+        )
+        return self.repository.update_driver(driver)
+
+    def delete_driver(self, driver_id):
+        existing = self.repository.get_driver(driver_id)
+        if not existing or existing.is_deleted:
+            raise ValueError(f"Driver does not exist: {driver_id}")
+        if self.repository.driver_has_active_assignments(driver_id):
+            raise ValueError(
+                "Driver has current orders and cannot be deleted. Set Availability off instead after clearing work."
+            )
+        if self.repository.driver_has_vehicle_selection(driver_id):
+            raise ValueError(
+                "Driver has vehicle selection history and cannot be deleted. Set Availability off instead."
+            )
+        if self.repository.driver_has_final_summary_history(driver_id):
+            raise ValueError(
+                "Driver has assignment history and cannot be deleted. Set Availability off instead."
+            )
+        self.repository.delete_driver(driver_id)
+        return self.get_specifications()
+
+    def create_vehicle(self, request):
+        vehicle = Vehicle(
+            vehicle_id=self._generate_vehicle_id(),
+            rego=self._clean_required_text(request.rego, "rego"),
+            type=self._clean_optional_text(request.type) or "",
+            is_available=self._bool_or_default(request.is_available, True),
+            pallet_capacity=self._quantity_or_default(
+                request.pallet_capacity,
+                "pallet_capacity",
+            ),
+            tub_capacity=self._quantity_or_default(request.tub_capacity, "tub_capacity"),
+            trolley_capacity=self._quantity_or_default(
+                request.trolley_capacity,
+                "trolley_capacity",
+            ),
+            stillage_capacity=self._quantity_or_default(
+                request.stillage_capacity,
+                "stillage_capacity",
+            ),
+            is_deleted=False,
+        )
+        return self.repository.create_vehicle(vehicle)
+
+    def update_vehicle(self, vehicle_id, request):
+        existing = self.repository.get_vehicle(vehicle_id)
+        if not existing or existing.is_deleted:
+            raise ValueError(f"Vehicle does not exist: {vehicle_id}")
+
+        is_available = self._bool_or_default(request.is_available, True)
+        if not is_available and existing.is_available:
+            self._ensure_vehicle_can_be_made_unavailable(vehicle_id)
+
+        vehicle = Vehicle(
+            vehicle_id=existing.vehicle_id,
+            rego=self._clean_required_text(request.rego, "rego"),
+            type=self._clean_optional_text(request.type) or "",
+            is_available=is_available,
+            pallet_capacity=self._quantity_or_default(
+                request.pallet_capacity,
+                "pallet_capacity",
+            ),
+            tub_capacity=self._quantity_or_default(request.tub_capacity, "tub_capacity"),
+            trolley_capacity=self._quantity_or_default(
+                request.trolley_capacity,
+                "trolley_capacity",
+            ),
+            stillage_capacity=self._quantity_or_default(
+                request.stillage_capacity,
+                "stillage_capacity",
+            ),
+            is_deleted=False,
+        )
+        return self.repository.update_vehicle(vehicle)
+
+    def delete_vehicle(self, vehicle_id):
+        existing = self.repository.get_vehicle(vehicle_id)
+        if not existing or existing.is_deleted:
+            raise ValueError(f"Vehicle does not exist: {vehicle_id}")
+        if self.repository.vehicle_has_current_selection(vehicle_id):
+            raise ValueError(
+                "Vehicle has assignment/history and cannot be deleted. Set Availability off instead after clearing selections."
+            )
+        if self.repository.vehicle_has_final_summary_history(vehicle_id):
+            raise ValueError(
+                "Vehicle has assignment/history and cannot be deleted. Set Availability off instead."
+            )
+        self.repository.delete_vehicle(vehicle_id)
+        return self.get_specifications()
+
     def save_final_trip_summary(self, request: SaveFinalTripSummaryRequest):
         dispatch_date = self._clean_required_text(request.dispatch_date, "dispatch_date")
         driver_id = self._clean_required_text(request.driver_id, "driver_id")
@@ -218,11 +355,13 @@ class ManualDispatchService:
             raise ValueError(f"Task does not exist: {task_type} {task_id}")
 
     def _validate_driver_exists(self, driver_id):
-        if not self.repository.get_driver(driver_id):
+        driver = self.repository.get_driver(driver_id)
+        if not driver or driver.is_deleted:
             raise ValueError(f"Driver does not exist: {driver_id}")
 
     def _validate_vehicle_exists(self, vehicle_id):
-        if not self.repository.get_vehicle(vehicle_id):
+        vehicle = self.repository.get_vehicle(vehicle_id)
+        if not vehicle or vehicle.is_deleted:
             raise ValueError(f"Vehicle does not exist: {vehicle_id}")
 
     def _validate_trip_no(self, trip_no):
@@ -251,6 +390,27 @@ class ManualDispatchService:
         if quantity < 0:
             raise ValueError(f"{field_name} cannot be negative")
         return quantity
+
+    def _bool_or_default(self, value, default):
+        if value is None or value == "":
+            return default
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            return value.strip().lower() in {"1", "true", "yes", "on"}
+        return bool(value)
+
+    def _ensure_driver_can_be_made_unavailable(self, driver_id):
+        if self.repository.driver_has_active_assignments(driver_id):
+            raise ValueError(
+                "Please unassign or finalize this driver's current orders before making the driver unavailable."
+            )
+
+    def _ensure_vehicle_can_be_made_unavailable(self, vehicle_id):
+        if self.repository.vehicle_has_current_selection(vehicle_id):
+            raise ValueError(
+                "Please clear this vehicle from current driver selections before making it unavailable."
+            )
 
     def _normalize_final_summary_rows(self, trips):
         if not isinstance(trips, list):
@@ -364,3 +524,21 @@ class ManualDispatchService:
             next_number += 1
             order_id = f"{prefix}{next_number:03d}"
         return order_id
+
+    def _generate_driver_id(self):
+        return self._generate_prefixed_id("D", self.repository.list_driver_ids())
+
+    def _generate_vehicle_id(self):
+        return self._generate_prefixed_id("V", self.repository.list_vehicle_ids())
+
+    def _generate_prefixed_id(self, prefix, existing_ids):
+        highest_number = 0
+        for identifier in existing_ids:
+            if not identifier.startswith(prefix):
+                continue
+            suffix = identifier.replace(prefix, "", 1)
+            if suffix.isdigit():
+                highest_number = max(highest_number, int(suffix))
+
+        next_number = highest_number + 1
+        return f"{prefix}{next_number:03d}"

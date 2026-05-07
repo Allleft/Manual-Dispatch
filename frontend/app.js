@@ -23,6 +23,17 @@ const state = {
   historyLoaded: false,
   historyError: "",
   selectedHistorySummaryId: "",
+  isSpecificationModalOpen: false,
+  specificationDrivers: [],
+  specificationVehicles: [],
+  specificationError: "",
+  specificationLoading: false,
+  specificationSaving: false,
+  specificationActiveTab: "drivers",
+  driverSpecificationForm: null,
+  driverSpecificationEditingId: "",
+  vehicleSpecificationForm: null,
+  vehicleSpecificationEditingId: "",
   activeOrderDetailId: "",
   isAddOrderOpen: false,
   addOrderError: "",
@@ -182,6 +193,50 @@ async function apiListFinalSummaries(dispatchDate) {
   });
 }
 
+async function apiGetSpecifications() {
+  return requestJson("/api/manual-dispatch/specifications");
+}
+
+async function apiCreateDriver(payload) {
+  return requestJson("/api/manual-dispatch/drivers", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+async function apiUpdateDriver(driverId, payload) {
+  return requestJson(`/api/manual-dispatch/drivers/${encodeURIComponent(driverId)}`, {
+    method: "PATCH",
+    body: payload,
+  });
+}
+
+async function apiDeleteDriver(driverId) {
+  return requestJson(`/api/manual-dispatch/drivers/${encodeURIComponent(driverId)}`, {
+    method: "DELETE",
+  });
+}
+
+async function apiCreateVehicle(payload) {
+  return requestJson("/api/manual-dispatch/vehicles", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+async function apiUpdateVehicle(vehicleId, payload) {
+  return requestJson(`/api/manual-dispatch/vehicles/${encodeURIComponent(vehicleId)}`, {
+    method: "PATCH",
+    body: payload,
+  });
+}
+
+async function apiDeleteVehicle(vehicleId) {
+  return requestJson(`/api/manual-dispatch/vehicles/${encodeURIComponent(vehicleId)}`, {
+    method: "DELETE",
+  });
+}
+
 function getExcelExportUrl(dispatchDate) {
   return getApiUrl("/api/manual-dispatch/export-excel", {
     dispatch_date: dispatchDate,
@@ -240,6 +295,51 @@ function getDefaultAddOrderForm() {
   };
 }
 
+function getDefaultDriverSpecificationForm(driver = {}) {
+  return {
+    name: driver.name || "",
+    license_no: driver.license_no || "",
+    email: driver.email || "",
+    phone_number: driver.phone_number || "",
+    start_time: driver.start_time || "",
+    end_time: driver.end_time || "",
+    is_available: driver.is_available !== false,
+    pallet_only: Boolean(driver.pallet_only),
+    preferred_zone: driver.preferred_zone || "",
+  };
+}
+
+function getDefaultVehicleSpecificationForm(vehicle = {}) {
+  return {
+    rego: vehicle.rego || "",
+    type: vehicle.type || "",
+    is_available: vehicle.is_available !== false,
+    pallet_capacity: String(vehicle.pallet_capacity ?? 0),
+    tub_capacity: String(vehicle.tub_capacity ?? 0),
+    trolley_capacity: String(vehicle.trolley_capacity ?? 0),
+    stillage_capacity: String(vehicle.stillage_capacity ?? 0),
+  };
+}
+
+function getDriverSpecificationPayload(form) {
+  return {
+    ...form,
+    is_available: Boolean(form.is_available),
+    pallet_only: Boolean(form.pallet_only),
+  };
+}
+
+function getVehicleSpecificationPayload(form) {
+  return {
+    ...form,
+    is_available: Boolean(form.is_available),
+    pallet_capacity: Number(form.pallet_capacity || 0),
+    tub_capacity: Number(form.tub_capacity || 0),
+    trolley_capacity: Number(form.trolley_capacity || 0),
+    stillage_capacity: Number(form.stillage_capacity || 0),
+  };
+}
+
 function openAddOrder() {
   state.isAddOrderOpen = true;
   state.addOrderError = "";
@@ -252,6 +352,98 @@ function closeAddOrder() {
   state.addOrderError = "";
   state.addOrderForm = {};
   renderAddOrderPopup();
+}
+
+async function openSpecificationModal() {
+  state.isSpecificationModalOpen = true;
+  state.specificationError = "";
+  state.driverSpecificationForm = null;
+  state.driverSpecificationEditingId = "";
+  state.vehicleSpecificationForm = null;
+  state.vehicleSpecificationEditingId = "";
+  renderSpecificationModal();
+  await loadSpecifications();
+}
+
+function closeSpecificationModal() {
+  state.isSpecificationModalOpen = false;
+  state.specificationError = "";
+  state.driverSpecificationForm = null;
+  state.driverSpecificationEditingId = "";
+  state.vehicleSpecificationForm = null;
+  state.vehicleSpecificationEditingId = "";
+  renderSpecificationModal();
+}
+
+async function loadSpecifications() {
+  state.specificationLoading = true;
+  state.specificationError = "";
+  renderSpecificationModal();
+
+  try {
+    const payload = await apiGetSpecifications();
+    state.specificationDrivers = payload.drivers || [];
+    state.specificationVehicles = payload.vehicles || [];
+  } catch (error) {
+    state.specificationError = `Unable to load specifications. ${error.message}`;
+  } finally {
+    state.specificationLoading = false;
+    renderSpecificationModal();
+  }
+}
+
+function startAddDriverSpecification() {
+  state.specificationActiveTab = "drivers";
+  state.driverSpecificationEditingId = "";
+  state.driverSpecificationForm = getDefaultDriverSpecificationForm();
+  renderSpecificationModal();
+}
+
+function startEditDriverSpecification(driver) {
+  state.specificationActiveTab = "drivers";
+  state.driverSpecificationEditingId = driver.driver_id;
+  state.driverSpecificationForm = getDefaultDriverSpecificationForm(driver);
+  renderSpecificationModal();
+}
+
+function cancelDriverSpecificationForm() {
+  state.driverSpecificationEditingId = "";
+  state.driverSpecificationForm = null;
+  renderSpecificationModal();
+}
+
+function updateDriverSpecificationForm(field, value) {
+  state.driverSpecificationForm = {
+    ...state.driverSpecificationForm,
+    [field]: value,
+  };
+}
+
+function startAddVehicleSpecification() {
+  state.specificationActiveTab = "vehicles";
+  state.vehicleSpecificationEditingId = "";
+  state.vehicleSpecificationForm = getDefaultVehicleSpecificationForm();
+  renderSpecificationModal();
+}
+
+function startEditVehicleSpecification(vehicle) {
+  state.specificationActiveTab = "vehicles";
+  state.vehicleSpecificationEditingId = vehicle.vehicle_id;
+  state.vehicleSpecificationForm = getDefaultVehicleSpecificationForm(vehicle);
+  renderSpecificationModal();
+}
+
+function cancelVehicleSpecificationForm() {
+  state.vehicleSpecificationEditingId = "";
+  state.vehicleSpecificationForm = null;
+  renderSpecificationModal();
+}
+
+function updateVehicleSpecificationForm(field, value) {
+  state.vehicleSpecificationForm = {
+    ...state.vehicleSpecificationForm,
+    [field]: value,
+  };
 }
 
 function updateAddOrderForm(field, value) {
@@ -422,6 +614,145 @@ async function handleCancelOrder(orderId) {
     state.isSaving = false;
     showError(`Unable to cancel Order. ${error.message}`);
     renderBoard();
+  }
+}
+
+async function refreshSpecificationsAndBoard() {
+  await loadSpecifications();
+  await loadBoard(state.dispatchDate);
+}
+
+async function handleSaveDriverSpecification() {
+  if (state.specificationSaving || !state.driverSpecificationForm) {
+    return;
+  }
+
+  state.specificationSaving = true;
+  state.specificationError = "";
+  renderSpecificationModal();
+
+  try {
+    const payload = getDriverSpecificationPayload(state.driverSpecificationForm);
+    if (state.driverSpecificationEditingId) {
+      await apiUpdateDriver(state.driverSpecificationEditingId, payload);
+    } else {
+      await apiCreateDriver(payload);
+    }
+    state.driverSpecificationEditingId = "";
+    state.driverSpecificationForm = null;
+    await refreshSpecificationsAndBoard();
+  } catch (error) {
+    state.specificationError = `Unable to save Driver. ${error.message}`;
+  } finally {
+    state.specificationSaving = false;
+    renderSpecificationModal();
+  }
+}
+
+async function handleToggleDriverAvailability(driver, isAvailable) {
+  state.specificationSaving = true;
+  state.specificationError = "";
+  renderSpecificationModal();
+
+  try {
+    await apiUpdateDriver(driver.driver_id, {
+      ...getDefaultDriverSpecificationForm(driver),
+      is_available: isAvailable,
+    });
+    await refreshSpecificationsAndBoard();
+  } catch (error) {
+    state.specificationError = `Unable to update Driver availability. ${error.message}`;
+  } finally {
+    state.specificationSaving = false;
+    renderSpecificationModal();
+  }
+}
+
+async function handleDeleteDriverSpecification(driverId) {
+  const confirmed = window.confirm("Are you sure you want to delete this driver?");
+  if (!confirmed) {
+    return;
+  }
+
+  state.specificationSaving = true;
+  state.specificationError = "";
+  renderSpecificationModal();
+
+  try {
+    await apiDeleteDriver(driverId);
+    await refreshSpecificationsAndBoard();
+  } catch (error) {
+    state.specificationError = `Unable to delete Driver. ${error.message}`;
+  } finally {
+    state.specificationSaving = false;
+    renderSpecificationModal();
+  }
+}
+
+async function handleSaveVehicleSpecification() {
+  if (state.specificationSaving || !state.vehicleSpecificationForm) {
+    return;
+  }
+
+  state.specificationSaving = true;
+  state.specificationError = "";
+  renderSpecificationModal();
+
+  try {
+    const payload = getVehicleSpecificationPayload(state.vehicleSpecificationForm);
+    if (state.vehicleSpecificationEditingId) {
+      await apiUpdateVehicle(state.vehicleSpecificationEditingId, payload);
+    } else {
+      await apiCreateVehicle(payload);
+    }
+    state.vehicleSpecificationEditingId = "";
+    state.vehicleSpecificationForm = null;
+    await refreshSpecificationsAndBoard();
+  } catch (error) {
+    state.specificationError = `Unable to save Vehicle. ${error.message}`;
+  } finally {
+    state.specificationSaving = false;
+    renderSpecificationModal();
+  }
+}
+
+async function handleToggleVehicleAvailability(vehicle, isAvailable) {
+  state.specificationSaving = true;
+  state.specificationError = "";
+  renderSpecificationModal();
+
+  try {
+    await apiUpdateVehicle(vehicle.vehicle_id, {
+      ...getDefaultVehicleSpecificationForm(vehicle),
+      is_available: isAvailable,
+    });
+    await refreshSpecificationsAndBoard();
+  } catch (error) {
+    state.specificationError = `Unable to update Vehicle availability. ${error.message}`;
+  } finally {
+    state.specificationSaving = false;
+    renderSpecificationModal();
+  }
+}
+
+async function handleDeleteVehicleSpecification(vehicleId) {
+  const confirmed = window.confirm("Are you sure you want to delete this vehicle?");
+  if (!confirmed) {
+    return;
+  }
+
+  state.specificationSaving = true;
+  state.specificationError = "";
+  renderSpecificationModal();
+
+  try {
+    await apiDeleteVehicle(vehicleId);
+    await refreshSpecificationsAndBoard();
+  } catch (error) {
+    state.specificationError = `Unable to delete Vehicle. ${error.message}`;
+  } finally {
+    state.specificationSaving = false;
+    renderSpecificationModal();
   }
 }
 
@@ -1065,6 +1396,7 @@ function renderBoardControls() {
   const dateInput = document.querySelector("#dispatch-date");
   const exportButton = document.querySelector("#export-excel-button");
   const loadHistoryButton = document.querySelector("#load-history-button");
+  const specificationButton = document.querySelector("#specification-button");
   const addOrderButton = document.querySelector("#add-order-button");
   const status = document.querySelector("#board-status");
   const error = document.querySelector("#board-error");
@@ -1082,6 +1414,10 @@ function renderBoardControls() {
   if (loadHistoryButton) {
     loadHistoryButton.disabled = state.isLoading || state.isSaving || state.isHistoryLoading;
     loadHistoryButton.textContent = state.isHistoryLoading ? "Loading History..." : "Load History";
+  }
+
+  if (specificationButton) {
+    specificationButton.disabled = state.isLoading || state.isSaving;
   }
 
   if (addOrderButton) {
@@ -1120,6 +1456,12 @@ function renderBoardControls() {
   if (loadHistoryButton) {
     loadHistoryButton.onclick = () => {
       handleLoadFinalSummaryHistory();
+    };
+  }
+
+  if (specificationButton) {
+    specificationButton.onclick = () => {
+      openSpecificationModal();
     };
   }
 
@@ -1760,6 +2102,374 @@ function createFinalTripSummaryCard(summary, options = {}) {
   return card;
 }
 
+function renderSpecificationModal() {
+  const root = document.querySelector("#specification-root");
+  if (!root) {
+    return;
+  }
+
+  root.innerHTML = "";
+  if (!state.isSpecificationModalOpen) {
+    return;
+  }
+
+  const backdrop = document.createElement("div");
+  backdrop.className = "detail-backdrop";
+  backdrop.addEventListener("click", (event) => {
+    if (event.target === backdrop) {
+      closeSpecificationModal();
+    }
+  });
+
+  const card = document.createElement("section");
+  card.className = "detail-card specification-modal";
+  card.setAttribute("role", "dialog");
+  card.setAttribute("aria-modal", "true");
+  card.setAttribute("aria-labelledby", "specification-title");
+  card.addEventListener("click", (event) => {
+    event.stopPropagation();
+  });
+
+  const header = document.createElement("div");
+  header.className = "detail-header";
+
+  const titleWrap = document.createElement("div");
+  const kicker = document.createElement("p");
+  kicker.className = "section-kicker";
+  kicker.textContent = "Manual master data";
+
+  const title = document.createElement("h2");
+  title.id = "specification-title";
+  title.textContent = "Driver & Vehicle Specification";
+  titleWrap.append(kicker, title);
+
+  const closeButton = document.createElement("button");
+  closeButton.type = "button";
+  closeButton.className = "detail-close";
+  closeButton.textContent = "Close";
+  closeButton.addEventListener("click", closeSpecificationModal);
+  header.append(titleWrap, closeButton);
+
+  const tabs = document.createElement("div");
+  tabs.className = "spec-tabs";
+  [
+    { id: "drivers", label: "Drivers" },
+    { id: "vehicles", label: "Vehicles" },
+  ].forEach((tab) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className =
+      state.specificationActiveTab === tab.id ? "spec-tab spec-tab-active" : "spec-tab";
+    button.textContent = tab.label;
+    button.addEventListener("click", () => {
+      state.specificationActiveTab = tab.id;
+      renderSpecificationModal();
+    });
+    tabs.append(button);
+  });
+
+  const body = document.createElement("div");
+  body.className = "spec-body";
+  if (state.specificationLoading) {
+    const loading = document.createElement("p");
+    loading.className = "empty-board";
+    loading.textContent = "Loading Driver and Vehicle specifications...";
+    body.append(loading);
+  } else {
+    if (state.specificationError) {
+      const error = document.createElement("p");
+      error.className = "board-error";
+      error.textContent = state.specificationError;
+      body.append(error);
+    }
+
+    body.append(
+      state.specificationActiveTab === "drivers"
+        ? createDriverSpecificationSection()
+        : createVehicleSpecificationSection(),
+    );
+  }
+
+  card.append(header, tabs, body);
+  backdrop.append(card);
+  root.append(backdrop);
+}
+
+function createDriverSpecificationSection() {
+  const section = document.createElement("section");
+  section.className = "spec-section";
+
+  const heading = document.createElement("div");
+  heading.className = "spec-section-heading";
+  const title = document.createElement("h3");
+  title.textContent = "Drivers";
+  const addButton = document.createElement("button");
+  addButton.type = "button";
+  addButton.textContent = "Add Driver";
+  addButton.disabled = state.specificationSaving;
+  addButton.addEventListener("click", startAddDriverSpecification);
+  heading.append(title, addButton);
+  section.append(heading);
+
+  if (state.driverSpecificationForm) {
+    section.append(createDriverSpecificationForm());
+  }
+
+  const tableWrap = document.createElement("div");
+  tableWrap.className = "spec-table-wrap";
+  const table = document.createElement("table");
+  table.className = "spec-table";
+  table.append(createSpecTableHead([
+    "Available",
+    "Driver ID",
+    "Name",
+    "License No",
+    "Email",
+    "Phone Number",
+    "Start",
+    "End",
+    "Pallet Only",
+    "Actions",
+  ]));
+
+  const tbody = document.createElement("tbody");
+  state.specificationDrivers.forEach((driver) => {
+    const row = document.createElement("tr");
+    row.append(
+      createAvailabilityCell(driver.is_available, (checked) =>
+        handleToggleDriverAvailability(driver, checked),
+      ),
+      createTextCell(driver.driver_id),
+      createTextCell(driver.name),
+      createTextCell(driver.license_no || ""),
+      createTextCell(driver.email || ""),
+      createTextCell(driver.phone_number || ""),
+      createTextCell(driver.start_time || ""),
+      createTextCell(driver.end_time || ""),
+      createTextCell(driver.pallet_only ? "Yes" : "No"),
+      createActionsCell([
+        { label: "Edit", handler: () => startEditDriverSpecification(driver) },
+        { label: "Delete", handler: () => handleDeleteDriverSpecification(driver.driver_id) },
+      ]),
+    );
+    tbody.append(row);
+  });
+  table.append(tbody);
+  tableWrap.append(table);
+  section.append(tableWrap);
+  return section;
+}
+
+function createVehicleSpecificationSection() {
+  const section = document.createElement("section");
+  section.className = "spec-section";
+
+  const heading = document.createElement("div");
+  heading.className = "spec-section-heading";
+  const title = document.createElement("h3");
+  title.textContent = "Vehicles";
+  const addButton = document.createElement("button");
+  addButton.type = "button";
+  addButton.textContent = "Add Vehicle";
+  addButton.disabled = state.specificationSaving;
+  addButton.addEventListener("click", startAddVehicleSpecification);
+  heading.append(title, addButton);
+  section.append(heading);
+
+  if (state.vehicleSpecificationForm) {
+    section.append(createVehicleSpecificationForm());
+  }
+
+  const tableWrap = document.createElement("div");
+  tableWrap.className = "spec-table-wrap";
+  const table = document.createElement("table");
+  table.className = "spec-table";
+  table.append(createSpecTableHead([
+    "Available",
+    "Vehicle ID",
+    "Rego",
+    "Type",
+    "Pallet Capacity",
+    "Tub Capacity",
+    "Trolley Capacity",
+    "Stillage Capacity",
+    "Actions",
+  ]));
+
+  const tbody = document.createElement("tbody");
+  state.specificationVehicles.forEach((vehicle) => {
+    const row = document.createElement("tr");
+    row.append(
+      createAvailabilityCell(vehicle.is_available, (checked) =>
+        handleToggleVehicleAvailability(vehicle, checked),
+      ),
+      createTextCell(vehicle.vehicle_id),
+      createTextCell(vehicle.rego),
+      createTextCell(vehicle.type || ""),
+      createTextCell(vehicle.pallet_capacity),
+      createTextCell(vehicle.tub_capacity),
+      createTextCell(vehicle.trolley_capacity),
+      createTextCell(vehicle.stillage_capacity),
+      createActionsCell([
+        { label: "Edit", handler: () => startEditVehicleSpecification(vehicle) },
+        { label: "Delete", handler: () => handleDeleteVehicleSpecification(vehicle.vehicle_id) },
+      ]),
+    );
+    tbody.append(row);
+  });
+  table.append(tbody);
+  tableWrap.append(table);
+  section.append(tableWrap);
+  return section;
+}
+
+function createDriverSpecificationForm() {
+  const form = document.createElement("form");
+  form.className = "spec-form";
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    handleSaveDriverSpecification();
+  });
+
+  form.append(
+    createSpecInput("Name", "name", state.driverSpecificationForm, updateDriverSpecificationForm, { required: true }),
+    createSpecInput("License No", "license_no", state.driverSpecificationForm, updateDriverSpecificationForm),
+    createSpecInput("Email", "email", state.driverSpecificationForm, updateDriverSpecificationForm, { type: "email" }),
+    createSpecInput("Phone Number", "phone_number", state.driverSpecificationForm, updateDriverSpecificationForm, { type: "tel" }),
+    createSpecInput("Start Time", "start_time", state.driverSpecificationForm, updateDriverSpecificationForm, { type: "time" }),
+    createSpecInput("End Time", "end_time", state.driverSpecificationForm, updateDriverSpecificationForm, { type: "time" }),
+    createSpecCheckbox("Available", "is_available", state.driverSpecificationForm, updateDriverSpecificationForm),
+    createSpecCheckbox("Pallet Only", "pallet_only", state.driverSpecificationForm, updateDriverSpecificationForm),
+    createSpecInput("Preferred Zone", "preferred_zone", state.driverSpecificationForm, updateDriverSpecificationForm),
+    createSpecFormActions(cancelDriverSpecificationForm),
+  );
+  return form;
+}
+
+function createVehicleSpecificationForm() {
+  const form = document.createElement("form");
+  form.className = "spec-form";
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    handleSaveVehicleSpecification();
+  });
+
+  form.append(
+    createSpecInput("Rego", "rego", state.vehicleSpecificationForm, updateVehicleSpecificationForm, { required: true }),
+    createSpecInput("Type", "type", state.vehicleSpecificationForm, updateVehicleSpecificationForm),
+    createSpecCheckbox("Available", "is_available", state.vehicleSpecificationForm, updateVehicleSpecificationForm),
+    createSpecInput("Pallet Capacity", "pallet_capacity", state.vehicleSpecificationForm, updateVehicleSpecificationForm, { type: "number", min: 0 }),
+    createSpecInput("Tub Capacity", "tub_capacity", state.vehicleSpecificationForm, updateVehicleSpecificationForm, { type: "number", min: 0 }),
+    createSpecInput("Trolley Capacity", "trolley_capacity", state.vehicleSpecificationForm, updateVehicleSpecificationForm, { type: "number", min: 0 }),
+    createSpecInput("Stillage Capacity", "stillage_capacity", state.vehicleSpecificationForm, updateVehicleSpecificationForm, { type: "number", min: 0 }),
+    createSpecFormActions(cancelVehicleSpecificationForm),
+  );
+  return form;
+}
+
+function createSpecInput(label, field, formState, updateFn, options = {}) {
+  const wrapper = document.createElement("label");
+  wrapper.className = "form-field";
+  wrapper.textContent = label;
+
+  const input = document.createElement("input");
+  input.name = field;
+  input.value = formState[field] ?? "";
+  input.type = options.type || "text";
+  input.disabled = state.specificationSaving;
+  if (options.required) {
+    input.required = true;
+  }
+  if (options.min !== undefined) {
+    input.min = options.min;
+  }
+  input.addEventListener("input", () => {
+    updateFn(field, input.value);
+  });
+  wrapper.append(input);
+  return wrapper;
+}
+
+function createSpecCheckbox(label, field, formState, updateFn) {
+  const wrapper = document.createElement("label");
+  wrapper.className = "spec-checkbox";
+  const input = document.createElement("input");
+  input.type = "checkbox";
+  input.checked = Boolean(formState[field]);
+  input.disabled = state.specificationSaving;
+  input.addEventListener("change", () => {
+    updateFn(field, input.checked);
+  });
+  wrapper.append(input, document.createTextNode(label));
+  return wrapper;
+}
+
+function createSpecFormActions(cancelHandler) {
+  const actions = document.createElement("div");
+  actions.className = "spec-form-actions";
+  const saveButton = document.createElement("button");
+  saveButton.type = "submit";
+  saveButton.textContent = state.specificationSaving ? "Saving..." : "Save";
+  saveButton.disabled = state.specificationSaving;
+  const cancelButton = document.createElement("button");
+  cancelButton.type = "button";
+  cancelButton.className = "button-secondary";
+  cancelButton.textContent = "Cancel";
+  cancelButton.disabled = state.specificationSaving;
+  cancelButton.addEventListener("click", cancelHandler);
+  actions.append(saveButton, cancelButton);
+  return actions;
+}
+
+function createSpecTableHead(labels) {
+  const thead = document.createElement("thead");
+  const row = document.createElement("tr");
+  labels.forEach((label) => {
+    const th = document.createElement("th");
+    th.scope = "col";
+    th.textContent = label;
+    row.append(th);
+  });
+  thead.append(row);
+  return thead;
+}
+
+function createTextCell(value) {
+  const cell = document.createElement("td");
+  cell.textContent = formatOptional(value, "");
+  return cell;
+}
+
+function createAvailabilityCell(isAvailable, onChange) {
+  const cell = document.createElement("td");
+  const input = document.createElement("input");
+  input.type = "checkbox";
+  input.checked = Boolean(isAvailable);
+  input.disabled = state.specificationSaving;
+  input.addEventListener("change", () => {
+    onChange(input.checked);
+  });
+  cell.append(input);
+  return cell;
+}
+
+function createActionsCell(actions) {
+  const cell = document.createElement("td");
+  const wrap = document.createElement("div");
+  wrap.className = "spec-actions";
+  actions.forEach((action) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "button-secondary";
+    button.textContent = action.label;
+    button.disabled = state.specificationSaving;
+    button.addEventListener("click", action.handler);
+    wrap.append(button);
+  });
+  cell.append(wrap);
+  return cell;
+}
+
 function createAddOrderField(label, field, options = {}) {
   const wrapper = document.createElement("label");
   wrapper.className = options.wide ? "form-field form-field-wide" : "form-field";
@@ -2182,6 +2892,7 @@ function renderBoard() {
   renderFinalTripSummaries();
   renderOrderDetailPopup();
   renderAddOrderPopup();
+  renderSpecificationModal();
 }
 
 renderBoard();

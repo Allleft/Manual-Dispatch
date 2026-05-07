@@ -4,10 +4,14 @@ from fastapi.responses import Response
 from backend.schemas import (
     AssignDriverVehicleRequest,
     AssignTaskRequest,
+    CreateDriverRequest,
     CreateOrderRequest,
+    CreateVehicleRequest,
     SaveFinalTripSummaryRequest,
     UnassignTaskRequest,
+    UpdateDriverRequest,
     UpdateOrderRequest,
+    UpdateVehicleRequest,
     to_dict,
 )
 from backend.repositories.sqlite_manual_dispatch_repository import (
@@ -23,6 +27,11 @@ service = ManualDispatchService(SQLiteManualDispatchRepository())
 @router.get("/board")
 def get_board(dispatch_date: str):
     return to_dict(service.get_board(dispatch_date))
+
+
+@router.get("/specifications")
+def get_specifications():
+    return to_dict(service.get_specifications())
 
 
 @router.get("/export-excel")
@@ -84,6 +93,54 @@ def update_order(order_id: str, request: UpdateOrderRequest):
 def cancel_order(order_id: str):
     try:
         return to_dict(service.cancel_order(order_id))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.post("/drivers")
+def create_driver(request: CreateDriverRequest):
+    try:
+        return to_dict(service.create_driver(request))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.patch("/drivers/{driver_id}")
+def update_driver(driver_id: str, request: UpdateDriverRequest):
+    try:
+        return to_dict(service.update_driver(driver_id, request))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.delete("/drivers/{driver_id}")
+def delete_driver(driver_id: str):
+    try:
+        return to_dict(service.delete_driver(driver_id))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.post("/vehicles")
+def create_vehicle(request: CreateVehicleRequest):
+    try:
+        return to_dict(service.create_vehicle(request))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.patch("/vehicles/{vehicle_id}")
+def update_vehicle(vehicle_id: str, request: UpdateVehicleRequest):
+    try:
+        return to_dict(service.update_vehicle(vehicle_id, request))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.delete("/vehicles/{vehicle_id}")
+def delete_vehicle(vehicle_id: str):
+    try:
+        return to_dict(service.delete_vehicle(vehicle_id))
     except ValueError as error:
         raise _to_http_exception(error) from error
 

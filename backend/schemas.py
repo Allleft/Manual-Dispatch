@@ -32,6 +32,10 @@ class Driver:
     is_available: bool
     preferred_zone: Optional[str]
     pallet_only: bool
+    license_no: Optional[str] = None
+    email: Optional[str] = None
+    phone_number: Optional[str] = None
+    is_deleted: bool = False
 
 
 @dataclass
@@ -44,6 +48,7 @@ class Vehicle:
     tub_capacity: int
     trolley_capacity: int
     stillage_capacity: int
+    is_deleted: bool = False
 
 
 @dataclass
@@ -192,6 +197,60 @@ class UpdateOrderRequest:
     start_time: Optional[str] = None
     end_time: Optional[str] = None
     note: Optional[str] = None
+
+
+@dataclass
+class CreateDriverRequest:
+    name: Optional[str] = None
+    license_no: Optional[str] = None
+    email: Optional[str] = None
+    phone_number: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    is_available: Optional[bool] = True
+    pallet_only: Optional[bool] = False
+    preferred_zone: Optional[str] = None
+
+
+@dataclass
+class UpdateDriverRequest:
+    name: Optional[str] = None
+    license_no: Optional[str] = None
+    email: Optional[str] = None
+    phone_number: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    is_available: Optional[bool] = True
+    pallet_only: Optional[bool] = False
+    preferred_zone: Optional[str] = None
+
+
+@dataclass
+class CreateVehicleRequest:
+    rego: Optional[str] = None
+    type: Optional[str] = None
+    is_available: Optional[bool] = True
+    pallet_capacity: Optional[int] = 0
+    tub_capacity: Optional[int] = 0
+    trolley_capacity: Optional[int] = 0
+    stillage_capacity: Optional[int] = 0
+
+
+@dataclass
+class UpdateVehicleRequest:
+    rego: Optional[str] = None
+    type: Optional[str] = None
+    is_available: Optional[bool] = True
+    pallet_capacity: Optional[int] = 0
+    tub_capacity: Optional[int] = 0
+    trolley_capacity: Optional[int] = 0
+    stillage_capacity: Optional[int] = 0
+
+
+@dataclass
+class ManualDispatchSpecificationResponse:
+    drivers: List[Driver]
+    vehicles: List[Vehicle]
 
 
 def to_dict(value):

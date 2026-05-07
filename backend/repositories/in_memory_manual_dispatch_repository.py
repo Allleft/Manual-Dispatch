@@ -82,6 +82,9 @@ class InMemoryManualDispatchRepository:
                 is_available=True,
                 preferred_zone=None,
                 pallet_only=False,
+                license_no="LIC-D001",
+                email="john@example.com",
+                phone_number="0400 100 001",
             ),
             Driver(
                 driver_id="D002",
@@ -91,6 +94,9 @@ class InMemoryManualDispatchRepository:
                 is_available=True,
                 preferred_zone=None,
                 pallet_only=True,
+                license_no="LIC-D002",
+                email="tony@example.com",
+                phone_number="0400 100 002",
             ),
             Driver(
                 driver_id="D003",
@@ -100,6 +106,9 @@ class InMemoryManualDispatchRepository:
                 is_available=True,
                 preferred_zone=None,
                 pallet_only=False,
+                license_no="LIC-D003",
+                email="david@example.com",
+                phone_number="0400 100 003",
             ),
         ]
         self.vehicles = [
@@ -145,10 +154,30 @@ class InMemoryManualDispatchRepository:
         return [order for order in self.orders if order.status == "ACTIVE"]
 
     def list_drivers(self):
-        return list(self.drivers)
+        return [
+            driver
+            for driver in self.drivers
+            if driver.is_available and not driver.is_deleted
+        ]
 
     def list_vehicles(self):
-        return list(self.vehicles)
+        return [
+            vehicle
+            for vehicle in self.vehicles
+            if vehicle.is_available and not vehicle.is_deleted
+        ]
+
+    def list_specification_drivers(self):
+        return [driver for driver in self.drivers if not driver.is_deleted]
+
+    def list_specification_vehicles(self):
+        return [vehicle for vehicle in self.vehicles if not vehicle.is_deleted]
+
+    def list_driver_ids(self):
+        return [driver.driver_id for driver in self.drivers]
+
+    def list_vehicle_ids(self):
+        return [vehicle.vehicle_id for vehicle in self.vehicles]
 
     def list_assignments(self, dispatch_date):
         return [
@@ -229,10 +258,77 @@ class InMemoryManualDispatchRepository:
         order.status = "CANCELLED"
         return order
 
+    def create_driver(self, driver):
+        if self.get_driver(driver.driver_id):
+            raise ValueError(f"Driver already exists: {driver.driver_id}")
+        self.drivers.append(driver)
+        return driver
+
+    def update_driver(self, driver):
+        for index, existing in enumerate(self.drivers):
+            if existing.driver_id == driver.driver_id and not existing.is_deleted:
+                self.drivers[index] = driver
+                return driver
+        raise ValueError(f"Driver does not exist: {driver.driver_id}")
+
+    def delete_driver(self, driver_id):
+        driver = self.get_driver(driver_id)
+        if not driver or driver.is_deleted:
+            raise ValueError(f"Driver does not exist: {driver_id}")
+        driver.is_deleted = True
+        driver.is_available = False
+        return True
+
+    def create_vehicle(self, vehicle):
+        if self.get_vehicle(vehicle.vehicle_id):
+            raise ValueError(f"Vehicle already exists: {vehicle.vehicle_id}")
+        self.vehicles.append(vehicle)
+        return vehicle
+
+    def update_vehicle(self, vehicle):
+        for index, existing in enumerate(self.vehicles):
+            if existing.vehicle_id == vehicle.vehicle_id and not existing.is_deleted:
+                self.vehicles[index] = vehicle
+                return vehicle
+        raise ValueError(f"Vehicle does not exist: {vehicle.vehicle_id}")
+
+    def delete_vehicle(self, vehicle_id):
+        vehicle = self.get_vehicle(vehicle_id)
+        if not vehicle or vehicle.is_deleted:
+            raise ValueError(f"Vehicle does not exist: {vehicle_id}")
+        vehicle.is_deleted = True
+        vehicle.is_available = False
+        return True
+
     def has_assignment_for_task(self, task_type, task_id):
         return any(
             assignment.task_type == task_type and assignment.task_id == task_id
             for assignment in self.assignments
+        )
+
+    def driver_has_active_assignments(self, driver_id):
+        return any(assignment.driver_id == driver_id for assignment in self.assignments)
+
+    def driver_has_vehicle_selection(self, driver_id):
+        return any(
+            assignment.driver_id == driver_id
+            for assignment in self.driver_vehicle_assignments
+        )
+
+    def driver_has_final_summary_history(self, driver_id):
+        return any(
+            summary.driver_id == driver_id for summary in self.final_trip_summaries
+        )
+
+    def vehicle_has_current_selection(self, vehicle_id):
+        return any(
+            assignment.vehicle_id == vehicle_id
+            for assignment in self.driver_vehicle_assignments
+        )
+
+    def vehicle_has_final_summary_history(self, vehicle_id):
+        return any(
+            summary.vehicle_id == vehicle_id for summary in self.final_trip_summaries
         )
 
     def upsert_assignment(self, dispatch_date, task_type, task_id, driver_id, trip_no):
