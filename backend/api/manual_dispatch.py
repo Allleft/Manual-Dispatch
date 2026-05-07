@@ -6,6 +6,7 @@ from backend.schemas import (
     AssignTaskRequest,
     CreateOrderRequest,
     UnassignTaskRequest,
+    UpdateOrderRequest,
     to_dict,
 )
 from backend.repositories.sqlite_manual_dispatch_repository import (
@@ -65,6 +66,14 @@ def assign_driver_vehicle(request: AssignDriverVehicleRequest):
 def create_order(request: CreateOrderRequest):
     try:
         return to_dict(service.create_order(request))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.patch("/orders/{order_id}")
+def update_order(order_id: str, request: UpdateOrderRequest):
+    try:
+        return to_dict(service.update_order(order_id, request))
     except ValueError as error:
         raise _to_http_exception(error) from error
 

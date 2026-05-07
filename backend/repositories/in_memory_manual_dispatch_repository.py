@@ -184,6 +184,13 @@ class InMemoryManualDispatchRepository:
         self.orders.append(order)
         return order
 
+    def update_order(self, order):
+        for index, existing in enumerate(self.orders):
+            if existing.order_id == order.order_id:
+                self.orders[index] = order
+                return order
+        raise ValueError(f"Order does not exist: {order.order_id}")
+
     def upsert_assignment(self, dispatch_date, task_type, task_id, driver_id, trip_no):
         existing = self.get_assignment(dispatch_date, task_type, task_id)
         if existing:

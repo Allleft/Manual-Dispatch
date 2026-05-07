@@ -18,6 +18,9 @@ const state = {
   isAddOrderOpen: false,
   addOrderError: "",
   addOrderForm: {},
+  isOrderEditMode: false,
+  orderEditError: "",
+  orderEditForm: {},
 };
 
 function getApiUrl(path, query = {}) {
@@ -112,6 +115,13 @@ async function apiCreateOrder(payload) {
   });
 }
 
+async function apiUpdateOrder(orderId, payload) {
+  return requestJson(`/api/manual-dispatch/orders/${encodeURIComponent(orderId)}`, {
+    method: "PATCH",
+    body: payload,
+  });
+}
+
 function getExcelExportUrl(dispatchDate) {
   return getApiUrl("/api/manual-dispatch/export-excel", {
     dispatch_date: dispatchDate,
@@ -199,6 +209,54 @@ function getAddOrderPayload() {
   };
 }
 
+function getOrderEditForm(order) {
+  return {
+    invoice_number: order.invoice_number || "",
+    company_name: order.company_name || "",
+    phone: order.phone || "",
+    delivery_address: order.delivery_address || "",
+    suburb: order.suburb || "",
+    postcode: order.postcode || "",
+    zone: order.zone || "",
+    urgency: getUrgencyLabel(order),
+    preferred_driver_id: order.preferred_driver_id || "",
+    pallet_quantity: String(getDisplayPalletQuantity(order)),
+    loose_bags_quantity: String(getLooseBagsQuantity(order)),
+    start_time: order.start_time || "",
+    end_time: order.end_time || "",
+    note: order.note || "",
+  };
+}
+
+function startOrderEdit(order) {
+  state.isOrderEditMode = true;
+  state.orderEditError = "";
+  state.orderEditForm = getOrderEditForm(order);
+  renderOrderDetailPopup();
+}
+
+function cancelOrderEdit() {
+  state.isOrderEditMode = false;
+  state.orderEditError = "";
+  state.orderEditForm = {};
+  renderOrderDetailPopup();
+}
+
+function updateOrderEditForm(field, value) {
+  state.orderEditForm = {
+    ...state.orderEditForm,
+    [field]: value,
+  };
+}
+
+function getOrderEditPayload() {
+  return {
+    ...state.orderEditForm,
+    pallet_quantity: Number(state.orderEditForm.pallet_quantity || 0),
+    loose_bags_quantity: Number(state.orderEditForm.loose_bags_quantity || 0),
+  };
+}
+
 async function handleExportExcel() {
   if (state.isLoading || state.isSaving) {
     return;
@@ -255,6 +313,28 @@ async function handleCreateOrder() {
     state.isSaving = false;
     state.addOrderError = `Unable to save Order. ${error.message}`;
     renderAddOrderPopup();
+  }
+}
+
+async function handleUpdateOrder(orderId) {
+  if (state.isSaving) {
+    return;
+  }
+
+  state.isSaving = true;
+  state.orderEditError = "";
+  renderOrderDetailPopup();
+
+  try {
+    await apiUpdateOrder(orderId, getOrderEditPayload());
+    state.isOrderEditMode = false;
+    state.orderEditError = "";
+    state.orderEditForm = {};
+    await loadBoard(state.dispatchDate);
+  } catch (error) {
+    state.isSaving = false;
+    state.orderEditError = `Unable to save changes. ${error.message}`;
+    renderOrderDetailPopup();
   }
 }
 
@@ -481,11 +561,17 @@ function cleanupPendingSelections() {
 
 function openOrderDetail(orderId) {
   state.activeOrderDetailId = orderId;
+  state.isOrderEditMode = false;
+  state.orderEditError = "";
+  state.orderEditForm = {};
   renderOrderDetailPopup();
 }
 
 function closeOrderDetail() {
   state.activeOrderDetailId = "";
+  state.isOrderEditMode = false;
+  state.orderEditError = "";
+  state.orderEditForm = {};
   renderOrderDetailPopup();
 }
 
@@ -1003,6 +1089,136 @@ function createAddOrderSelect(label, field, options) {
   return wrapper;
 }
 
+function createOrderEditField(label, field, options = {}) {
+  const wrapper = document.createElement("label");
+  wrapper.className = options.wide ? "form-field form-field-wide" : "form-field";
+  wrapper.textContent = label;
+
+  const input = document.createElement(options.multiline ? "textarea" : "input");
+  input.name = field;
+  input.value = state.orderEditForm[field] ?? "";
+  input.disabled = state.isSaving;
+  if (!options.multiline) {
+    input.type = options.type || "text";
+  }
+  if (options.required) {
+    input.required = true;
+  }
+  if (options.min !== undefined) {
+    input.min = options.min;
+  }
+  input.addEventListener("input", () => {
+    updateOrderEditForm(field, input.value);
+  });
+
+  wrapper.append(input);
+  return wrapper;
+}
+
+function createOrderEditReadOnlyField(label, value) {
+  const wrapper = document.createElement("label");
+  wrapper.className = "form-field";
+  wrapper.textContent = label;
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.value = formatOptional(value);
+  input.disabled = true;
+
+  wrapper.append(input);
+  return wrapper;
+}
+
+function createOrderEditSelect(label, field, options) {
+  const wrapper = document.createElement("label");
+  wrapper.className = "form-field";
+  wrapper.textContent = label;
+
+  const select = document.createElement("select");
+  select.name = field;
+  select.disabled = state.isSaving;
+  options.forEach((option) => {
+    select.append(createOption(option.value, option.label, state.orderEditForm[field] === option.value));
+  });
+  select.addEventListener("change", () => {
+    updateOrderEditForm(field, select.value);
+  });
+
+  wrapper.append(select);
+  return wrapper;
+}
+
+function createOrderEditForm(order) {
+  const form = document.createElement("form");
+  form.className = "order-form";
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    handleUpdateOrder(order.order_id);
+  });
+
+  const formGrid = document.createElement("div");
+  formGrid.className = "form-grid";
+
+  const preferredDriverOptions = [
+    { value: "", label: "No preferred driver" },
+    ...state.drivers.map((driver) => ({
+      value: driver.driver_id,
+      label: driver.name,
+    })),
+  ];
+
+  formGrid.append(
+    createOrderEditField("Invoice #", "invoice_number"),
+    createOrderEditField("Company Name", "company_name"),
+    createOrderEditField("Phone", "phone", { type: "tel" }),
+    createOrderEditField("Delivery Address", "delivery_address"),
+    createOrderEditField("Suburb", "suburb", { required: true }),
+    createOrderEditField("Postcode", "postcode"),
+    createOrderEditReadOnlyField("Delivery Date (read-only)", order.delivery_date),
+    createOrderEditField("Zone", "zone"),
+    createOrderEditSelect("Urgency", "urgency", [
+      { value: "Normal", label: "Normal" },
+      { value: "Urgent", label: "Urgent" },
+    ]),
+    createOrderEditSelect("Preferred Driver", "preferred_driver_id", preferredDriverOptions),
+    createOrderEditField("Pallet Quantity", "pallet_quantity", {
+      type: "number",
+      min: "0",
+    }),
+    createOrderEditField("Loose Bags Quantity", "loose_bags_quantity", {
+      type: "number",
+      min: "0",
+    }),
+    createOrderEditField("Start Time", "start_time", { type: "time" }),
+    createOrderEditField("End Time", "end_time", { type: "time" }),
+    createOrderEditField("Note", "note", { multiline: true, wide: true }),
+  );
+
+  const error = document.createElement("p");
+  error.className = "board-error";
+  error.hidden = !state.orderEditError;
+  error.textContent = state.orderEditError;
+
+  const actions = document.createElement("div");
+  actions.className = "form-actions";
+
+  const cancelButton = document.createElement("button");
+  cancelButton.type = "button";
+  cancelButton.className = "button-secondary";
+  cancelButton.textContent = "Cancel Edit";
+  cancelButton.disabled = state.isSaving;
+  cancelButton.addEventListener("click", cancelOrderEdit);
+
+  const saveButton = document.createElement("button");
+  saveButton.type = "submit";
+  saveButton.textContent = state.isSaving ? "Saving..." : "Save Changes";
+  saveButton.disabled = state.isSaving;
+
+  actions.append(cancelButton, saveButton);
+  form.append(formGrid, error, actions);
+  return form;
+}
+
 function renderAddOrderPopup() {
   const root = document.querySelector("#add-order-root");
   if (!root) {
@@ -1177,7 +1393,31 @@ function renderOrderDetailPopup() {
   closeButton.textContent = "Close";
   closeButton.addEventListener("click", closeOrderDetail);
 
-  header.append(titleWrap, closeButton);
+  const headerActions = document.createElement("div");
+  headerActions.className = "detail-actions";
+
+  if (!state.isOrderEditMode) {
+    const editButton = document.createElement("button");
+    editButton.type = "button";
+    editButton.textContent = "Edit";
+    editButton.addEventListener("click", () => startOrderEdit(order));
+    headerActions.append(editButton);
+  }
+
+  headerActions.append(closeButton);
+
+  header.append(titleWrap, headerActions);
+
+  if (state.isOrderEditMode && Object.keys(state.orderEditForm).length === 0) {
+    state.orderEditForm = getOrderEditForm(order);
+  }
+
+  if (state.isOrderEditMode) {
+    modal.append(header, createOrderEditForm(order));
+    backdrop.append(modal);
+    root.append(backdrop);
+    return;
+  }
 
   const details = document.createElement("dl");
   details.className = "detail-grid";

@@ -114,6 +114,24 @@ class CreateOrderRequest:
     note: Optional[str] = None
 
 
+@dataclass
+class UpdateOrderRequest:
+    invoice_number: Optional[str] = None
+    company_name: Optional[str] = None
+    phone: Optional[str] = None
+    delivery_address: Optional[str] = None
+    suburb: Optional[str] = None
+    postcode: Optional[str] = None
+    zone: Optional[str] = None
+    urgency: Optional[str] = None
+    preferred_driver_id: Optional[str] = None
+    pallet_quantity: Optional[int] = 0
+    loose_bags_quantity: Optional[int] = 0
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    note: Optional[str] = None
+
+
 def to_dict(value):
     """Convert dataclass response objects into plain dictionaries for APIs."""
     return asdict(value)

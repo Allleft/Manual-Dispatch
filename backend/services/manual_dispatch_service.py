@@ -92,6 +92,41 @@ class ManualDispatchService:
         )
         return self.repository.create_order(order)
 
+    def update_order(self, order_id, request):
+        existing = self.repository.get_order(order_id)
+        if not existing:
+            raise ValueError(f"Order does not exist: {order_id}")
+
+        suburb = self._clean_required_text(request.suburb, "suburb")
+        pallet_quantity = self._quantity_or_default(
+            request.pallet_quantity,
+            "pallet_quantity",
+        )
+        loose_bags_quantity = self._quantity_or_default(
+            request.loose_bags_quantity,
+            "loose_bags_quantity",
+        )
+
+        order = Order(
+            order_id=existing.order_id,
+            invoice_number=self._clean_optional_text(request.invoice_number),
+            company_name=self._clean_optional_text(request.company_name) or "",
+            phone=self._clean_optional_text(request.phone),
+            delivery_address=self._clean_optional_text(request.delivery_address) or "",
+            suburb=suburb,
+            postcode=self._clean_optional_text(request.postcode) or "",
+            delivery_date=existing.delivery_date,
+            zone=self._clean_optional_text(request.zone) or "",
+            urgency=self._clean_optional_text(request.urgency) or "Normal",
+            preferred_driver_id=self._clean_optional_text(request.preferred_driver_id),
+            pallet_quantity=pallet_quantity,
+            loose_bags_quantity=loose_bags_quantity,
+            start_time=self._clean_optional_text(request.start_time),
+            end_time=self._clean_optional_text(request.end_time),
+            note=self._clean_optional_text(request.note),
+        )
+        return self.repository.update_order(order)
+
     def _validate_task_type(self, task_type):
         if task_type not in SUPPORTED_TASK_TYPES:
             raise ValueError(f"Unsupported task_type: {task_type}")
