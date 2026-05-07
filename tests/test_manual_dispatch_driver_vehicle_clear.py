@@ -47,6 +47,33 @@ class ManualDispatchDriverVehicleClearTest(unittest.TestCase):
         board = self.service.get_board(self.dispatch_date)
         self.assertEqual([], board.driver_vehicle_assignments)
 
+    def test_clearing_vehicle_with_none_vehicle_id_removes_assignment(self):
+        self._assign_vehicle("D001", "V002")
+
+        self.service.assign_vehicle_to_driver(
+            AssignDriverVehicleRequest(
+                dispatch_date=self.dispatch_date,
+                driver_id="D001",
+                vehicle_id=None,
+            )
+        )
+
+        board = self.service.get_board(self.dispatch_date)
+        self.assertEqual([], board.driver_vehicle_assignments)
+
+    def test_clearing_vehicle_with_missing_vehicle_id_removes_assignment(self):
+        self._assign_vehicle("D001", "V002")
+
+        self.service.assign_vehicle_to_driver(
+            AssignDriverVehicleRequest(
+                dispatch_date=self.dispatch_date,
+                driver_id="D001",
+            )
+        )
+
+        board = self.service.get_board(self.dispatch_date)
+        self.assertEqual([], board.driver_vehicle_assignments)
+
     def test_clearing_vehicle_does_not_remove_task_assignments(self):
         self._assign_order("ORD-001", "D001", "trip1")
         self._assign_vehicle("D001", "V002")

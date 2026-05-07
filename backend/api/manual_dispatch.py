@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Body, HTTPException
 from fastapi.responses import Response
 
 from backend.schemas import (
@@ -55,7 +55,8 @@ def unassign_task(request: UnassignTaskRequest):
 
 
 @router.post("/driver-vehicle")
-def assign_driver_vehicle(request: AssignDriverVehicleRequest):
+def assign_driver_vehicle(payload: dict = Body(...)):
+    request = _assign_driver_vehicle_request_from_payload(payload)
     try:
         return to_dict(service.assign_vehicle_to_driver(request))
     except ValueError as error:
@@ -84,6 +85,15 @@ def cancel_order(order_id: str):
         return to_dict(service.cancel_order(order_id))
     except ValueError as error:
         raise _to_http_exception(error) from error
+
+
+def _assign_driver_vehicle_request_from_payload(payload):
+    payload = payload or {}
+    return AssignDriverVehicleRequest(
+        dispatch_date=payload.get("dispatch_date"),
+        driver_id=payload.get("driver_id"),
+        vehicle_id=payload.get("vehicle_id") or None,
+    )
 
 
 def _to_http_exception(error):

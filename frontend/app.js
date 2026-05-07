@@ -37,6 +37,38 @@ function getApiUrl(path, query = {}) {
   return url.toString();
 }
 
+function formatApiErrorDetail(detail) {
+  if (!detail) {
+    return "";
+  }
+
+  if (typeof detail === "string") {
+    return detail;
+  }
+
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => {
+        if (typeof item === "string") {
+          return item;
+        }
+        if (item && typeof item === "object") {
+          const location = Array.isArray(item.loc) ? item.loc.join(".") : "";
+          const message = item.msg || JSON.stringify(item);
+          return location ? `${location}: ${message}` : message;
+        }
+        return String(item);
+      })
+      .join("; ");
+  }
+
+  if (typeof detail === "object") {
+    return detail.message || detail.msg || JSON.stringify(detail);
+  }
+
+  return String(detail);
+}
+
 async function requestJson(path, options = {}) {
   const response = await fetch(getApiUrl(path, options.query), {
     method: options.method || "GET",
@@ -51,7 +83,7 @@ async function requestJson(path, options = {}) {
     let message = `Request failed with status ${response.status}`;
     try {
       const payload = await response.json();
-      message = payload.detail || message;
+      message = formatApiErrorDetail(payload.detail) || message;
     } catch (error) {
       message = response.statusText || message;
     }
@@ -280,7 +312,7 @@ async function handleExportExcel() {
       let message = `Export failed with status ${response.status}`;
       try {
         const payload = await response.json();
-        message = payload.detail || message;
+        message = formatApiErrorDetail(payload.detail) || message;
       } catch (error) {
         message = response.statusText || message;
       }
