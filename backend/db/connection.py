@@ -49,6 +49,7 @@ def _split_schema_and_seed(schema):
 def _ensure_manual_dispatch_columns(connection):
     _ensure_column(connection, "manual_orders", "invoice_number", "TEXT")
     _ensure_column(connection, "manual_orders", "phone", "TEXT")
+    _ensure_column(connection, "manual_orders", "status", "TEXT NOT NULL DEFAULT 'ACTIVE'")
     _ensure_column(
         connection,
         "manual_drivers",

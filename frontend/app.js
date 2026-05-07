@@ -122,6 +122,12 @@ async function apiUpdateOrder(orderId, payload) {
   });
 }
 
+async function apiCancelOrder(orderId) {
+  return requestJson(`/api/manual-dispatch/orders/${encodeURIComponent(orderId)}/cancel`, {
+    method: "POST",
+  });
+}
+
 function getExcelExportUrl(dispatchDate) {
   return getApiUrl("/api/manual-dispatch/export-excel", {
     dispatch_date: dispatchDate,
@@ -335,6 +341,33 @@ async function handleUpdateOrder(orderId) {
     state.isSaving = false;
     state.orderEditError = `Unable to save changes. ${error.message}`;
     renderOrderDetailPopup();
+  }
+}
+
+async function handleCancelOrder(orderId) {
+  if (state.isSaving) {
+    return;
+  }
+
+  const confirmed = window.confirm(
+    "Cancel this Order? Cancelled Orders are hidden from the Task Pool and excluded from export.",
+  );
+  if (!confirmed) {
+    return;
+  }
+
+  state.isSaving = true;
+  clearError();
+  renderOrderDetailPopup();
+
+  try {
+    await apiCancelOrder(orderId);
+    closeOrderDetail();
+    await loadBoard(state.dispatchDate);
+  } catch (error) {
+    state.isSaving = false;
+    showError(`Unable to cancel Order. ${error.message}`);
+    renderBoard();
   }
 }
 
@@ -1401,7 +1434,15 @@ function renderOrderDetailPopup() {
     editButton.type = "button";
     editButton.textContent = "Edit";
     editButton.addEventListener("click", () => startOrderEdit(order));
-    headerActions.append(editButton);
+
+    const cancelButton = document.createElement("button");
+    cancelButton.type = "button";
+    cancelButton.className = "button-danger";
+    cancelButton.textContent = state.isSaving ? "Cancelling..." : "Cancel Order";
+    cancelButton.disabled = state.isSaving;
+    cancelButton.addEventListener("click", () => handleCancelOrder(order.order_id));
+
+    headerActions.append(editButton, cancelButton);
   }
 
   headerActions.append(closeButton);
@@ -1440,7 +1481,12 @@ function renderOrderDetailPopup() {
     createDetailField("Note", order.note),
   );
 
-  modal.append(header, details);
+  const detailError = document.createElement("p");
+  detailError.className = "board-error";
+  detailError.hidden = !state.errorMessage;
+  detailError.textContent = state.errorMessage;
+
+  modal.append(header, detailError, details);
   backdrop.append(modal);
   root.append(backdrop);
 }

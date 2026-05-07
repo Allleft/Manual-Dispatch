@@ -16,7 +16,8 @@ CREATE TABLE IF NOT EXISTS manual_orders (
     loose_bags_quantity INTEGER NOT NULL DEFAULT 0,
     start_time TEXT,
     end_time TEXT,
-    note TEXT
+    note TEXT,
+    status TEXT NOT NULL DEFAULT 'ACTIVE'
 );
 
 CREATE TABLE IF NOT EXISTS manual_drivers (
@@ -81,7 +82,8 @@ INSERT OR IGNORE INTO manual_orders (
     loose_bags_quantity,
     start_time,
     end_time,
-    note
+    note,
+    status
 ) VALUES
     (
         'ORD-001',
@@ -99,7 +101,8 @@ INSERT OR IGNORE INTO manual_orders (
         0,
         '08:00',
         '12:00',
-        'Call before delivery'
+        'Call before delivery',
+        'ACTIVE'
     ),
     (
         'ORD-002',
@@ -117,7 +120,8 @@ INSERT OR IGNORE INTO manual_orders (
         12,
         '10:00',
         '14:00',
-        'Loose Bags only'
+        'Loose Bags only',
+        'ACTIVE'
     ),
     (
         'ORD-003',
@@ -135,7 +139,8 @@ INSERT OR IGNORE INTO manual_orders (
         0,
         '09:00',
         '15:00',
-        NULL
+        NULL,
+        'ACTIVE'
     );
 
 INSERT OR IGNORE INTO manual_drivers (

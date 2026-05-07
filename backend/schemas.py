@@ -20,6 +20,7 @@ class Order:
     start_time: Optional[str]
     end_time: Optional[str]
     note: Optional[str]
+    status: str = "ACTIVE"
 
 
 @dataclass

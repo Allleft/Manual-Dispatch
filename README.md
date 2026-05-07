@@ -1,10 +1,10 @@
 ﻿# Manual Dispatch Board
 
-Manual Dispatch Board is a manual office workflow for assigning Orders to Driver + Trip + Vehicle. This repository is currently in Phase 10A-3: Edit Order.
+Manual Dispatch Board is a manual office workflow for assigning Orders to Driver + Trip + Vehicle. This repository is currently in Phase 10A-4: Cancel Order.
 
 ## Current Phase
-- Phase: 10A-3
-- Status: manual Add/Edit Order workflow with SQLite persistence
+- Phase: 10A-4
+- Status: manual Add/Edit/Cancel Order workflow with SQLite persistence
 - Frontend now loads board data from the backend API.
 - Assign, Unassign, and Choose Vehicle actions now call the backend API.
 - SQLite persistence means refresh can preserve assignments and Driver + Dispatch Date vehicle selections.
@@ -16,6 +16,10 @@ Manual Dispatch Board is a manual office workflow for assigning Orders to Driver
 - Order edits are saved to SQLite.
 - Delivery Date is read-only during edit to avoid cross-date assignment complexity.
 - Editing an assigned Order keeps the existing Driver + Trip assignment unchanged.
+- Order detail popup now supports Cancel Order.
+- Cancel Order is a soft delete using `status = CANCELLED`.
+- Cancelled Orders are hidden from the Task Pool and excluded from Excel export.
+- Assigned Orders must be unassigned before cancellation.
 - Business hints remain non-blocking.
 - Order cards are now compact and show Invoice #, Company, Suburb, urgency, note preview, and start time.
 - Clicking an Order card opens a read-only full detail popup.
@@ -30,7 +34,7 @@ Manual Dispatch Board is a manual office workflow for assigning Orders to Driver
 - Empty Drivers and empty Trips are not exported.
 - Location column is not included in the export.
 - No separate Review Summary UI was added.
-- Delete Order / Cancel Order is not implemented yet.
+- Physical Delete Order is not implemented; cancellation is soft delete only.
 - Driver and Vehicle management are not implemented yet.
 - Backend now has SQLite persistence support for demo/master data, manual task assignments, and Driver + Dispatch Date vehicle assignments.
 - Runtime SQLite database files are local and ignored by Git.
@@ -84,6 +88,7 @@ Phase 9 Excel export is documented in `docs/manual-dispatch-board-phase9.md`.
 Phase 10A-0 Order card UI refinement is documented in `docs/manual-dispatch-board-phase10a0-ui-refinement.md`.
 Phase 10A-1 Add Order is documented in `docs/manual-dispatch-board-phase10a1-add-order.md`.
 Phase 10A-3 Edit Order is documented in `docs/manual-dispatch-board-phase10a3-edit-order.md`.
+Phase 10A-4 Cancel Order is documented in `docs/manual-dispatch-board-phase10a4-cancel-order.md`.
 
 ## Validation
 Phase 0 uses document and Git validation only. Functional tests should not be run until test, frontend, or backend implementation files exist.
@@ -99,3 +104,4 @@ Phase 9 uses backend Excel export unit tests, backend regression tests, frontend
 Phase 10A-0 uses backend schema/migration tests, frontend syntax validation, static safety checks, and browser/manual checks when tooling is available.
 Phase 10A-1 uses backend create-order tests, backend regression tests, frontend syntax validation, static safety checks, and browser/manual checks when tooling is available.
 Phase 10A-3 uses backend edit-order tests, backend regression tests, frontend syntax validation, static safety checks, and browser/manual checks when tooling is available.
+Phase 10A-4 uses backend cancel-order tests, safe migration checks, frontend syntax validation, static safety checks, and browser/manual checks when tooling is available.

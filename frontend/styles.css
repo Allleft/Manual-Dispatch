@@ -453,6 +453,17 @@ select:disabled {
   background: var(--warning-soft);
 }
 
+.button-danger {
+  border: 1px solid rgba(157, 47, 31, 0.2);
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.button-danger:disabled {
+  color: rgba(157, 47, 31, 0.62);
+  background: #f1c8bf;
+}
+
 .driver-card {
   padding: 1rem;
 }

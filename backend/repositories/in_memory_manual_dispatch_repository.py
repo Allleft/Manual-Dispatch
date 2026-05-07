@@ -136,7 +136,7 @@ class InMemoryManualDispatchRepository:
         self._next_assignment_number = 1
 
     def list_orders(self):
-        return list(self.orders)
+        return [order for order in self.orders if order.status == "ACTIVE"]
 
     def list_drivers(self):
         return list(self.drivers)
@@ -175,7 +175,8 @@ class InMemoryManualDispatchRepository:
 
     def get_task(self, task_type, task_id):
         if task_type == "ORDER":
-            return self.get_order(task_id)
+            order = self.get_order(task_id)
+            return order if order and order.status == "ACTIVE" else None
         return None
 
     def create_order(self, order):
@@ -190,6 +191,19 @@ class InMemoryManualDispatchRepository:
                 self.orders[index] = order
                 return order
         raise ValueError(f"Order does not exist: {order.order_id}")
+
+    def cancel_order(self, order_id):
+        order = self.get_order(order_id)
+        if not order:
+            raise ValueError(f"Order does not exist: {order_id}")
+        order.status = "CANCELLED"
+        return order
+
+    def has_assignment_for_task(self, task_type, task_id):
+        return any(
+            assignment.task_type == task_type and assignment.task_id == task_id
+            for assignment in self.assignments
+        )
 
     def upsert_assignment(self, dispatch_date, task_type, task_id, driver_id, trip_no):
         existing = self.get_assignment(dispatch_date, task_type, task_id)

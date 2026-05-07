@@ -89,6 +89,7 @@ class ManualDispatchService:
             start_time=self._clean_optional_text(request.start_time),
             end_time=self._clean_optional_text(request.end_time),
             note=self._clean_optional_text(request.note),
+            status="ACTIVE",
         )
         return self.repository.create_order(order)
 
@@ -124,8 +125,22 @@ class ManualDispatchService:
             start_time=self._clean_optional_text(request.start_time),
             end_time=self._clean_optional_text(request.end_time),
             note=self._clean_optional_text(request.note),
+            status=existing.status,
         )
         return self.repository.update_order(order)
+
+    def cancel_order(self, order_id):
+        existing = self.repository.get_order(order_id)
+        if not existing:
+            raise ValueError(f"Order does not exist: {order_id}")
+
+        if existing.status == "CANCELLED":
+            return existing
+
+        if self.repository.has_assignment_for_task("ORDER", order_id):
+            raise ValueError("Order must be unassigned before cancellation")
+
+        return self.repository.cancel_order(order_id)
 
     def _validate_task_type(self, task_type):
         if task_type not in SUPPORTED_TASK_TYPES:

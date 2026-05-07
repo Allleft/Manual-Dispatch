@@ -78,6 +78,14 @@ def update_order(order_id: str, request: UpdateOrderRequest):
         raise _to_http_exception(error) from error
 
 
+@router.post("/orders/{order_id}/cancel")
+def cancel_order(order_id: str):
+    try:
+        return to_dict(service.cancel_order(order_id))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
 def _to_http_exception(error):
     message = str(error)
     status_code = 404 if "does not exist" in message else 400

@@ -20,7 +20,7 @@ class SQLiteManualDispatchRepository:
     def list_orders(self):
         with connect(self.db_path) as connection:
             rows = connection.execute(
-                "SELECT * FROM manual_orders ORDER BY order_id"
+                "SELECT * FROM manual_orders WHERE status = 'ACTIVE' ORDER BY order_id"
             ).fetchall()
         return [self._row_to_order(row) for row in rows]
 
@@ -90,7 +90,8 @@ class SQLiteManualDispatchRepository:
 
     def get_task(self, task_type, task_id):
         if task_type == "ORDER":
-            return self.get_order(task_id)
+            order = self.get_order(task_id)
+            return order if order and order.status == "ACTIVE" else None
         return None
 
     def create_order(self, order):
@@ -113,8 +114,9 @@ class SQLiteManualDispatchRepository:
                     loose_bags_quantity,
                     start_time,
                     end_time,
-                    note
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    note,
+                    status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     order.order_id,
@@ -133,6 +135,7 @@ class SQLiteManualDispatchRepository:
                     order.start_time,
                     order.end_time,
                     order.note,
+                    order.status,
                 ),
             )
             connection.commit()
@@ -183,6 +186,31 @@ class SQLiteManualDispatchRepository:
         if cursor.rowcount == 0:
             raise ValueError(f"Order does not exist: {order.order_id}")
         return self.get_order(order.order_id)
+
+    def cancel_order(self, order_id):
+        with connect(self.db_path) as connection:
+            cursor = connection.execute(
+                "UPDATE manual_orders SET status = 'CANCELLED' WHERE order_id = ?",
+                (order_id,),
+            )
+            connection.commit()
+
+        if cursor.rowcount == 0:
+            raise ValueError(f"Order does not exist: {order_id}")
+        return self.get_order(order_id)
+
+    def has_assignment_for_task(self, task_type, task_id):
+        with connect(self.db_path) as connection:
+            row = connection.execute(
+                """
+                SELECT 1
+                FROM manual_dispatch_assignments
+                WHERE task_type = ? AND task_id = ?
+                LIMIT 1
+                """,
+                (task_type, task_id),
+            ).fetchone()
+        return row is not None
 
     def upsert_assignment(self, dispatch_date, task_type, task_id, driver_id, trip_no):
         timestamp = self._timestamp()
@@ -328,6 +356,7 @@ class SQLiteManualDispatchRepository:
             start_time=row["start_time"],
             end_time=row["end_time"],
             note=row["note"],
+            status=row["status"],
         )
 
     def _row_to_driver(self, row):
