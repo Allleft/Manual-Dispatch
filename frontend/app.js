@@ -725,54 +725,53 @@ async function handleVehicleChange(driverId, vehicleId) {
 
 function renderBoardControls() {
   const dateInput = document.querySelector("#dispatch-date");
-  const loadButton = document.querySelector("#load-board-button");
   const exportButton = document.querySelector("#export-excel-button");
-  const retryButton = document.querySelector("#retry-board-button");
   const addOrderButton = document.querySelector("#add-order-button");
   const status = document.querySelector("#board-status");
   const error = document.querySelector("#board-error");
 
-  if (
-    !dateInput ||
-    !loadButton ||
-    !exportButton ||
-    !retryButton ||
-    !addOrderButton ||
-    !status ||
-    !error
-  ) {
+  if (!dateInput || !exportButton) {
     return;
   }
 
   dateInput.value = state.dispatchDate;
   dateInput.disabled = state.isLoading || state.isSaving;
-  loadButton.disabled = state.isLoading || state.isSaving;
+
   exportButton.disabled = state.isLoading || state.isSaving;
-  retryButton.disabled = state.isLoading || state.isSaving;
-  addOrderButton.disabled = state.isLoading || state.isSaving;
   exportButton.textContent = state.isSaving ? "Preparing..." : "Export Excel";
 
-  status.textContent = state.isLoading
-    ? "Loading board data..."
-    : state.isSaving
-      ? "Saving manual dispatch change..."
-      : `Dispatch Date: ${state.dispatchDate}`;
+  if (addOrderButton) {
+    addOrderButton.disabled = state.isLoading || state.isSaving;
+  }
 
-  error.hidden = !state.errorMessage;
-  error.textContent = state.errorMessage;
+  if (status) {
+    status.textContent = state.isLoading
+      ? "Loading board data..."
+      : state.isSaving
+        ? "Saving manual dispatch change..."
+        : `Dispatch Date: ${state.dispatchDate}`;
+  }
 
-  loadButton.onclick = () => {
-    loadBoard(dateInput.value || DEFAULT_DISPATCH_DATE);
+  if (error) {
+    error.hidden = !state.errorMessage;
+    error.textContent = state.errorMessage;
+  }
+
+  dateInput.onchange = () => {
+    const nextDate = dateInput.value || DEFAULT_DISPATCH_DATE;
+    state.dispatchDate = nextDate;
+    loadBoard(nextDate);
   };
+
   exportButton.onclick = () => {
     handleExportExcel();
   };
-  retryButton.onclick = () => {
-    loadBoard(state.dispatchDate);
-  };
-  addOrderButton.onclick = () => {
-    openAddOrder();
-  };
+
+  if (addOrderButton) {
+    addOrderButton.onclick = () => {
+      openAddOrder();
+    };
+  }
 }
 
 function renderTaskPoolFilters() {

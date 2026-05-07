@@ -11,38 +11,27 @@
       <div>
         <p class="eyebrow">Manual office workflow</p>
         <h1>Manual Dispatch Board</h1>
-        <p class="hero-copy">
-          Phase 10A-5 adds Task Pool search and urgency filtering while keeping dispatch decisions manual.
-        </p>
       </div>
-      <div class="phase-badge" aria-label="Current phase">Phase 10A-5 Search and Filter</div>
     </header>
 
     <main class="board-shell" aria-label="Manual Dispatch Board">
       <section class="board-section board-controls" aria-labelledby="board-controls-title">
-        <div>
-          <p class="section-kicker">Backend source of truth</p>
-          <h2 id="board-controls-title">Dispatch Date</h2>
-        </div>
+
         <div class="dispatch-date-controls">
           <label for="dispatch-date">Dispatch date</label>
           <input id="dispatch-date" type="date" value="2026-05-05">
-          <button id="load-board-button" type="button">Load Board</button>
+
           <button id="export-excel-button" class="button-export" type="button">Export Excel</button>
-          <button id="retry-board-button" class="button-secondary" type="button">Retry</button>
         </div>
-        <p id="board-status" class="board-status" aria-live="polite">Loading board data...</p>
         <p id="board-error" class="board-error" aria-live="assertive" hidden></p>
       </section>
 
       <section class="board-section task-pool" aria-labelledby="task-pool-title">
         <div class="section-heading">
           <div>
-            <p class="section-kicker">Top section</p>
             <h2 id="task-pool-title">Task Pool</h2>
           </div>
           <div class="section-actions">
-            <p class="section-note">Backend Orders with compact hints. Choose a driver and trip manually.</p>
             <button id="add-order-button" type="button">Add Order</button>
           </div>
         </div>
@@ -67,10 +56,8 @@
       <section class="board-section driver-summary" aria-labelledby="trip-summary-title">
         <div class="section-heading">
           <div>
-            <p class="section-kicker">Bottom section</p>
-            <h2 id="trip-summary-title">Trip Summary</h2>
+            <h2 id="trip-summary-title">Driver Summary</h2>
           </div>
-          <p class="section-note">Trip groups stay under each Driver so vehicle selection remains Driver + Dispatch Date.</p>
         </div>
         <div id="driver-summary-list" class="driver-grid" aria-live="polite"></div>
       </section>
