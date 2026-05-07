@@ -1,10 +1,10 @@
 ﻿# Manual Dispatch Board
 
-Manual Dispatch Board is a manual office workflow for assigning Orders to Driver + Trip + Vehicle. This repository now includes frontend-only locked Final Trip Summary snapshots.
+Manual Dispatch Board is a manual office workflow for assigning Orders to Driver + Trip + Vehicle. This repository now persists locked Final Trip Summary snapshots and can load saved history.
 
 ## Current Phase
-- Phase: 10A-5
-- Status: manual Add/Edit/Cancel Order workflow with SQLite persistence and frontend Task Pool filtering
+- Phase: 10G
+- Status: persisted Final Trip Summary snapshots with saved history loading
 - Frontend now loads board data from the backend API.
 - Assign, Unassign, and Choose Vehicle actions now call the backend API.
 - SQLite persistence means refresh can preserve assignments and Driver + Dispatch Date vehicle selections.
@@ -28,7 +28,12 @@ Manual Dispatch Board is a manual office workflow for assigning Orders to Driver
 - Generated Orders are unassigned through the existing backend API and removed from editable Trip Summary.
 - Generated Orders are hidden from Task Pool in the same browser session using frontend memory.
 - Final Trip Summary snapshots are read-only and do not auto-update from later board changes.
-- Final Trip Summary persistence is not implemented yet; refresh may clear generated summaries.
+- Final Trip Summary snapshots can now be saved to SQLite.
+- Saved Final Trip Summary rows store snapshot data rather than live Order, Driver, or Vehicle references.
+- Saved Final Trip Summary history can be loaded by dispatch date.
+- Saving a Final Trip Summary marks included Orders as `FINALIZED`.
+- `FINALIZED` Orders are hidden from Task Pool and editable Trip Summary.
+- Generated-but-unsaved summaries are still frontend memory only.
 - Business hints remain non-blocking.
 - Order cards are now compact and show Invoice #, Company, Suburb, urgency, note preview, and start time.
 - Clicking an Order card opens a read-only full detail popup.
@@ -100,6 +105,7 @@ Phase 10A-3 Edit Order is documented in `docs/manual-dispatch-board-phase10a3-ed
 Phase 10A-4 Cancel Order is documented in `docs/manual-dispatch-board-phase10a4-cancel-order.md`.
 Phase 10A-5 Order Search and Filter is documented in `docs/manual-dispatch-board-phase10a5-order-filter.md`.
 Final Trip Summary snapshot behavior is documented in `docs/manual-dispatch-board-final-trip-summary.md`.
+Phase 10G Final Trip Summary persistence is documented in `docs/manual-dispatch-board-phase10g-final-summary-persistence.md`.
 
 ## Validation
 Phase 0 uses document and Git validation only. Functional tests should not be run until test, frontend, or backend implementation files exist.
@@ -117,3 +123,4 @@ Phase 10A-1 uses backend create-order tests, backend regression tests, frontend 
 Phase 10A-3 uses backend edit-order tests, backend regression tests, frontend syntax validation, static safety checks, and browser/manual checks when tooling is available.
 Phase 10A-4 uses backend cancel-order tests, safe migration checks, frontend syntax validation, static safety checks, and browser/manual checks when tooling is available.
 Phase 10A-5 uses frontend syntax validation, backend regression tests, static safety checks, and browser/manual checks when tooling is available.
+Phase 10G uses backend final-summary persistence tests, backend regression tests, frontend syntax validation, static safety checks, and browser/manual checks when tooling is available.

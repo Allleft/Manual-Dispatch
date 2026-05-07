@@ -3,7 +3,8 @@
 ## Summary
 - Final Trip Summary is a locked frontend-memory snapshot generated from a Driver's current editable Trip Summary.
 - It is read-only and does not auto-update after later board changes.
-- It uses existing assignment data and existing unassign API calls. No new backend final summary tables are added in this phase.
+- It uses existing assignment data and existing unassign API calls during Generate.
+- Phase 10G adds optional SQLite persistence for saved Final Trip Summary snapshots.
 
 ## Generate Behavior
 1. User clicks `Generate` on a Driver card.
@@ -22,11 +23,11 @@
 - A Driver can have only one locked Final Trip Summary in this phase.
 
 ## Session Limitation
-- Final Trip Summary is frontend-memory only.
-- Refresh may clear generated summaries.
+- Generated-but-unsaved Final Trip Summary previews are frontend-memory only.
+- Refresh may clear generated unsaved previews.
 - Generated Orders are hidden from Task Pool in the same session using `state.generatedTaskKeys`.
-- Refresh may allow generated Orders to reappear in Task Pool because final summary persistence is not implemented yet.
-- A backend `DISPATCHED` or `GENERATED` status can be considered later, but is intentionally not added now.
+- Saving a Final Trip Summary marks included Orders as `FINALIZED`.
+- Saved summaries can be loaded through History after refresh.
 
 ## Final Summary Header
 Each locked block shows:
@@ -87,7 +88,6 @@ Final Trip Summary does not include:
 
 ## Excluded Work
 - Excel export changes
-- Backend final summary persistence
 - Lock/unlock workflow
 - Batch unassign endpoint
 - Add/Edit/Delete Order changes
@@ -97,6 +97,5 @@ Final Trip Summary does not include:
 - Maps, ETA, routing, geocoding, CP-SAT, or optimization
 
 ## Future Handoff
-- A later phase can persist final summaries in backend storage.
-- A later phase can add a stronger Order status such as `GENERATED` or `DISPATCHED`.
 - A later phase can add a lock/unlock workflow if office review requires it.
+- A later phase can add controlled reopen behavior for `FINALIZED` Orders if office review requires it.

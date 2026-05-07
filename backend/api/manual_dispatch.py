@@ -5,6 +5,7 @@ from backend.schemas import (
     AssignDriverVehicleRequest,
     AssignTaskRequest,
     CreateOrderRequest,
+    SaveFinalTripSummaryRequest,
     UnassignTaskRequest,
     UpdateOrderRequest,
     to_dict,
@@ -87,12 +88,54 @@ def cancel_order(order_id: str):
         raise _to_http_exception(error) from error
 
 
+@router.post("/final-summaries")
+def save_final_trip_summary(payload: dict = Body(...)):
+    request = _save_final_trip_summary_request_from_payload(payload)
+    try:
+        return to_dict(service.save_final_trip_summary(request))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.get("/final-summaries")
+def list_final_trip_summaries(dispatch_date: str):
+    try:
+        return [to_dict(summary) for summary in service.list_final_trip_summaries(dispatch_date)]
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.get("/final-summaries/{summary_id}")
+def get_final_trip_summary(summary_id: str):
+    try:
+        return to_dict(service.get_final_trip_summary(summary_id))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
 def _assign_driver_vehicle_request_from_payload(payload):
     payload = payload or {}
     return AssignDriverVehicleRequest(
         dispatch_date=payload.get("dispatch_date"),
         driver_id=payload.get("driver_id"),
         vehicle_id=payload.get("vehicle_id") or None,
+    )
+
+
+def _save_final_trip_summary_request_from_payload(payload):
+    payload = payload or {}
+    return SaveFinalTripSummaryRequest(
+        dispatch_date=payload.get("dispatch_date"),
+        driver_id=payload.get("driver_id"),
+        driver_name_snapshot=payload.get("driver_name_snapshot")
+        or payload.get("driver_name"),
+        vehicle_id=payload.get("vehicle_id") or None,
+        vehicle_rego_snapshot=payload.get("vehicle_rego_snapshot")
+        or payload.get("vehicle_rego"),
+        total_pallets=payload.get("total_pallets") or 0,
+        total_loose_bags=payload.get("total_loose_bags") or 0,
+        generated_at=payload.get("generated_at"),
+        trips=payload.get("trips") or [],
     )
 
 

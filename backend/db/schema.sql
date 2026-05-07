@@ -66,6 +66,41 @@ CREATE TABLE IF NOT EXISTS manual_driver_vehicle_assignments (
     FOREIGN KEY(vehicle_id) REFERENCES manual_vehicles(vehicle_id)
 );
 
+CREATE TABLE IF NOT EXISTS final_trip_summaries (
+    summary_id TEXT PRIMARY KEY,
+    dispatch_date TEXT NOT NULL,
+    driver_id TEXT NOT NULL,
+    driver_name_snapshot TEXT NOT NULL,
+    vehicle_id TEXT,
+    vehicle_rego_snapshot TEXT,
+    total_pallets INTEGER NOT NULL DEFAULT 0,
+    total_loose_bags INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'SAVED',
+    generated_at TEXT,
+    saved_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS final_trip_summary_rows (
+    row_id TEXT PRIMARY KEY,
+    summary_id TEXT NOT NULL,
+    trip_no TEXT NOT NULL,
+    row_no INTEGER NOT NULL,
+    task_type TEXT NOT NULL,
+    task_id TEXT NOT NULL,
+    order_id_snapshot TEXT,
+    invoice_number_snapshot TEXT,
+    company_name_snapshot TEXT,
+    suburb_snapshot TEXT,
+    delivery_address_snapshot TEXT,
+    product_snapshot TEXT,
+    pallet_quantity_snapshot INTEGER NOT NULL DEFAULT 0,
+    loose_bags_quantity_snapshot INTEGER NOT NULL DEFAULT 0,
+    note_snapshot TEXT,
+    CHECK(trip_no IN ('trip1', 'trip2')),
+    FOREIGN KEY(summary_id) REFERENCES final_trip_summaries(summary_id)
+        ON DELETE CASCADE
+);
+
 INSERT OR IGNORE INTO manual_orders (
     order_id,
     invoice_number,

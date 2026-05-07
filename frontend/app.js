@@ -18,6 +18,11 @@ const state = {
   urgencyFilter: "All",
   finalTripSummaries: {},
   generatedTaskKeys: new Set(),
+  finalSummaryHistory: [],
+  isHistoryLoading: false,
+  historyLoaded: false,
+  historyError: "",
+  selectedHistorySummaryId: "",
   activeOrderDetailId: "",
   isAddOrderOpen: false,
   addOrderError: "",
@@ -161,6 +166,19 @@ async function apiUpdateOrder(orderId, payload) {
 async function apiCancelOrder(orderId) {
   return requestJson(`/api/manual-dispatch/orders/${encodeURIComponent(orderId)}/cancel`, {
     method: "POST",
+  });
+}
+
+async function apiSaveFinalSummary(payload) {
+  return requestJson("/api/manual-dispatch/final-summaries", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+async function apiListFinalSummaries(dispatchDate) {
+  return requestJson("/api/manual-dispatch/final-summaries", {
+    query: { dispatch_date: dispatchDate },
   });
 }
 
@@ -425,6 +443,48 @@ function getLooseBagsQuantity(order) {
 
 function formatOptional(value, fallback = "-") {
   return value === undefined || value === null || value === "" ? fallback : value;
+}
+
+function normalizeFinalSummary(summary) {
+  return {
+    summary_id: summary.summary_id || "",
+    dispatch_date: summary.dispatch_date || state.dispatchDate,
+    driver_id: summary.driver_id || "",
+    driver_name: summary.driver_name || summary.driver_name_snapshot || "",
+    driver_name_snapshot: summary.driver_name_snapshot || summary.driver_name || "",
+    vehicle_id: summary.vehicle_id || "",
+    vehicle_rego: summary.vehicle_rego || summary.vehicle_rego_snapshot || "No vehicle selected",
+    vehicle_rego_snapshot: summary.vehicle_rego_snapshot || summary.vehicle_rego || "No vehicle selected",
+    total_pallets: Number(summary.total_pallets || 0),
+    total_loose_bags: Number(summary.total_loose_bags || 0),
+    status: summary.status || (summary.summary_id ? "SAVED" : "LOCKED"),
+    generated_at: summary.generated_at || "",
+    saved_at: summary.saved_at || "",
+    trips: (summary.trips || [])
+      .map((trip) => ({
+        trip_no: trip.trip_no,
+        orders: (trip.orders || []).map((order) => ({
+          row_id: order.row_id || "",
+          row_no: Number(order.row_no || 0),
+          task_type: order.task_type || "ORDER",
+          task_id: order.task_id || order.order_id || order.order_id_snapshot || "",
+          order_id: order.order_id || order.order_id_snapshot || order.task_id || "",
+          invoice_number: order.invoice_number || order.invoice_number_snapshot || "",
+          company_name: order.company_name || order.company_name_snapshot || "",
+          suburb: order.suburb || order.suburb_snapshot || "",
+          delivery_address: order.delivery_address || order.delivery_address_snapshot || "",
+          product: order.product || order.product_snapshot || "",
+          pallet_quantity: Number(
+            order.pallet_quantity ?? order.pallet_quantity_snapshot ?? 0,
+          ),
+          loose_bags_quantity: Number(
+            order.loose_bags_quantity ?? order.loose_bags_quantity_snapshot ?? 0,
+          ),
+          note: order.note || order.note_snapshot || "",
+        })),
+      }))
+      .filter((trip) => trip.orders.length > 0),
+  };
 }
 
 function truncateText(value, maxLength = 44) {
@@ -794,11 +854,22 @@ function buildFinalTripSummarySnapshot(driverId) {
             task_type: assignment.task_type,
             task_id: assignment.task_id,
             order_id: order.order_id,
+            order_id_snapshot: order.order_id,
+            invoice_number_snapshot: order.invoice_number || "",
+            company_name_snapshot: order.company_name || "",
+            suburb_snapshot: order.suburb || "",
+            delivery_address_snapshot: order.delivery_address || "",
+            product_snapshot: "",
+            pallet_quantity_snapshot: getDisplayPalletQuantity(order),
+            loose_bags_quantity_snapshot: getLooseBagsQuantity(order),
+            note_snapshot: order.note || "",
             company_name: order.company_name || "",
             suburb: order.suburb || "",
             invoice_number: order.invoice_number || "",
+            delivery_address: order.delivery_address || "",
             pallet_quantity: getDisplayPalletQuantity(order),
             loose_bags_quantity: getLooseBagsQuantity(order),
+            note: order.note || "",
             product: "",
           };
         })
@@ -818,9 +889,13 @@ function buildFinalTripSummarySnapshot(driverId) {
     dispatch_date: state.dispatchDate,
     driver_id: driver.driver_id,
     driver_name: driver.name,
+    driver_name_snapshot: driver.name,
+    vehicle_id: selectedVehicle ? selectedVehicle.vehicle_id : "",
     vehicle_rego: selectedVehicle ? selectedVehicle.rego : "No vehicle selected",
+    vehicle_rego_snapshot: selectedVehicle ? selectedVehicle.rego : "No vehicle selected",
     total_pallets: allOrders.reduce((total, order) => total + Number(order.pallet_quantity || 0), 0),
     total_loose_bags: allOrders.reduce((total, order) => total + Number(order.loose_bags_quantity || 0), 0),
+    status: "LOCKED",
     trips,
   };
 }
@@ -889,9 +964,107 @@ async function handleGenerateDriverSummary(driverId) {
   }
 }
 
+function getFinalSummarySavePayload(summary) {
+  const normalized = normalizeFinalSummary(summary);
+  return {
+    dispatch_date: normalized.dispatch_date,
+    driver_id: normalized.driver_id,
+    driver_name_snapshot: normalized.driver_name_snapshot || normalized.driver_name,
+    vehicle_id: normalized.vehicle_id || null,
+    vehicle_rego_snapshot: normalized.vehicle_rego_snapshot || "No vehicle selected",
+    total_pallets: normalized.total_pallets,
+    total_loose_bags: normalized.total_loose_bags,
+    generated_at: normalized.generated_at,
+    trips: normalized.trips.map((trip) => ({
+      trip_no: trip.trip_no,
+      orders: trip.orders.map((order) => ({
+        task_type: order.task_type,
+        task_id: order.task_id,
+        order_id_snapshot: order.order_id,
+        invoice_number_snapshot: order.invoice_number,
+        company_name_snapshot: order.company_name,
+        suburb_snapshot: order.suburb,
+        delivery_address_snapshot: order.delivery_address,
+        product_snapshot: order.product,
+        pallet_quantity_snapshot: order.pallet_quantity,
+        loose_bags_quantity_snapshot: order.loose_bags_quantity,
+        note_snapshot: order.note,
+      })),
+    })),
+  };
+}
+
+async function handleSaveFinalSummary(driverId) {
+  if (state.isSaving || state.isLoading) {
+    return;
+  }
+
+  const summary = state.finalTripSummaries[driverId];
+  if (!summary) {
+    showError("Generate a Final Trip Summary before saving.");
+    renderBoard();
+    return;
+  }
+
+  if (summary.summary_id) {
+    showError("This Final Trip Summary is already saved.");
+    renderBoard();
+    return;
+  }
+
+  state.isSaving = true;
+  clearError();
+  renderBoard();
+
+  try {
+    const savedSummary = normalizeFinalSummary(
+      await apiSaveFinalSummary(getFinalSummarySavePayload(summary)),
+    );
+    state.finalTripSummaries[driverId] = savedSummary;
+    state.historyLoaded = false;
+    state.selectedHistorySummaryId = savedSummary.summary_id;
+    await loadBoard(state.dispatchDate);
+  } catch (error) {
+    state.isSaving = false;
+    showError(`Unable to save Final Trip Summary. ${error.message}`);
+    renderBoard();
+  }
+}
+
+async function handleLoadFinalSummaryHistory() {
+  if (state.isSaving || state.isLoading || state.isHistoryLoading) {
+    return;
+  }
+
+  state.isHistoryLoading = true;
+  state.historyError = "";
+  clearError();
+  renderBoard();
+
+  try {
+    const summaries = await apiListFinalSummaries(state.dispatchDate);
+    state.finalSummaryHistory = (summaries || []).map(normalizeFinalSummary);
+    state.historyLoaded = true;
+    if (
+      state.selectedHistorySummaryId &&
+      !state.finalSummaryHistory.some(
+        (summary) => summary.summary_id === state.selectedHistorySummaryId,
+      )
+    ) {
+      state.selectedHistorySummaryId = "";
+    }
+  } catch (error) {
+    state.historyError = `Unable to load Final Trip Summary history. ${error.message}`;
+  } finally {
+    state.isHistoryLoading = false;
+    renderBoard();
+  }
+}
+
 function renderBoardControls() {
   const dateInput = document.querySelector("#dispatch-date");
   const exportButton = document.querySelector("#export-excel-button");
+  const loadHistoryButton = document.querySelector("#load-history-button");
   const addOrderButton = document.querySelector("#add-order-button");
   const status = document.querySelector("#board-status");
   const error = document.querySelector("#board-error");
@@ -905,6 +1078,11 @@ function renderBoardControls() {
 
   exportButton.disabled = state.isLoading || state.isSaving;
   exportButton.textContent = state.isSaving ? "Preparing..." : "Export Excel";
+
+  if (loadHistoryButton) {
+    loadHistoryButton.disabled = state.isLoading || state.isSaving || state.isHistoryLoading;
+    loadHistoryButton.textContent = state.isHistoryLoading ? "Loading History..." : "Load History";
+  }
 
   if (addOrderButton) {
     addOrderButton.disabled = state.isLoading || state.isSaving;
@@ -926,12 +1104,24 @@ function renderBoardControls() {
   dateInput.onchange = () => {
     const nextDate = dateInput.value || DEFAULT_DISPATCH_DATE;
     state.dispatchDate = nextDate;
+    state.finalTripSummaries = {};
+    state.generatedTaskKeys = new Set();
+    state.finalSummaryHistory = [];
+    state.historyLoaded = false;
+    state.historyError = "";
+    state.selectedHistorySummaryId = "";
     loadBoard(nextDate);
   };
 
   exportButton.onclick = () => {
     handleExportExcel();
   };
+
+  if (loadHistoryButton) {
+    loadHistoryButton.onclick = () => {
+      handleLoadFinalSummaryHistory();
+    };
+  }
 
   if (addOrderButton) {
     addOrderButton.onclick = () => {
@@ -1374,26 +1564,104 @@ function renderFinalTripSummaries() {
   }
 
   finalSummaryList.innerHTML = "";
-  const summaries = Object.values(state.finalTripSummaries);
+  const summaries = Object.values(state.finalTripSummaries).map(normalizeFinalSummary);
 
   if (summaries.length === 0) {
     const emptyState = document.createElement("p");
     emptyState.className = "empty-board";
-    emptyState.textContent = "No locked Final Trip Summary snapshots generated in this session.";
+    emptyState.textContent = "No generated Final Trip Summary previews in this session.";
     finalSummaryList.append(emptyState);
+  } else {
+    summaries
+      .sort((first, second) => first.driver_name.localeCompare(second.driver_name))
+      .forEach((summary) => {
+        finalSummaryList.append(createFinalTripSummaryCard(summary, { mode: "preview" }));
+      });
+  }
+
+  renderFinalSummaryHistory();
+}
+
+function renderFinalSummaryHistory() {
+  const historyList = document.querySelector("#final-summary-history-list");
+  if (!historyList) {
     return;
   }
 
-  summaries
-    .sort((first, second) => first.driver_name.localeCompare(second.driver_name))
-    .forEach((summary) => {
-      finalSummaryList.append(createFinalTripSummaryCard(summary));
+  historyList.innerHTML = "";
+
+  if (state.isHistoryLoading) {
+    const loadingState = document.createElement("p");
+    loadingState.className = "empty-board";
+    loadingState.textContent = "Loading saved Final Trip Summary history...";
+    historyList.append(loadingState);
+    return;
+  }
+
+  if (state.historyError) {
+    const error = document.createElement("p");
+    error.className = "board-error";
+    error.textContent = state.historyError;
+    historyList.append(error);
+    return;
+  }
+
+  if (!state.historyLoaded) {
+    const prompt = document.createElement("p");
+    prompt.className = "empty-board";
+    prompt.textContent = "Click Load History to view saved Final Trip Summaries for this dispatch date.";
+    historyList.append(prompt);
+    return;
+  }
+
+  if (state.finalSummaryHistory.length === 0) {
+    const emptyState = document.createElement("p");
+    emptyState.className = "empty-board";
+    emptyState.textContent = "No saved Final Trip Summaries found for this dispatch date.";
+    historyList.append(emptyState);
+    return;
+  }
+
+  const historyPicker = document.createElement("div");
+  historyPicker.className = "history-picker";
+
+  state.finalSummaryHistory.forEach((summary) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className =
+      summary.summary_id === state.selectedHistorySummaryId
+        ? "history-summary-button history-summary-button-active"
+        : "history-summary-button";
+    button.textContent = `${summary.driver_name} - ${formatOptional(summary.vehicle_rego, "No vehicle selected")} - ${
+      summary.saved_at ? formatGeneratedAt(summary.saved_at) : "Saved"
+    }`;
+    button.addEventListener("click", () => {
+      state.selectedHistorySummaryId = summary.summary_id;
+      renderFinalSummaryHistory();
     });
+    historyPicker.append(button);
+  });
+
+  historyList.append(historyPicker);
+
+  const selectedSummary = state.finalSummaryHistory.find(
+    (summary) => summary.summary_id === state.selectedHistorySummaryId,
+  );
+
+  if (selectedSummary) {
+    historyList.append(createFinalTripSummaryCard(selectedSummary, { mode: "history" }));
+  } else {
+    const prompt = document.createElement("p");
+    prompt.className = "empty-board";
+    prompt.textContent = "Select a saved summary above to view its locked snapshot.";
+    historyList.append(prompt);
+  }
 }
 
-function createFinalTripSummaryCard(summary) {
+function createFinalTripSummaryCard(summary, options = {}) {
   const card = document.createElement("article");
   card.className = "final-summary-card";
+  const isSaved = Boolean(summary.summary_id);
 
   const header = document.createElement("div");
   header.className = "final-summary-header";
@@ -1401,15 +1669,28 @@ function createFinalTripSummaryCard(summary) {
   const titleWrap = document.createElement("div");
   const kicker = document.createElement("p");
   kicker.className = "section-kicker";
-  kicker.textContent = "Locked snapshot";
+  kicker.textContent = options.mode === "history" ? "Saved history" : "Locked snapshot";
 
   const title = document.createElement("h3");
   title.textContent = summary.driver_name;
 
   titleWrap.append(kicker, title);
 
-  const lockedBadge = createBadge("Locked", "good");
-  header.append(titleWrap, lockedBadge);
+  const actions = document.createElement("div");
+  actions.className = "final-summary-actions";
+  actions.append(createBadge(isSaved ? "Saved" : "Locked", "good"));
+  if (!isSaved && options.mode !== "history") {
+    const saveButton = document.createElement("button");
+    saveButton.type = "button";
+    saveButton.className = "button-secondary";
+    saveButton.textContent = state.isSaving ? "Saving..." : "Save Final Summary";
+    saveButton.disabled = state.isSaving || state.isLoading;
+    saveButton.addEventListener("click", () => {
+      handleSaveFinalSummary(summary.driver_id);
+    });
+    actions.append(saveButton);
+  }
+  header.append(titleWrap, actions);
 
   const meta = document.createElement("dl");
   meta.className = "final-summary-meta";
@@ -1418,6 +1699,7 @@ function createFinalTripSummaryCard(summary) {
     createDetailField("Driver", summary.driver_name),
     createDetailField("Rego #", summary.vehicle_rego),
     createDetailField("Generated At", formatGeneratedAt(summary.generated_at)),
+    createDetailField("Saved At", isSaved ? formatGeneratedAt(summary.saved_at) : "Not saved yet"),
     createDetailField("Total Pallets", summary.total_pallets),
     createDetailField("Total Loose Bags", summary.total_loose_bags),
   );
@@ -1458,7 +1740,7 @@ function createFinalTripSummaryCard(summary) {
         formatOptional(order.company_name, ""),
         formatOptional(order.suburb, ""),
         formatOptional(order.invoice_number, ""),
-        "",
+        formatOptional(order.product, ""),
         order.pallet_quantity,
       ].forEach((value) => {
         const td = document.createElement("td");

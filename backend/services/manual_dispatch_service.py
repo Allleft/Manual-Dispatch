@@ -5,6 +5,7 @@ from backend.schemas import (
     ManualDispatchBoardResponse,
     ManualDriverVehicleClearResponse,
     Order,
+    SaveFinalTripSummaryRequest,
 )
 
 
@@ -164,6 +165,50 @@ class ManualDispatchService:
 
         return self.repository.cancel_order(order_id)
 
+    def save_final_trip_summary(self, request: SaveFinalTripSummaryRequest):
+        dispatch_date = self._clean_required_text(request.dispatch_date, "dispatch_date")
+        driver_id = self._clean_required_text(request.driver_id, "driver_id")
+        self._validate_driver_exists(driver_id)
+
+        vehicle_id = self._clean_optional_text(request.vehicle_id)
+        if vehicle_id:
+            self._validate_vehicle_exists(vehicle_id)
+
+        rows = self._normalize_final_summary_rows(request.trips)
+        if not rows:
+            raise ValueError("At least one final summary row is required")
+
+        summary = {
+            "dispatch_date": dispatch_date,
+            "driver_id": driver_id,
+            "driver_name_snapshot": self._clean_required_text(
+                request.driver_name_snapshot,
+                "driver_name_snapshot",
+            ),
+            "vehicle_id": vehicle_id,
+            "vehicle_rego_snapshot": self._clean_optional_text(
+                request.vehicle_rego_snapshot
+            )
+            or "No vehicle selected",
+            "total_pallets": sum(row["pallet_quantity_snapshot"] for row in rows),
+            "total_loose_bags": sum(
+                row["loose_bags_quantity_snapshot"] for row in rows
+            ),
+            "generated_at": self._clean_optional_text(request.generated_at),
+        }
+        return self.repository.save_final_trip_summary(summary, rows)
+
+    def list_final_trip_summaries(self, dispatch_date):
+        dispatch_date = self._clean_required_text(dispatch_date, "dispatch_date")
+        return self.repository.list_final_trip_summaries(dispatch_date)
+
+    def get_final_trip_summary(self, summary_id):
+        summary_id = self._clean_required_text(summary_id, "summary_id")
+        summary = self.repository.get_final_trip_summary(summary_id)
+        if not summary:
+            raise ValueError(f"Final Trip Summary does not exist: {summary_id}")
+        return summary
+
     def _validate_task_type(self, task_type):
         if task_type not in SUPPORTED_TASK_TYPES:
             raise ValueError(f"Unsupported task_type: {task_type}")
@@ -206,6 +251,98 @@ class ManualDispatchService:
         if quantity < 0:
             raise ValueError(f"{field_name} cannot be negative")
         return quantity
+
+    def _normalize_final_summary_rows(self, trips):
+        if not isinstance(trips, list):
+            raise ValueError("trips must be a list")
+
+        normalized_rows = []
+        row_no = 1
+        for trip in trips:
+            if not isinstance(trip, dict):
+                raise ValueError("Each trip must be an object")
+
+            trip_no = self._clean_required_text(trip.get("trip_no"), "trip_no")
+            self._validate_trip_no(trip_no)
+
+            orders = trip.get("orders") or []
+            if not isinstance(orders, list):
+                raise ValueError("trip orders must be a list")
+
+            for order_snapshot in orders:
+                if not isinstance(order_snapshot, dict):
+                    raise ValueError("Each final summary Order row must be an object")
+
+                task_type = self._clean_required_text(
+                    order_snapshot.get("task_type") or "ORDER",
+                    "task_type",
+                )
+                task_id = self._clean_required_text(
+                    order_snapshot.get("task_id")
+                    or order_snapshot.get("order_id")
+                    or order_snapshot.get("order_id_snapshot"),
+                    "task_id",
+                )
+                self._validate_task_type(task_type)
+                task = self.repository.get_task(task_type, task_id)
+                if not task:
+                    raise ValueError(f"Task does not exist: {task_type} {task_id}")
+
+                normalized_rows.append(
+                    {
+                        "trip_no": trip_no,
+                        "row_no": row_no,
+                        "task_type": task_type,
+                        "task_id": task_id,
+                        "order_id_snapshot": self._clean_optional_text(
+                            order_snapshot.get("order_id_snapshot")
+                            or order_snapshot.get("order_id")
+                        )
+                        or task_id,
+                        "invoice_number_snapshot": self._clean_optional_text(
+                            order_snapshot.get("invoice_number_snapshot")
+                            or order_snapshot.get("invoice_number")
+                        ),
+                        "company_name_snapshot": self._clean_optional_text(
+                            order_snapshot.get("company_name_snapshot")
+                            or order_snapshot.get("company_name")
+                        )
+                        or "",
+                        "suburb_snapshot": self._clean_optional_text(
+                            order_snapshot.get("suburb_snapshot")
+                            or order_snapshot.get("suburb")
+                        )
+                        or "",
+                        "delivery_address_snapshot": self._clean_optional_text(
+                            order_snapshot.get("delivery_address_snapshot")
+                            or order_snapshot.get("delivery_address")
+                        )
+                        or "",
+                        "product_snapshot": self._clean_optional_text(
+                            order_snapshot.get("product_snapshot")
+                            or order_snapshot.get("product")
+                        ),
+                        "pallet_quantity_snapshot": self._quantity_or_default(
+                            order_snapshot.get("pallet_quantity_snapshot")
+                            if "pallet_quantity_snapshot" in order_snapshot
+                            else order_snapshot.get("pallet_quantity"),
+                            "pallet_quantity_snapshot",
+                        ),
+                        "loose_bags_quantity_snapshot": self._quantity_or_default(
+                            order_snapshot.get("loose_bags_quantity_snapshot")
+                            if "loose_bags_quantity_snapshot" in order_snapshot
+                            else order_snapshot.get("loose_bags_quantity"),
+                            "loose_bags_quantity_snapshot",
+                        ),
+                        "note_snapshot": self._clean_optional_text(
+                            order_snapshot.get("note_snapshot")
+                            or order_snapshot.get("note")
+                        ),
+                    }
+                )
+                row_no += 1
+
+        return normalized_rows
 
     def _generate_order_id(self, delivery_date):
         date_token = "".join(character for character in delivery_date if character.isdigit())

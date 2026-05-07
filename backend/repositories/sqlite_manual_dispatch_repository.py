@@ -3,6 +3,9 @@ from datetime import datetime, timezone
 from backend.db.connection import connect, get_database_path, initialize_database
 from backend.schemas import (
     Driver,
+    FinalTripSummary,
+    FinalTripSummaryOrderSnapshot,
+    FinalTripSummaryTrip,
     ManualDispatchAssignment,
     ManualDriverVehicleAssignment,
     Order,
@@ -45,6 +48,15 @@ class SQLiteManualDispatchRepository:
                 SELECT *
                 FROM manual_dispatch_assignments
                 WHERE dispatch_date = ?
+                    AND (
+                        task_type <> 'ORDER'
+                        OR EXISTS (
+                            SELECT 1
+                            FROM manual_orders
+                            WHERE manual_orders.order_id = manual_dispatch_assignments.task_id
+                                AND manual_orders.status = 'ACTIVE'
+                        )
+                    )
                 ORDER BY assignment_id
                 """,
                 (dispatch_date,),
@@ -63,6 +75,31 @@ class SQLiteManualDispatchRepository:
                 (dispatch_date,),
             ).fetchall()
         return [self._row_to_driver_vehicle_assignment(row) for row in rows]
+
+    def list_final_trip_summaries(self, dispatch_date):
+        with connect(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT *
+                FROM final_trip_summaries
+                WHERE dispatch_date = ?
+                ORDER BY saved_at DESC, summary_id
+                """,
+                (dispatch_date,),
+            ).fetchall()
+        return [self._row_to_final_trip_summary(row) for row in rows]
+
+    def get_final_trip_summary(self, summary_id):
+        with connect(self.db_path) as connection:
+            row = connection.execute(
+                """
+                SELECT *
+                FROM final_trip_summaries
+                WHERE summary_id = ?
+                """,
+                (summary_id,),
+            ).fetchone()
+        return self._row_to_final_trip_summary(row) if row else None
 
     def get_order(self, order_id):
         with connect(self.db_path) as connection:
@@ -329,6 +366,108 @@ class SQLiteManualDispatchRepository:
             connection.commit()
         return cursor.rowcount > 0
 
+    def save_final_trip_summary(self, summary, rows):
+        timestamp = self._timestamp()
+
+        with connect(self.db_path) as connection:
+            summary_id = self._create_final_trip_summary_id(connection)
+            connection.execute(
+                """
+                INSERT INTO final_trip_summaries (
+                    summary_id,
+                    dispatch_date,
+                    driver_id,
+                    driver_name_snapshot,
+                    vehicle_id,
+                    vehicle_rego_snapshot,
+                    total_pallets,
+                    total_loose_bags,
+                    status,
+                    generated_at,
+                    saved_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    summary_id,
+                    summary["dispatch_date"],
+                    summary["driver_id"],
+                    summary["driver_name_snapshot"],
+                    summary.get("vehicle_id"),
+                    summary.get("vehicle_rego_snapshot"),
+                    summary["total_pallets"],
+                    summary["total_loose_bags"],
+                    "SAVED",
+                    summary.get("generated_at") or timestamp,
+                    timestamp,
+                ),
+            )
+
+            for row in rows:
+                row_id = self._create_final_trip_summary_row_id(connection)
+                connection.execute(
+                    """
+                    INSERT INTO final_trip_summary_rows (
+                        row_id,
+                        summary_id,
+                        trip_no,
+                        row_no,
+                        task_type,
+                        task_id,
+                        order_id_snapshot,
+                        invoice_number_snapshot,
+                        company_name_snapshot,
+                        suburb_snapshot,
+                        delivery_address_snapshot,
+                        product_snapshot,
+                        pallet_quantity_snapshot,
+                        loose_bags_quantity_snapshot,
+                        note_snapshot
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        row_id,
+                        summary_id,
+                        row["trip_no"],
+                        row["row_no"],
+                        row["task_type"],
+                        row["task_id"],
+                        row.get("order_id_snapshot"),
+                        row.get("invoice_number_snapshot"),
+                        row.get("company_name_snapshot"),
+                        row.get("suburb_snapshot"),
+                        row.get("delivery_address_snapshot"),
+                        row.get("product_snapshot"),
+                        row["pallet_quantity_snapshot"],
+                        row["loose_bags_quantity_snapshot"],
+                        row.get("note_snapshot"),
+                    ),
+                )
+
+                if row["task_type"] == "ORDER":
+                    connection.execute(
+                        """
+                        UPDATE manual_orders
+                        SET status = 'FINALIZED'
+                        WHERE order_id = ? AND status = 'ACTIVE'
+                        """,
+                        (row["task_id"],),
+                    )
+                    connection.execute(
+                        """
+                        DELETE FROM manual_dispatch_assignments
+                        WHERE dispatch_date = ? AND task_type = ? AND task_id = ?
+                        """,
+                        (
+                            summary["dispatch_date"],
+                            row["task_type"],
+                            row["task_id"],
+                        ),
+                    )
+
+            connection.commit()
+
+        return self.get_final_trip_summary(summary_id)
+
     def _fetch_assignment_row(self, connection, dispatch_date, task_type, task_id):
         return connection.execute(
             """
@@ -349,6 +488,28 @@ class SQLiteManualDispatchRepository:
             """
         ).fetchone()
         return f"A-{row['next_number']:03d}"
+
+    def _create_final_trip_summary_id(self, connection):
+        row = connection.execute(
+            """
+            SELECT COALESCE(MAX(CAST(SUBSTR(summary_id, 5) AS INTEGER)), 0) + 1
+                AS next_number
+            FROM final_trip_summaries
+            WHERE summary_id LIKE 'FTS-%'
+            """
+        ).fetchone()
+        return f"FTS-{row['next_number']:03d}"
+
+    def _create_final_trip_summary_row_id(self, connection):
+        row = connection.execute(
+            """
+            SELECT COALESCE(MAX(CAST(SUBSTR(row_id, 5) AS INTEGER)), 0) + 1
+                AS next_number
+            FROM final_trip_summary_rows
+            WHERE row_id LIKE 'FSR-%'
+            """
+        ).fetchone()
+        return f"FSR-{row['next_number']:03d}"
 
     def _row_to_order(self, row):
         return Order(
@@ -409,6 +570,67 @@ class SQLiteManualDispatchRepository:
             dispatch_date=row["dispatch_date"],
             driver_id=row["driver_id"],
             vehicle_id=row["vehicle_id"],
+        )
+
+    def _row_to_final_trip_summary(self, row):
+        with connect(self.db_path) as connection:
+            summary_rows = connection.execute(
+                """
+                SELECT *
+                FROM final_trip_summary_rows
+                WHERE summary_id = ?
+                ORDER BY
+                    CASE trip_no
+                        WHEN 'trip1' THEN 1
+                        WHEN 'trip2' THEN 2
+                        ELSE 9
+                    END,
+                    row_no
+                """,
+                (row["summary_id"],),
+            ).fetchall()
+
+        trips = []
+        for trip_no in ("trip1", "trip2"):
+            trip_orders = [
+                self._row_to_final_trip_summary_order(summary_row)
+                for summary_row in summary_rows
+                if summary_row["trip_no"] == trip_no
+            ]
+            if trip_orders:
+                trips.append(FinalTripSummaryTrip(trip_no=trip_no, orders=trip_orders))
+
+        return FinalTripSummary(
+            summary_id=row["summary_id"],
+            dispatch_date=row["dispatch_date"],
+            driver_id=row["driver_id"],
+            driver_name_snapshot=row["driver_name_snapshot"],
+            vehicle_id=row["vehicle_id"],
+            vehicle_rego_snapshot=row["vehicle_rego_snapshot"],
+            total_pallets=row["total_pallets"],
+            total_loose_bags=row["total_loose_bags"],
+            status=row["status"],
+            generated_at=row["generated_at"],
+            saved_at=row["saved_at"],
+            trips=trips,
+        )
+
+    def _row_to_final_trip_summary_order(self, row):
+        return FinalTripSummaryOrderSnapshot(
+            row_id=row["row_id"],
+            trip_no=row["trip_no"],
+            row_no=row["row_no"],
+            task_type=row["task_type"],
+            task_id=row["task_id"],
+            order_id_snapshot=row["order_id_snapshot"],
+            invoice_number_snapshot=row["invoice_number_snapshot"],
+            company_name_snapshot=row["company_name_snapshot"],
+            suburb_snapshot=row["suburb_snapshot"],
+            delivery_address_snapshot=row["delivery_address_snapshot"],
+            product_snapshot=row["product_snapshot"],
+            pallet_quantity_snapshot=row["pallet_quantity_snapshot"],
+            loose_bags_quantity_snapshot=row["loose_bags_quantity_snapshot"],
+            note_snapshot=row["note_snapshot"],
         )
 
     def _timestamp(self):

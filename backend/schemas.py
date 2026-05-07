@@ -105,6 +105,59 @@ class ManualDriverVehicleClearResponse:
 
 
 @dataclass
+class FinalTripSummaryOrderSnapshot:
+    row_id: Optional[str]
+    trip_no: str
+    row_no: int
+    task_type: str
+    task_id: str
+    order_id_snapshot: str
+    invoice_number_snapshot: Optional[str]
+    company_name_snapshot: str
+    suburb_snapshot: str
+    delivery_address_snapshot: str
+    product_snapshot: Optional[str]
+    pallet_quantity_snapshot: int
+    loose_bags_quantity_snapshot: int
+    note_snapshot: Optional[str]
+
+
+@dataclass
+class FinalTripSummaryTrip:
+    trip_no: str
+    orders: List[FinalTripSummaryOrderSnapshot]
+
+
+@dataclass
+class FinalTripSummary:
+    summary_id: str
+    dispatch_date: str
+    driver_id: str
+    driver_name_snapshot: str
+    vehicle_id: Optional[str]
+    vehicle_rego_snapshot: Optional[str]
+    total_pallets: int
+    total_loose_bags: int
+    status: str
+    generated_at: str
+    saved_at: str
+    trips: List[FinalTripSummaryTrip]
+
+
+@dataclass
+class SaveFinalTripSummaryRequest:
+    dispatch_date: str
+    driver_id: str
+    driver_name_snapshot: str
+    vehicle_id: Optional[str]
+    vehicle_rego_snapshot: Optional[str]
+    total_pallets: int
+    total_loose_bags: int
+    generated_at: Optional[str]
+    trips: List[dict]
+
+
+@dataclass
 class CreateOrderRequest:
     invoice_number: Optional[str] = None
     company_name: Optional[str] = None

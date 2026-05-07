@@ -1,5 +1,8 @@
 from backend.schemas import (
     Driver,
+    FinalTripSummary,
+    FinalTripSummaryOrderSnapshot,
+    FinalTripSummaryTrip,
     ManualDispatchAssignment,
     ManualDriverVehicleAssignment,
     Order,
@@ -133,7 +136,10 @@ class InMemoryManualDispatchRepository:
         ]
         self.assignments = []
         self.driver_vehicle_assignments = []
+        self.final_trip_summaries = []
         self._next_assignment_number = 1
+        self._next_final_summary_number = 1
+        self._next_final_summary_row_number = 1
 
     def list_orders(self):
         return [order for order in self.orders if order.status == "ACTIVE"]
@@ -149,6 +155,13 @@ class InMemoryManualDispatchRepository:
             assignment
             for assignment in self.assignments
             if assignment.dispatch_date == dispatch_date
+            and (
+                assignment.task_type != "ORDER"
+                or (
+                    self.get_order(assignment.task_id)
+                    and self.get_order(assignment.task_id).status == "ACTIVE"
+                )
+            )
         ]
 
     def list_driver_vehicle_assignments(self, dispatch_date):
@@ -157,6 +170,23 @@ class InMemoryManualDispatchRepository:
             for assignment in self.driver_vehicle_assignments
             if assignment.dispatch_date == dispatch_date
         ]
+
+    def list_final_trip_summaries(self, dispatch_date):
+        return [
+            summary
+            for summary in self.final_trip_summaries
+            if summary.dispatch_date == dispatch_date
+        ]
+
+    def get_final_trip_summary(self, summary_id):
+        return next(
+            (
+                summary
+                for summary in self.final_trip_summaries
+                if summary.summary_id == summary_id
+            ),
+            None,
+        )
 
     def get_order(self, order_id):
         return next((order for order in self.orders if order.order_id == order_id), None)
@@ -282,7 +312,72 @@ class InMemoryManualDispatchRepository:
         ]
         return len(self.driver_vehicle_assignments) != before_count
 
+    def save_final_trip_summary(self, summary, rows):
+        summary_id = self._create_final_summary_id()
+        trips = []
+        for trip_no in ("trip1", "trip2"):
+            trip_orders = []
+            for row in rows:
+                if row["trip_no"] != trip_no:
+                    continue
+                trip_orders.append(
+                    FinalTripSummaryOrderSnapshot(
+                        row_id=self._create_final_summary_row_id(),
+                        trip_no=row["trip_no"],
+                        row_no=row["row_no"],
+                        task_type=row["task_type"],
+                        task_id=row["task_id"],
+                        order_id_snapshot=row.get("order_id_snapshot"),
+                        invoice_number_snapshot=row.get("invoice_number_snapshot"),
+                        company_name_snapshot=row.get("company_name_snapshot"),
+                        suburb_snapshot=row.get("suburb_snapshot"),
+                        delivery_address_snapshot=row.get("delivery_address_snapshot"),
+                        product_snapshot=row.get("product_snapshot"),
+                        pallet_quantity_snapshot=row["pallet_quantity_snapshot"],
+                        loose_bags_quantity_snapshot=row["loose_bags_quantity_snapshot"],
+                        note_snapshot=row.get("note_snapshot"),
+                    )
+                )
+            if trip_orders:
+                trips.append(FinalTripSummaryTrip(trip_no=trip_no, orders=trip_orders))
+
+        saved_at = summary.get("saved_at") or summary.get("generated_at") or "in-memory"
+        final_summary = FinalTripSummary(
+            summary_id=summary_id,
+            dispatch_date=summary["dispatch_date"],
+            driver_id=summary["driver_id"],
+            driver_name_snapshot=summary["driver_name_snapshot"],
+            vehicle_id=summary.get("vehicle_id"),
+            vehicle_rego_snapshot=summary.get("vehicle_rego_snapshot"),
+            total_pallets=summary["total_pallets"],
+            total_loose_bags=summary["total_loose_bags"],
+            status="SAVED",
+            generated_at=summary.get("generated_at") or saved_at,
+            saved_at=saved_at,
+            trips=trips,
+        )
+        self.final_trip_summaries.append(final_summary)
+
+        for row in rows:
+            if row["task_type"] == "ORDER":
+                order = self.get_order(row["task_id"])
+                if order and order.status == "ACTIVE":
+                    order.status = "FINALIZED"
+                self.remove_assignment(summary["dispatch_date"], row["task_type"], row["task_id"])
+
+        return final_summary
+
     def _create_assignment_id(self):
         assignment_id = f"A-{self._next_assignment_number:03d}"
         self._next_assignment_number += 1
         return assignment_id
+
+    def _create_final_summary_id(self):
+        summary_id = f"FTS-{self._next_final_summary_number:03d}"
+        self._next_final_summary_number += 1
+        return summary_id
+
+    def _create_final_summary_row_id(self):
+        row_id = f"FSR-{self._next_final_summary_row_number:03d}"
+        self._next_final_summary_row_number += 1
+        return row_id
