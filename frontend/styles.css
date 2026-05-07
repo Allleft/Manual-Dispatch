@@ -1105,3 +1105,86 @@ select:disabled {
     overflow-x: auto;
   }
 }
+
+/* Hotfix: make Driver & Vehicle Specification modal scrollable */
+.detail-backdrop {
+  place-items: start center;
+  align-items: start;
+  overflow-y: auto;
+  padding: 1rem;
+}
+
+/* Driver & Vehicle Specification modal: scrollable and visually consistent */
+.specification-modal {
+  width: min(1120px, calc(100vw - 2rem));
+  max-width: min(1120px, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: #edf3ee;
+  border: 1px solid var(--line);
+}
+
+.specification-modal .detail-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  margin: 0 0 1rem;
+  padding: 0 0 1rem;
+  background: #edf3ee;
+  border-bottom: none;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.specification-modal .detail-title-group {
+  padding-right: 1rem;
+}
+
+.specification-modal .detail-title-group .eyebrow {
+  margin-bottom: 0.25rem;
+}
+
+.specification-modal .detail-title-group h3 {
+  margin-bottom: 0.75rem;
+}
+
+.specification-modal .close-detail {
+  flex-shrink: 0;
+}
+
+.specification-modal .spec-tabs {
+  margin-top: 0.25rem;
+}
+
+.specification-modal .spec-body,
+.specification-modal .spec-section {
+  min-height: 0;
+}
+
+.specification-modal .spec-section {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.specification-modal .spec-table-wrap {
+  max-height: calc(100vh - 18rem);
+  min-height: 220px;
+  overflow: auto;
+}
+
+.specification-modal .spec-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+}
+
+/* Keep normal order detail popup behavior stable */
+.order-detail-modal:not(.specification-modal) {
+  max-height: min(760px, calc(100vh - 2rem));
+  overflow: auto;
+}

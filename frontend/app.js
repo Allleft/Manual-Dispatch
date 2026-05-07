@@ -30,6 +30,7 @@ const state = {
   specificationLoading: false,
   specificationSaving: false,
   specificationActiveTab: "drivers",
+  specificationDirty: false,
   driverSpecificationForm: null,
   driverSpecificationEditingId: "",
   vehicleSpecificationForm: null,
@@ -357,6 +358,7 @@ function closeAddOrder() {
 async function openSpecificationModal() {
   state.isSpecificationModalOpen = true;
   state.specificationError = "";
+  state.specificationDirty = false;
   state.driverSpecificationForm = null;
   state.driverSpecificationEditingId = "";
   state.vehicleSpecificationForm = null;
@@ -365,14 +367,20 @@ async function openSpecificationModal() {
   await loadSpecifications();
 }
 
-function closeSpecificationModal() {
+async function closeSpecificationModal() {
+  const shouldReloadBoard = state.specificationDirty;
   state.isSpecificationModalOpen = false;
   state.specificationError = "";
+  state.specificationDirty = false;
   state.driverSpecificationForm = null;
   state.driverSpecificationEditingId = "";
   state.vehicleSpecificationForm = null;
   state.vehicleSpecificationEditingId = "";
   renderSpecificationModal();
+
+  if (shouldReloadBoard) {
+    await loadBoard(state.dispatchDate);
+  }
 }
 
 async function loadSpecifications() {
@@ -617,9 +625,11 @@ async function handleCancelOrder(orderId) {
   }
 }
 
-async function refreshSpecificationsAndBoard() {
+async function refreshSpecificationsOnly({ markDirty = true } = {}) {
+  if (markDirty) {
+    state.specificationDirty = true;
+  }
   await loadSpecifications();
-  await loadBoard(state.dispatchDate);
 }
 
 async function handleSaveDriverSpecification() {
@@ -640,7 +650,7 @@ async function handleSaveDriverSpecification() {
     }
     state.driverSpecificationEditingId = "";
     state.driverSpecificationForm = null;
-    await refreshSpecificationsAndBoard();
+    await refreshSpecificationsOnly();
   } catch (error) {
     state.specificationError = `Unable to save Driver. ${error.message}`;
   } finally {
@@ -659,7 +669,7 @@ async function handleToggleDriverAvailability(driver, isAvailable) {
       ...getDefaultDriverSpecificationForm(driver),
       is_available: isAvailable,
     });
-    await refreshSpecificationsAndBoard();
+    await refreshSpecificationsOnly();
   } catch (error) {
     state.specificationError = `Unable to update Driver availability. ${error.message}`;
   } finally {
@@ -680,7 +690,7 @@ async function handleDeleteDriverSpecification(driverId) {
 
   try {
     await apiDeleteDriver(driverId);
-    await refreshSpecificationsAndBoard();
+    await refreshSpecificationsOnly();
   } catch (error) {
     state.specificationError = `Unable to delete Driver. ${error.message}`;
   } finally {
@@ -707,7 +717,7 @@ async function handleSaveVehicleSpecification() {
     }
     state.vehicleSpecificationEditingId = "";
     state.vehicleSpecificationForm = null;
-    await refreshSpecificationsAndBoard();
+    await refreshSpecificationsOnly();
   } catch (error) {
     state.specificationError = `Unable to save Vehicle. ${error.message}`;
   } finally {
@@ -726,7 +736,7 @@ async function handleToggleVehicleAvailability(vehicle, isAvailable) {
       ...getDefaultVehicleSpecificationForm(vehicle),
       is_available: isAvailable,
     });
-    await refreshSpecificationsAndBoard();
+    await refreshSpecificationsOnly();
   } catch (error) {
     state.specificationError = `Unable to update Vehicle availability. ${error.message}`;
   } finally {
@@ -747,7 +757,7 @@ async function handleDeleteVehicleSpecification(vehicleId) {
 
   try {
     await apiDeleteVehicle(vehicleId);
-    await refreshSpecificationsAndBoard();
+    await refreshSpecificationsOnly();
   } catch (error) {
     state.specificationError = `Unable to delete Vehicle. ${error.message}`;
   } finally {
@@ -2170,7 +2180,9 @@ function renderSpecificationModal() {
 
   const body = document.createElement("div");
   body.className = "spec-body";
-  if (state.specificationLoading) {
+  const hasSpecificationData =
+    state.specificationDrivers.length > 0 || state.specificationVehicles.length > 0;
+  if (state.specificationLoading && !hasSpecificationData) {
     const loading = document.createElement("p");
     loading.className = "empty-board";
     loading.textContent = "Loading Driver and Vehicle specifications...";
@@ -2199,17 +2211,15 @@ function createDriverSpecificationSection() {
   const section = document.createElement("section");
   section.className = "spec-section";
 
-  const heading = document.createElement("div");
-  heading.className = "spec-section-heading";
-  const title = document.createElement("h3");
-  title.textContent = "Drivers";
-  const addButton = document.createElement("button");
-  addButton.type = "button";
-  addButton.textContent = "Add Driver";
-  addButton.disabled = state.specificationSaving;
-  addButton.addEventListener("click", startAddDriverSpecification);
-  heading.append(title, addButton);
-  section.append(heading);
+const heading = document.createElement("div");
+heading.className = "spec-section-heading";
+const addButton = document.createElement("button");
+addButton.type = "button";
+addButton.textContent = "Add Driver";
+addButton.disabled = state.specificationSaving;
+addButton.addEventListener("click", startAddDriverSpecification);
+heading.append(addButton);
+section.append(heading);
 
   if (state.driverSpecificationForm) {
     section.append(createDriverSpecificationForm());
@@ -2264,17 +2274,15 @@ function createVehicleSpecificationSection() {
   const section = document.createElement("section");
   section.className = "spec-section";
 
-  const heading = document.createElement("div");
-  heading.className = "spec-section-heading";
-  const title = document.createElement("h3");
-  title.textContent = "Vehicles";
-  const addButton = document.createElement("button");
-  addButton.type = "button";
-  addButton.textContent = "Add Vehicle";
-  addButton.disabled = state.specificationSaving;
-  addButton.addEventListener("click", startAddVehicleSpecification);
-  heading.append(title, addButton);
-  section.append(heading);
+const heading = document.createElement("div");
+heading.className = "spec-section-heading";
+const addButton = document.createElement("button");
+addButton.type = "button";
+addButton.textContent = "Add Vehicle";
+addButton.disabled = state.specificationSaving;
+addButton.addEventListener("click", startAddVehicleSpecification);
+heading.append(addButton);
+section.append(heading);
 
   if (state.vehicleSpecificationForm) {
     section.append(createVehicleSpecificationForm());
