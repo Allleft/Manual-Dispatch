@@ -12,10 +12,10 @@
         <p class="eyebrow">Manual office workflow</p>
         <h1>Manual Dispatch Board</h1>
         <p class="hero-copy">
-          Phase 10A-1 adds a minimal Add Order popup while keeping dispatch decisions manual.
+          Phase 10A-5 adds Task Pool search and urgency filtering while keeping dispatch decisions manual.
         </p>
       </div>
-      <div class="phase-badge" aria-label="Current phase">Phase 10A-1 Add Order</div>
+      <div class="phase-badge" aria-label="Current phase">Phase 10A-5 Search and Filter</div>
     </header>
 
     <main class="board-shell" aria-label="Manual Dispatch Board">
@@ -45,6 +45,21 @@
             <p class="section-note">Backend Orders with compact hints. Choose a driver and trip manually.</p>
             <button id="add-order-button" type="button">Add Order</button>
           </div>
+        </div>
+        <div class="task-filter-bar" aria-label="Task Pool search and filters">
+          <label for="order-search">
+            Search Orders
+            <input id="order-search" type="search" placeholder="Invoice, company, suburb, postcode, note">
+          </label>
+          <label for="urgency-filter">
+            Urgency
+            <select id="urgency-filter">
+              <option value="All">All</option>
+              <option value="Normal">Normal</option>
+              <option value="Urgent">Urgent</option>
+            </select>
+          </label>
+          <p id="task-filter-summary" class="filter-summary" aria-live="polite"></p>
         </div>
         <div id="task-pool-list" class="task-grid" aria-live="polite"></div>
       </section>

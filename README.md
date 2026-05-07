@@ -1,10 +1,10 @@
 ﻿# Manual Dispatch Board
 
-Manual Dispatch Board is a manual office workflow for assigning Orders to Driver + Trip + Vehicle. This repository is currently in Phase 10A-4: Cancel Order.
+Manual Dispatch Board is a manual office workflow for assigning Orders to Driver + Trip + Vehicle. This repository is currently in Phase 10A-5: Order Search and Filter.
 
 ## Current Phase
-- Phase: 10A-4
-- Status: manual Add/Edit/Cancel Order workflow with SQLite persistence
+- Phase: 10A-5
+- Status: manual Add/Edit/Cancel Order workflow with SQLite persistence and frontend Task Pool filtering
 - Frontend now loads board data from the backend API.
 - Assign, Unassign, and Choose Vehicle actions now call the backend API.
 - SQLite persistence means refresh can preserve assignments and Driver + Dispatch Date vehicle selections.
@@ -20,6 +20,9 @@ Manual Dispatch Board is a manual office workflow for assigning Orders to Driver
 - Cancel Order is a soft delete using `status = CANCELLED`.
 - Cancelled Orders are hidden from the Task Pool and excluded from Excel export.
 - Assigned Orders must be unassigned before cancellation.
+- Task Pool now has frontend-only Order search.
+- Task Pool now has frontend-only Urgency filtering.
+- Search/filter affects only unassigned Orders and does not hide assigned Orders in Trip Summary.
 - Business hints remain non-blocking.
 - Order cards are now compact and show Invoice #, Company, Suburb, urgency, note preview, and start time.
 - Clicking an Order card opens a read-only full detail popup.
@@ -89,6 +92,7 @@ Phase 10A-0 Order card UI refinement is documented in `docs/manual-dispatch-boar
 Phase 10A-1 Add Order is documented in `docs/manual-dispatch-board-phase10a1-add-order.md`.
 Phase 10A-3 Edit Order is documented in `docs/manual-dispatch-board-phase10a3-edit-order.md`.
 Phase 10A-4 Cancel Order is documented in `docs/manual-dispatch-board-phase10a4-cancel-order.md`.
+Phase 10A-5 Order Search and Filter is documented in `docs/manual-dispatch-board-phase10a5-order-filter.md`.
 
 ## Validation
 Phase 0 uses document and Git validation only. Functional tests should not be run until test, frontend, or backend implementation files exist.
@@ -105,3 +109,4 @@ Phase 10A-0 uses backend schema/migration tests, frontend syntax validation, sta
 Phase 10A-1 uses backend create-order tests, backend regression tests, frontend syntax validation, static safety checks, and browser/manual checks when tooling is available.
 Phase 10A-3 uses backend edit-order tests, backend regression tests, frontend syntax validation, static safety checks, and browser/manual checks when tooling is available.
 Phase 10A-4 uses backend cancel-order tests, safe migration checks, frontend syntax validation, static safety checks, and browser/manual checks when tooling is available.
+Phase 10A-5 uses frontend syntax validation, backend regression tests, static safety checks, and browser/manual checks when tooling is available.

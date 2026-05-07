@@ -14,6 +14,8 @@ const state = {
   assignments: [],
   driverVehicleAssignments: [],
   pendingSelections: {},
+  taskPoolSearch: "",
+  urgencyFilter: "All",
   activeOrderDetailId: "",
   isAddOrderOpen: false,
   addOrderError: "",
@@ -446,6 +448,38 @@ function getUnassignedOrders() {
   return state.orders.filter((order) => !getAssignmentForOrder(order));
 }
 
+function normalizeSearchText(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function orderMatchesSearch(order, searchText) {
+  if (!searchText) {
+    return true;
+  }
+
+  return [
+    order.invoice_number,
+    order.company_name,
+    order.suburb,
+    order.postcode,
+    order.note,
+  ].some((value) => normalizeSearchText(value).includes(searchText));
+}
+
+function orderMatchesUrgencyFilter(order) {
+  if (state.urgencyFilter === "All") {
+    return true;
+  }
+  return getUrgencyLabel(order) === state.urgencyFilter;
+}
+
+function getFilteredUnassignedOrders() {
+  const searchText = normalizeSearchText(state.taskPoolSearch);
+  return getUnassignedOrders().filter(
+    (order) => orderMatchesSearch(order, searchText) && orderMatchesUrgencyFilter(order),
+  );
+}
+
 function getOrderByTaskId(taskId) {
   return state.orders.find((order) => order.order_id === taskId);
 }
@@ -741,6 +775,40 @@ function renderBoardControls() {
   };
 }
 
+function renderTaskPoolFilters() {
+  const searchInput = document.querySelector("#order-search");
+  const urgencyFilter = document.querySelector("#urgency-filter");
+  const summary = document.querySelector("#task-filter-summary");
+
+  if (!searchInput || !urgencyFilter || !summary) {
+    return;
+  }
+
+  const unassignedCount = getUnassignedOrders().length;
+  const filteredCount = getFilteredUnassignedOrders().length;
+
+  searchInput.value = state.taskPoolSearch;
+  searchInput.disabled = state.isLoading || state.isSaving;
+  urgencyFilter.value = state.urgencyFilter;
+  urgencyFilter.disabled = state.isLoading || state.isSaving;
+  summary.textContent =
+    state.taskPoolSearch || state.urgencyFilter !== "All"
+      ? `${filteredCount} of ${unassignedCount} unassigned Orders shown`
+      : `${unassignedCount} unassigned Orders`;
+
+  searchInput.oninput = () => {
+    state.taskPoolSearch = searchInput.value;
+    renderTaskPoolFilters();
+    renderTaskPool();
+  };
+
+  urgencyFilter.onchange = () => {
+    state.urgencyFilter = urgencyFilter.value || "All";
+    renderTaskPoolFilters();
+    renderTaskPool();
+  };
+}
+
 function renderTaskPool() {
   const taskPoolList = document.querySelector("#task-pool-list");
   taskPoolList.innerHTML = "";
@@ -762,6 +830,7 @@ function renderTaskPool() {
   }
 
   const unassignedOrders = getUnassignedOrders();
+  const filteredOrders = getFilteredUnassignedOrders();
 
   if (unassignedOrders.length === 0) {
     const emptyState = document.createElement("p");
@@ -771,7 +840,15 @@ function renderTaskPool() {
     return;
   }
 
-  unassignedOrders.forEach((order) => {
+  if (filteredOrders.length === 0) {
+    const emptyState = document.createElement("p");
+    emptyState.className = "empty-board";
+    emptyState.textContent = "No matching unassigned orders.";
+    taskPoolList.append(emptyState);
+    return;
+  }
+
+  filteredOrders.forEach((order) => {
     const selection = getPendingSelection(order.order_id);
     const card = document.createElement("article");
     card.className = "order-card order-card-compact";
@@ -1493,6 +1570,7 @@ function renderOrderDetailPopup() {
 
 function renderBoard() {
   renderBoardControls();
+  renderTaskPoolFilters();
   renderTaskPool();
   renderDriverSummary();
   renderOrderDetailPopup();
