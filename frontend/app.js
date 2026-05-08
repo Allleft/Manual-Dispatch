@@ -1101,13 +1101,27 @@ function calculateTripTotals(driverId, tripNo) {
   return calculateTotals(getAssignedOrdersForTrip(driverId, tripNo));
 }
 
-function isVehicleCapacityExceeded(driverId) {
+function getTripCapacityExceptions(driverId) {
   const selectedVehicle = getSelectedVehicleForDriver(driverId);
   if (!selectedVehicle) {
-    return false;
+    return [];
   }
 
-  return calculateDriverTotals(driverId).pallets > Number(selectedVehicle.pallet_capacity || 0);
+  const capacity = Number(selectedVehicle.pallet_capacity || 0);
+  if (!Number.isFinite(capacity) || capacity <= 0) {
+    return [];
+  }
+
+  return ["trip1", "trip2"]
+    .map((tripNo) => {
+      const totals = calculateTripTotals(driverId, tripNo);
+      return {
+        tripNo,
+        pallets: totals.pallets,
+        exceeds: totals.pallets > capacity,
+      };
+    })
+    .filter((item) => item.exceeds);
 }
 
 function getDriverExceptions(driver) {
@@ -1118,9 +1132,10 @@ function getDriverExceptions(driver) {
     messages.push("Exception: Driver only handles pallet orders");
   }
 
-  if (isVehicleCapacityExceeded(driver.driver_id)) {
-    messages.push("Exception: Assigned pallets exceed selected vehicle capacity");
-  }
+  getTripCapacityExceptions(driver.driver_id).forEach((item) => {
+    const tripLabel = item.tripNo === "trip1" ? "Trip 1" : "Trip 2";
+    messages.push(`Exception: ${tripLabel} pallets exceed selected vehicle capacity`);
+  });
 
   return messages;
 }
@@ -2131,8 +2146,6 @@ function createFinalTripSummaryCard(summary, options = {}) {
     createDetailField("Date", summary.dispatch_date),
     createDetailField("Driver", summary.driver_name),
     createDetailField("Rego #", summary.vehicle_rego),
-    createDetailField("Generated At", formatGeneratedAt(summary.generated_at)),
-    createDetailField("Saved At", isSaved ? formatGeneratedAt(summary.saved_at) : "Not saved yet"),
     createDetailField("Total Pallets", summary.total_pallets),
     createDetailField("Total Loose Bags", summary.total_loose_bags),
   );
