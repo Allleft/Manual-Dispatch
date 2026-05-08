@@ -2237,11 +2237,6 @@ function renderSpecificationShell() {
   root.innerHTML = "";
   const backdrop = document.createElement("div");
   backdrop.className = "detail-backdrop";
-  backdrop.addEventListener("click", (event) => {
-    if (event.target === backdrop) {
-      closeSpecificationModal();
-    }
-  });
 
   const card = document.createElement("section");
   card.className = "detail-card specification-modal";
@@ -2839,11 +2834,6 @@ function renderAddOrderPopup() {
 
   const backdrop = document.createElement("div");
   backdrop.className = "detail-backdrop";
-  backdrop.addEventListener("click", () => {
-    if (!state.isSaving) {
-      closeAddOrder();
-    }
-  });
 
   const modal = document.createElement("article");
   modal.className = "order-detail-modal";
@@ -2971,7 +2961,6 @@ function renderOrderDetailPopup() {
 
   const backdrop = document.createElement("div");
   backdrop.className = "detail-backdrop";
-  backdrop.addEventListener("click", closeOrderDetail);
 
   const modal = document.createElement("article");
   modal.className = "order-detail-modal";
