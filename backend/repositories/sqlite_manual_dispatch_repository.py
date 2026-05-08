@@ -133,6 +133,18 @@ class SQLiteManualDispatchRepository:
             ).fetchall()
         return [self._row_to_final_trip_summary(row) for row in rows]
 
+    def list_final_summary_dates(self):
+        with connect(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT DISTINCT dispatch_date
+                FROM final_trip_summaries
+                WHERE status = 'SAVED'
+                ORDER BY dispatch_date DESC
+                """
+            ).fetchall()
+        return [row["dispatch_date"] for row in rows]
+
     def has_saved_final_trip_summary(self, dispatch_date, driver_id):
         with connect(self.db_path) as connection:
             row = connection.execute(

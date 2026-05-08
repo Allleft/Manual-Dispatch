@@ -162,6 +162,11 @@ def list_final_trip_summaries(dispatch_date: str):
         raise _to_http_exception(error) from error
 
 
+@router.get("/final-summary-dates")
+def list_final_summary_dates():
+    return service.list_final_summary_dates()
+
+
 @router.get("/final-summaries/{summary_id}")
 def get_final_trip_summary(summary_id: str):
     try:

@@ -108,6 +108,29 @@ class ManualDispatchFinalSummaryTest(unittest.TestCase):
         self.assertEqual([saved.summary_id], [summary.summary_id for summary in summaries])
         self.assertEqual("ORD-001", detail.trips[0].orders[0].task_id)
 
+    def test_saved_summary_dates_are_listed_newest_first(self):
+        self._assign_order("ORD-001", "D001", "trip1")
+        self.service.save_final_trip_summary(self._summary_request())
+
+        self.service.save_final_trip_summary(
+            SaveFinalTripSummaryRequest(
+                dispatch_date="2026-05-06",
+                driver_id="D002",
+                driver_name_snapshot="Tony",
+                vehicle_id=None,
+                vehicle_rego_snapshot="No vehicle selected",
+                total_pallets=0,
+                total_loose_bags=12,
+                generated_at="2026-05-06T00:00:00Z",
+                trips=[self._trip_payload("trip1", [self._order_payload("ORD-002")])],
+            )
+        )
+
+        self.assertEqual(
+            ["2026-05-06", "2026-05-05"],
+            self.service.list_final_summary_dates(),
+        )
+
     def test_saving_final_summary_marks_orders_finalized_and_clears_assignments(self):
         self._assign_order("ORD-001", "D001", "trip1")
         self.service.save_final_trip_summary(self._summary_request())
@@ -345,6 +368,18 @@ class ManualDispatchFinalSummaryRouteTest(unittest.TestCase):
             "Final Summary for this driver and dispatch date has already been saved.",
             second_response.json()["detail"],
         )
+
+    def test_final_summary_dates_api_returns_saved_dates(self):
+        self._assign_order("ORD-001", "D001", "trip1")
+        save_response = self.client.post(
+            "/api/manual-dispatch/final-summaries",
+            json=self._summary_payload(),
+        )
+        dates_response = self.client.get("/api/manual-dispatch/final-summary-dates")
+
+        self.assertEqual(200, save_response.status_code)
+        self.assertEqual(200, dates_response.status_code)
+        self.assertEqual([self.dispatch_date], dates_response.json())
 
     def _assign_order(self, order_id, driver_id, trip_no):
         return self.service.assign_task(

@@ -344,6 +344,9 @@ class ManualDispatchService:
         dispatch_date = self._clean_required_text(dispatch_date, "dispatch_date")
         return self.repository.list_final_trip_summaries(dispatch_date)
 
+    def list_final_summary_dates(self):
+        return self.repository.list_final_summary_dates()
+
     def get_final_trip_summary(self, summary_id):
         summary_id = self._clean_required_text(summary_id, "summary_id")
         summary = self.repository.get_final_trip_summary(summary_id)

@@ -22,7 +22,6 @@
           <input id="dispatch-date" type="date" value="2026-05-05">
 
           <button id="export-excel-button" class="button-export" type="button">Export Excel</button>
-          <button id="load-history-button" class="button-secondary" type="button">Load History</button>
           <button id="specification-button" class="button-secondary" type="button">Driver &amp; Vehicle Specification</button>
         </div>
         <p id="board-error" class="board-error" aria-live="assertive" hidden></p>
@@ -70,6 +69,15 @@
             <h2 id="final-trip-summary-title">Final Trip Summary</h2>
           </div>
           <p class="section-note">Locked generated snapshots. They do not auto-update from later board changes.</p>
+        </div>
+        <div class="final-summary-control-bar" aria-label="Final Trip Summary controls">
+          <button id="save-final-summary-button" class="button-secondary" type="button">Save Final Summary</button>
+          <label for="history-date-select">
+            History Date
+            <select id="history-date-select"></select>
+          </label>
+          <button id="load-history-button" class="button-secondary" type="button">Load History</button>
+          <p id="final-summary-control-message" class="board-status" aria-live="polite" hidden></p>
         </div>
         <div id="final-trip-summary-list" class="final-summary-grid" aria-live="polite"></div>
         <div class="final-history-panel" aria-labelledby="final-history-title">

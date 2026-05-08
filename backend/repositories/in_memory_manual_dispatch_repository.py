@@ -207,6 +207,16 @@ class InMemoryManualDispatchRepository:
             if summary.dispatch_date == dispatch_date
         ]
 
+    def list_final_summary_dates(self):
+        return sorted(
+            {
+                summary.dispatch_date
+                for summary in self.final_trip_summaries
+                if summary.status == "SAVED"
+            },
+            reverse=True,
+        )
+
     def has_saved_final_trip_summary(self, dispatch_date, driver_id):
         return any(
             summary.dispatch_date == dispatch_date
