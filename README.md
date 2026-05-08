@@ -122,6 +122,7 @@ Phase 10A-3 Edit Order is documented in `docs/manual-dispatch-board-phase10a3-ed
 Phase 10A-4 Cancel Order is documented in `docs/manual-dispatch-board-phase10a4-cancel-order.md`.
 Phase 10A-5 Order Search and Filter is documented in `docs/manual-dispatch-board-phase10a5-order-filter.md`.
 Final Trip Summary snapshot behavior is documented in `docs/manual-dispatch-board-final-trip-summary.md`.
+Global Final Summary save behavior is documented in `docs/manual-dispatch-board-global-final-summary-save.md`.
 Phase 10G Final Trip Summary persistence is documented in `docs/manual-dispatch-board-phase10g-final-summary-persistence.md`.
 Phase 13 Final Trip Summary closed-loop stabilization is documented in `docs/manual-dispatch-board-phase13-final-summary-closed-loop.md`.
 Phase 14 Final Trip Summary redesign and demo reset is documented in `docs/manual-dispatch-board-phase14-final-summary-redesign.md`.
