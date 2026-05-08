@@ -207,6 +207,14 @@ class InMemoryManualDispatchRepository:
             if summary.dispatch_date == dispatch_date
         ]
 
+    def has_saved_final_trip_summary(self, dispatch_date, driver_id):
+        return any(
+            summary.dispatch_date == dispatch_date
+            and summary.driver_id == driver_id
+            and summary.status == "SAVED"
+            for summary in self.final_trip_summaries
+        )
+
     def get_final_trip_summary(self, summary_id):
         return next(
             (
@@ -409,6 +417,13 @@ class InMemoryManualDispatchRepository:
         return len(self.driver_vehicle_assignments) != before_count
 
     def save_final_trip_summary(self, summary, rows):
+        if self.has_saved_final_trip_summary(
+            summary["dispatch_date"], summary["driver_id"]
+        ):
+            raise ValueError(
+                "Final Summary for this driver and dispatch date has already been saved."
+            )
+
         summary_id = self._create_final_summary_id()
         trips = []
         for trip_no in ("trip1", "trip2"):

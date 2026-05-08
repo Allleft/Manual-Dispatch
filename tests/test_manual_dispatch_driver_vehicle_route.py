@@ -14,7 +14,7 @@ from backend.services.manual_dispatch_service import ManualDispatchService
 try:
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
-except ModuleNotFoundError:
+except (ImportError, ModuleNotFoundError, RuntimeError):
     FastAPI = None
     TestClient = None
 

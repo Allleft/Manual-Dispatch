@@ -3,8 +3,8 @@
 Manual Dispatch Board is a manual office workflow for assigning Orders to Driver + Trip + Vehicle. This repository now includes Driver & Vehicle Specification master-data management.
 
 ## Current Phase
-- Phase: 12C
-- Status: Driver & Vehicle Specification modal rebuild
+- Phase: 13
+- Status: Final Trip Summary Closed Loop Stabilization
 - Frontend now loads board data from the backend API.
 - Assign, Unassign, and Choose Vehicle actions now call the backend API.
 - SQLite persistence means refresh can preserve assignments and Driver + Dispatch Date vehicle selections.
@@ -33,6 +33,9 @@ Manual Dispatch Board is a manual office workflow for assigning Orders to Driver
 - Saved Final Trip Summary history can be loaded by dispatch date.
 - Saving a Final Trip Summary marks included Orders as `FINALIZED`.
 - `FINALIZED` Orders are hidden from Task Pool and editable Trip Summary.
+- Saved Final Trip Summaries are historical snapshots and do not update when live Orders, Drivers, or Vehicles change later.
+- Duplicate saved Final Trip Summaries for the same Driver and Dispatch Date are rejected.
+- Final Trip Summary save is transactional so failed saves do not partially finalize Orders.
 - Generated-but-unsaved summaries are still frontend memory only.
 - Driver & Vehicle Specification modal is available from the top board controls.
 - Drivers can be added, edited, safely deleted, and marked available/unavailable.
@@ -114,6 +117,7 @@ Phase 10A-4 Cancel Order is documented in `docs/manual-dispatch-board-phase10a4-
 Phase 10A-5 Order Search and Filter is documented in `docs/manual-dispatch-board-phase10a5-order-filter.md`.
 Final Trip Summary snapshot behavior is documented in `docs/manual-dispatch-board-final-trip-summary.md`.
 Phase 10G Final Trip Summary persistence is documented in `docs/manual-dispatch-board-phase10g-final-summary-persistence.md`.
+Phase 13 Final Trip Summary closed-loop stabilization is documented in `docs/manual-dispatch-board-phase13-final-summary-closed-loop.md`.
 Driver & Vehicle Specification is documented in `docs/manual-dispatch-board-driver-vehicle-specification.md`.
 Phase 12 UI stability and deferred specification refresh is documented in `docs/manual-dispatch-board-phase12-ui-stability.md`.
 Phase 12C Driver & Vehicle Specification modal rebuild is documented in `docs/manual-dispatch-board-phase12c-specification-modal-rebuild.md`.
@@ -135,6 +139,7 @@ Phase 10A-3 uses backend edit-order tests, backend regression tests, frontend sy
 Phase 10A-4 uses backend cancel-order tests, safe migration checks, frontend syntax validation, static safety checks, and browser/manual checks when tooling is available.
 Phase 10A-5 uses frontend syntax validation, backend regression tests, static safety checks, and browser/manual checks when tooling is available.
 Phase 10G uses backend final-summary persistence tests, backend regression tests, frontend syntax validation, static safety checks, and browser/manual checks when tooling is available.
+Phase 13 uses backend final-summary closed-loop tests, backend regression tests, frontend syntax validation, static safety checks, and browser/manual checks when tooling is available.
 Phase 10B/C uses backend driver/vehicle specification tests, backend regression tests, frontend syntax validation, static safety checks, and browser/manual checks when tooling is available.
 Phase 12 uses frontend syntax validation, backend regression tests, static safety checks, and browser/manual checks when tooling is available.
 Phase 12C uses frontend syntax validation, backend regression tests when available, static safety checks, and browser/manual checks when tooling is available.

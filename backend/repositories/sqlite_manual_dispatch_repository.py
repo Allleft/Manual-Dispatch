@@ -133,6 +133,19 @@ class SQLiteManualDispatchRepository:
             ).fetchall()
         return [self._row_to_final_trip_summary(row) for row in rows]
 
+    def has_saved_final_trip_summary(self, dispatch_date, driver_id):
+        with connect(self.db_path) as connection:
+            row = connection.execute(
+                """
+                SELECT 1
+                FROM final_trip_summaries
+                WHERE dispatch_date = ? AND driver_id = ? AND status = 'SAVED'
+                LIMIT 1
+                """,
+                (dispatch_date, driver_id),
+            ).fetchone()
+        return row is not None
+
     def get_final_trip_summary(self, summary_id):
         with connect(self.db_path) as connection:
             row = connection.execute(
@@ -645,6 +658,20 @@ class SQLiteManualDispatchRepository:
         timestamp = self._timestamp()
 
         with connect(self.db_path) as connection:
+            existing_summary = connection.execute(
+                """
+                SELECT 1
+                FROM final_trip_summaries
+                WHERE dispatch_date = ? AND driver_id = ? AND status = 'SAVED'
+                LIMIT 1
+                """,
+                (summary["dispatch_date"], summary["driver_id"]),
+            ).fetchone()
+            if existing_summary:
+                raise ValueError(
+                    "Final Summary for this driver and dispatch date has already been saved."
+                )
+
             summary_id = self._create_final_trip_summary_id(connection)
             connection.execute(
                 """

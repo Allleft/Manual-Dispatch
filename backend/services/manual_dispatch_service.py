@@ -311,6 +311,11 @@ class ManualDispatchService:
         if vehicle_id:
             self._validate_vehicle_exists(vehicle_id)
 
+        if self.repository.has_saved_final_trip_summary(dispatch_date, driver_id):
+            raise ValueError(
+                "Final Summary for this driver and dispatch date has already been saved."
+            )
+
         rows = self._normalize_final_summary_rows(request.trips)
         if not rows:
             raise ValueError("At least one final summary row is required")
