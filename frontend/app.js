@@ -265,24 +265,21 @@ async function loadBoard(dispatchDate = state.dispatchDate, options = {}) {
 
   try {
     const payload = await apiGetBoard(state.dispatchDate);
+
     if (state.isSpecificationModalOpen && !force) {
       state.specificationDirty = true;
       return;
     }
+
     applyBoardResponse(payload);
   } catch (error) {
-    if (state.isSpecificationModalOpen && !force) {
-      state.specificationDirty = true;
-      return;
-    }
     showError(`Unable to load board data. ${error.message}`);
   } finally {
-    state.isLoading = false;
-    state.isSaving = false;
-    if (state.isSpecificationModalOpen && !force) {
-      return;
+    if (!(state.isSpecificationModalOpen && !force)) {
+      state.isLoading = false;
+      state.isSaving = false;
+      renderBoard();
     }
-    renderBoard();
   }
 }
 
