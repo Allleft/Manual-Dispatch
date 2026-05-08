@@ -18,6 +18,7 @@ from backend.repositories.sqlite_manual_dispatch_repository import (
     SQLiteManualDispatchRepository,
 )
 from backend.services.excel_export_service import build_manual_dispatch_excel
+from backend.services.final_summary_excel_export_service import build_final_summary_excel
 from backend.services.manual_dispatch_service import ManualDispatchService
 
 router = APIRouter(prefix="/api/manual-dispatch", tags=["manual-dispatch"])
@@ -160,6 +161,22 @@ def list_final_trip_summaries(dispatch_date: str):
         return [to_dict(summary) for summary in service.list_final_trip_summaries(dispatch_date)]
     except ValueError as error:
         raise _to_http_exception(error) from error
+
+
+@router.get("/final-summaries/export-excel")
+def export_final_trip_summaries_excel(dispatch_date: str):
+    try:
+        summaries = service.list_final_trip_summaries(dispatch_date)
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+    workbook_bytes = build_final_summary_excel(summaries, dispatch_date)
+    filename = f"final-trip-summary-{dispatch_date}.xlsx"
+    return Response(
+        content=workbook_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/final-summary-dates")

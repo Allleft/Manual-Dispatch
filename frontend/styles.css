@@ -134,7 +134,7 @@ h1 {
 
 .dispatch-date-controls {
   display: grid;
-  grid-template-columns: 1fr auto auto auto;
+  grid-template-columns: 1fr auto;
   gap: 0.55rem;
   align-items: end;
 }
@@ -655,15 +655,29 @@ select:disabled {
 }
 
 .final-summary-control-bar {
-  display: grid;
-  grid-template-columns: max-content minmax(180px, 260px) max-content 1fr;
+  display: flex;
   align-items: end;
+  justify-content: space-between;
+  flex-wrap: wrap;
   gap: 0.75rem;
   margin-bottom: 1rem;
   border: 1px solid rgba(39, 93, 69, 0.16);
   border-radius: var(--radius-md);
   padding: 0.85rem;
   background: var(--field);
+}
+
+.final-summary-save-controls,
+.final-summary-history-controls {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.final-summary-history-controls {
+  justify-content: flex-end;
+  margin-left: auto;
 }
 
 .final-summary-control-bar label {
@@ -678,7 +692,7 @@ select:disabled {
 
 .final-summary-control-bar .board-status,
 .final-summary-control-bar .board-error {
-  align-self: stretch;
+  flex: 1 1 100%;
   margin: 0;
 }
 

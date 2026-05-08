@@ -3,8 +3,8 @@
 Manual Dispatch Board is a manual office workflow for assigning Orders to Driver + Trip + Vehicle. This repository now includes Driver & Vehicle Specification master-data management.
 
 ## Current Phase
-- Phase: 14
-- Status: Final Trip Summary Redesign and Demo Order Reset
+- Phase: 14B
+- Status: Final Trip Summary Save and Export Polish
 - Frontend now loads board data from the backend API.
 - Assign, Unassign, and Choose Vehicle actions now call the backend API.
 - SQLite persistence means refresh can preserve assignments and Driver + Dispatch Date vehicle selections.
@@ -29,10 +29,12 @@ Manual Dispatch Board is a manual office workflow for assigning Orders to Driver
 - Generated Orders are hidden from Task Pool in the same browser session using frontend memory.
 - Final Trip Summary snapshots are read-only and do not auto-update from later board changes.
 - Final Trip Summary snapshots can now be saved to SQLite.
-- Final Trip Summary now uses one global Save Final Summary button for all generated unsaved summaries.
+- Final Trip Summary now uses one global Save and Export button for all generated unsaved summaries.
 - Per-driver Final Trip Summary cards are read-only display cards and no longer include individual Save buttons.
 - Load History now lives inside the Final Trip Summary section.
 - Final Summary History can be loaded by a selected saved history date.
+- The old top-level Export Excel button was removed from the Dispatch Date controls.
+- Final Trip Summary export now uses saved snapshot records instead of active assignment data.
 - Saved Final Trip Summary rows store snapshot data rather than live Order, Driver, or Vehicle references.
 - Saved Final Trip Summary history can be loaded by dispatch date.
 - Saving a Final Trip Summary marks included Orders as `FINALIZED`.
@@ -59,11 +61,9 @@ Manual Dispatch Board is a manual office workflow for assigning Orders to Driver
 - Preferred Zone is hidden on the frontend.
 - Pallet-only driver and vehicle capacity exceptions are display-only and non-blocking.
 - Pending Driver/Trip selections are preserved after assigning another Order.
-- Export Excel button is available near the Dispatch Date controls.
-- Excel export uses backend SQLite assignment data.
-- Excel export includes only assigned Orders.
-- Empty Drivers and empty Trips are not exported.
-- Location column is not included in the export.
+- Save and Export downloads a Final Trip Summary workbook after generated summaries are saved.
+- Final Trip Summary Excel export uses saved snapshot fields and excludes Generated At / Saved At.
+- Active assignment Excel export remains available through the backend route for compatibility, but it is no longer exposed as a top-level frontend button.
 - No separate Review Summary UI was added.
 - Physical Delete Order is not implemented; cancellation is soft delete only.
 - Driver and Vehicle management is available through the Driver & Vehicle Specification modal.
@@ -126,6 +126,7 @@ Global Final Summary save behavior is documented in `docs/manual-dispatch-board-
 Phase 10G Final Trip Summary persistence is documented in `docs/manual-dispatch-board-phase10g-final-summary-persistence.md`.
 Phase 13 Final Trip Summary closed-loop stabilization is documented in `docs/manual-dispatch-board-phase13-final-summary-closed-loop.md`.
 Phase 14 Final Trip Summary redesign and demo reset is documented in `docs/manual-dispatch-board-phase14-final-summary-redesign.md`.
+Phase 14B Final Summary save and export polish is documented in `docs/manual-dispatch-board-phase14b-final-summary-save-export.md`.
 Driver & Vehicle Specification is documented in `docs/manual-dispatch-board-driver-vehicle-specification.md`.
 Phase 12 UI stability and deferred specification refresh is documented in `docs/manual-dispatch-board-phase12-ui-stability.md`.
 Phase 12C Driver & Vehicle Specification modal rebuild is documented in `docs/manual-dispatch-board-phase12c-specification-modal-rebuild.md`.
@@ -149,6 +150,7 @@ Phase 10A-5 uses frontend syntax validation, backend regression tests, static sa
 Phase 10G uses backend final-summary persistence tests, backend regression tests, frontend syntax validation, static safety checks, and browser/manual checks when tooling is available.
 Phase 13 uses backend final-summary closed-loop tests, backend regression tests, frontend syntax validation, static safety checks, and browser/manual checks when tooling is available.
 Phase 14 uses backend final-summary date tests, backend regression tests, frontend syntax validation, static safety checks, and manual browser checks when tooling is available. The local demo reset script must not commit runtime SQLite files.
+Phase 14B uses backend Final Summary Excel export tests, backend regression tests, frontend syntax validation, static safety checks, and manual browser checks when tooling is available.
 Phase 10B/C uses backend driver/vehicle specification tests, backend regression tests, frontend syntax validation, static safety checks, and browser/manual checks when tooling is available.
 Phase 12 uses frontend syntax validation, backend regression tests, static safety checks, and browser/manual checks when tooling is available.
 Phase 12C uses frontend syntax validation, backend regression tests when available, static safety checks, and browser/manual checks when tooling is available.

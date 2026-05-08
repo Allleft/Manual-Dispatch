@@ -246,16 +246,28 @@ async function apiDeleteVehicle(vehicleId) {
   });
 }
 
-function getExcelExportUrl(dispatchDate) {
-  return getApiUrl("/api/manual-dispatch/export-excel", {
+function getFinalSummaryExcelExportUrl(dispatchDate) {
+  return getApiUrl("/api/manual-dispatch/final-summaries/export-excel", {
     dispatch_date: dispatchDate,
   });
 }
 
-function getExportFilename(response, dispatchDate) {
+function getExportFilename(response, fallbackFilename) {
   const disposition = response.headers.get("Content-Disposition") || "";
   const match = disposition.match(/filename="?([^"]+)"?/i);
-  return match ? match[1] : `manual-dispatch-${dispatchDate}.xlsx`;
+  return match ? match[1] : fallbackFilename;
+}
+
+async function downloadExcelResponse(response, fallbackFilename) {
+  const blob = await response.blob();
+  const downloadUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = downloadUrl;
+  link.download = getExportFilename(response, fallbackFilename);
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(downloadUrl);
 }
 
 async function loadBoard(dispatchDate = state.dispatchDate, options = {}) {
@@ -599,43 +611,20 @@ function getOrderEditPayload() {
   };
 }
 
-async function handleExportExcel() {
-  if (state.isLoading || state.isSaving) {
-    return;
-  }
-
-  state.isSaving = true;
-  clearError();
-  renderBoard();
-
-  try {
-    const response = await fetch(getExcelExportUrl(state.dispatchDate));
-    if (!response.ok) {
-      let message = `Export failed with status ${response.status}`;
-      try {
-        const payload = await response.json();
-        message = formatApiErrorDetail(payload.detail) || message;
-      } catch (error) {
-        message = response.statusText || message;
-      }
-      throw new Error(message);
+async function exportFinalSummariesExcel(dispatchDate) {
+  const response = await fetch(getFinalSummaryExcelExportUrl(dispatchDate));
+  if (!response.ok) {
+    let message = `Export failed with status ${response.status}`;
+    try {
+      const payload = await response.json();
+      message = formatApiErrorDetail(payload.detail) || message;
+    } catch (error) {
+      message = response.statusText || message;
     }
-
-    const blob = await response.blob();
-    const downloadUrl = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = downloadUrl;
-    link.download = getExportFilename(response, state.dispatchDate);
-    document.body.append(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(downloadUrl);
-  } catch (error) {
-    showError(`Unable to export Excel. ${error.message}`);
-  } finally {
-    state.isSaving = false;
-    renderBoard();
+    throw new Error(message);
   }
+
+  await downloadExcelResponse(response, `final-trip-summary-${dispatchDate}.xlsx`);
 }
 
 async function handleCreateOrder() {
@@ -1499,7 +1488,7 @@ async function handleSaveAllFinalSummaries() {
   state.finalSummaryGlobalSaveSuccess = "";
 
   if (unsavedSummaries.length === 0) {
-    state.finalSummaryGlobalSaveError = "Generate at least one driver summary before saving.";
+    state.finalSummaryGlobalSaveError = "Generate at least one Final Trip Summary before saving and exporting.";
     renderFinalTripSummaries();
     return;
   }
@@ -1521,10 +1510,9 @@ async function handleSaveAllFinalSummaries() {
       savedSummaries.push(savedSummary);
     }
 
-    state.finalSummaryGlobalSaveSuccess =
-      savedSummaries.length === 1
-        ? "1 Final Trip Summary saved."
-        : `${savedSummaries.length} Final Trip Summaries saved.`;
+    await exportFinalSummariesExcel(state.dispatchDate);
+
+    state.finalSummaryGlobalSaveSuccess = "Final Summary saved and exported.";
     state.historyLoaded = false;
     await loadFinalSummaryDates({ render: false });
     state.isSavingFinalSummaries = false;
@@ -1532,7 +1520,7 @@ async function handleSaveAllFinalSummaries() {
   } catch (error) {
     state.isSaving = false;
     state.isSavingFinalSummaries = false;
-    state.finalSummaryGlobalSaveError = `Unable to save Final Trip Summary. ${error.message}`;
+    state.finalSummaryGlobalSaveError = `Unable to save and export Final Summary. ${error.message}`;
     renderBoard();
   }
 }
@@ -1561,21 +1549,17 @@ async function handleLoadFinalSummaryHistory() {
 
 function renderBoardControls() {
   const dateInput = document.querySelector("#dispatch-date");
-  const exportButton = document.querySelector("#export-excel-button");
   const specificationButton = document.querySelector("#specification-button");
   const addOrderButton = document.querySelector("#add-order-button");
   const status = document.querySelector("#board-status");
   const error = document.querySelector("#board-error");
 
-  if (!dateInput || !exportButton) {
+  if (!dateInput) {
     return;
   }
 
   dateInput.value = state.dispatchDate;
   dateInput.disabled = state.isLoading || state.isSaving;
-
-  exportButton.disabled = state.isLoading || state.isSaving;
-  exportButton.textContent = state.isSaving ? "Preparing..." : "Export Excel";
 
   if (specificationButton) {
     specificationButton.disabled = state.isLoading || state.isSaving;
@@ -1612,10 +1596,6 @@ function renderBoardControls() {
     state.historyDate = nextDate;
     loadBoard(nextDate);
     loadFinalSummaryDates();
-  };
-
-  exportButton.onclick = () => {
-    handleExportExcel();
   };
 
   if (specificationButton) {
@@ -1846,7 +1826,9 @@ function renderDriverSummary() {
     }
 
     const assignedOrders = getAssignedOrdersForDriver(driver.driver_id);
-    const hasLockedFinalSummary = Boolean(state.finalTripSummaries[driver.driver_id]);
+    const finalSummary = state.finalTripSummaries[driver.driver_id];
+    const hasLockedFinalSummary = Boolean(finalSummary);
+    const hasUnsavedLockedFinalSummary = Boolean(finalSummary && !finalSummary.summary_id);
     const driverTotals = calculateTotals(assignedOrders);
     const loadSummary = document.createElement("div");
     loadSummary.className = "load-summary";
@@ -1905,7 +1887,7 @@ function renderDriverSummary() {
 
     const finalLockHint = document.createElement("p");
     finalLockHint.className = "vehicle-hint final-lock-hint";
-    finalLockHint.textContent = hasLockedFinalSummary
+    finalLockHint.textContent = hasUnsavedLockedFinalSummary
       ? "Final Trip Summary for this driver is already generated and locked."
       : "";
 
@@ -1942,7 +1924,7 @@ function renderDriverSummary() {
     if (assignedOrders.length === 0) {
       const emptyState = document.createElement("p");
       emptyState.className = "empty-trip editable-empty-state";
-      emptyState.textContent = hasLockedFinalSummary
+      emptyState.textContent = hasUnsavedLockedFinalSummary
         ? "No editable tasks. Locked Final Trip Summary is shown below."
         : "No editable tasks assigned to this driver.";
       trips.append(emptyState);
@@ -2072,8 +2054,8 @@ function renderFinalSummaryControls() {
       state.isSavingFinalSummaries ||
       unsavedSummaries.length === 0;
     saveButton.textContent = state.isSavingFinalSummaries
-      ? "Saving..."
-      : "Save Final Summary";
+      ? "Saving and Exporting..."
+      : "Save and Export";
     saveButton.onclick = () => {
       handleSaveAllFinalSummaries();
     };
@@ -2109,10 +2091,10 @@ function renderFinalSummaryControls() {
   if (message) {
     const helperMessage =
       unsavedSummaries.length === 0
-        ? "Generate at least one driver summary before saving."
+        ? "No unsaved Final Summary to save and export."
         : `${unsavedSummaries.length} generated summary${
             unsavedSummaries.length === 1 ? "" : "ies"
-          } ready to save.`;
+          } ready to save and export.`;
     const text =
       state.finalSummaryGlobalSaveError ||
       state.finalSummaryGlobalSaveSuccess ||
@@ -2214,14 +2196,17 @@ function createFinalTripSummaryCard(summary, options = {}) {
   header.className = "final-summary-header";
 
   const titleWrap = document.createElement("div");
-  const kicker = document.createElement("p");
-  kicker.className = "section-kicker";
-  kicker.textContent = options.mode === "history" ? "Saved history" : "Locked snapshot";
+  if (options.mode === "history") {
+    const kicker = document.createElement("p");
+    kicker.className = "section-kicker";
+    kicker.textContent = "Saved history";
+    titleWrap.append(kicker);
+  }
 
   const title = document.createElement("h3");
   title.textContent = summary.driver_name;
 
-  titleWrap.append(kicker, title);
+  titleWrap.append(title);
 
   const actions = document.createElement("div");
   actions.className = "final-summary-actions";
