@@ -250,7 +250,14 @@ function getExportFilename(response, dispatchDate) {
   return match ? match[1] : `manual-dispatch-${dispatchDate}.xlsx`;
 }
 
-async function loadBoard(dispatchDate = state.dispatchDate) {
+async function loadBoard(dispatchDate = state.dispatchDate, options = {}) {
+  const force = Boolean(options.force);
+
+  if (state.isSpecificationModalOpen && !force) {
+    state.specificationDirty = true;
+    return;
+  }
+
   state.dispatchDate = dispatchDate || DEFAULT_DISPATCH_DATE;
   state.isLoading = true;
   state.errorMessage = "";
@@ -258,12 +265,23 @@ async function loadBoard(dispatchDate = state.dispatchDate) {
 
   try {
     const payload = await apiGetBoard(state.dispatchDate);
+    if (state.isSpecificationModalOpen && !force) {
+      state.specificationDirty = true;
+      return;
+    }
     applyBoardResponse(payload);
   } catch (error) {
+    if (state.isSpecificationModalOpen && !force) {
+      state.specificationDirty = true;
+      return;
+    }
     showError(`Unable to load board data. ${error.message}`);
   } finally {
     state.isLoading = false;
     state.isSaving = false;
+    if (state.isSpecificationModalOpen && !force) {
+      return;
+    }
     renderBoard();
   }
 }
@@ -387,7 +405,7 @@ async function closeSpecificationModal() {
   }
 
   if (shouldReloadBoard) {
-    await loadBoard(state.dispatchDate);
+    await loadBoard(state.dispatchDate, { force: true });
   }
 }
 
