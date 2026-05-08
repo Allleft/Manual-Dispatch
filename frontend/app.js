@@ -18,6 +18,9 @@ const state = {
   urgencyFilter: "All",
   finalTripSummaries: {},
   generatedTaskKeys: new Set(),
+  savingFinalSummaryDriverId: "",
+  finalSummarySaveErrors: {},
+  finalSummarySaveSuccess: {},
   finalSummaryHistory: [],
   isHistoryLoading: false,
   historyLoaded: false,
@@ -1371,6 +1374,8 @@ async function handleGenerateDriverSummary(driverId) {
   }
 
   state.finalTripSummaries[driverId] = snapshot;
+  delete state.finalSummarySaveErrors[driverId];
+  delete state.finalSummarySaveSuccess[driverId];
   snapshot.trips.forEach((trip) => {
     trip.orders.forEach((order) => {
       state.generatedTaskKeys.add(getTaskKey(order.task_type, order.task_id));
@@ -1432,7 +1437,7 @@ function getFinalSummarySavePayload(summary) {
 }
 
 async function handleSaveFinalSummary(driverId) {
-  if (state.isSaving || state.isLoading) {
+  if (state.isSaving || state.savingFinalSummaryDriverId || state.isLoading) {
     return;
   }
 
@@ -1444,27 +1449,33 @@ async function handleSaveFinalSummary(driverId) {
   }
 
   if (summary.summary_id) {
-    showError("This Final Trip Summary is already saved.");
-    renderBoard();
+    state.finalSummarySaveSuccess[driverId] = "Final Trip Summary saved.";
+    renderFinalTripSummaries();
     return;
   }
 
   state.isSaving = true;
+  state.savingFinalSummaryDriverId = driverId;
+  delete state.finalSummarySaveErrors[driverId];
+  delete state.finalSummarySaveSuccess[driverId];
   clearError();
-  renderBoard();
+  renderFinalTripSummaries();
 
   try {
     const savedSummary = normalizeFinalSummary(
       await apiSaveFinalSummary(getFinalSummarySavePayload(summary)),
     );
     state.finalTripSummaries[driverId] = savedSummary;
+    state.finalSummarySaveSuccess[driverId] = "Final Trip Summary saved.";
     state.historyLoaded = false;
     state.selectedHistorySummaryId = savedSummary.summary_id;
+    state.savingFinalSummaryDriverId = "";
     await loadBoard(state.dispatchDate);
   } catch (error) {
     state.isSaving = false;
-    showError(`Unable to save Final Trip Summary. ${error.message}`);
-    renderBoard();
+    state.savingFinalSummaryDriverId = "";
+    state.finalSummarySaveErrors[driverId] = `Unable to save Final Trip Summary. ${error.message}`;
+    renderFinalTripSummaries();
   }
 }
 
@@ -1548,6 +1559,9 @@ function renderBoardControls() {
     state.dispatchDate = nextDate;
     state.finalTripSummaries = {};
     state.generatedTaskKeys = new Set();
+    state.savingFinalSummaryDriverId = "";
+    state.finalSummarySaveErrors = {};
+    state.finalSummarySaveSuccess = {};
     state.finalSummaryHistory = [];
     state.historyLoaded = false;
     state.historyError = "";
@@ -2110,6 +2124,10 @@ function createFinalTripSummaryCard(summary, options = {}) {
   const card = document.createElement("article");
   card.className = "final-summary-card";
   const isSaved = Boolean(summary.summary_id);
+  const driverId = summary.driver_id;
+  const isSavingThisSummary = state.savingFinalSummaryDriverId === driverId;
+  const saveError = state.finalSummarySaveErrors[driverId] || "";
+  const saveSuccess = state.finalSummarySaveSuccess[driverId] || "";
 
   const header = document.createElement("div");
   header.className = "final-summary-header";
@@ -2131,14 +2149,23 @@ function createFinalTripSummaryCard(summary, options = {}) {
     const saveButton = document.createElement("button");
     saveButton.type = "button";
     saveButton.className = "button-secondary";
-    saveButton.textContent = state.isSaving ? "Saving..." : "Save Final Summary";
-    saveButton.disabled = state.isSaving || state.isLoading;
+    saveButton.textContent = isSavingThisSummary ? "Saving..." : "Save Final Summary";
+    saveButton.disabled = state.isLoading || state.isSaving || Boolean(state.savingFinalSummaryDriverId);
     saveButton.addEventListener("click", () => {
-      handleSaveFinalSummary(summary.driver_id);
+      handleSaveFinalSummary(driverId);
     });
     actions.append(saveButton);
   }
   header.append(titleWrap, actions);
+
+  const saveMessage = document.createElement("p");
+  if (saveError) {
+    saveMessage.className = "board-error";
+    saveMessage.textContent = saveError;
+  } else if (saveSuccess && options.mode !== "history") {
+    saveMessage.className = "board-status";
+    saveMessage.textContent = saveSuccess;
+  }
 
   const meta = document.createElement("dl");
   meta.className = "final-summary-meta";
@@ -2202,7 +2229,11 @@ function createFinalTripSummaryCard(summary, options = {}) {
     trips.append(tripSection);
   });
 
-  card.append(header, meta, trips);
+  card.append(header);
+  if (saveMessage.textContent) {
+    card.append(saveMessage);
+  }
+  card.append(meta, trips);
   return card;
 }
 
