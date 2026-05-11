@@ -347,6 +347,15 @@ class InMemoryManualDispatchRepository:
         self.operator_accounts.append(account)
         return account
 
+    def update_operator_account_password(self, account_id, password_hash, password_salt):
+        account = self.get_operator_account_by_id(account_id)
+        if not account:
+            raise ValueError("Operator account does not exist")
+        account.password_hash = password_hash
+        account.password_salt = password_salt
+        account.updated_at = "in-memory"
+        return account
+
     def update_vehicle(self, vehicle):
         for index, existing in enumerate(self.vehicles):
             if existing.vehicle_id == vehicle.vehicle_id and not existing.is_deleted:

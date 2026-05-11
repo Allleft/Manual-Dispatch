@@ -98,6 +98,8 @@ Runtime SQLite database files are local and ignored by Git.
 - Operator accounts are stored in SQLite.
 - Passwords are stored as salted PBKDF2-HMAC-SHA256 hashes, not plain text.
 - Login returns account identity only: account id and account name.
+- Forgot Password resets the password; it does not recover or reveal the old password.
+- Password reset requires an administrator reset code from `MANUAL_DISPATCH_ADMIN_RESET_CODE`.
 - Raw passwords, password hashes, and salts are not displayed, exported, logged, or returned by the API.
 - This is lightweight MVP/demo login, not production enterprise authentication.
 
@@ -147,6 +149,16 @@ Some route-level tests use FastAPI/Starlette `TestClient`, which requires `httpx
 ```powershell
 python -m pip install httpx
 ```
+
+### Local Admin Reset Code
+
+Forgot Password uses a local environment variable:
+
+```powershell
+$env:MANUAL_DISPATCH_ADMIN_RESET_CODE="replace-with-your-local-admin-reset-code"
+```
+
+The reset code must not be committed. If it is not set, password reset is disabled.
 
 ## Validation / Tests
 

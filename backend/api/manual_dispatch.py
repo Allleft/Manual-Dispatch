@@ -9,6 +9,7 @@ from backend.schemas import (
     CreateVehicleRequest,
     LoginOperatorAccountRequest,
     RegisterOperatorAccountRequest,
+    ResetOperatorPasswordRequest,
     SaveFinalTripSummaryRequest,
     UnassignTaskRequest,
     UpdateDriverRequest,
@@ -63,6 +64,14 @@ def register_operator_account(request: RegisterOperatorAccountRequest):
 def login_operator_account(request: LoginOperatorAccountRequest):
     try:
         return to_dict(service.login_operator_account(request))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.post("/auth/reset-password")
+def reset_operator_password(request: ResetOperatorPasswordRequest):
+    try:
+        return to_dict(service.reset_operator_password(request))
     except ValueError as error:
         raise _to_http_exception(error) from error
 

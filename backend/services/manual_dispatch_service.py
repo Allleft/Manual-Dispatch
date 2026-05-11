@@ -14,6 +14,7 @@ from backend.schemas import (
     Order,
     OperatorAccountIdentity,
     RegisterOperatorAccountRequest,
+    ResetOperatorPasswordRequest,
     SaveFinalTripSummaryRequest,
     Vehicle,
 )
@@ -23,6 +24,13 @@ SUPPORTED_TASK_TYPES = {"ORDER"}
 SUPPORTED_TRIPS = {"trip1", "trip2"}
 PASSWORD_MIN_LENGTH = 6
 PASSWORD_HASH_ITERATIONS = 120_000
+ADMIN_RESET_CODE_ENV = "MANUAL_DISPATCH_ADMIN_RESET_CODE"
+PASSWORD_RESET_FAILURE_MESSAGE = (
+    "Unable to reset password. Please check your details or contact an administrator."
+)
+PASSWORD_RESET_DISABLED_MESSAGE = (
+    "Password reset is not configured. Please contact an administrator."
+)
 
 
 class ManualDispatchService:
@@ -91,6 +99,43 @@ class ManualDispatchService:
         return OperatorAccountIdentity(
             account_id=account.account_id,
             account_name=account.account_name,
+        )
+
+    def reset_operator_password(self, request: ResetOperatorPasswordRequest):
+        account_name = self._clean_account_name(request.account_name)
+        new_password = self._clean_required_password(request.new_password)
+        confirm_password = request.confirm_password
+
+        if confirm_password is None:
+            raise ValueError("confirm_password is required")
+        if new_password != confirm_password:
+            raise ValueError("Passwords do not match")
+
+        configured_reset_code = os.environ.get(ADMIN_RESET_CODE_ENV)
+        if not configured_reset_code:
+            raise ValueError(PASSWORD_RESET_DISABLED_MESSAGE)
+
+        submitted_reset_code = request.admin_reset_code or ""
+        if not hmac.compare_digest(
+            str(submitted_reset_code),
+            str(configured_reset_code),
+        ):
+            raise ValueError(PASSWORD_RESET_FAILURE_MESSAGE)
+
+        account = self.repository.get_operator_account_by_name(account_name)
+        if not account:
+            raise ValueError(PASSWORD_RESET_FAILURE_MESSAGE)
+
+        password_salt = os.urandom(16).hex()
+        password_hash = self._hash_password(new_password, password_salt)
+        updated_account = self.repository.update_operator_account_password(
+            account.account_id,
+            password_hash,
+            password_salt,
+        )
+        return OperatorAccountIdentity(
+            account_id=updated_account.account_id,
+            account_name=updated_account.account_name,
         )
 
     def assign_task(self, request):

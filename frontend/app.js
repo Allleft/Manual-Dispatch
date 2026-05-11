@@ -21,6 +21,7 @@ const state = {
   loginError: "",
   registerError: "",
   authSuccessMessage: "",
+  resetError: "",
   isAuthLoading: false,
   isLoading: false,
   isSaving: false,
@@ -196,6 +197,13 @@ async function apiLoginAccount(payload) {
   });
 }
 
+async function apiResetPassword(payload) {
+  return requestJson("/api/manual-dispatch/auth/reset-password", {
+    method: "POST",
+    body: payload,
+  });
+}
+
 async function apiCreateOrder(payload) {
   return requestJson("/api/manual-dispatch/orders", {
     method: "POST",
@@ -352,6 +360,7 @@ function applyLoggedInAccount(identity) {
   state.isLoggedIn = Boolean(state.accountName);
   state.loginError = "";
   state.registerError = "";
+  state.resetError = "";
   state.authSuccessMessage = "";
   saveAccountSession(identity);
 }
@@ -363,6 +372,7 @@ function logoutAccount() {
   state.authMode = "login";
   state.loginError = "";
   state.registerError = "";
+  state.resetError = "";
   state.authSuccessMessage = "";
   clearAccountSession();
   renderBoard();
@@ -1731,10 +1741,58 @@ async function handleRegister(event) {
   }
 }
 
+async function handleResetPassword(event) {
+  event.preventDefault();
+  if (state.isAuthLoading) {
+    return;
+  }
+
+  const form = event.currentTarget;
+  const accountNameInput = form.querySelector('input[name="account_name"]');
+  const resetCodeInput = form.querySelector('input[name="admin_reset_code"]');
+  const passwordInput = form.querySelector('input[name="new_password"]');
+  const confirmPasswordInput = form.querySelector('input[name="confirm_password"]');
+  const accountName = accountNameInput ? accountNameInput.value.trim() : "";
+  const adminResetCode = resetCodeInput ? resetCodeInput.value : "";
+  const newPassword = passwordInput ? passwordInput.value : "";
+  const confirmPassword = confirmPasswordInput ? confirmPasswordInput.value : "";
+
+  state.isAuthLoading = true;
+  state.resetError = "";
+  state.authSuccessMessage = "";
+  renderAuthGate();
+
+  try {
+    await apiResetPassword({
+      account_name: accountName,
+      admin_reset_code: adminResetCode,
+      new_password: newPassword,
+      confirm_password: confirmPassword,
+    });
+    state.authMode = "login";
+    state.authSuccessMessage = "Password reset successfully. Please log in with your new password.";
+  } catch (error) {
+    state.resetError = "Unable to reset password. Please check your details or contact an administrator.";
+  } finally {
+    if (resetCodeInput) {
+      resetCodeInput.value = "";
+    }
+    if (passwordInput) {
+      passwordInput.value = "";
+    }
+    if (confirmPasswordInput) {
+      confirmPasswordInput.value = "";
+    }
+    state.isAuthLoading = false;
+    renderBoard();
+  }
+}
+
 function switchAuthMode(mode) {
   state.authMode = mode;
   state.loginError = "";
   state.registerError = "";
+  state.resetError = "";
   state.authSuccessMessage = "";
   renderAuthGate();
 }
@@ -1801,7 +1859,11 @@ function renderAuthGate() {
   const title = document.createElement("h2");
   title.id = "auth-title";
   title.textContent =
-    state.authMode === "register" ? "Create operator account" : "Login to Manual Dispatch Board";
+    state.authMode === "register"
+      ? "Create operator account"
+      : state.authMode === "reset"
+      ? "Reset operator password"
+      : "Login to Manual Dispatch Board";
 
   const note = document.createElement("p");
   note.className = "auth-note";
@@ -1810,7 +1872,13 @@ function renderAuthGate() {
 
   const form = document.createElement("form");
   form.className = "auth-form";
-  form.addEventListener("submit", state.authMode === "register" ? handleRegister : handleLogin);
+  const submitHandler =
+    state.authMode === "register"
+      ? handleRegister
+      : state.authMode === "reset"
+      ? handleResetPassword
+      : handleLogin;
+  form.addEventListener("submit", submitHandler);
 
   form.append(
     createAuthInput("Account Name / Username", "account_name", {
@@ -1819,13 +1887,38 @@ function renderAuthGate() {
       maxlength: 50,
       required: true,
     }),
-    createAuthInput("Password", "password", {
-      type: "password",
-      autocomplete: state.authMode === "register" ? "new-password" : "current-password",
-      minlength: 6,
-      required: true,
-    }),
   );
+
+  if (state.authMode === "reset") {
+    form.append(
+      createAuthInput("Admin Reset Code", "admin_reset_code", {
+        type: "password",
+        autocomplete: "off",
+        required: true,
+      }),
+      createAuthInput("New Password", "new_password", {
+        type: "password",
+        autocomplete: "new-password",
+        minlength: 6,
+        required: true,
+      }),
+      createAuthInput("Confirm New Password", "confirm_password", {
+        type: "password",
+        autocomplete: "new-password",
+        minlength: 6,
+        required: true,
+      }),
+    );
+  } else {
+    form.append(
+      createAuthInput("Password", "password", {
+        type: "password",
+        autocomplete: state.authMode === "register" ? "new-password" : "current-password",
+        minlength: 6,
+        required: true,
+      }),
+    );
+  }
 
   if (state.authMode === "register") {
     form.append(
@@ -1840,10 +1933,14 @@ function renderAuthGate() {
 
   const error = document.createElement("p");
   error.className = "board-error";
-  error.hidden =
-    state.authMode === "register" ? !state.registerError : !state.loginError;
-  error.textContent =
-    state.authMode === "register" ? state.registerError : state.loginError;
+  const errorMessage =
+    state.authMode === "register"
+      ? state.registerError
+      : state.authMode === "reset"
+      ? state.resetError
+      : state.loginError;
+  error.hidden = !errorMessage;
+  error.textContent = errorMessage;
 
   const success = document.createElement("p");
   success.className = "board-status";
@@ -1853,14 +1950,26 @@ function renderAuthGate() {
   const actions = document.createElement("div");
   actions.className = "form-actions auth-actions";
 
+  if (state.authMode === "login") {
+    const forgotButton = document.createElement("button");
+    forgotButton.type = "button";
+    forgotButton.className = "button-link";
+    forgotButton.disabled = state.isAuthLoading;
+    forgotButton.textContent = "Forgot password?";
+    forgotButton.addEventListener("click", () => {
+      switchAuthMode("reset");
+    });
+    form.append(forgotButton);
+  }
+
   const switchButton = document.createElement("button");
   switchButton.type = "button";
   switchButton.className = "button-secondary";
   switchButton.disabled = state.isAuthLoading;
   switchButton.textContent =
-    state.authMode === "register" ? "Back to login" : "Create account";
+    state.authMode === "login" ? "Create account" : "Back to login";
   switchButton.addEventListener("click", () => {
-    switchAuthMode(state.authMode === "register" ? "login" : "register");
+    switchAuthMode(state.authMode === "login" ? "register" : "login");
   });
 
   const submitButton = document.createElement("button");
@@ -1871,6 +1980,10 @@ function renderAuthGate() {
       ? state.isAuthLoading
         ? "Creating..."
         : "Create account"
+      : state.authMode === "reset"
+      ? state.isAuthLoading
+        ? "Resetting..."
+        : "Reset password"
       : state.isAuthLoading
       ? "Logging in..."
       : "Login";

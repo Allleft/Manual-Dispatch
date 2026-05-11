@@ -196,6 +196,14 @@ class LoginOperatorAccountRequest:
 
 
 @dataclass
+class ResetOperatorPasswordRequest:
+    account_name: Optional[str] = None
+    admin_reset_code: Optional[str] = None
+    new_password: Optional[str] = None
+    confirm_password: Optional[str] = None
+
+
+@dataclass
 class CreateOrderRequest:
     invoice_number: Optional[str] = None
     company_name: Optional[str] = None

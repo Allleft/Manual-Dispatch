@@ -505,6 +505,22 @@ select:disabled {
   font-size: 0.82rem;
 }
 
+.button-link {
+  min-height: 0;
+  width: fit-content;
+  border: 0;
+  padding: 0;
+  color: var(--accent);
+  background: transparent;
+  font-size: 0.9rem;
+  text-decoration: underline;
+}
+
+.button-link:disabled {
+  color: var(--muted);
+  background: transparent;
+}
+
 .button-export {
   border: 1px solid rgba(39, 93, 69, 0.28);
   color: var(--accent-strong);

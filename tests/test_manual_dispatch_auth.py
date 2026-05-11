@@ -12,6 +12,7 @@ from backend.repositories.sqlite_manual_dispatch_repository import (
 from backend.schemas import (
     LoginOperatorAccountRequest,
     RegisterOperatorAccountRequest,
+    ResetOperatorPasswordRequest,
 )
 from backend.services.manual_dispatch_service import ManualDispatchService
 
@@ -32,8 +33,13 @@ class ManualDispatchAuthTest(unittest.TestCase):
         self.db_path = self.temp_dir / "manual_dispatch.sqlite3"
         self.repository = SQLiteManualDispatchRepository(self.db_path)
         self.service = ManualDispatchService(self.repository)
+        self.previous_reset_code = os.environ.get("MANUAL_DISPATCH_ADMIN_RESET_CODE")
 
     def tearDown(self):
+        if self.previous_reset_code is None:
+            os.environ.pop("MANUAL_DISPATCH_ADMIN_RESET_CODE", None)
+        else:
+            os.environ["MANUAL_DISPATCH_ADMIN_RESET_CODE"] = self.previous_reset_code
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_registering_new_account_returns_identity_only(self):
@@ -128,6 +134,107 @@ class ManualDispatchAuthTest(unittest.TestCase):
         self.assertGreater(len(row[0]), 32)
         self.assertGreater(len(row[1]), 16)
 
+    def test_successful_password_reset_allows_new_password_only(self):
+        self._register("Mandy")
+        os.environ["MANUAL_DISPATCH_ADMIN_RESET_CODE"] = "test-reset-code"
+
+        identity = self.service.reset_operator_password(
+            ResetOperatorPasswordRequest(
+                account_name="Mandy",
+                admin_reset_code="test-reset-code",
+                new_password="newsecret123",
+                confirm_password="newsecret123",
+            )
+        )
+
+        self.assertEqual("Mandy", identity.account_name)
+        self.assertFalse(hasattr(identity, "password_hash"))
+        self.assertFalse(hasattr(identity, "password_salt"))
+
+        with self.assertRaisesRegex(ValueError, "Invalid account name or password"):
+            self.service.login_operator_account(
+                LoginOperatorAccountRequest(
+                    account_name="Mandy",
+                    password="secret123",
+                )
+            )
+
+        login_identity = self.service.login_operator_account(
+            LoginOperatorAccountRequest(
+                account_name="Mandy",
+                password="newsecret123",
+            )
+        )
+        self.assertEqual("Mandy", login_identity.account_name)
+
+    def test_reset_password_rejects_missing_admin_reset_code_environment(self):
+        self._register("Mandy")
+        os.environ.pop("MANUAL_DISPATCH_ADMIN_RESET_CODE", None)
+
+        with self.assertRaisesRegex(ValueError, "Password reset is not configured"):
+            self.service.reset_operator_password(self._reset_request())
+
+    def test_reset_password_rejects_wrong_admin_reset_code(self):
+        self._register("Mandy")
+        os.environ["MANUAL_DISPATCH_ADMIN_RESET_CODE"] = "test-reset-code"
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "Unable to reset password. Please check your details or contact an administrator.",
+        ):
+            self.service.reset_operator_password(
+                self._reset_request(admin_reset_code="wrong-code")
+            )
+
+    def test_reset_password_rejects_invalid_new_password(self):
+        self._register("Mandy")
+        os.environ["MANUAL_DISPATCH_ADMIN_RESET_CODE"] = "test-reset-code"
+
+        with self.assertRaisesRegex(ValueError, "password must be at least"):
+            self.service.reset_operator_password(
+                self._reset_request(new_password="123", confirm_password="123")
+            )
+
+    def test_reset_password_rejects_mismatched_confirm_password(self):
+        self._register("Mandy")
+        os.environ["MANUAL_DISPATCH_ADMIN_RESET_CODE"] = "test-reset-code"
+
+        with self.assertRaisesRegex(ValueError, "Passwords do not match"):
+            self.service.reset_operator_password(
+                self._reset_request(confirm_password="different")
+            )
+
+    def test_reset_password_keeps_new_password_hashed_and_salted(self):
+        self._register("Mandy")
+        os.environ["MANUAL_DISPATCH_ADMIN_RESET_CODE"] = "test-reset-code"
+
+        with sqlite3.connect(self.db_path) as connection:
+            before = connection.execute(
+                """
+                SELECT password_hash, password_salt
+                FROM operator_accounts
+                WHERE account_name = ?
+                """,
+                ("Mandy",),
+            ).fetchone()
+
+        self.service.reset_operator_password(self._reset_request())
+
+        with sqlite3.connect(self.db_path) as connection:
+            after = connection.execute(
+                """
+                SELECT password_hash, password_salt
+                FROM operator_accounts
+                WHERE account_name = ?
+                """,
+                ("Mandy",),
+            ).fetchone()
+
+        self.assertNotEqual(before[0], after[0])
+        self.assertNotEqual(before[1], after[1])
+        self.assertNotEqual("newsecret123", after[0])
+        self.assertNotEqual("newsecret123", after[1])
+
     def _register(self, account_name):
         return self.service.register_operator_account(
             RegisterOperatorAccountRequest(
@@ -135,6 +242,19 @@ class ManualDispatchAuthTest(unittest.TestCase):
                 password="secret123",
                 confirm_password="secret123",
             )
+        )
+
+    def _reset_request(
+        self,
+        admin_reset_code="test-reset-code",
+        new_password="newsecret123",
+        confirm_password="newsecret123",
+    ):
+        return ResetOperatorPasswordRequest(
+            account_name="Mandy",
+            admin_reset_code=admin_reset_code,
+            new_password=new_password,
+            confirm_password=confirm_password,
         )
 
 
@@ -151,6 +271,7 @@ class ManualDispatchAuthRouteTest(unittest.TestCase):
 
         self.repository = SQLiteManualDispatchRepository(self.db_path)
         self.service = ManualDispatchService(self.repository)
+        self.previous_reset_code = os.environ.get("MANUAL_DISPATCH_ADMIN_RESET_CODE")
         self.api_module = importlib.import_module("backend.api.manual_dispatch")
         self.original_service = self.api_module.service
         self.api_module.service = self.service
@@ -165,6 +286,10 @@ class ManualDispatchAuthRouteTest(unittest.TestCase):
             os.environ.pop("MANUAL_DISPATCH_DB_PATH", None)
         else:
             os.environ["MANUAL_DISPATCH_DB_PATH"] = self.previous_db_path
+        if self.previous_reset_code is None:
+            os.environ.pop("MANUAL_DISPATCH_ADMIN_RESET_CODE", None)
+        else:
+            os.environ["MANUAL_DISPATCH_ADMIN_RESET_CODE"] = self.previous_reset_code
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_register_and_login_routes_return_identity_only(self):
@@ -204,6 +329,61 @@ class ManualDispatchAuthRouteTest(unittest.TestCase):
 
         self.assertEqual(400, response.status_code)
         self.assertEqual("Invalid account name or password", response.json()["detail"])
+
+    def test_reset_password_route_returns_identity_only(self):
+        os.environ["MANUAL_DISPATCH_ADMIN_RESET_CODE"] = "test-reset-code"
+        self.client.post(
+            "/api/manual-dispatch/auth/register",
+            json={
+                "account_name": "Mandy",
+                "password": "secret123",
+                "confirm_password": "secret123",
+            },
+        )
+
+        response = self.client.post(
+            "/api/manual-dispatch/auth/reset-password",
+            json={
+                "account_name": "Mandy",
+                "admin_reset_code": "test-reset-code",
+                "new_password": "newsecret123",
+                "confirm_password": "newsecret123",
+            },
+        )
+
+        self.assertEqual(200, response.status_code)
+        payload = response.json()
+        self.assertEqual("Mandy", payload["account_name"])
+        self.assertNotIn("password_hash", payload)
+        self.assertNotIn("password_salt", payload)
+        self.assertNotIn("admin_reset_code", payload)
+
+    def test_reset_password_route_rejects_wrong_code_safely(self):
+        os.environ["MANUAL_DISPATCH_ADMIN_RESET_CODE"] = "test-reset-code"
+        self.client.post(
+            "/api/manual-dispatch/auth/register",
+            json={
+                "account_name": "Mandy",
+                "password": "secret123",
+                "confirm_password": "secret123",
+            },
+        )
+
+        response = self.client.post(
+            "/api/manual-dispatch/auth/reset-password",
+            json={
+                "account_name": "Mandy",
+                "admin_reset_code": "wrong-code",
+                "new_password": "newsecret123",
+                "confirm_password": "newsecret123",
+            },
+        )
+
+        self.assertEqual(400, response.status_code)
+        self.assertEqual(
+            "Unable to reset password. Please check your details or contact an administrator.",
+            response.json()["detail"],
+        )
 
 
 if __name__ == "__main__":

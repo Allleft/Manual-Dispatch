@@ -478,6 +478,23 @@ class SQLiteManualDispatchRepository:
             connection.commit()
         return self.get_operator_account_by_id(account_id)
 
+    def update_operator_account_password(self, account_id, password_hash, password_salt):
+        timestamp = self._timestamp()
+        with connect(self.db_path) as connection:
+            cursor = connection.execute(
+                """
+                UPDATE operator_accounts
+                SET password_hash = ?, password_salt = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (password_hash, password_salt, timestamp, account_id),
+            )
+            connection.commit()
+
+        if cursor.rowcount == 0:
+            raise ValueError("Operator account does not exist")
+        return self.get_operator_account_by_id(account_id)
+
     def update_vehicle(self, vehicle):
         with connect(self.db_path) as connection:
             cursor = connection.execute(
