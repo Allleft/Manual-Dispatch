@@ -1,9 +1,11 @@
-function getTodayLocalDateString(date = new Date()) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
+const getTodayLocalDateString =
+  window.ManualDispatchDateUtils?.getTodayLocalDateString ||
+  function getTodayLocalDateStringFallback(date = new Date()) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
 
 const DEFAULT_DISPATCH_DATE = getTodayLocalDateString();
 const AUTH_ACCOUNT_NAME_SESSION_KEY = "manualDispatchAccountName";

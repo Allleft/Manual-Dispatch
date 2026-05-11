@@ -112,6 +112,8 @@ Runtime SQLite database files are local and ignored by Git.
 - `tools/`: Manual development utilities, including demo Order reset tooling.
 - `requirements.txt`: Runtime Python dependencies: FastAPI, Uvicorn, and openpyxl.
 
+For a more detailed developer map, see [Manual Dispatch Board code structure](docs/manual-dispatch-board-code-structure.md).
+
 ## Getting Started
 
 These commands assume PowerShell on Windows from the repository root.
