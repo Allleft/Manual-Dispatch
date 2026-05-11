@@ -1,12 +1,19 @@
+import hashlib
+import hmac
+import os
+
 from backend.repositories.in_memory_manual_dispatch_repository import (
     InMemoryManualDispatchRepository,
 )
 from backend.schemas import (
     Driver,
+    LoginOperatorAccountRequest,
     ManualDispatchBoardResponse,
     ManualDriverVehicleClearResponse,
     ManualDispatchSpecificationResponse,
     Order,
+    OperatorAccountIdentity,
+    RegisterOperatorAccountRequest,
     SaveFinalTripSummaryRequest,
     Vehicle,
 )
@@ -14,6 +21,8 @@ from backend.schemas import (
 
 SUPPORTED_TASK_TYPES = {"ORDER"}
 SUPPORTED_TRIPS = {"trip1", "trip2"}
+PASSWORD_MIN_LENGTH = 6
+PASSWORD_HASH_ITERATIONS = 120_000
 
 
 class ManualDispatchService:
@@ -36,6 +45,52 @@ class ManualDispatchService:
         return ManualDispatchSpecificationResponse(
             drivers=self.repository.list_specification_drivers(),
             vehicles=self.repository.list_specification_vehicles(),
+        )
+
+    def register_operator_account(self, request: RegisterOperatorAccountRequest):
+        account_name = self._clean_account_name(request.account_name)
+        password = self._clean_required_password(request.password)
+        confirm_password = request.confirm_password
+
+        if confirm_password is None:
+            raise ValueError("confirm_password is required")
+
+        if password != confirm_password:
+            raise ValueError("Passwords do not match")
+
+        if self.repository.get_operator_account_by_name(account_name):
+            raise ValueError("Account name already exists")
+
+        password_salt = os.urandom(16).hex()
+        password_hash = self._hash_password(password, password_salt)
+        account = self.repository.create_operator_account(
+            account_name=account_name,
+            password_hash=password_hash,
+            password_salt=password_salt,
+        )
+        return OperatorAccountIdentity(
+            account_id=account.account_id,
+            account_name=account.account_name,
+        )
+
+    def login_operator_account(self, request: LoginOperatorAccountRequest):
+        account_name = self._clean_optional_text(request.account_name)
+        password = request.password or ""
+
+        if not account_name or not password:
+            raise ValueError("Invalid account name or password")
+
+        account = self.repository.get_operator_account_by_name(account_name)
+        if not account:
+            raise ValueError("Invalid account name or password")
+
+        expected_hash = self._hash_password(password, account.password_salt)
+        if not hmac.compare_digest(expected_hash, account.password_hash):
+            raise ValueError("Invalid account name or password")
+
+        return OperatorAccountIdentity(
+            account_id=account.account_id,
+            account_name=account.account_name,
         )
 
     def assign_task(self, request):
@@ -306,6 +361,10 @@ class ManualDispatchService:
         dispatch_date = self._clean_required_text(request.dispatch_date, "dispatch_date")
         driver_id = self._clean_required_text(request.driver_id, "driver_id")
         self._validate_driver_exists(driver_id)
+        saved_by_account = self._validate_saved_by_account(
+            request.saved_by_account_name,
+            request.saved_by_account_id,
+        )
 
         vehicle_id = self._clean_optional_text(request.vehicle_id)
         if vehicle_id:
@@ -337,6 +396,8 @@ class ManualDispatchService:
                 row["loose_bags_quantity_snapshot"] for row in rows
             ),
             "generated_at": self._clean_optional_text(request.generated_at),
+            "saved_by_account_name": saved_by_account.account_name,
+            "saved_by_account_id": saved_by_account.account_id,
         }
         return self.repository.save_final_trip_summary(summary, rows)
 
@@ -382,6 +443,22 @@ class ManualDispatchService:
             raise ValueError(f"{field_name} is required")
         return text
 
+    def _clean_account_name(self, value):
+        account_name = self._clean_required_text(value, "account_name")
+        if len(account_name) < 2 or len(account_name) > 50:
+            raise ValueError("account_name must be between 2 and 50 characters")
+        return account_name
+
+    def _clean_required_password(self, value):
+        if value is None:
+            raise ValueError("password is required")
+        password = str(value)
+        if len(password) < PASSWORD_MIN_LENGTH:
+            raise ValueError(
+                f"password must be at least {PASSWORD_MIN_LENGTH} characters"
+            )
+        return password
+
     def _clean_optional_text(self, value):
         if value is None:
             return None
@@ -419,6 +496,35 @@ class ManualDispatchService:
             raise ValueError(
                 "Please clear this vehicle from current driver selections before making it unavailable."
             )
+
+    def _validate_saved_by_account(self, account_name, account_id=None):
+        cleaned_name = self._clean_required_text(
+            account_name,
+            "saved_by_account_name",
+        )
+        account = self.repository.get_operator_account_by_name(cleaned_name)
+        if not account:
+            raise ValueError("saved_by_account_name must reference a registered account")
+
+        if account_id not in (None, ""):
+            try:
+                cleaned_account_id = int(account_id)
+            except (TypeError, ValueError) as error:
+                raise ValueError("saved_by_account_id must be a whole number") from error
+            if cleaned_account_id != account.account_id:
+                raise ValueError(
+                    "saved_by_account_id does not match saved_by_account_name"
+                )
+
+        return account
+
+    def _hash_password(self, password, password_salt):
+        return hashlib.pbkdf2_hmac(
+            "sha256",
+            str(password).encode("utf-8"),
+            bytes.fromhex(password_salt),
+            PASSWORD_HASH_ITERATIONS,
+        ).hex()
 
     def _normalize_final_summary_rows(self, trips):
         if not isinstance(trips, list):

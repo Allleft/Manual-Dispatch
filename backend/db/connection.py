@@ -71,6 +71,18 @@ def _ensure_manual_dispatch_columns(connection):
         "is_deleted",
         "INTEGER NOT NULL DEFAULT 0",
     )
+    _ensure_column(
+        connection,
+        "final_trip_summaries",
+        "saved_by_account_name",
+        "TEXT NOT NULL DEFAULT 'Unknown'",
+    )
+    _ensure_column(
+        connection,
+        "final_trip_summaries",
+        "saved_by_account_id",
+        "INTEGER",
+    )
 
 
 def _ensure_column(connection, table_name, column_name, column_definition):

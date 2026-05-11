@@ -37,6 +37,7 @@ def _write_summary_sheet(worksheet, summary):
         ("Date", summary.dispatch_date),
         ("Driver", summary.driver_name_snapshot),
         ("Rego #", summary.vehicle_rego_snapshot or "No vehicle selected"),
+        ("Saved By", summary.saved_by_account_name or "Unknown"),
         ("Total Pallets", summary.total_pallets),
         ("Total Loose Bags", summary.total_loose_bags),
     ]

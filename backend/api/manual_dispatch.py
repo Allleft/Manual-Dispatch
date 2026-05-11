@@ -7,6 +7,8 @@ from backend.schemas import (
     CreateDriverRequest,
     CreateOrderRequest,
     CreateVehicleRequest,
+    LoginOperatorAccountRequest,
+    RegisterOperatorAccountRequest,
     SaveFinalTripSummaryRequest,
     UnassignTaskRequest,
     UpdateDriverRequest,
@@ -47,6 +49,22 @@ def export_excel(dispatch_date: str):
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.post("/auth/register")
+def register_operator_account(request: RegisterOperatorAccountRequest):
+    try:
+        return to_dict(service.register_operator_account(request))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.post("/auth/login")
+def login_operator_account(request: LoginOperatorAccountRequest):
+    try:
+        return to_dict(service.login_operator_account(request))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
 
 
 @router.post("/assign")
@@ -215,6 +233,8 @@ def _save_final_trip_summary_request_from_payload(payload):
         total_loose_bags=payload.get("total_loose_bags") or 0,
         generated_at=payload.get("generated_at"),
         trips=payload.get("trips") or [],
+        saved_by_account_name=payload.get("saved_by_account_name"),
+        saved_by_account_id=payload.get("saved_by_account_id"),
     )
 
 

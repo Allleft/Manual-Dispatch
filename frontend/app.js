@@ -6,12 +6,22 @@ function getTodayLocalDateString(date = new Date()) {
 }
 
 const DEFAULT_DISPATCH_DATE = getTodayLocalDateString();
+const AUTH_ACCOUNT_NAME_SESSION_KEY = "manualDispatchAccountName";
+const AUTH_ACCOUNT_ID_SESSION_KEY = "manualDispatchAccountId";
 const API_BASE_URL =
   window.MANUAL_DISPATCH_API_BASE_URL ||
   (window.location.protocol === "file:" ? "http://127.0.0.1:8000" : "");
 
 const state = {
   dispatchDate: DEFAULT_DISPATCH_DATE,
+  accountName: "",
+  accountId: "",
+  isLoggedIn: false,
+  authMode: "login",
+  loginError: "",
+  registerError: "",
+  authSuccessMessage: "",
+  isAuthLoading: false,
   isLoading: false,
   isSaving: false,
   errorMessage: "",
@@ -172,6 +182,20 @@ async function apiAssignDriverVehicle(payload) {
   });
 }
 
+async function apiRegisterAccount(payload) {
+  return requestJson("/api/manual-dispatch/auth/register", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+async function apiLoginAccount(payload) {
+  return requestJson("/api/manual-dispatch/auth/login", {
+    method: "POST",
+    body: payload,
+  });
+}
+
 async function apiCreateOrder(payload) {
   return requestJson("/api/manual-dispatch/orders", {
     method: "POST",
@@ -275,6 +299,73 @@ async function downloadExcelResponse(response, fallbackFilename) {
   link.click();
   link.remove();
   URL.revokeObjectURL(downloadUrl);
+}
+
+function getSafeSessionStorage() {
+  try {
+    return window.sessionStorage;
+  } catch (error) {
+    return null;
+  }
+}
+
+function restoreAccountSession() {
+  const storage = getSafeSessionStorage();
+  if (!storage) {
+    return;
+  }
+
+  const accountName = storage.getItem(AUTH_ACCOUNT_NAME_SESSION_KEY) || "";
+  const accountId = storage.getItem(AUTH_ACCOUNT_ID_SESSION_KEY) || "";
+  if (!accountName) {
+    return;
+  }
+
+  state.accountName = accountName;
+  state.accountId = accountId;
+  state.isLoggedIn = true;
+}
+
+function saveAccountSession(identity) {
+  const storage = getSafeSessionStorage();
+  if (!storage) {
+    return;
+  }
+
+  storage.setItem(AUTH_ACCOUNT_NAME_SESSION_KEY, identity.account_name || "");
+  storage.setItem(AUTH_ACCOUNT_ID_SESSION_KEY, String(identity.account_id || ""));
+}
+
+function clearAccountSession() {
+  const storage = getSafeSessionStorage();
+  if (!storage) {
+    return;
+  }
+
+  storage.removeItem(AUTH_ACCOUNT_NAME_SESSION_KEY);
+  storage.removeItem(AUTH_ACCOUNT_ID_SESSION_KEY);
+}
+
+function applyLoggedInAccount(identity) {
+  state.accountName = identity.account_name || "";
+  state.accountId = identity.account_id ? String(identity.account_id) : "";
+  state.isLoggedIn = Boolean(state.accountName);
+  state.loginError = "";
+  state.registerError = "";
+  state.authSuccessMessage = "";
+  saveAccountSession(identity);
+}
+
+function logoutAccount() {
+  state.accountName = "";
+  state.accountId = "";
+  state.isLoggedIn = false;
+  state.authMode = "login";
+  state.loginError = "";
+  state.registerError = "";
+  state.authSuccessMessage = "";
+  clearAccountSession();
+  renderBoard();
 }
 
 async function loadBoard(dispatchDate = state.dispatchDate, options = {}) {
@@ -910,6 +1001,10 @@ function normalizeFinalSummary(summary) {
     status: summary.status || (summary.summary_id ? "SAVED" : "LOCKED"),
     generated_at: summary.generated_at || "",
     saved_at: summary.saved_at || "",
+    saved_by_account_name:
+      summary.saved_by_account_name ||
+      (summary.summary_id ? "Unknown" : state.accountName || "Unknown"),
+    saved_by_account_id: summary.saved_by_account_id || "",
     trips: (summary.trips || [])
       .map((trip) => ({
         trip_no: trip.trip_no,
@@ -1360,6 +1455,8 @@ function buildFinalTripSummarySnapshot(driverId) {
     vehicle_rego_snapshot: selectedVehicle ? selectedVehicle.rego : "No vehicle selected",
     total_pallets: allOrders.reduce((total, order) => total + Number(order.pallet_quantity || 0), 0),
     total_loose_bags: allOrders.reduce((total, order) => total + Number(order.loose_bags_quantity || 0), 0),
+    saved_by_account_name: state.accountName || "",
+    saved_by_account_id: state.accountId || "",
     status: "LOCKED",
     trips,
   };
@@ -1442,6 +1539,8 @@ function getFinalSummarySavePayload(summary) {
     total_pallets: normalized.total_pallets,
     total_loose_bags: normalized.total_loose_bags,
     generated_at: normalized.generated_at,
+    saved_by_account_name: state.accountName || normalized.saved_by_account_name,
+    saved_by_account_id: state.accountId || normalized.saved_by_account_id || null,
     trips: normalized.trips.map((trip) => ({
       trip_no: trip.trip_no,
       orders: trip.orders.map((order) => ({
@@ -1494,6 +1593,13 @@ async function handleSaveAllFinalSummaries() {
   state.finalSummaryGlobalSaveError = "";
   state.finalSummaryGlobalSaveSuccess = "";
 
+  if (!state.isLoggedIn || !state.accountName) {
+    state.finalSummaryGlobalSaveError =
+      "Please log in before saving and exporting Final Trip Summary.";
+    renderFinalTripSummaries();
+    return;
+  }
+
   if (unsavedSummaries.length === 0) {
     state.finalSummaryGlobalSaveError = "Generate at least one Final Trip Summary before saving and exporting.";
     renderFinalTripSummaries();
@@ -1519,7 +1625,7 @@ async function handleSaveAllFinalSummaries() {
 
     await exportFinalSummariesExcel(state.dispatchDate);
 
-    state.finalSummaryGlobalSaveSuccess = "Final Summary saved and exported.";
+    state.finalSummaryGlobalSaveSuccess = `Final Trip Summary saved and exported by ${state.accountName}.`;
     state.historyLoaded = false;
     await loadFinalSummaryDates({ render: false });
     state.isSavingFinalSummaries = false;
@@ -1552,6 +1658,252 @@ async function handleLoadFinalSummaryHistory() {
     state.isHistoryLoading = false;
     renderBoard();
   }
+}
+
+async function handleLogin(event) {
+  event.preventDefault();
+  if (state.isAuthLoading) {
+    return;
+  }
+
+  const form = event.currentTarget;
+  const accountNameInput = form.querySelector('input[name="account_name"]');
+  const passwordInput = form.querySelector('input[name="password"]');
+  const accountName = accountNameInput ? accountNameInput.value.trim() : "";
+  const password = passwordInput ? passwordInput.value : "";
+
+  state.isAuthLoading = true;
+  state.loginError = "";
+  state.authSuccessMessage = "";
+  renderAuthGate();
+
+  try {
+    const identity = await apiLoginAccount({ account_name: accountName, password });
+    applyLoggedInAccount(identity);
+  } catch (error) {
+    state.loginError = error.message || "Invalid account name or password";
+  } finally {
+    if (passwordInput) {
+      passwordInput.value = "";
+    }
+    state.isAuthLoading = false;
+    renderBoard();
+  }
+}
+
+async function handleRegister(event) {
+  event.preventDefault();
+  if (state.isAuthLoading) {
+    return;
+  }
+
+  const form = event.currentTarget;
+  const accountNameInput = form.querySelector('input[name="account_name"]');
+  const passwordInput = form.querySelector('input[name="password"]');
+  const confirmPasswordInput = form.querySelector('input[name="confirm_password"]');
+  const accountName = accountNameInput ? accountNameInput.value.trim() : "";
+  const password = passwordInput ? passwordInput.value : "";
+  const confirmPassword = confirmPasswordInput ? confirmPasswordInput.value : "";
+
+  state.isAuthLoading = true;
+  state.registerError = "";
+  state.authSuccessMessage = "";
+  renderAuthGate();
+
+  try {
+    const identity = await apiRegisterAccount({
+      account_name: accountName,
+      password,
+      confirm_password: confirmPassword,
+    });
+    applyLoggedInAccount(identity);
+  } catch (error) {
+    state.registerError = error.message || "Unable to create account";
+  } finally {
+    if (passwordInput) {
+      passwordInput.value = "";
+    }
+    if (confirmPasswordInput) {
+      confirmPasswordInput.value = "";
+    }
+    state.isAuthLoading = false;
+    renderBoard();
+  }
+}
+
+function switchAuthMode(mode) {
+  state.authMode = mode;
+  state.loginError = "";
+  state.registerError = "";
+  state.authSuccessMessage = "";
+  renderAuthGate();
+}
+
+function renderAccountStatus() {
+  const accountStatus = document.querySelector("#account-status");
+  if (!accountStatus) {
+    return;
+  }
+
+  accountStatus.innerHTML = "";
+  if (!state.isLoggedIn) {
+    const badge = document.createElement("p");
+    badge.className = "account-badge";
+    badge.textContent = "Login required";
+    accountStatus.append(badge);
+    return;
+  }
+
+  const badge = document.createElement("p");
+  badge.className = "account-badge";
+  badge.textContent = `Logged in as: ${state.accountName}`;
+
+  const logoutButton = document.createElement("button");
+  logoutButton.type = "button";
+  logoutButton.className = "button-secondary";
+  logoutButton.textContent = "Logout";
+  logoutButton.addEventListener("click", logoutAccount);
+
+  accountStatus.append(badge, logoutButton);
+}
+
+function renderAuthGate() {
+  const root = document.querySelector("#auth-root");
+  const boardShell = document.querySelector(".board-shell");
+  if (!root) {
+    return;
+  }
+
+  if (boardShell) {
+    boardShell.classList.toggle("board-locked", !state.isLoggedIn);
+    boardShell.setAttribute("aria-hidden", state.isLoggedIn ? "false" : "true");
+  }
+
+  root.innerHTML = "";
+  if (state.isLoggedIn) {
+    return;
+  }
+
+  const backdrop = document.createElement("div");
+  backdrop.className = "detail-backdrop auth-backdrop";
+
+  const modal = document.createElement("section");
+  modal.className = "order-detail-modal auth-modal";
+  modal.setAttribute("role", "dialog");
+  modal.setAttribute("aria-modal", "true");
+  modal.setAttribute("aria-labelledby", "auth-title");
+  modal.addEventListener("click", (event) => event.stopPropagation());
+
+  const kicker = document.createElement("p");
+  kicker.className = "section-kicker";
+  kicker.textContent = "Operator login";
+
+  const title = document.createElement("h2");
+  title.id = "auth-title";
+  title.textContent =
+    state.authMode === "register" ? "Create operator account" : "Login to Manual Dispatch Board";
+
+  const note = document.createElement("p");
+  note.className = "auth-note";
+  note.textContent =
+    "Use an operator account name and password. Passwords are not stored in plain text.";
+
+  const form = document.createElement("form");
+  form.className = "auth-form";
+  form.addEventListener("submit", state.authMode === "register" ? handleRegister : handleLogin);
+
+  form.append(
+    createAuthInput("Account Name / Username", "account_name", {
+      autocomplete: "username",
+      minlength: 2,
+      maxlength: 50,
+      required: true,
+    }),
+    createAuthInput("Password", "password", {
+      type: "password",
+      autocomplete: state.authMode === "register" ? "new-password" : "current-password",
+      minlength: 6,
+      required: true,
+    }),
+  );
+
+  if (state.authMode === "register") {
+    form.append(
+      createAuthInput("Confirm Password", "confirm_password", {
+        type: "password",
+        autocomplete: "new-password",
+        minlength: 6,
+        required: true,
+      }),
+    );
+  }
+
+  const error = document.createElement("p");
+  error.className = "board-error";
+  error.hidden =
+    state.authMode === "register" ? !state.registerError : !state.loginError;
+  error.textContent =
+    state.authMode === "register" ? state.registerError : state.loginError;
+
+  const success = document.createElement("p");
+  success.className = "board-status";
+  success.hidden = !state.authSuccessMessage;
+  success.textContent = state.authSuccessMessage;
+
+  const actions = document.createElement("div");
+  actions.className = "form-actions auth-actions";
+
+  const switchButton = document.createElement("button");
+  switchButton.type = "button";
+  switchButton.className = "button-secondary";
+  switchButton.disabled = state.isAuthLoading;
+  switchButton.textContent =
+    state.authMode === "register" ? "Back to login" : "Create account";
+  switchButton.addEventListener("click", () => {
+    switchAuthMode(state.authMode === "register" ? "login" : "register");
+  });
+
+  const submitButton = document.createElement("button");
+  submitButton.type = "submit";
+  submitButton.disabled = state.isAuthLoading;
+  submitButton.textContent =
+    state.authMode === "register"
+      ? state.isAuthLoading
+        ? "Creating..."
+        : "Create account"
+      : state.isAuthLoading
+      ? "Logging in..."
+      : "Login";
+
+  actions.append(switchButton, submitButton);
+  form.append(error, success, actions);
+  modal.append(kicker, title, note, form);
+  backdrop.append(modal);
+  root.append(backdrop);
+}
+
+function createAuthInput(label, name, options = {}) {
+  const wrapper = document.createElement("label");
+  wrapper.className = "form-field";
+  wrapper.textContent = label;
+
+  const input = document.createElement("input");
+  input.name = name;
+  input.type = options.type || "text";
+  input.required = Boolean(options.required);
+  input.disabled = state.isAuthLoading;
+  if (options.minlength) {
+    input.minLength = options.minlength;
+  }
+  if (options.maxlength) {
+    input.maxLength = options.maxlength;
+  }
+  if (options.autocomplete) {
+    input.autocomplete = options.autocomplete;
+  }
+
+  wrapper.append(input);
+  return wrapper;
 }
 
 function renderBoardControls() {
@@ -2056,6 +2408,7 @@ function renderFinalSummaryControls() {
 
   if (saveButton) {
     saveButton.disabled =
+      !state.isLoggedIn ||
       state.isLoading ||
       state.isSaving ||
       state.isSavingFinalSummaries ||
@@ -2096,8 +2449,11 @@ function renderFinalSummaryControls() {
   }
 
   if (message) {
+    const loginBlocked = !state.isLoggedIn && unsavedSummaries.length > 0;
     const helperMessage =
-      unsavedSummaries.length === 0
+      loginBlocked
+        ? "Please log in before saving and exporting Final Trip Summary."
+        : unsavedSummaries.length === 0
         ? "No unsaved Final Summary to save and export."
         : `${unsavedSummaries.length} generated summary${
             unsavedSummaries.length === 1 ? "" : "ies"
@@ -2106,7 +2462,8 @@ function renderFinalSummaryControls() {
       state.finalSummaryGlobalSaveError ||
       state.finalSummaryGlobalSaveSuccess ||
       helperMessage;
-    message.className = state.finalSummaryGlobalSaveError ? "board-error" : "board-status";
+    message.className =
+      state.finalSummaryGlobalSaveError || loginBlocked ? "board-error" : "board-status";
     message.hidden = false;
     message.textContent = text;
   }
@@ -2226,6 +2583,10 @@ function createFinalTripSummaryCard(summary, options = {}) {
     createDetailField("Date", summary.dispatch_date),
     createDetailField("Driver", summary.driver_name),
     createDetailField("Rego #", summary.vehicle_rego),
+    createDetailField(
+      isSaved ? "Saved by" : "Will be saved by",
+      summary.saved_by_account_name || "Unknown",
+    ),
     createDetailField("Total Pallets", summary.total_pallets),
     createDetailField("Total Loose Bags", summary.total_loose_bags),
   );
@@ -3135,6 +3496,7 @@ function renderOrderDetailPopup() {
 }
 
 function renderBoard() {
+  renderAccountStatus();
   renderBoardControls();
   renderTaskPoolFilters();
   renderTaskPool();
@@ -3143,8 +3505,10 @@ function renderBoard() {
   renderOrderDetailPopup();
   renderAddOrderPopup();
   renderSpecificationModal();
+  renderAuthGate();
 }
 
+restoreAccountSession();
 renderBoard();
 loadBoard(state.dispatchDate);
 loadFinalSummaryDates();

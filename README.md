@@ -15,7 +15,7 @@ This project is intentionally not a route optimizer. It does not automatically s
 
 ## Current Status
 
-Current status: Phase 14B, with follow-up UI/date-default polish on `feature/manual-dispatch-board`.
+Current status: Phase 15 on `feature/manual-dispatch-board`.
 
 Implemented focus areas:
 
@@ -23,6 +23,7 @@ Implemented focus areas:
 - Order lifecycle: Add, Edit, Cancel via soft delete.
 - Driver and Vehicle master-data management through the Driver & Vehicle Specification modal.
 - Final Trip Summary generation, save/history, and Excel export from saved snapshot records.
+- Lightweight database-backed operator login for Final Trip Summary attribution.
 - Dispatch Date defaults to the browser's local current date. Demo data may still be dated `2026-05-05`, so today's Task Pool can be empty unless local data exists for today.
 
 Runtime SQLite database files are local and ignored by Git.
@@ -31,6 +32,8 @@ Runtime SQLite database files are local and ignored by Git.
 
 ### Dispatch Board
 
+- Login/register gate using Account Name + Password before the board can be used.
+- Logged-in operator badge and Logout button in the page header.
 - Dispatch Date board loading.
 - Top-bottom layout:
   - Top: Task Pool.
@@ -79,14 +82,24 @@ Runtime SQLite database files are local and ignored by Git.
 - Generated Orders are unassigned through the backend API and hidden from Task Pool in the same browser session.
 - Generated-but-unsaved Final Trip Summary snapshots are frontend-memory only and can be lost on refresh.
 - One global Save and Export button saves all generated unsaved summaries.
+- Save and Export requires a logged-in operator account.
 - Saved Final Trip Summaries are persisted to SQLite as historical snapshots.
+- Saved summaries record the logged-in account name as the operator attribution.
 - Saving marks included Orders as `FINALIZED`.
 - `FINALIZED` Orders are hidden from Task Pool and editable Trip Summary.
 - Saved history can be loaded by History Date in the Final Trip Summary section.
 - Saved summaries do not update when live Orders, Drivers, or Vehicles are later edited.
 - Duplicate saved summaries for the same Driver + Dispatch Date are rejected.
-- Final Trip Summary Excel export uses saved snapshot fields and excludes Generated At / Saved At.
+- Final Trip Summary Excel export uses saved snapshot fields, includes `Saved By`, and excludes Generated At / Saved At.
 - The older active-assignment Excel export route remains in the backend for compatibility, but it is not exposed as a top-level frontend button.
+
+### Operator Accounts
+
+- Operator accounts are stored in SQLite.
+- Passwords are stored as salted PBKDF2-HMAC-SHA256 hashes, not plain text.
+- Login returns account identity only: account id and account name.
+- Raw passwords, password hashes, and salts are not displayed, exported, logged, or returned by the API.
+- This is lightweight MVP/demo login, not production enterprise authentication.
 
 ## Project Structure
 
@@ -174,7 +187,8 @@ Do not add these unless explicitly requested:
 - automatic route sequencing
 - capacity-based blocking
 - zone-based blocking
-- login/auth
+- external auth providers
+- role-based access control
 - MySQL/MariaDB
 
 ## Documentation / Phase Notes
@@ -215,6 +229,7 @@ Do not add these unless explicitly requested:
 - [Phase 13 closed-loop stabilization](docs/manual-dispatch-board-phase13-final-summary-closed-loop.md)
 - [Phase 14 redesign and demo reset](docs/manual-dispatch-board-phase14-final-summary-redesign.md)
 - [Phase 14B save and export polish](docs/manual-dispatch-board-phase14b-final-summary-save-export.md)
+- [Phase 15 login and operator attribution](docs/manual-dispatch-board-phase15-login-final-summary-operator.md)
 
 ### Driver, Vehicle, and UI Stability
 

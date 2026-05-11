@@ -102,12 +102,36 @@ h1 {
   font-weight: 800;
 }
 
+.account-status {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.account-badge {
+  margin-bottom: 0;
+  border: 1px solid rgba(39, 93, 69, 0.22);
+  border-radius: 999px;
+  padding: 0.72rem 0.9rem;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  font-weight: 900;
+}
+
 .board-shell {
   display: grid;
   gap: 1.25rem;
   max-width: 1180px;
   margin: 0 auto;
   padding: 0 1.25rem 3rem;
+}
+
+.board-shell.board-locked {
+  pointer-events: none;
+  user-select: none;
+  filter: blur(2px);
 }
 
 .board-section {
@@ -953,6 +977,28 @@ select:disabled {
   padding: 1.2rem;
   background: var(--panel);
   box-shadow: 0 30px 80px rgba(23, 33, 29, 0.28);
+}
+
+.auth-backdrop {
+  z-index: 40;
+}
+
+.auth-modal {
+  width: min(520px, 100%);
+}
+
+.auth-note {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.auth-form {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.auth-actions {
+  align-items: center;
 }
 
 .detail-header {

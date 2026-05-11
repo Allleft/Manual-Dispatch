@@ -6,6 +6,7 @@ from backend.schemas import (
     ManualDispatchAssignment,
     ManualDriverVehicleAssignment,
     Order,
+    OperatorAccountRecord,
     Vehicle,
 )
 
@@ -146,9 +147,11 @@ class InMemoryManualDispatchRepository:
         self.assignments = []
         self.driver_vehicle_assignments = []
         self.final_trip_summaries = []
+        self.operator_accounts = []
         self._next_assignment_number = 1
         self._next_final_summary_number = 1
         self._next_final_summary_row_number = 1
+        self._next_operator_account_id = 1
 
     def list_orders(self, delivery_date=None):
         return [
@@ -255,6 +258,27 @@ class InMemoryManualDispatchRepository:
             None,
         )
 
+    def get_operator_account_by_name(self, account_name):
+        normalized_name = str(account_name or "").strip().lower()
+        return next(
+            (
+                account
+                for account in self.operator_accounts
+                if account.account_name.lower() == normalized_name
+            ),
+            None,
+        )
+
+    def get_operator_account_by_id(self, account_id):
+        return next(
+            (
+                account
+                for account in self.operator_accounts
+                if account.account_id == account_id
+            ),
+            None,
+        )
+
     def get_task(self, task_type, task_id):
         if task_type == "ORDER":
             order = self.get_order(task_id)
@@ -307,6 +331,21 @@ class InMemoryManualDispatchRepository:
             raise ValueError(f"Vehicle already exists: {vehicle.vehicle_id}")
         self.vehicles.append(vehicle)
         return vehicle
+
+    def create_operator_account(self, account_name, password_hash, password_salt):
+        if self.get_operator_account_by_name(account_name):
+            raise ValueError("Account name already exists")
+        account = OperatorAccountRecord(
+            account_id=self._next_operator_account_id,
+            account_name=account_name,
+            password_hash=password_hash,
+            password_salt=password_salt,
+            created_at="in-memory",
+            updated_at="in-memory",
+        )
+        self._next_operator_account_id += 1
+        self.operator_accounts.append(account)
+        return account
 
     def update_vehicle(self, vehicle):
         for index, existing in enumerate(self.vehicles):
@@ -480,6 +519,8 @@ class InMemoryManualDispatchRepository:
             status="SAVED",
             generated_at=summary.get("generated_at") or saved_at,
             saved_at=saved_at,
+            saved_by_account_name=summary.get("saved_by_account_name") or "Unknown",
+            saved_by_account_id=summary.get("saved_by_account_id"),
             trips=trips,
         )
         self.final_trip_summaries.append(final_summary)

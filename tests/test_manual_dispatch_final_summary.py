@@ -12,6 +12,7 @@ from backend.repositories.sqlite_manual_dispatch_repository import (
 from backend.schemas import (
     AssignDriverVehicleRequest,
     AssignTaskRequest,
+    RegisterOperatorAccountRequest,
     SaveFinalTripSummaryRequest,
 )
 from backend.services.manual_dispatch_service import ManualDispatchService
@@ -34,6 +35,13 @@ class ManualDispatchFinalSummaryTest(unittest.TestCase):
         self.repository = SQLiteManualDispatchRepository(self.db_path)
         self.service = ManualDispatchService(self.repository)
         self.dispatch_date = "2026-05-05"
+        self.account = self.service.register_operator_account(
+            RegisterOperatorAccountRequest(
+                account_name="Mandy",
+                password="secret123",
+                confirm_password="secret123",
+            )
+        )
 
     def tearDown(self):
         shutil.rmtree(self.temp_dir, ignore_errors=True)
@@ -58,6 +66,7 @@ class ManualDispatchFinalSummaryTest(unittest.TestCase):
 
         self.assertTrue(summary.summary_id.startswith("FTS-"))
         self.assertEqual("John", summary.driver_name_snapshot)
+        self.assertEqual("Mandy", summary.saved_by_account_name)
         self.assertEqual("XYZ888", summary.vehicle_rego_snapshot)
         self.assertEqual(1, len(summary.trips))
         self.assertEqual("trip1", summary.trips[0].trip_no)
@@ -122,6 +131,8 @@ class ManualDispatchFinalSummaryTest(unittest.TestCase):
                 total_pallets=0,
                 total_loose_bags=12,
                 generated_at="2026-05-06T00:00:00Z",
+                saved_by_account_name=self.account.account_name,
+                saved_by_account_id=self.account.account_id,
                 trips=[self._trip_payload("trip1", [self._order_payload("ORD-002")])],
             )
         )
@@ -194,7 +205,49 @@ class ManualDispatchFinalSummaryTest(unittest.TestCase):
                     total_pallets=0,
                     total_loose_bags=0,
                     generated_at="2026-05-05T00:00:00Z",
+                    saved_by_account_name=self.account.account_name,
+                    saved_by_account_id=self.account.account_id,
                     trips=[],
+                )
+            )
+
+    def test_save_final_summary_rejects_missing_saved_by_account_name(self):
+        self._assign_order("ORD-001", "D001", "trip1")
+
+        with self.assertRaisesRegex(ValueError, "saved_by_account_name is required"):
+            self.service.save_final_trip_summary(
+                SaveFinalTripSummaryRequest(
+                    dispatch_date=self.dispatch_date,
+                    driver_id="D001",
+                    driver_name_snapshot="John",
+                    vehicle_id=None,
+                    vehicle_rego_snapshot=None,
+                    total_pallets=2,
+                    total_loose_bags=0,
+                    generated_at="2026-05-05T00:00:00Z",
+                    trips=[self._trip_payload("trip1", [self._order_payload("ORD-001")])],
+                )
+            )
+
+    def test_save_final_summary_rejects_unknown_saved_by_account_name(self):
+        self._assign_order("ORD-001", "D001", "trip1")
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "saved_by_account_name must reference a registered account",
+        ):
+            self.service.save_final_trip_summary(
+                SaveFinalTripSummaryRequest(
+                    dispatch_date=self.dispatch_date,
+                    driver_id="D001",
+                    driver_name_snapshot="John",
+                    vehicle_id=None,
+                    vehicle_rego_snapshot=None,
+                    total_pallets=2,
+                    total_loose_bags=0,
+                    generated_at="2026-05-05T00:00:00Z",
+                    saved_by_account_name="Unknown Operator",
+                    trips=[self._trip_payload("trip1", [self._order_payload("ORD-001")])],
                 )
             )
 
@@ -271,6 +324,8 @@ class ManualDispatchFinalSummaryTest(unittest.TestCase):
             total_pallets=2,
             total_loose_bags=0,
             generated_at="2026-05-05T00:00:00Z",
+            saved_by_account_name=self.account.account_name,
+            saved_by_account_id=self.account.account_id,
             trips=trips
             if trips is not None
             else [self._trip_payload("trip1", [self._order_payload("ORD-001")])],
@@ -309,6 +364,13 @@ class ManualDispatchFinalSummaryRouteTest(unittest.TestCase):
 
         self.repository = SQLiteManualDispatchRepository(self.db_path)
         self.service = ManualDispatchService(self.repository)
+        self.account = self.service.register_operator_account(
+            RegisterOperatorAccountRequest(
+                account_name="Mandy",
+                password="secret123",
+                confirm_password="secret123",
+            )
+        )
         self.api_module = importlib.import_module("backend.api.manual_dispatch")
         self.original_service = self.api_module.service
         self.api_module.service = self.service
@@ -337,6 +399,7 @@ class ManualDispatchFinalSummaryRouteTest(unittest.TestCase):
         self.assertEqual(200, response.status_code)
         saved_payload = response.json()
         self.assertTrue(saved_payload["summary_id"].startswith("FTS-"))
+        self.assertEqual("Mandy", saved_payload["saved_by_account_name"])
 
         history_response = self.client.get(
             "/api/manual-dispatch/final-summaries",
@@ -349,7 +412,22 @@ class ManualDispatchFinalSummaryRouteTest(unittest.TestCase):
             [saved_payload["summary_id"]],
             [item["summary_id"] for item in history_response.json()],
         )
+        self.assertEqual("Mandy", history_response.json()[0]["saved_by_account_name"])
         self.assertNotIn("ORD-001", [order.order_id for order in board.orders])
+
+    def test_final_summary_api_rejects_missing_saved_by_account_name(self):
+        self._assign_order("ORD-001", "D001", "trip1")
+        payload = self._summary_payload()
+        payload.pop("saved_by_account_name")
+        payload.pop("saved_by_account_id")
+
+        response = self.client.post(
+            "/api/manual-dispatch/final-summaries",
+            json=payload,
+        )
+
+        self.assertEqual(400, response.status_code)
+        self.assertIn("saved_by_account_name is required", response.json()["detail"])
 
     def test_final_summary_api_rejects_duplicate_driver_date_summary(self):
         self._assign_order("ORD-001", "D001", "trip1")
@@ -403,6 +481,8 @@ class ManualDispatchFinalSummaryRouteTest(unittest.TestCase):
             "total_pallets": order.pallet_quantity,
             "total_loose_bags": order.loose_bags_quantity,
             "generated_at": "2026-05-05T00:00:00Z",
+            "saved_by_account_name": self.account.account_name,
+            "saved_by_account_id": self.account.account_id,
             "trips": [
                 {
                     "trip_no": "trip1",

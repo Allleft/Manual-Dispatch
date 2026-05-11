@@ -12,7 +12,11 @@ from openpyxl import load_workbook
 from backend.repositories.sqlite_manual_dispatch_repository import (
     SQLiteManualDispatchRepository,
 )
-from backend.schemas import AssignTaskRequest, SaveFinalTripSummaryRequest
+from backend.schemas import (
+    AssignTaskRequest,
+    RegisterOperatorAccountRequest,
+    SaveFinalTripSummaryRequest,
+)
 from backend.services.final_summary_excel_export_service import build_final_summary_excel
 from backend.services.manual_dispatch_service import ManualDispatchService
 
@@ -34,6 +38,13 @@ class ManualDispatchFinalSummaryExportTest(unittest.TestCase):
         self.repository = SQLiteManualDispatchRepository(self.db_path)
         self.service = ManualDispatchService(self.repository)
         self.dispatch_date = "2026-05-05"
+        self.account = self.service.register_operator_account(
+            RegisterOperatorAccountRequest(
+                account_name="Mandy",
+                password="secret123",
+                confirm_password="secret123",
+            )
+        )
 
     def tearDown(self):
         shutil.rmtree(self.temp_dir, ignore_errors=True)
@@ -61,6 +72,8 @@ class ManualDispatchFinalSummaryExportTest(unittest.TestCase):
         self.assertIn("Snapshot Driver", values)
         self.assertIn("Rego #", values)
         self.assertIn("SNAP123", values)
+        self.assertIn("Saved By", values)
+        self.assertIn("Mandy", values)
         self.assertIn("Trip 1", values)
         self.assertIn("Trip 2", values)
         self.assertIn("No.", values)
@@ -94,6 +107,18 @@ class ManualDispatchFinalSummaryExportTest(unittest.TestCase):
 
         self.assertNotIn("Generated At", values)
         self.assertNotIn("Saved At", values)
+
+    def test_export_does_not_include_password_data(self):
+        self._assign_order("ORD-001", "D001", "trip1")
+        self.service.save_final_trip_summary(self._summary_request())
+
+        values = self._flat_values(self._load_export_workbook())
+        normalized_values = [str(value).lower() for value in values]
+
+        self.assertFalse(any("password" in value for value in normalized_values))
+        self.assertFalse(any("password_hash" in value for value in normalized_values))
+        self.assertFalse(any("password_salt" in value for value in normalized_values))
+        self.assertNotIn("secret123", values)
 
     def test_export_uses_snapshots_after_live_records_change(self):
         self._assign_order("ORD-001", "D001", "trip1")
@@ -171,6 +196,8 @@ class ManualDispatchFinalSummaryExportTest(unittest.TestCase):
             total_pallets=0,
             total_loose_bags=0,
             generated_at="2026-05-05T00:00:00Z",
+            saved_by_account_name=self.account.account_name,
+            saved_by_account_id=self.account.account_id,
             trips=trips
             if trips is not None
             else [self._trip_payload("trip1", [self._order_payload("ORD-001")])],
@@ -209,6 +236,13 @@ class ManualDispatchFinalSummaryExportRouteTest(unittest.TestCase):
 
         self.repository = SQLiteManualDispatchRepository(self.db_path)
         self.service = ManualDispatchService(self.repository)
+        self.account = self.service.register_operator_account(
+            RegisterOperatorAccountRequest(
+                account_name="Mandy",
+                password="secret123",
+                confirm_password="secret123",
+            )
+        )
         self.api_module = importlib.import_module("backend.api.manual_dispatch")
         self.original_service = self.api_module.service
         self.api_module.service = self.service
@@ -267,6 +301,8 @@ class ManualDispatchFinalSummaryExportRouteTest(unittest.TestCase):
             total_pallets=order.pallet_quantity,
             total_loose_bags=order.loose_bags_quantity,
             generated_at="2026-05-05T00:00:00Z",
+            saved_by_account_name=self.account.account_name,
+            saved_by_account_id=self.account.account_id,
             trips=[
                 {
                     "trip_no": "trip1",

@@ -9,6 +9,7 @@ from backend.schemas import (
     ManualDispatchAssignment,
     ManualDriverVehicleAssignment,
     Order,
+    OperatorAccountRecord,
     Vehicle,
 )
 
@@ -204,6 +205,30 @@ class SQLiteManualDispatchRepository:
                 (vehicle_id,),
             ).fetchone()
         return self._row_to_vehicle(row) if row else None
+
+    def get_operator_account_by_name(self, account_name):
+        with connect(self.db_path) as connection:
+            row = connection.execute(
+                """
+                SELECT *
+                FROM operator_accounts
+                WHERE account_name = ? COLLATE NOCASE
+                """,
+                (account_name,),
+            ).fetchone()
+        return self._row_to_operator_account(row) if row else None
+
+    def get_operator_account_by_id(self, account_id):
+        with connect(self.db_path) as connection:
+            row = connection.execute(
+                """
+                SELECT *
+                FROM operator_accounts
+                WHERE id = ?
+                """,
+                (account_id,),
+            ).fetchone()
+        return self._row_to_operator_account(row) if row else None
 
     def get_task(self, task_type, task_id):
         if task_type == "ORDER":
@@ -433,6 +458,25 @@ class SQLiteManualDispatchRepository:
             )
             connection.commit()
         return self.get_vehicle(vehicle.vehicle_id)
+
+    def create_operator_account(self, account_name, password_hash, password_salt):
+        timestamp = self._timestamp()
+        with connect(self.db_path) as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO operator_accounts (
+                    account_name,
+                    password_hash,
+                    password_salt,
+                    created_at,
+                    updated_at
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (account_name, password_hash, password_salt, timestamp, timestamp),
+            )
+            account_id = cursor.lastrowid
+            connection.commit()
+        return self.get_operator_account_by_id(account_id)
 
     def update_vehicle(self, vehicle):
         with connect(self.db_path) as connection:
@@ -709,8 +753,10 @@ class SQLiteManualDispatchRepository:
                     total_loose_bags,
                     status,
                     generated_at,
-                    saved_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    saved_at,
+                    saved_by_account_name,
+                    saved_by_account_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     summary_id,
@@ -724,6 +770,8 @@ class SQLiteManualDispatchRepository:
                     "SAVED",
                     summary.get("generated_at") or timestamp,
                     timestamp,
+                    summary.get("saved_by_account_name") or "Unknown",
+                    summary.get("saved_by_account_id"),
                 ),
             )
 
@@ -942,6 +990,8 @@ class SQLiteManualDispatchRepository:
             status=row["status"],
             generated_at=row["generated_at"],
             saved_at=row["saved_at"],
+            saved_by_account_name=row["saved_by_account_name"] or "Unknown",
+            saved_by_account_id=row["saved_by_account_id"],
             trips=trips,
         )
 
@@ -961,6 +1011,16 @@ class SQLiteManualDispatchRepository:
             pallet_quantity_snapshot=row["pallet_quantity_snapshot"],
             loose_bags_quantity_snapshot=row["loose_bags_quantity_snapshot"],
             note_snapshot=row["note_snapshot"],
+        )
+
+    def _row_to_operator_account(self, row):
+        return OperatorAccountRecord(
+            account_id=row["id"],
+            account_name=row["account_name"],
+            password_hash=row["password_hash"],
+            password_salt=row["password_salt"],
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
         )
 
     def _timestamp(self):

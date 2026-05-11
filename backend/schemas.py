@@ -146,6 +146,8 @@ class FinalTripSummary:
     status: str
     generated_at: str
     saved_at: str
+    saved_by_account_name: str
+    saved_by_account_id: Optional[int]
     trips: List[FinalTripSummaryTrip]
 
 
@@ -160,6 +162,37 @@ class SaveFinalTripSummaryRequest:
     total_loose_bags: int
     generated_at: Optional[str]
     trips: List[dict]
+    saved_by_account_name: Optional[str] = None
+    saved_by_account_id: Optional[int] = None
+
+
+@dataclass
+class OperatorAccountRecord:
+    account_id: int
+    account_name: str
+    password_hash: str
+    password_salt: str
+    created_at: str
+    updated_at: str
+
+
+@dataclass
+class OperatorAccountIdentity:
+    account_id: int
+    account_name: str
+
+
+@dataclass
+class RegisterOperatorAccountRequest:
+    account_name: Optional[str] = None
+    password: Optional[str] = None
+    confirm_password: Optional[str] = None
+
+
+@dataclass
+class LoginOperatorAccountRequest:
+    account_name: Optional[str] = None
+    password: Optional[str] = None
 
 
 @dataclass

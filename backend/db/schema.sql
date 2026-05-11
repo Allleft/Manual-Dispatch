@@ -71,6 +71,15 @@ CREATE TABLE IF NOT EXISTS manual_driver_vehicle_assignments (
     FOREIGN KEY(vehicle_id) REFERENCES manual_vehicles(vehicle_id)
 );
 
+CREATE TABLE IF NOT EXISTS operator_accounts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+    password_hash TEXT NOT NULL,
+    password_salt TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS final_trip_summaries (
     summary_id TEXT PRIMARY KEY,
     dispatch_date TEXT NOT NULL,
@@ -82,7 +91,10 @@ CREATE TABLE IF NOT EXISTS final_trip_summaries (
     total_loose_bags INTEGER NOT NULL DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'SAVED',
     generated_at TEXT,
-    saved_at TEXT NOT NULL
+    saved_at TEXT NOT NULL,
+    saved_by_account_name TEXT NOT NULL DEFAULT 'Unknown',
+    saved_by_account_id INTEGER,
+    FOREIGN KEY(saved_by_account_id) REFERENCES operator_accounts(id)
 );
 
 CREATE TABLE IF NOT EXISTS final_trip_summary_rows (
