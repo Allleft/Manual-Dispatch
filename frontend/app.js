@@ -32,6 +32,7 @@ import {
   findDriverById,
   findVehicleById,
   getAssignedOrdersForDriver,
+  getAssignmentsForDriver,
   getOrderByTaskId,
   getSelectedVehicleForDriver,
   getTaskKey,
