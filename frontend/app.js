@@ -22,65 +22,12 @@ import {
   formatApiErrorDetail,
   getFinalSummaryExcelExportUrl,
 } from "./js/api/manual-dispatch-api.js";
-import { getTodayLocalDateString } from "./js/utils/date-utils.js";
-
-const DEFAULT_DISPATCH_DATE = getTodayLocalDateString();
-const AUTH_ACCOUNT_NAME_SESSION_KEY = "manualDispatchAccountName";
-const AUTH_ACCOUNT_ID_SESSION_KEY = "manualDispatchAccountId";
-
-const state = {
-  dispatchDate: DEFAULT_DISPATCH_DATE,
-  accountName: "",
-  accountId: "",
-  isLoggedIn: false,
-  authMode: "login",
-  loginError: "",
-  registerError: "",
-  authSuccessMessage: "",
-  resetError: "",
-  isAuthLoading: false,
-  isLoading: false,
-  isSaving: false,
-  errorMessage: "",
-  orders: [],
-  drivers: [],
-  vehicles: [],
-  assignments: [],
-  driverVehicleAssignments: [],
-  pendingSelections: {},
-  taskPoolSearch: "",
-  urgencyFilter: "All",
-  finalTripSummaries: {},
-  generatedTaskKeys: new Set(),
-  isSavingFinalSummaries: false,
-  finalSummaryGlobalSaveError: "",
-  finalSummaryGlobalSaveSuccess: "",
-  finalSummaryDates: [],
-  historyDate: DEFAULT_DISPATCH_DATE,
-  finalSummaryHistory: [],
-  isHistoryLoading: false,
-  historyLoaded: false,
-  historyError: "",
-  isSpecificationModalOpen: false,
-  specificationDrivers: [],
-  specificationVehicles: [],
-  specificationError: "",
-  specificationLoading: false,
-  specificationSaving: false,
-  specificationActiveTab: "drivers",
-  specificationDirty: false,
-  driverSpecificationForm: null,
-  driverSpecificationEditingId: "",
-  vehicleSpecificationForm: null,
-  vehicleSpecificationEditingId: "",
-  activeOrderDetailId: "",
-  isAddOrderOpen: false,
-  addOrderError: "",
-  addOrderForm: {},
-  isOrderEditMode: false,
-  orderEditError: "",
-  orderEditForm: {},
-};
+import {
+  AUTH_ACCOUNT_ID_SESSION_KEY,
+  AUTH_ACCOUNT_NAME_SESSION_KEY,
+  DEFAULT_DISPATCH_DATE,
+  state,
+} from "./js/state/app-state.js";
 
 function normalizeBoardResponse(payload) {
   return {
