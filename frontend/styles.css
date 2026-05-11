@@ -680,7 +680,8 @@ select:disabled {
   margin-left: auto;
 }
 
-.final-summary-control-bar label {
+.final-summary-control-bar label,
+.final-summary-history-controls label {
   display: grid;
   gap: 0.35rem;
   color: var(--muted);
@@ -782,6 +783,14 @@ select:disabled {
   margin-top: 1.25rem;
   border-top: 1px solid var(--line);
   padding-top: 1rem;
+}
+
+.final-history-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
 }
 
 .final-history-panel h3 {
@@ -1149,6 +1158,15 @@ select:disabled {
 
   .final-summary-control-bar {
     grid-template-columns: 1fr;
+  }
+
+  .final-history-heading {
+    display: grid;
+  }
+
+  .final-summary-history-controls {
+    justify-content: flex-start;
+    margin-left: 0;
   }
 
   .final-trip-table {
