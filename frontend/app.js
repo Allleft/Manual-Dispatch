@@ -1,4 +1,11 @@
-const DEFAULT_DISPATCH_DATE = "2026-05-05";
+function getTodayLocalDateString(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+const DEFAULT_DISPATCH_DATE = getTodayLocalDateString();
 const API_BASE_URL =
   window.MANUAL_DISPATCH_API_BASE_URL ||
   (window.location.protocol === "file:" ? "http://127.0.0.1:8000" : "");
