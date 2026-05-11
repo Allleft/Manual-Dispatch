@@ -20,11 +20,22 @@ class SQLiteManualDispatchRepository:
         self.db_path = get_database_path(db_path)
         initialize_database(self.db_path)
 
-    def list_orders(self):
+    def list_orders(self, delivery_date=None):
         with connect(self.db_path) as connection:
-            rows = connection.execute(
-                "SELECT * FROM manual_orders WHERE status = 'ACTIVE' ORDER BY order_id"
-            ).fetchall()
+            if delivery_date:
+                rows = connection.execute(
+                    """
+                    SELECT *
+                    FROM manual_orders
+                    WHERE status = 'ACTIVE' AND delivery_date = ?
+                    ORDER BY order_id
+                    """,
+                    (delivery_date,),
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    "SELECT * FROM manual_orders WHERE status = 'ACTIVE' ORDER BY order_id"
+                ).fetchall()
         return [self._row_to_order(row) for row in rows]
 
     def list_drivers(self):

@@ -150,8 +150,13 @@ class InMemoryManualDispatchRepository:
         self._next_final_summary_number = 1
         self._next_final_summary_row_number = 1
 
-    def list_orders(self):
-        return [order for order in self.orders if order.status == "ACTIVE"]
+    def list_orders(self, delivery_date=None):
+        return [
+            order
+            for order in self.orders
+            if order.status == "ACTIVE"
+            and (not delivery_date or order.delivery_date == delivery_date)
+        ]
 
     def list_drivers(self):
         return [

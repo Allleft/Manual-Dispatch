@@ -23,7 +23,7 @@ class ManualDispatchService:
     def get_board(self, dispatch_date):
         return ManualDispatchBoardResponse(
             dispatch_date=dispatch_date,
-            orders=self.repository.list_orders(),
+            orders=self.repository.list_orders(dispatch_date),
             drivers=self.repository.list_drivers(),
             vehicles=self.repository.list_vehicles(),
             assignments=self.repository.list_assignments(dispatch_date),

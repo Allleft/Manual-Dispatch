@@ -10,6 +10,7 @@ from backend.repositories.sqlite_manual_dispatch_repository import (
 from backend.schemas import (
     AssignDriverVehicleRequest,
     AssignTaskRequest,
+    CreateOrderRequest,
     UnassignTaskRequest,
 )
 from backend.services.manual_dispatch_service import ManualDispatchService
@@ -63,6 +64,27 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
         self.assertEqual(
             ["ABC123", "XYZ888", "MCC001"],
             [vehicle.rego for vehicle in board.vehicles],
+        )
+
+    def test_board_only_loads_orders_for_requested_dispatch_date(self):
+        created = self.service.create_order(
+            CreateOrderRequest(
+                company_name="SQLite Date Filter Customer",
+                suburb="Geelong",
+                delivery_date="2026-05-06",
+            )
+        )
+
+        board_0505 = self.service.get_board("2026-05-05")
+        board_0506 = self.service.get_board("2026-05-06")
+
+        self.assertNotIn(created.order_id, [order.order_id for order in board_0505.orders])
+        self.assertIn(created.order_id, [order.order_id for order in board_0506.orders])
+        self.assertTrue(
+            all(order.delivery_date == "2026-05-05" for order in board_0505.orders)
+        )
+        self.assertTrue(
+            all(order.delivery_date == "2026-05-06" for order in board_0506.orders)
         )
 
     def test_existing_database_without_new_columns_is_upgraded(self):

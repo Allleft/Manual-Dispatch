@@ -6,6 +6,7 @@ from backend.repositories.in_memory_manual_dispatch_repository import (
 from backend.schemas import (
     AssignDriverVehicleRequest,
     AssignTaskRequest,
+    CreateOrderRequest,
     UnassignTaskRequest,
 )
 from backend.services.manual_dispatch_service import ManualDispatchService
@@ -32,6 +33,27 @@ class ManualDispatchServiceTest(unittest.TestCase):
         self.assertEqual(["John", "Tony", "David"], [driver.name for driver in board.drivers])
         self.assertEqual([False, True, False], [driver.pallet_only for driver in board.drivers])
         self.assertEqual(["ABC123", "XYZ888", "MCC001"], [vehicle.rego for vehicle in board.vehicles])
+
+    def test_get_board_filters_orders_by_dispatch_date(self):
+        created = self.service.create_order(
+            CreateOrderRequest(
+                company_name="Date Filter Customer",
+                suburb="Richmond",
+                delivery_date="2026-05-06",
+            )
+        )
+
+        board_0505 = self.service.get_board("2026-05-05")
+        board_0506 = self.service.get_board("2026-05-06")
+
+        self.assertNotIn(created.order_id, [order.order_id for order in board_0505.orders])
+        self.assertIn(created.order_id, [order.order_id for order in board_0506.orders])
+        self.assertTrue(
+            all(order.delivery_date == "2026-05-05" for order in board_0505.orders)
+        )
+        self.assertTrue(
+            all(order.delivery_date == "2026-05-06" for order in board_0506.orders)
+        )
 
     def test_assign_task_creates_assignment_with_task_type_and_task_id(self):
         assignment = self.service.assign_task(
