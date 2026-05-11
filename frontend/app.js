@@ -1,4 +1,4 @@
-import {
+﻿import {
   apiAssignDriverVehicle,
   apiAssignTask,
   apiCancelOrder,
@@ -28,6 +28,44 @@ import {
   DEFAULT_DISPATCH_DATE,
   state,
 } from "./js/state/app-state.js";
+import {
+  calculateDriverTotals,
+  calculateTotals,
+  calculateTripTotals,
+  findDriverById,
+  findVehicleById,
+  getAssignmentForOrder,
+  getAssignedOrdersForDriver,
+  getAssignmentsForDriverTrip,
+  getDriverExceptions,
+  getFilteredUnassignedOrders,
+  getOrderByTaskId,
+  getOrderPreferredDriverName,
+  getSelectedVehicleForDriver,
+  getTaskKey,
+  getUnassignedOrders,
+  isGeneratedTask,
+  isVehicleSelectedByAnotherDriver,
+} from "./js/state/selectors.js";
+import {
+  createBadge,
+  createDetailField,
+  createHint,
+  createOption,
+} from "./js/utils/dom-utils.js";
+import {
+  formatOptional,
+  getDisplayPalletQuantity,
+  getLooseBagsQuantity,
+  getUrgencyLabel,
+  isUrgent,
+  normalizeSearchText,
+  truncateText,
+} from "./js/utils/format-utils.js";
+import {
+  renderAccountStatus as renderAccountStatusView,
+  renderAuthGate as renderAuthGateView,
+} from "./js/render/auth-renderer.js";
 
 function normalizeBoardResponse(payload) {
   return {
@@ -736,26 +774,6 @@ async function handleDeleteVehicleSpecification(vehicleId) {
   }
 }
 
-function getDisplayPalletQuantity(order) {
-  const palletQuantity = Number(order.pallet_quantity);
-  const looseBagsQuantity = Number(order.loose_bags_quantity);
-
-  if ((!Number.isFinite(palletQuantity) || palletQuantity === 0) && looseBagsQuantity > 0) {
-    return 0;
-  }
-
-  return Number.isFinite(palletQuantity) ? palletQuantity : 0;
-}
-
-function getLooseBagsQuantity(order) {
-  const looseBagsQuantity = Number(order.loose_bags_quantity);
-  return Number.isFinite(looseBagsQuantity) ? looseBagsQuantity : 0;
-}
-
-function formatOptional(value, fallback = "-") {
-  return value === undefined || value === null || value === "" ? fallback : value;
-}
-
 function normalizeFinalSummary(summary) {
   return {
     summary_id: summary.summary_id || "",
@@ -800,237 +818,6 @@ function normalizeFinalSummary(summary) {
       }))
       .filter((trip) => trip.orders.length > 0),
   };
-}
-
-function truncateText(value, maxLength = 44) {
-  const text = formatOptional(value, "");
-  if (text.length <= maxLength) {
-    return text;
-  }
-  return `${text.slice(0, maxLength - 1)}...`;
-}
-
-function createOption(value, label, selected = false) {
-  const option = document.createElement("option");
-  option.value = value;
-  option.textContent = label;
-  option.selected = selected;
-  return option;
-}
-
-function createBadge(text, variant = "neutral") {
-  const badge = document.createElement("span");
-  badge.className = `hint-badge hint-badge-${variant}`;
-  badge.textContent = text;
-  return badge;
-}
-
-function createHint(text, variant = "neutral") {
-  const hint = document.createElement("p");
-  hint.className = `hint-row hint-row-${variant}`;
-  hint.textContent = text;
-  return hint;
-}
-
-function createDetailField(label, value) {
-  const field = document.createElement("div");
-  field.className = "detail-field";
-
-  const labelElement = document.createElement("dt");
-  labelElement.textContent = label;
-
-  const valueElement = document.createElement("dd");
-  valueElement.textContent = formatOptional(value);
-
-  field.append(labelElement, valueElement);
-  return field;
-}
-
-function getAssignmentForOrder(order) {
-  return state.assignments.find(
-    (assignment) =>
-      assignment.task_type === "ORDER" && assignment.task_id === order.order_id,
-  );
-}
-
-function getTaskKey(taskType, taskId) {
-  return `${taskType}:${taskId}`;
-}
-
-function isGeneratedTask(taskType, taskId) {
-  return state.generatedTaskKeys.has(getTaskKey(taskType, taskId));
-}
-
-function getUnassignedOrders() {
-  return state.orders.filter(
-    (order) => !getAssignmentForOrder(order) && !isGeneratedTask("ORDER", order.order_id),
-  );
-}
-
-function normalizeSearchText(value) {
-  return String(value || "").trim().toLowerCase();
-}
-
-function orderMatchesSearch(order, searchText) {
-  if (!searchText) {
-    return true;
-  }
-
-  return [
-    order.invoice_number,
-    order.company_name,
-    order.suburb,
-    order.postcode,
-    order.note,
-  ].some((value) => normalizeSearchText(value).includes(searchText));
-}
-
-function orderMatchesUrgencyFilter(order) {
-  if (state.urgencyFilter === "All") {
-    return true;
-  }
-  return getUrgencyLabel(order) === state.urgencyFilter;
-}
-
-function getFilteredUnassignedOrders() {
-  const searchText = normalizeSearchText(state.taskPoolSearch);
-  return getUnassignedOrders().filter(
-    (order) => orderMatchesSearch(order, searchText) && orderMatchesUrgencyFilter(order),
-  );
-}
-
-function getOrderByTaskId(taskId) {
-  return state.orders.find((order) => order.order_id === taskId);
-}
-
-function findDriverById(driverId) {
-  return state.drivers.find((driver) => driver.driver_id === driverId);
-}
-
-function findVehicleById(vehicleId) {
-  return state.vehicles.find((vehicle) => vehicle.vehicle_id === vehicleId);
-}
-
-function getDriverVehicleAssignment(driverId) {
-  return state.driverVehicleAssignments.find(
-    (assignment) =>
-      assignment.dispatch_date === state.dispatchDate && assignment.driver_id === driverId,
-  );
-}
-
-function getSelectedVehicleForDriver(driverId) {
-  const assignment = getDriverVehicleAssignment(driverId);
-  return assignment ? findVehicleById(assignment.vehicle_id) : null;
-}
-
-function isVehicleSelectedByAnotherDriver(driverId, vehicleId) {
-  if (!vehicleId) {
-    return false;
-  }
-
-  return state.driverVehicleAssignments.some(
-    (assignment) =>
-      assignment.dispatch_date === state.dispatchDate &&
-      assignment.driver_id !== driverId &&
-      assignment.vehicle_id === vehicleId,
-  );
-}
-
-function getOrderPreferredDriverName(order) {
-  const driver = order.preferred_driver_id ? findDriverById(order.preferred_driver_id) : null;
-  return driver ? driver.name : "";
-}
-
-function isUrgent(order) {
-  return String(order.urgency || "").toLowerCase() === "urgent";
-}
-
-function getUrgencyLabel(order) {
-  const urgency = order.urgency || "Normal";
-  return urgency.charAt(0).toUpperCase() + urgency.slice(1).toLowerCase();
-}
-
-function getAssignedOrdersForDriver(driverId) {
-  return state.assignments
-    .filter((assignment) => assignment.driver_id === driverId)
-    .map((assignment) => getOrderByTaskId(assignment.task_id))
-    .filter(Boolean);
-}
-
-function getAssignedOrdersForTrip(driverId, tripNo) {
-  return state.assignments
-    .filter((assignment) => assignment.driver_id === driverId && assignment.trip_no === tripNo)
-    .map((assignment) => getOrderByTaskId(assignment.task_id))
-    .filter(Boolean);
-}
-
-function getAssignmentsForDriver(driverId) {
-  return state.assignments.filter(
-    (assignment) =>
-      assignment.driver_id === driverId &&
-      (!assignment.dispatch_date || assignment.dispatch_date === state.dispatchDate),
-  );
-}
-
-function getAssignmentsForDriverTrip(driverId, tripNo) {
-  return getAssignmentsForDriver(driverId).filter((assignment) => assignment.trip_no === tripNo);
-}
-
-function calculateTotals(orders) {
-  return orders.reduce(
-    (totals, order) => ({
-      pallets: totals.pallets + getDisplayPalletQuantity(order),
-      looseBags: totals.looseBags + getLooseBagsQuantity(order),
-    }),
-    { pallets: 0, looseBags: 0 },
-  );
-}
-
-function calculateDriverTotals(driverId) {
-  return calculateTotals(getAssignedOrdersForDriver(driverId));
-}
-
-function calculateTripTotals(driverId, tripNo) {
-  return calculateTotals(getAssignedOrdersForTrip(driverId, tripNo));
-}
-
-function getTripCapacityExceptions(driverId) {
-  const selectedVehicle = getSelectedVehicleForDriver(driverId);
-  if (!selectedVehicle) {
-    return [];
-  }
-
-  const capacity = Number(selectedVehicle.pallet_capacity || 0);
-  if (!Number.isFinite(capacity) || capacity <= 0) {
-    return [];
-  }
-
-  return ["trip1", "trip2"]
-    .map((tripNo) => {
-      const totals = calculateTripTotals(driverId, tripNo);
-      return {
-        tripNo,
-        pallets: totals.pallets,
-        exceeds: totals.pallets > capacity,
-      };
-    })
-    .filter((item) => item.exceeds);
-}
-
-function getDriverExceptions(driver) {
-  const messages = [];
-  const assignedOrders = getAssignedOrdersForDriver(driver.driver_id);
-
-  if (driver.pallet_only && assignedOrders.some((order) => getLooseBagsQuantity(order) > 0)) {
-    messages.push("Exception: Driver only handles pallet orders");
-  }
-
-  getTripCapacityExceptions(driver.driver_id).forEach((item) => {
-    const tripLabel = item.tripNo === "trip1" ? "Trip 1" : "Trip 2";
-    messages.push(`Exception: ${tripLabel} pallets exceed selected vehicle capacity`);
-  });
-
-  return messages;
 }
 
 function getPendingSelection(orderId) {
@@ -1558,225 +1345,16 @@ function switchAuthMode(mode) {
 }
 
 function renderAccountStatus() {
-  const accountStatus = document.querySelector("#account-status");
-  if (!accountStatus) {
-    return;
-  }
-
-  accountStatus.innerHTML = "";
-  if (!state.isLoggedIn) {
-    const badge = document.createElement("p");
-    badge.className = "account-badge";
-    badge.textContent = "Login required";
-    accountStatus.append(badge);
-    return;
-  }
-
-  const badge = document.createElement("p");
-  badge.className = "account-badge";
-  badge.textContent = `Logged in as: ${state.accountName}`;
-
-  const logoutButton = document.createElement("button");
-  logoutButton.type = "button";
-  logoutButton.className = "button-secondary";
-  logoutButton.textContent = "Logout";
-  logoutButton.addEventListener("click", logoutAccount);
-
-  accountStatus.append(badge, logoutButton);
+  renderAccountStatusView({ onLogout: logoutAccount });
 }
 
 function renderAuthGate() {
-  const root = document.querySelector("#auth-root");
-  const boardShell = document.querySelector(".board-shell");
-  if (!root) {
-    return;
-  }
-
-  if (boardShell) {
-    boardShell.classList.toggle("board-locked", !state.isLoggedIn);
-    boardShell.setAttribute("aria-hidden", state.isLoggedIn ? "false" : "true");
-  }
-
-  root.innerHTML = "";
-  if (state.isLoggedIn) {
-    return;
-  }
-
-  const backdrop = document.createElement("div");
-  backdrop.className = "detail-backdrop auth-backdrop";
-
-  const modal = document.createElement("section");
-  modal.className = "order-detail-modal auth-modal";
-  modal.setAttribute("role", "dialog");
-  modal.setAttribute("aria-modal", "true");
-  modal.setAttribute("aria-labelledby", "auth-title");
-  modal.addEventListener("click", (event) => event.stopPropagation());
-
-  const kicker = document.createElement("p");
-  kicker.className = "section-kicker";
-  kicker.textContent = "Operator login";
-
-  const title = document.createElement("h2");
-  title.id = "auth-title";
-  title.textContent =
-    state.authMode === "register"
-      ? "Create operator account"
-      : state.authMode === "reset"
-      ? "Reset operator password"
-      : "Login to Manual Dispatch Board";
-
-  const note = document.createElement("p");
-  note.className = "auth-note";
-  note.textContent =
-    "Use an operator account name and password. Passwords are not stored in plain text.";
-
-  const form = document.createElement("form");
-  form.className = "auth-form";
-  const submitHandler =
-    state.authMode === "register"
-      ? handleRegister
-      : state.authMode === "reset"
-      ? handleResetPassword
-      : handleLogin;
-  form.addEventListener("submit", submitHandler);
-
-  form.append(
-    createAuthInput("Account Name / Username", "account_name", {
-      autocomplete: "username",
-      minlength: 2,
-      maxlength: 50,
-      required: true,
-    }),
-  );
-
-  if (state.authMode === "reset") {
-    form.append(
-      createAuthInput("Admin Reset Code", "admin_reset_code", {
-        type: "password",
-        autocomplete: "off",
-        required: true,
-      }),
-      createAuthInput("New Password", "new_password", {
-        type: "password",
-        autocomplete: "new-password",
-        minlength: 6,
-        required: true,
-      }),
-      createAuthInput("Confirm New Password", "confirm_password", {
-        type: "password",
-        autocomplete: "new-password",
-        minlength: 6,
-        required: true,
-      }),
-    );
-  } else {
-    form.append(
-      createAuthInput("Password", "password", {
-        type: "password",
-        autocomplete: state.authMode === "register" ? "new-password" : "current-password",
-        minlength: 6,
-        required: true,
-      }),
-    );
-  }
-
-  if (state.authMode === "register") {
-    form.append(
-      createAuthInput("Confirm Password", "confirm_password", {
-        type: "password",
-        autocomplete: "new-password",
-        minlength: 6,
-        required: true,
-      }),
-    );
-  }
-
-  const error = document.createElement("p");
-  error.className = "board-error";
-  const errorMessage =
-    state.authMode === "register"
-      ? state.registerError
-      : state.authMode === "reset"
-      ? state.resetError
-      : state.loginError;
-  error.hidden = !errorMessage;
-  error.textContent = errorMessage;
-
-  const success = document.createElement("p");
-  success.className = "board-status";
-  success.hidden = !state.authSuccessMessage;
-  success.textContent = state.authSuccessMessage;
-
-  const actions = document.createElement("div");
-  actions.className = "form-actions auth-actions";
-
-  if (state.authMode === "login") {
-    const forgotButton = document.createElement("button");
-    forgotButton.type = "button";
-    forgotButton.className = "button-link";
-    forgotButton.disabled = state.isAuthLoading;
-    forgotButton.textContent = "Forgot password?";
-    forgotButton.addEventListener("click", () => {
-      switchAuthMode("reset");
-    });
-    form.append(forgotButton);
-  }
-
-  const switchButton = document.createElement("button");
-  switchButton.type = "button";
-  switchButton.className = "button-secondary";
-  switchButton.disabled = state.isAuthLoading;
-  switchButton.textContent =
-    state.authMode === "login" ? "Create account" : "Back to login";
-  switchButton.addEventListener("click", () => {
-    switchAuthMode(state.authMode === "login" ? "register" : "login");
+  renderAuthGateView({
+    onLogin: handleLogin,
+    onRegister: handleRegister,
+    onResetPassword: handleResetPassword,
+    onSwitchAuthMode: switchAuthMode,
   });
-
-  const submitButton = document.createElement("button");
-  submitButton.type = "submit";
-  submitButton.disabled = state.isAuthLoading;
-  submitButton.textContent =
-    state.authMode === "register"
-      ? state.isAuthLoading
-        ? "Creating..."
-        : "Create account"
-      : state.authMode === "reset"
-      ? state.isAuthLoading
-        ? "Resetting..."
-        : "Reset password"
-      : state.isAuthLoading
-      ? "Logging in..."
-      : "Login";
-
-  actions.append(switchButton, submitButton);
-  form.append(error, success, actions);
-  modal.append(kicker, title, note, form);
-  backdrop.append(modal);
-  root.append(backdrop);
-}
-
-function createAuthInput(label, name, options = {}) {
-  const wrapper = document.createElement("label");
-  wrapper.className = "form-field";
-  wrapper.textContent = label;
-
-  const input = document.createElement("input");
-  input.name = name;
-  input.type = options.type || "text";
-  input.required = Boolean(options.required);
-  input.disabled = state.isAuthLoading;
-  if (options.minlength) {
-    input.minLength = options.minlength;
-  }
-  if (options.maxlength) {
-    input.maxLength = options.maxlength;
-  }
-  if (options.autocomplete) {
-    input.autocomplete = options.autocomplete;
-  }
-
-  wrapper.append(input);
-  return wrapper;
 }
 
 function renderBoardControls() {
@@ -3385,3 +2963,5 @@ restoreAccountSession();
 renderBoard();
 loadBoard(state.dispatchDate);
 loadFinalSummaryDates();
+
+
