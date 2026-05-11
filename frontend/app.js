@@ -70,6 +70,7 @@ import {
   renderTaskPool as renderTaskPoolView,
   renderTaskPoolFilters as renderTaskPoolFiltersView,
 } from "./js/render/task-pool-renderer.js";
+import { renderDriverSummary as renderDriverSummaryView } from "./js/render/trip-summary-renderer.js";
 
 function normalizeBoardResponse(payload) {
   return {
@@ -1449,246 +1450,13 @@ function renderTaskPool() {
   });
 }
 function renderDriverSummary() {
-  const driverSummaryList = document.querySelector("#driver-summary-list");
-  driverSummaryList.innerHTML = "";
-
-  if (state.isLoading && state.drivers.length === 0) {
-    const loadingState = document.createElement("p");
-    loadingState.className = "empty-board";
-    loadingState.textContent = "Loading Drivers from backend...";
-    driverSummaryList.append(loadingState);
-    return;
-  }
-
-  if (state.errorMessage && state.drivers.length === 0) {
-    const errorState = document.createElement("p");
-    errorState.className = "empty-board";
-    errorState.textContent = "Trip Summary is unavailable until backend data loads.";
-    driverSummaryList.append(errorState);
-    return;
-  }
-
-  state.drivers.forEach((driver) => {
-    const card = document.createElement("article");
-    card.className = "driver-card trip-summary-card";
-
-    const header = document.createElement("div");
-    header.className = "driver-card-header";
-
-    const name = document.createElement("h3");
-    name.textContent = driver.name;
-
-    const driverBadges = document.createElement("div");
-    driverBadges.className = "hint-badge-row";
-    driverBadges.append(
-      createBadge(driver.is_available ? "Available" : "Not available", driver.is_available ? "good" : "warning"),
-    );
-    if (driver.pallet_only) {
-      driverBadges.append(createBadge("Pallet-only driver", "warning"));
-    }
-
-    const assignedOrders = getAssignedOrdersForDriver(driver.driver_id);
-    const finalSummary = state.finalTripSummaries[driver.driver_id];
-    const hasLockedFinalSummary = Boolean(finalSummary);
-    const hasUnsavedLockedFinalSummary = Boolean(finalSummary && !finalSummary.summary_id);
-    const driverTotals = calculateTotals(assignedOrders);
-    const loadSummary = document.createElement("div");
-    loadSummary.className = "load-summary";
-    loadSummary.append(
-      createHint(`Total pallets assigned: ${driverTotals.pallets}`),
-      createHint(`Total loose bags assigned: ${driverTotals.looseBags}`),
-    );
-
-    const selectedVehicle = getSelectedVehicleForDriver(driver.driver_id);
-
-    const vehicleWrap = document.createElement("label");
-    vehicleWrap.className = "vehicle-select";
-    vehicleWrap.textContent = "Choose Vehicle";
-
-    const vehicleSelect = document.createElement("select");
-    vehicleSelect.disabled = state.isSaving || state.isLoading;
-    vehicleSelect.append(createOption("", "Select vehicle", !selectedVehicle));
-    state.vehicles.forEach((vehicle) => {
-      vehicleSelect.append(
-        createOption(
-          vehicle.vehicle_id,
-          vehicle.rego,
-          selectedVehicle ? selectedVehicle.vehicle_id === vehicle.vehicle_id : false,
-        ),
-      );
-    });
-
-    const vehicleStatus = document.createElement("p");
-    vehicleStatus.className = "vehicle-status";
-    vehicleStatus.textContent = selectedVehicle
-      ? `Selected Vehicle: ${selectedVehicle.rego}`
-      : "No vehicle selected";
-
-    const vehicleCapacity = document.createElement("p");
-    vehicleCapacity.className = "vehicle-status vehicle-capacity";
-    vehicleCapacity.textContent = selectedVehicle
-      ? `Capacity: ${selectedVehicle.pallet_capacity} pallets`
-      : "Capacity: select a vehicle to view";
-
-    const duplicateHint = document.createElement("p");
-    duplicateHint.className = "vehicle-hint";
-    duplicateHint.textContent =
-      selectedVehicle && isVehicleSelectedByAnotherDriver(driver.driver_id, selectedVehicle.vehicle_id)
-        ? "Vehicle also selected by another driver."
-        : "";
-
-    const exceptions = getDriverExceptions(driver);
-    const exceptionList = document.createElement("div");
-    exceptionList.className = "exception-list";
-    exceptions.forEach((message) => {
-      const item = document.createElement("p");
-      item.className = "exception-item";
-      item.textContent = message;
-      exceptionList.append(item);
-    });
-
-    const finalLockHint = document.createElement("p");
-    finalLockHint.className = "vehicle-hint final-lock-hint";
-    finalLockHint.textContent = hasUnsavedLockedFinalSummary
-      ? "Final Trip Summary for this driver is already generated and locked."
-      : "";
-
-    const generateButton = document.createElement("button");
-    generateButton.type = "button";
-    generateButton.className = "button-secondary generate-summary-button";
-    generateButton.textContent = state.isSaving ? "Generating..." : "Generate";
-    generateButton.disabled = state.isSaving || state.isLoading;
-    generateButton.addEventListener("click", () => {
-      handleGenerateDriverSummary(driver.driver_id);
-    });
-
-    vehicleSelect.addEventListener("change", () => {
-      handleVehicleChange(driver.driver_id, vehicleSelect.value);
-    });
-
-    vehicleWrap.append(vehicleSelect);
-    header.append(name, driverBadges, loadSummary, vehicleWrap, vehicleStatus, vehicleCapacity);
-    if (duplicateHint.textContent) {
-      header.append(duplicateHint);
-    }
-    if (exceptions.length > 0) {
-      header.append(exceptionList);
-    }
-    if (assignedOrders.length > 0 && !hasLockedFinalSummary) {
-      header.append(generateButton);
-    }
-    if (finalLockHint.textContent) {
-      header.append(finalLockHint);
-    }
-
-    const trips = document.createElement("div");
-    trips.className = "trip-columns";
-    if (assignedOrders.length === 0) {
-      const emptyState = document.createElement("p");
-      emptyState.className = "empty-trip editable-empty-state";
-      emptyState.textContent = hasUnsavedLockedFinalSummary
-        ? "No editable tasks. Locked Final Trip Summary is shown below."
-        : "No editable tasks assigned to this driver.";
-      trips.append(emptyState);
-    } else {
-      ["trip1", "trip2"].forEach((tripNo) => {
-        if (getAssignmentsForDriverTrip(driver.driver_id, tripNo).length > 0) {
-          trips.append(createTripGroup(driver.driver_id, tripNo, tripNo === "trip1" ? "Trip 1" : "Trip 2"));
-        }
-      });
-    }
-
-    card.append(header, trips);
-    driverSummaryList.append(card);
+  renderDriverSummaryView({
+    onVehicleChange: handleVehicleChange,
+    onGenerateDriverSummary: handleGenerateDriverSummary,
+    onOpenOrderDetail: openOrderDetail,
+    onUnassign: handleUnassign,
   });
 }
-
-function createTripGroup(driverId, tripNo, title) {
-  const group = document.createElement("section");
-  group.className = "trip-group";
-
-  const heading = document.createElement("h4");
-  heading.textContent = title;
-
-  const tripTotals = calculateTripTotals(driverId, tripNo);
-  const tripSummary = document.createElement("p");
-  tripSummary.className = "trip-summary";
-  tripSummary.textContent = `Pallets: ${tripTotals.pallets} | Loose bags: ${tripTotals.looseBags}`;
-
-  const assignedTasks = state.assignments.filter(
-    (assignment) => assignment.driver_id === driverId && assignment.trip_no === tripNo,
-  );
-
-  const taskList = document.createElement("div");
-  taskList.className = "assigned-task-list";
-
-  if (assignedTasks.length === 0) {
-    const emptyState = document.createElement("p");
-    emptyState.className = "empty-trip";
-    emptyState.textContent = "No tasks assigned to this trip.";
-    taskList.append(emptyState);
-  } else {
-    assignedTasks.forEach((assignment) => {
-      const order = getOrderByTaskId(assignment.task_id);
-      if (!order) {
-        return;
-      }
-
-      taskList.append(createAssignedTask(assignment, order));
-    });
-  }
-
-  group.append(heading, tripSummary, taskList);
-  return group;
-}
-
-function createAssignedTask(assignment, order) {
-  const row = document.createElement("article");
-  row.className = "assigned-task";
-  row.tabIndex = 0;
-  row.setAttribute("role", "button");
-  row.setAttribute("title", "View order details");
-  row.setAttribute(
-    "aria-label",
-    `View details for ${order.invoice_number || order.order_id}, ${order.suburb}, Pallet ${getDisplayPalletQuantity(order)}`,
-  );
-  row.addEventListener("click", () => openOrderDetail(order.order_id));
-  row.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      openOrderDetail(order.order_id);
-    }
-  });
-
-  const details = document.createElement("div");
-
-  const suburb = document.createElement("p");
-  suburb.className = "assigned-suburb";
-  suburb.textContent = order.suburb;
-
-  const pallet = document.createElement("p");
-  pallet.className = "assigned-pallet";
-  pallet.textContent = `Pallet: ${getDisplayPalletQuantity(order)} | Loose bags: ${getLooseBagsQuantity(order)}`;
-
-  details.append(suburb, pallet);
-
-  const unassignButton = document.createElement("button");
-  unassignButton.type = "button";
-  unassignButton.className = "button-secondary";
-  unassignButton.disabled = state.isSaving || state.isLoading;
-  unassignButton.textContent = state.isSaving ? "Saving..." : "Unassign";
-  unassignButton.addEventListener("click", (event) => {
-    event.stopPropagation();
-    handleUnassign(assignment.task_type, assignment.task_id);
-  });
-  unassignButton.addEventListener("keydown", (event) => {
-    event.stopPropagation();
-  });
-
-  row.append(details, unassignButton);
-  return row;
-}
-
 function formatGeneratedAt(value) {
   if (!value) {
     return "-";
@@ -2815,6 +2583,7 @@ restoreAccountSession();
 renderBoard();
 loadBoard(state.dispatchDate);
 loadFinalSummaryDates();
+
 
 
 
