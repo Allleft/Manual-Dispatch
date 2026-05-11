@@ -54,3 +54,10 @@ git diff --check
 ```
 
 If the local `python` command is unavailable, run the same commands with the active virtual environment's Python executable.
+
+For route-level FastAPI `TestClient` tests and browser smoke tests, install development dependencies:
+
+```powershell
+python -m pip install -r requirements-dev.txt
+python -m playwright install chromium
+```
