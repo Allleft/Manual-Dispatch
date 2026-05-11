@@ -67,6 +67,10 @@ import {
   renderAuthGate as renderAuthGateView,
 } from "./js/render/auth-renderer.js";
 import {
+  renderAddOrderPopup as renderAddOrderPopupView,
+  renderOrderDetailPopup as renderOrderDetailPopupView,
+} from "./js/render/order-modal-renderer.js";
+import {
   renderTaskPool as renderTaskPoolView,
   renderTaskPoolFilters as renderTaskPoolFiltersView,
 } from "./js/render/task-pool-renderer.js";
@@ -2158,414 +2162,25 @@ function createActionsCell(actions) {
   return cell;
 }
 
-function createAddOrderField(label, field, options = {}) {
-  const wrapper = document.createElement("label");
-  wrapper.className = options.wide ? "form-field form-field-wide" : "form-field";
-  wrapper.textContent = label;
-
-  const input = document.createElement(options.multiline ? "textarea" : "input");
-  input.name = field;
-  input.value = state.addOrderForm[field] ?? "";
-  input.disabled = state.isSaving;
-  if (!options.multiline) {
-    input.type = options.type || "text";
-  }
-  if (options.required) {
-    input.required = true;
-  }
-  if (options.min !== undefined) {
-    input.min = options.min;
-  }
-  input.addEventListener("input", () => {
-    updateAddOrderForm(field, input.value);
-  });
-
-  wrapper.append(input);
-  return wrapper;
-}
-
-function createAddOrderSelect(label, field, options) {
-  const wrapper = document.createElement("label");
-  wrapper.className = "form-field";
-  wrapper.textContent = label;
-
-  const select = document.createElement("select");
-  select.name = field;
-  select.disabled = state.isSaving;
-  options.forEach((option) => {
-    select.append(createOption(option.value, option.label, state.addOrderForm[field] === option.value));
-  });
-  select.addEventListener("change", () => {
-    updateAddOrderForm(field, select.value);
-  });
-
-  wrapper.append(select);
-  return wrapper;
-}
-
-function createOrderEditField(label, field, options = {}) {
-  const wrapper = document.createElement("label");
-  wrapper.className = options.wide ? "form-field form-field-wide" : "form-field";
-  wrapper.textContent = label;
-
-  const input = document.createElement(options.multiline ? "textarea" : "input");
-  input.name = field;
-  input.value = state.orderEditForm[field] ?? "";
-  input.disabled = state.isSaving;
-  if (!options.multiline) {
-    input.type = options.type || "text";
-  }
-  if (options.required) {
-    input.required = true;
-  }
-  if (options.min !== undefined) {
-    input.min = options.min;
-  }
-  input.addEventListener("input", () => {
-    updateOrderEditForm(field, input.value);
-  });
-
-  wrapper.append(input);
-  return wrapper;
-}
-
-function createOrderEditReadOnlyField(label, value) {
-  const wrapper = document.createElement("label");
-  wrapper.className = "form-field";
-  wrapper.textContent = label;
-
-  const input = document.createElement("input");
-  input.type = "text";
-  input.value = formatOptional(value);
-  input.disabled = true;
-
-  wrapper.append(input);
-  return wrapper;
-}
-
-function createOrderEditSelect(label, field, options) {
-  const wrapper = document.createElement("label");
-  wrapper.className = "form-field";
-  wrapper.textContent = label;
-
-  const select = document.createElement("select");
-  select.name = field;
-  select.disabled = state.isSaving;
-  options.forEach((option) => {
-    select.append(createOption(option.value, option.label, state.orderEditForm[field] === option.value));
-  });
-  select.addEventListener("change", () => {
-    updateOrderEditForm(field, select.value);
-  });
-
-  wrapper.append(select);
-  return wrapper;
-}
-
-function createOrderEditForm(order) {
-  const form = document.createElement("form");
-  form.className = "order-form";
-  form.addEventListener("submit", (event) => {
-    event.preventDefault();
-    handleUpdateOrder(order.order_id);
-  });
-
-  const formGrid = document.createElement("div");
-  formGrid.className = "form-grid";
-
-  const preferredDriverOptions = [
-    { value: "", label: "No preferred driver" },
-    ...state.drivers.map((driver) => ({
-      value: driver.driver_id,
-      label: driver.name,
-    })),
-  ];
-
-  formGrid.append(
-    createOrderEditField("Invoice #", "invoice_number"),
-    createOrderEditField("Company Name", "company_name"),
-    createOrderEditField("Phone", "phone", { type: "tel" }),
-    createOrderEditField("Delivery Address", "delivery_address"),
-    createOrderEditField("Suburb", "suburb", { required: true }),
-    createOrderEditField("Postcode", "postcode"),
-    createOrderEditReadOnlyField("Delivery Date (read-only)", order.delivery_date),
-    createOrderEditField("Zone", "zone"),
-    createOrderEditSelect("Urgency", "urgency", [
-      { value: "Normal", label: "Normal" },
-      { value: "Urgent", label: "Urgent" },
-    ]),
-    createOrderEditSelect("Preferred Driver", "preferred_driver_id", preferredDriverOptions),
-    createOrderEditField("Pallet Quantity", "pallet_quantity", {
-      type: "number",
-      min: "0",
-    }),
-    createOrderEditField("Loose Bags Quantity", "loose_bags_quantity", {
-      type: "number",
-      min: "0",
-    }),
-    createOrderEditField("Start Time", "start_time", { type: "time" }),
-    createOrderEditField("End Time", "end_time", { type: "time" }),
-    createOrderEditField("Note", "note", { multiline: true, wide: true }),
-  );
-
-  const error = document.createElement("p");
-  error.className = "board-error";
-  error.hidden = !state.orderEditError;
-  error.textContent = state.orderEditError;
-
-  const actions = document.createElement("div");
-  actions.className = "form-actions";
-
-  const cancelButton = document.createElement("button");
-  cancelButton.type = "button";
-  cancelButton.className = "button-secondary";
-  cancelButton.textContent = "Cancel Edit";
-  cancelButton.disabled = state.isSaving;
-  cancelButton.addEventListener("click", cancelOrderEdit);
-
-  const saveButton = document.createElement("button");
-  saveButton.type = "submit";
-  saveButton.textContent = state.isSaving ? "Saving..." : "Save Changes";
-  saveButton.disabled = state.isSaving;
-
-  actions.append(cancelButton, saveButton);
-  form.append(formGrid, error, actions);
-  return form;
-}
-
 function renderAddOrderPopup() {
-  const root = document.querySelector("#add-order-root");
-  if (!root) {
-    return;
-  }
-
-  root.innerHTML = "";
-  if (!state.isAddOrderOpen) {
-    return;
-  }
-
-  const backdrop = document.createElement("div");
-  backdrop.className = "detail-backdrop";
-
-  const modal = document.createElement("article");
-  modal.className = "order-detail-modal";
-  modal.setAttribute("role", "dialog");
-  modal.setAttribute("aria-modal", "true");
-  modal.setAttribute("aria-labelledby", "add-order-title");
-  modal.addEventListener("click", (event) => event.stopPropagation());
-
-  const header = document.createElement("div");
-  header.className = "detail-header";
-
-  const titleWrap = document.createElement("div");
-  const kicker = document.createElement("p");
-  kicker.className = "section-kicker";
-  kicker.textContent = "Manual entry";
-
-  const title = document.createElement("h2");
-  title.id = "add-order-title";
-  title.textContent = "Add New Order";
-
-  titleWrap.append(kicker, title);
-
-  const closeButton = document.createElement("button");
-  closeButton.type = "button";
-  closeButton.className = "button-secondary detail-close";
-  closeButton.textContent = "Cancel";
-  closeButton.disabled = state.isSaving;
-  closeButton.addEventListener("click", closeAddOrder);
-
-  header.append(titleWrap, closeButton);
-
-  const form = document.createElement("form");
-  form.className = "order-form";
-  form.addEventListener("submit", (event) => {
-    event.preventDefault();
-    handleCreateOrder();
+  renderAddOrderPopupView({
+    onCloseAddOrder: closeAddOrder,
+    onCreateOrder: handleCreateOrder,
+    onUpdateAddOrderForm: updateAddOrderForm,
   });
-
-  const formGrid = document.createElement("div");
-  formGrid.className = "form-grid";
-
-  const preferredDriverOptions = [
-    { value: "", label: "No preferred driver" },
-    ...state.drivers.map((driver) => ({
-      value: driver.driver_id,
-      label: driver.name,
-    })),
-  ];
-
-  formGrid.append(
-    createAddOrderField("Invoice #", "invoice_number"),
-    createAddOrderField("Company Name", "company_name"),
-    createAddOrderField("Phone", "phone", { type: "tel" }),
-    createAddOrderField("Delivery Address", "delivery_address"),
-    createAddOrderField("Suburb", "suburb", { required: true }),
-    createAddOrderField("Postcode", "postcode"),
-    createAddOrderField("Delivery Date", "delivery_date", {
-      type: "date",
-      required: true,
-    }),
-    createAddOrderField("Zone", "zone"),
-    createAddOrderSelect("Urgency", "urgency", [
-      { value: "Normal", label: "Normal" },
-      { value: "Urgent", label: "Urgent" },
-    ]),
-    createAddOrderSelect("Preferred Driver", "preferred_driver_id", preferredDriverOptions),
-    createAddOrderField("Pallet Quantity", "pallet_quantity", {
-      type: "number",
-      min: "0",
-    }),
-    createAddOrderField("Loose Bags Quantity", "loose_bags_quantity", {
-      type: "number",
-      min: "0",
-    }),
-    createAddOrderField("Start Time", "start_time", { type: "time" }),
-    createAddOrderField("End Time", "end_time", { type: "time" }),
-    createAddOrderField("Note", "note", { multiline: true, wide: true }),
-  );
-
-  const error = document.createElement("p");
-  error.className = "board-error";
-  error.hidden = !state.addOrderError;
-  error.textContent = state.addOrderError;
-
-  const actions = document.createElement("div");
-  actions.className = "form-actions";
-
-  const cancelButton = document.createElement("button");
-  cancelButton.type = "button";
-  cancelButton.className = "button-secondary";
-  cancelButton.textContent = "Cancel";
-  cancelButton.disabled = state.isSaving;
-  cancelButton.addEventListener("click", closeAddOrder);
-
-  const saveButton = document.createElement("button");
-  saveButton.type = "submit";
-  saveButton.textContent = state.isSaving ? "Saving..." : "Save Order";
-  saveButton.disabled = state.isSaving;
-
-  actions.append(cancelButton, saveButton);
-  form.append(formGrid, error, actions);
-  modal.append(header, form);
-  backdrop.append(modal);
-  root.append(backdrop);
 }
 
 function renderOrderDetailPopup() {
-  let root = document.querySelector("#order-detail-root");
-  if (!root) {
-    root = document.createElement("div");
-    root.id = "order-detail-root";
-    document.body.append(root);
-  }
-
-  root.innerHTML = "";
-  if (!state.activeOrderDetailId) {
-    return;
-  }
-
-  const order = getOrderByTaskId(state.activeOrderDetailId);
-  if (!order) {
-    state.activeOrderDetailId = "";
-    return;
-  }
-
-  const backdrop = document.createElement("div");
-  backdrop.className = "detail-backdrop";
-
-  const modal = document.createElement("article");
-  modal.className = "order-detail-modal";
-  modal.setAttribute("role", "dialog");
-  modal.setAttribute("aria-modal", "true");
-  modal.setAttribute("aria-labelledby", "order-detail-title");
-  modal.addEventListener("click", (event) => event.stopPropagation());
-
-  const header = document.createElement("div");
-  header.className = "detail-header";
-
-  const titleWrap = document.createElement("div");
-  const kicker = document.createElement("p");
-  kicker.className = "section-kicker";
-  kicker.textContent = "Order details";
-
-  const title = document.createElement("h2");
-  title.id = "order-detail-title";
-  title.textContent = `${formatOptional(order.invoice_number)} - ${formatOptional(order.suburb)}`;
-
-  titleWrap.append(kicker, title);
-
-  const closeButton = document.createElement("button");
-  closeButton.type = "button";
-  closeButton.className = "button-secondary detail-close";
-  closeButton.textContent = "Close";
-  closeButton.addEventListener("click", closeOrderDetail);
-
-  const headerActions = document.createElement("div");
-  headerActions.className = "detail-actions";
-
-  if (!state.isOrderEditMode) {
-    const editButton = document.createElement("button");
-    editButton.type = "button";
-    editButton.textContent = "Edit";
-    editButton.addEventListener("click", () => startOrderEdit(order));
-
-    const cancelButton = document.createElement("button");
-    cancelButton.type = "button";
-    cancelButton.className = "button-danger";
-    cancelButton.textContent = state.isSaving ? "Cancelling..." : "Cancel Order";
-    cancelButton.disabled = state.isSaving;
-    cancelButton.addEventListener("click", () => handleCancelOrder(order.order_id));
-
-    headerActions.append(editButton, cancelButton);
-  }
-
-  headerActions.append(closeButton);
-
-  header.append(titleWrap, headerActions);
-
-  if (state.isOrderEditMode && Object.keys(state.orderEditForm).length === 0) {
-    state.orderEditForm = getOrderEditForm(order);
-  }
-
-  if (state.isOrderEditMode) {
-    modal.append(header, createOrderEditForm(order));
-    backdrop.append(modal);
-    root.append(backdrop);
-    return;
-  }
-
-  const details = document.createElement("dl");
-  details.className = "detail-grid";
-  details.append(
-    createDetailField("Order ID", order.order_id),
-    createDetailField("Invoice #", order.invoice_number),
-    createDetailField("Company Name", order.company_name),
-    createDetailField("Phone", order.phone),
-    createDetailField("Delivery Address", order.delivery_address),
-    createDetailField("Suburb", order.suburb),
-    createDetailField("Postcode", order.postcode),
-    createDetailField("Delivery Date", order.delivery_date),
-    createDetailField("Zone", order.zone),
-    createDetailField("Urgency", getUrgencyLabel(order)),
-    createDetailField("Preferred Driver", getOrderPreferredDriverName(order)),
-    createDetailField("Pallet Quantity", getDisplayPalletQuantity(order)),
-    createDetailField("Loose Bags Quantity", getLooseBagsQuantity(order)),
-    createDetailField("Start Time", order.start_time),
-    createDetailField("End Time", order.end_time),
-    createDetailField("Note", order.note),
-  );
-
-  const detailError = document.createElement("p");
-  detailError.className = "board-error";
-  detailError.hidden = !state.errorMessage;
-  detailError.textContent = state.errorMessage;
-
-  modal.append(header, detailError, details);
-  backdrop.append(modal);
-  root.append(backdrop);
+  renderOrderDetailPopupView({
+    getOrderEditForm,
+    onCancelOrder: handleCancelOrder,
+    onCancelOrderEdit: cancelOrderEdit,
+    onCloseOrderDetail: closeOrderDetail,
+    onSaveOrderEdit: handleUpdateOrder,
+    onStartOrderEdit: startOrderEdit,
+    onUpdateOrderEditForm: updateOrderEditForm,
+  });
 }
-
 function renderBoard() {
   renderAccountStatus();
   renderBoardControls();
@@ -2583,6 +2198,7 @@ restoreAccountSession();
 renderBoard();
 loadBoard(state.dispatchDate);
 loadFinalSummaryDates();
+
 
 
 
