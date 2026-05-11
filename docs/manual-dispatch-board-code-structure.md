@@ -29,6 +29,7 @@ Active refactor branch: `refactor/manual-dispatch-structure`.
 - `frontend/index.html`: Static DOM shell for the board, modal roots, login root, and Final Trip Summary controls.
 - `frontend/app.js`: Main browser entry point. It owns application state, render functions, and user actions.
 - `frontend/js/api/manual-dispatch-api.js`: Fetch wrapper and Manual Dispatch API client functions.
+- `frontend/js/state/app-state.js`: Initial application state, default Dispatch Date, and operator account session keys.
 - `frontend/js/utils/date-utils.js`: Browser-local date formatting helper used for the default Dispatch Date.
 - `frontend/styles.css`: Board, modal, and Final Trip Summary styling.
 
