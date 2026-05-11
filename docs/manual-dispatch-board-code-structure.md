@@ -27,10 +27,17 @@ Active refactor branch: `refactor/manual-dispatch-structure`.
 ## Frontend
 
 - `frontend/index.html`: Static DOM shell for the board, modal roots, login root, and Final Trip Summary controls.
-- `frontend/app.js`: Main browser entry point. It owns application state, render functions, and user actions.
+- `frontend/app.js`: Main browser entry point and coordinator. It wires API calls, state updates, action callbacks, and renderer calls.
 - `frontend/js/api/manual-dispatch-api.js`: Fetch wrapper and Manual Dispatch API client functions.
 - `frontend/js/state/app-state.js`: Initial application state, default Dispatch Date, and operator account session keys.
+- `frontend/js/state/selectors.js`: Read-only board selectors and derived totals used by renderers and action coordination.
 - `frontend/js/utils/date-utils.js`: Browser-local date formatting helper used for the default Dispatch Date.
+- `frontend/js/utils/format-utils.js`: Display formatting helpers for quantities, optional values, urgency, and compact text.
+- `frontend/js/utils/dom-utils.js`: Small DOM construction helpers for options, badges, hints, and detail fields.
+- `frontend/js/render/auth-renderer.js`: Login/register/reset-password modal and account badge rendering.
+- `frontend/js/render/task-pool-renderer.js`: Task Pool filters, empty states, compact Order cards, and assign-control rendering.
+- `frontend/js/render/trip-summary-renderer.js`: Driver Summary cards, trip sections, assigned task rows, vehicle selector, and driver exception rendering.
+- `frontend/js/render/order-modal-renderer.js`: Add Order, Order Detail, and Order Edit modal rendering.
 - `frontend/styles.css`: Board, modal, and Final Trip Summary styling.
 
 ## Tests
@@ -48,8 +55,7 @@ Active refactor branch: `refactor/manual-dispatch-structure`.
 python -m compileall backend tests
 python -m unittest discover -s tests -v
 node --check frontend/app.js
-node --check frontend/js/api/manual-dispatch-api.js
-node --check frontend/js/utils/date-utils.js
+Get-ChildItem frontend -Recurse -Filter *.js | ForEach-Object { node --check $_.FullName }
 git diff --check
 ```
 

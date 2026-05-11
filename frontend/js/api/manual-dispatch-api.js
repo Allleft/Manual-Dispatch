@@ -228,3 +228,8 @@ export function getFinalSummaryExcelExportUrl(dispatchDate) {
     dispatch_date: dispatchDate,
   });
 }
+
+
+export function apiExportFinalSummariesExcel(dispatchDate) {
+  return fetch(getFinalSummaryExcelExportUrl(dispatchDate));
+}
