@@ -1,9 +1,7 @@
 ﻿import {
   apiAssignDriverVehicle,
   apiAssignTask,
-  apiCancelOrder,
   apiCreateDriver,
-  apiCreateOrder,
   apiCreateVehicle,
   apiDeleteDriver,
   apiDeleteVehicle,
@@ -12,22 +10,15 @@
   apiGetSpecifications,
   apiListFinalSummaries,
   apiListFinalSummaryDates,
-  apiLoginAccount,
-  apiRegisterAccount,
-  apiResetPassword,
   apiSaveFinalSummary,
   apiUnassignTask,
   apiUpdateDriver,
-  apiUpdateOrder,
   apiUpdateVehicle,
   formatApiErrorDetail,
 } from "./js/api/manual-dispatch-api.js";
-import {
-  AUTH_ACCOUNT_ID_SESSION_KEY,
-  AUTH_ACCOUNT_NAME_SESSION_KEY,
-  DEFAULT_DISPATCH_DATE,
-  state,
-} from "./js/state/app-state.js";
+import { createAuthActions } from "./js/actions/auth-actions.js";
+import { createOrderActions } from "./js/actions/order-actions.js";
+import { DEFAULT_DISPATCH_DATE, state } from "./js/state/app-state.js";
 import {
   findDriverById,
   findVehicleById,
@@ -42,7 +33,6 @@ import {
   formatOptional,
   getDisplayPalletQuantity,
   getLooseBagsQuantity,
-  getUrgencyLabel,
 } from "./js/utils/format-utils.js";
 import {
   renderAccountStatus as renderAccountStatusView,
@@ -97,75 +87,6 @@ async function downloadExcelResponse(response, fallbackFilename) {
   link.click();
   link.remove();
   URL.revokeObjectURL(downloadUrl);
-}
-
-function getSafeSessionStorage() {
-  try {
-    return window.sessionStorage;
-  } catch (error) {
-    return null;
-  }
-}
-
-function restoreAccountSession() {
-  const storage = getSafeSessionStorage();
-  if (!storage) {
-    return;
-  }
-
-  const accountName = storage.getItem(AUTH_ACCOUNT_NAME_SESSION_KEY) || "";
-  const accountId = storage.getItem(AUTH_ACCOUNT_ID_SESSION_KEY) || "";
-  if (!accountName) {
-    return;
-  }
-
-  state.accountName = accountName;
-  state.accountId = accountId;
-  state.isLoggedIn = true;
-}
-
-function saveAccountSession(identity) {
-  const storage = getSafeSessionStorage();
-  if (!storage) {
-    return;
-  }
-
-  storage.setItem(AUTH_ACCOUNT_NAME_SESSION_KEY, identity.account_name || "");
-  storage.setItem(AUTH_ACCOUNT_ID_SESSION_KEY, String(identity.account_id || ""));
-}
-
-function clearAccountSession() {
-  const storage = getSafeSessionStorage();
-  if (!storage) {
-    return;
-  }
-
-  storage.removeItem(AUTH_ACCOUNT_NAME_SESSION_KEY);
-  storage.removeItem(AUTH_ACCOUNT_ID_SESSION_KEY);
-}
-
-function applyLoggedInAccount(identity) {
-  state.accountName = identity.account_name || "";
-  state.accountId = identity.account_id ? String(identity.account_id) : "";
-  state.isLoggedIn = Boolean(state.accountName);
-  state.loginError = "";
-  state.registerError = "";
-  state.resetError = "";
-  state.authSuccessMessage = "";
-  saveAccountSession(identity);
-}
-
-function logoutAccount() {
-  state.accountName = "";
-  state.accountId = "";
-  state.isLoggedIn = false;
-  state.authMode = "login";
-  state.loginError = "";
-  state.registerError = "";
-  state.resetError = "";
-  state.authSuccessMessage = "";
-  clearAccountSession();
-  renderBoard();
 }
 
 async function loadBoard(dispatchDate = state.dispatchDate, options = {}) {
@@ -233,26 +154,6 @@ function clearError() {
   state.errorMessage = "";
 }
 
-function getDefaultAddOrderForm() {
-  return {
-    invoice_number: "",
-    company_name: "",
-    phone: "",
-    delivery_address: "",
-    suburb: "",
-    postcode: "",
-    delivery_date: state.dispatchDate || DEFAULT_DISPATCH_DATE,
-    zone: "",
-    urgency: "Normal",
-    preferred_driver_id: "",
-    pallet_quantity: "0",
-    loose_bags_quantity: "0",
-    start_time: "",
-    end_time: "",
-    note: "",
-  };
-}
-
 function getDefaultDriverSpecificationForm(driver = {}) {
   return {
     name: driver.name || "",
@@ -296,20 +197,6 @@ function getVehicleSpecificationPayload(form) {
     trolley_capacity: Number(form.trolley_capacity || 0),
     stillage_capacity: Number(form.stillage_capacity || 0),
   };
-}
-
-function openAddOrder() {
-  state.isAddOrderOpen = true;
-  state.addOrderError = "";
-  state.addOrderForm = getDefaultAddOrderForm();
-  renderAddOrderPopup();
-}
-
-function closeAddOrder() {
-  state.isAddOrderOpen = false;
-  state.addOrderError = "";
-  state.addOrderForm = {};
-  renderAddOrderPopup();
 }
 
 async function openSpecificationModal() {
@@ -446,69 +333,6 @@ function updateSpecificationVehicleLocal(vehicleId, updates) {
   );
 }
 
-function updateAddOrderForm(field, value) {
-  state.addOrderForm = {
-    ...state.addOrderForm,
-    [field]: value,
-  };
-}
-
-function getAddOrderPayload() {
-  return {
-    ...state.addOrderForm,
-    pallet_quantity: Number(state.addOrderForm.pallet_quantity || 0),
-    loose_bags_quantity: Number(state.addOrderForm.loose_bags_quantity || 0),
-  };
-}
-
-function getOrderEditForm(order) {
-  return {
-    invoice_number: order.invoice_number || "",
-    company_name: order.company_name || "",
-    phone: order.phone || "",
-    delivery_address: order.delivery_address || "",
-    suburb: order.suburb || "",
-    postcode: order.postcode || "",
-    zone: order.zone || "",
-    urgency: getUrgencyLabel(order),
-    preferred_driver_id: order.preferred_driver_id || "",
-    pallet_quantity: String(getDisplayPalletQuantity(order)),
-    loose_bags_quantity: String(getLooseBagsQuantity(order)),
-    start_time: order.start_time || "",
-    end_time: order.end_time || "",
-    note: order.note || "",
-  };
-}
-
-function startOrderEdit(order) {
-  state.isOrderEditMode = true;
-  state.orderEditError = "";
-  state.orderEditForm = getOrderEditForm(order);
-  renderOrderDetailPopup();
-}
-
-function cancelOrderEdit() {
-  state.isOrderEditMode = false;
-  state.orderEditError = "";
-  state.orderEditForm = {};
-  renderOrderDetailPopup();
-}
-
-function updateOrderEditForm(field, value) {
-  state.orderEditForm = {
-    ...state.orderEditForm,
-    [field]: value,
-  };
-}
-
-function getOrderEditPayload() {
-  return {
-    ...state.orderEditForm,
-    pallet_quantity: Number(state.orderEditForm.pallet_quantity || 0),
-    loose_bags_quantity: Number(state.orderEditForm.loose_bags_quantity || 0),
-  };
-}
-
 async function exportFinalSummariesExcel(dispatchDate) {
   const response = await apiExportFinalSummariesExcel(dispatchDate);
   if (!response.ok) {
@@ -523,75 +347,6 @@ async function exportFinalSummariesExcel(dispatchDate) {
   }
 
   await downloadExcelResponse(response, `final-trip-summary-${dispatchDate}.xlsx`);
-}
-
-async function handleCreateOrder() {
-  if (state.isSaving) {
-    return;
-  }
-
-  state.isSaving = true;
-  state.addOrderError = "";
-  renderAddOrderPopup();
-
-  try {
-    await apiCreateOrder(getAddOrderPayload());
-    closeAddOrder();
-    await loadBoard(state.dispatchDate);
-  } catch (error) {
-    state.isSaving = false;
-    state.addOrderError = `Unable to save Order. ${error.message}`;
-    renderAddOrderPopup();
-  }
-}
-
-async function handleUpdateOrder(orderId) {
-  if (state.isSaving) {
-    return;
-  }
-
-  state.isSaving = true;
-  state.orderEditError = "";
-  renderOrderDetailPopup();
-
-  try {
-    await apiUpdateOrder(orderId, getOrderEditPayload());
-    state.isOrderEditMode = false;
-    state.orderEditError = "";
-    state.orderEditForm = {};
-    await loadBoard(state.dispatchDate);
-  } catch (error) {
-    state.isSaving = false;
-    state.orderEditError = `Unable to save changes. ${error.message}`;
-    renderOrderDetailPopup();
-  }
-}
-
-async function handleCancelOrder(orderId) {
-  if (state.isSaving) {
-    return;
-  }
-
-  const confirmed = window.confirm(
-    "Cancel this Order? Cancelled Orders are hidden from the Task Pool and excluded from export.",
-  );
-  if (!confirmed) {
-    return;
-  }
-
-  state.isSaving = true;
-  clearError();
-  renderOrderDetailPopup();
-
-  try {
-    await apiCancelOrder(orderId);
-    closeOrderDetail();
-    await loadBoard(state.dispatchDate);
-  } catch (error) {
-    state.isSaving = false;
-    showError(`Unable to cancel Order. ${error.message}`);
-    renderBoard();
-  }
 }
 
 async function refreshSpecificationsOnly({ markDirty = true } = {}) {
@@ -851,22 +606,6 @@ function cleanupPendingSelections() {
   });
 }
 
-function openOrderDetail(orderId) {
-  state.activeOrderDetailId = orderId;
-  state.isOrderEditMode = false;
-  state.orderEditError = "";
-  state.orderEditForm = {};
-  renderOrderDetailPopup();
-}
-
-function closeOrderDetail() {
-  state.activeOrderDetailId = "";
-  state.isOrderEditMode = false;
-  state.orderEditError = "";
-  state.orderEditForm = {};
-  renderOrderDetailPopup();
-}
-
 async function handleAssign(orderId) {
   const selection = getPendingSelection(orderId);
   if (!selection.driver_id || state.isSaving) {
@@ -886,7 +625,7 @@ async function handleAssign(orderId) {
       trip_no: selection.trip_no || "trip1",
     });
     delete state.pendingSelections[orderId];
-    closeOrderDetail();
+    orderActions.closeOrderDetail();
     await loadBoard(state.dispatchDate);
   } catch (error) {
     state.isSaving = false;
@@ -1209,143 +948,16 @@ async function handleLoadFinalSummaryHistory() {
   }
 }
 
-async function handleLogin(event) {
-  event.preventDefault();
-  if (state.isAuthLoading) {
-    return;
-  }
-
-  const form = event.currentTarget;
-  const accountNameInput = form.querySelector('input[name="account_name"]');
-  const passwordInput = form.querySelector('input[name="password"]');
-  const accountName = accountNameInput ? accountNameInput.value.trim() : "";
-  const password = passwordInput ? passwordInput.value : "";
-
-  state.isAuthLoading = true;
-  state.loginError = "";
-  state.authSuccessMessage = "";
-  renderAuthGate();
-
-  try {
-    const identity = await apiLoginAccount({ account_name: accountName, password });
-    applyLoggedInAccount(identity);
-  } catch (error) {
-    state.loginError = error.message || "Invalid account name or password";
-  } finally {
-    if (passwordInput) {
-      passwordInput.value = "";
-    }
-    state.isAuthLoading = false;
-    renderBoard();
-  }
-}
-
-async function handleRegister(event) {
-  event.preventDefault();
-  if (state.isAuthLoading) {
-    return;
-  }
-
-  const form = event.currentTarget;
-  const accountNameInput = form.querySelector('input[name="account_name"]');
-  const passwordInput = form.querySelector('input[name="password"]');
-  const confirmPasswordInput = form.querySelector('input[name="confirm_password"]');
-  const accountName = accountNameInput ? accountNameInput.value.trim() : "";
-  const password = passwordInput ? passwordInput.value : "";
-  const confirmPassword = confirmPasswordInput ? confirmPasswordInput.value : "";
-
-  state.isAuthLoading = true;
-  state.registerError = "";
-  state.authSuccessMessage = "";
-  renderAuthGate();
-
-  try {
-    const identity = await apiRegisterAccount({
-      account_name: accountName,
-      password,
-      confirm_password: confirmPassword,
-    });
-    applyLoggedInAccount(identity);
-  } catch (error) {
-    state.registerError = error.message || "Unable to create account";
-  } finally {
-    if (passwordInput) {
-      passwordInput.value = "";
-    }
-    if (confirmPasswordInput) {
-      confirmPasswordInput.value = "";
-    }
-    state.isAuthLoading = false;
-    renderBoard();
-  }
-}
-
-async function handleResetPassword(event) {
-  event.preventDefault();
-  if (state.isAuthLoading) {
-    return;
-  }
-
-  const form = event.currentTarget;
-  const accountNameInput = form.querySelector('input[name="account_name"]');
-  const resetCodeInput = form.querySelector('input[name="admin_reset_code"]');
-  const passwordInput = form.querySelector('input[name="new_password"]');
-  const confirmPasswordInput = form.querySelector('input[name="confirm_password"]');
-  const accountName = accountNameInput ? accountNameInput.value.trim() : "";
-  const adminResetCode = resetCodeInput ? resetCodeInput.value : "";
-  const newPassword = passwordInput ? passwordInput.value : "";
-  const confirmPassword = confirmPasswordInput ? confirmPasswordInput.value : "";
-
-  state.isAuthLoading = true;
-  state.resetError = "";
-  state.authSuccessMessage = "";
-  renderAuthGate();
-
-  try {
-    await apiResetPassword({
-      account_name: accountName,
-      admin_reset_code: adminResetCode,
-      new_password: newPassword,
-      confirm_password: confirmPassword,
-    });
-    state.authMode = "login";
-    state.authSuccessMessage = "Password reset successfully. Please log in with your new password.";
-  } catch (error) {
-    state.resetError = "Unable to reset password. Please check your details or contact an administrator.";
-  } finally {
-    if (resetCodeInput) {
-      resetCodeInput.value = "";
-    }
-    if (passwordInput) {
-      passwordInput.value = "";
-    }
-    if (confirmPasswordInput) {
-      confirmPasswordInput.value = "";
-    }
-    state.isAuthLoading = false;
-    renderBoard();
-  }
-}
-
-function switchAuthMode(mode) {
-  state.authMode = mode;
-  state.loginError = "";
-  state.registerError = "";
-  state.resetError = "";
-  state.authSuccessMessage = "";
-  renderAuthGate();
-}
-
 function renderAccountStatus() {
-  renderAccountStatusView({ onLogout: logoutAccount });
+  renderAccountStatusView({ onLogout: authActions.logoutAccount });
 }
 
 function renderAuthGate() {
   renderAuthGateView({
-    onLogin: handleLogin,
-    onRegister: handleRegister,
-    onResetPassword: handleResetPassword,
-    onSwitchAuthMode: switchAuthMode,
+    onLogin: authActions.handleLogin,
+    onRegister: authActions.handleRegister,
+    onResetPassword: authActions.handleResetPassword,
+    onSwitchAuthMode: authActions.switchAuthMode,
   });
 }
 
@@ -1408,7 +1020,7 @@ function renderBoardControls() {
 
   if (addOrderButton) {
     addOrderButton.onclick = () => {
-      openAddOrder();
+      orderActions.openAddOrder();
     };
   }
 }
@@ -1431,7 +1043,7 @@ function renderTaskPoolFilters() {
 function renderTaskPool() {
   renderTaskPoolView({
     getPendingSelection,
-    onOpenOrderDetail: openOrderDetail,
+    onOpenOrderDetail: orderActions.openOrderDetail,
     onPendingSelectionChange: updatePendingSelection,
     onAssign: handleAssign,
   });
@@ -1440,7 +1052,7 @@ function renderDriverSummary() {
   renderDriverSummaryView({
     onVehicleChange: handleVehicleChange,
     onGenerateDriverSummary: handleGenerateDriverSummary,
-    onOpenOrderDetail: openOrderDetail,
+    onOpenOrderDetail: orderActions.openOrderDetail,
     onUnassign: handleUnassign,
   });
 }
@@ -1902,21 +1514,21 @@ function createActionsCell(actions) {
 
 function renderAddOrderPopup() {
   renderAddOrderPopupView({
-    onCloseAddOrder: closeAddOrder,
-    onCreateOrder: handleCreateOrder,
-    onUpdateAddOrderForm: updateAddOrderForm,
+    onCloseAddOrder: orderActions.closeAddOrder,
+    onCreateOrder: orderActions.handleCreateOrder,
+    onUpdateAddOrderForm: orderActions.updateAddOrderForm,
   });
 }
 
 function renderOrderDetailPopup() {
   renderOrderDetailPopupView({
-    getOrderEditForm,
-    onCancelOrder: handleCancelOrder,
-    onCancelOrderEdit: cancelOrderEdit,
-    onCloseOrderDetail: closeOrderDetail,
-    onSaveOrderEdit: handleUpdateOrder,
-    onStartOrderEdit: startOrderEdit,
-    onUpdateOrderEditForm: updateOrderEditForm,
+    getOrderEditForm: orderActions.getOrderEditForm,
+    onCancelOrder: orderActions.handleCancelOrder,
+    onCancelOrderEdit: orderActions.cancelOrderEdit,
+    onCloseOrderDetail: orderActions.closeOrderDetail,
+    onSaveOrderEdit: orderActions.handleUpdateOrder,
+    onStartOrderEdit: orderActions.startOrderEdit,
+    onUpdateOrderEditForm: orderActions.updateOrderEditForm,
   });
 }
 function renderBoard() {
@@ -1932,7 +1544,23 @@ function renderBoard() {
   renderAuthGate();
 }
 
-restoreAccountSession();
+const authActions = createAuthActions({
+  renderAuthGate,
+  renderBoard,
+  state,
+});
+
+const orderActions = createOrderActions({
+  clearError,
+  loadBoard,
+  renderAddOrderPopup,
+  renderBoard,
+  renderOrderDetailPopup,
+  showError,
+  state,
+});
+
+authActions.restoreAccountSession();
 renderBoard();
 loadBoard(state.dispatchDate);
 loadFinalSummaryDates();
