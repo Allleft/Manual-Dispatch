@@ -268,7 +268,11 @@ function createAssignedTask(assignment, order, { onOpenOrderDetail, onUnassign }
   pallet.className = "assigned-pallet";
   pallet.textContent = `Pallet: ${getDisplayPalletQuantity(order)} | Loose bags: ${getLooseBagsQuantity(order)}`;
 
-  details.append(suburb, pallet);
+  const deliveryDate = document.createElement("p");
+  deliveryDate.className = "assigned-delivery-date";
+  deliveryDate.textContent = `Delivery Date: ${order.delivery_date || "-"}`;
+
+  details.append(suburb, deliveryDate, pallet);
 
   const unassignButton = document.createElement("button");
   unassignButton.type = "button";

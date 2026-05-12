@@ -1,6 +1,7 @@
 from backend.schemas import Order
 from backend.services.manual_dispatch.normalization import (
     clean_optional_text,
+    clean_required_iso_date,
     clean_required_text,
     quantity_or_default,
 )
@@ -53,6 +54,10 @@ class OrderService:
             raise ValueError(f"Order does not exist: {order_id}")
 
         suburb = clean_required_text(request.suburb, "suburb")
+        delivery_date = clean_required_iso_date(
+            request.delivery_date if request.delivery_date is not None else existing.delivery_date,
+            "delivery_date",
+        )
         pallet_quantity = quantity_or_default(
             request.pallet_quantity,
             "pallet_quantity",
@@ -70,7 +75,7 @@ class OrderService:
             delivery_address=clean_optional_text(request.delivery_address) or "",
             suburb=suburb,
             postcode=clean_optional_text(request.postcode) or "",
-            delivery_date=existing.delivery_date,
+            delivery_date=delivery_date,
             zone=clean_optional_text(request.zone) or "",
             urgency=clean_optional_text(request.urgency) or "Normal",
             preferred_driver_id=clean_optional_text(request.preferred_driver_id),

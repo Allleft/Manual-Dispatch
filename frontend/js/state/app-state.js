@@ -29,6 +29,7 @@ export const state = {
   pendingSelections: {},
   taskPoolSearch: "",
   urgencyFilter: "All",
+  taskPoolDeliveryDateFilter: "",
   finalTripSummaries: {},
   generatedTaskKeys: new Set(),
   isSavingFinalSummaries: false,

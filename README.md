@@ -41,8 +41,8 @@ Runtime SQLite database files are local and ignored by Git.
   - Top: Task Pool.
   - Bottom: Trip Summary.
 - Task Pool is a global unassigned active Order pool and is not filtered by Driver Summary Delivery Date.
-- Compact Order cards show Invoice #, Company, Suburb, Pallet quantity, urgency, note preview, and start time.
-- Task Pool search and urgency filter apply only to unassigned Orders.
+- Compact Order cards show Invoice #, Company, Suburb, Delivery Date, Pallet quantity, urgency, note preview, and start time.
+- Task Pool search, urgency, and optional Delivery Date display filters apply only to visible unassigned Orders; they do not change Task Pool membership.
 - Clicking an Order card opens a detail popup.
 
 ### Manual Assignment
@@ -60,7 +60,7 @@ Runtime SQLite database files are local and ignored by Git.
 
 - Add Order popup saves new Orders to SQLite.
 - Add Order defaults delivery date to the currently selected Dispatch Date.
-- Edit Order supports operational fields while keeping Delivery Date read-only.
+- Edit Order supports operational fields, including editable Delivery Date for active Orders.
 - Editing an assigned Order preserves the existing Driver + Trip assignment.
 - Cancel Order uses soft delete with `status = CANCELLED`.
 - Cancelled Orders are hidden from Task Pool and normal active exports.
@@ -189,7 +189,7 @@ The test suite uses temporary SQLite databases for automated tests. Do not commi
 
 The repository includes seed/demo data for local development. Recent demo reset tooling creates 20 Victoria Orders dated `2026-05-05` while preserving Driver and Vehicle master data.
 
-The Dispatch Date input now defaults to the browser's local current date. Task Pool is global for active unassigned Orders, so demo Orders can still appear even when their customer Delivery Date differs from the Dispatch Date. Driver Summary and Final Trip Summary use the Driver Summary Delivery Date, so select `2026-05-05` there when working with the seeded demo Orders.
+The Dispatch Date input now defaults to the browser's local current date. Task Pool is global for active unassigned Orders, so demo Orders can still appear even when their customer Delivery Date differs from the Dispatch Date. Use the Task Pool Delivery Date filter when you want a narrower visible queue; Driver Summary and Final Trip Summary use their separate Driver Summary Delivery Date, so select `2026-05-05` there when working with the seeded demo Orders.
 
 The demo reset script is manual/dev-only and must not run automatically on app startup.
 

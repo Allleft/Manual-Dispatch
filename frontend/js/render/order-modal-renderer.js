@@ -346,20 +346,6 @@ function createOrderEditField(label, field, options = {}) {
   return wrapper;
 }
 
-function createOrderEditReadOnlyField(label, value) {
-  const wrapper = document.createElement("label");
-  wrapper.className = "form-field";
-  wrapper.textContent = label;
-
-  const input = document.createElement("input");
-  input.type = "text";
-  input.value = formatOptional(value);
-  input.disabled = true;
-
-  wrapper.append(input);
-  return wrapper;
-}
-
 function createOrderEditSelect(label, field, options, handlers) {
   const wrapper = document.createElement("label");
   wrapper.className = "form-field";
@@ -405,7 +391,11 @@ function createOrderEditForm(order, handlers) {
     createOrderEditField("Delivery Address", "delivery_address", handlers),
     createOrderEditField("Suburb", "suburb", { required: true, ...handlers }),
     createOrderEditField("Postcode", "postcode", handlers),
-    createOrderEditReadOnlyField("Delivery Date (read-only)", order.delivery_date),
+    createOrderEditField("Delivery Date", "delivery_date", {
+      type: "date",
+      required: true,
+      ...handlers,
+    }),
     createOrderEditField("Zone", "zone", handlers),
     createOrderEditSelect("Urgency", "urgency", [
       { value: "Normal", label: "Normal" },

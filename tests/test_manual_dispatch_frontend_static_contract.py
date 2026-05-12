@@ -21,6 +21,29 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn('id="driver-summary-delivery-date"', index_html)
         self.assertIn('type="date"', index_html)
 
+    def test_task_pool_delivery_date_filter_controls_are_present(self):
+        index_html = (FRONTEND_ROOT / "index.html").read_text(encoding="utf-8")
+
+        self.assertIn('id="task-pool-delivery-date-filter"', index_html)
+        self.assertIn('id="clear-task-pool-delivery-date-filter"', index_html)
+        self.assertIn("All delivery dates", index_html)
+
+    def test_order_renderers_show_delivery_date_and_edit_form_is_not_read_only(self):
+        task_pool_renderer = (
+            FRONTEND_ROOT / "js" / "render" / "task-pool-renderer.js"
+        ).read_text(encoding="utf-8")
+        trip_summary_renderer = (
+            FRONTEND_ROOT / "js" / "render" / "trip-summary-renderer.js"
+        ).read_text(encoding="utf-8")
+        order_modal_renderer = (
+            FRONTEND_ROOT / "js" / "render" / "order-modal-renderer.js"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("Delivery Date:", task_pool_renderer)
+        self.assertIn("assigned-delivery-date", trip_summary_renderer)
+        self.assertIn('createOrderEditField("Delivery Date", "delivery_date"', order_modal_renderer)
+        self.assertNotIn("Delivery Date (read-only)", order_modal_renderer)
+
     def test_frontend_module_import_paths_exist(self):
         frontend_sources = list(FRONTEND_ROOT.rglob("*.js"))
         import_paths = []

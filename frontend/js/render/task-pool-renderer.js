@@ -15,12 +15,19 @@ import {
   truncateText,
 } from "../utils/format-utils.js";
 
-export function renderTaskPoolFilters({ onSearchChange, onUrgencyChange }) {
+export function renderTaskPoolFilters({
+  onSearchChange,
+  onUrgencyChange,
+  onDeliveryDateChange,
+  onClearDeliveryDate,
+}) {
   const searchInput = document.querySelector("#order-search");
   const urgencyFilter = document.querySelector("#urgency-filter");
+  const deliveryDateFilter = document.querySelector("#task-pool-delivery-date-filter");
+  const clearDeliveryDateFilter = document.querySelector("#clear-task-pool-delivery-date-filter");
   const summary = document.querySelector("#task-filter-summary");
 
-  if (!searchInput || !urgencyFilter || !summary) {
+  if (!searchInput || !urgencyFilter || !deliveryDateFilter || !clearDeliveryDateFilter || !summary) {
     return;
   }
 
@@ -31,8 +38,12 @@ export function renderTaskPoolFilters({ onSearchChange, onUrgencyChange }) {
   searchInput.disabled = state.isLoading || state.isSaving;
   urgencyFilter.value = state.urgencyFilter;
   urgencyFilter.disabled = state.isLoading || state.isSaving;
+  deliveryDateFilter.value = state.taskPoolDeliveryDateFilter;
+  deliveryDateFilter.disabled = state.isLoading || state.isSaving;
+  clearDeliveryDateFilter.disabled =
+    state.isLoading || state.isSaving || !state.taskPoolDeliveryDateFilter;
   summary.textContent =
-    state.taskPoolSearch || state.urgencyFilter !== "All"
+    state.taskPoolSearch || state.urgencyFilter !== "All" || state.taskPoolDeliveryDateFilter
       ? `${filteredCount} of ${unassignedCount} unassigned Orders shown`
       : `${unassignedCount} unassigned Orders`;
 
@@ -42,6 +53,14 @@ export function renderTaskPoolFilters({ onSearchChange, onUrgencyChange }) {
 
   urgencyFilter.onchange = () => {
     onUrgencyChange(urgencyFilter.value || "All");
+  };
+
+  deliveryDateFilter.onchange = () => {
+    onDeliveryDateChange(deliveryDateFilter.value || "");
+  };
+
+  clearDeliveryDateFilter.onclick = () => {
+    onClearDeliveryDate();
   };
 }
 
@@ -124,6 +143,7 @@ export function renderTaskPool({
     meta.append(
       createBadge(`Pallet: ${getDisplayPalletQuantity(order)}`),
       createBadge(getUrgencyLabel(order), isUrgent(order) ? "urgent" : "neutral"),
+      createBadge(`Delivery Date: ${formatOptional(order.delivery_date)}`),
       createBadge(`Start: ${formatOptional(order.start_time)}`),
     );
 

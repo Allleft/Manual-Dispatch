@@ -15,6 +15,7 @@ from backend.schemas import (
     CreateOrderRequest,
     RegisterOperatorAccountRequest,
     SaveFinalTripSummaryRequest,
+    UpdateOrderRequest,
 )
 from backend.services.manual_dispatch_service import ManualDispatchService
 
@@ -236,6 +237,44 @@ class ManualDispatchFinalSummaryTest(unittest.TestCase):
                     ],
                 )
             )
+
+    def test_final_summary_uses_assigned_order_after_delivery_date_edit(self):
+        self._assign_order("ORD-001", "D001", "trip1")
+        self.service.update_order(
+            "ORD-001",
+            UpdateOrderRequest(
+                invoice_number="INV-1001",
+                company_name="Demo Customer A",
+                phone="0400 000 001",
+                delivery_address="1 Demo Street",
+                suburb="Dandenong",
+                postcode="3175",
+                delivery_date="2026-05-06",
+                zone="South East",
+                urgency="Urgent",
+                preferred_driver_id="D001",
+                pallet_quantity=2,
+                loose_bags_quantity=0,
+                start_time="08:00",
+                end_time="12:00",
+                note="Call before delivery",
+            ),
+        )
+
+        summary = self.service.save_final_trip_summary(
+            self._summary_request(
+                delivery_date="2026-05-06",
+                trips=[
+                    self._trip_payload(
+                        "trip1",
+                        [self._order_payload("ORD-001")],
+                    )
+                ],
+            )
+        )
+
+        self.assertEqual("2026-05-06", summary.delivery_date)
+        self.assertEqual("ORD-001", summary.trips[0].orders[0].task_id)
 
     def test_saved_snapshot_does_not_change_after_live_data_edits(self):
         self._assign_order("ORD-001", "D001", "trip1")

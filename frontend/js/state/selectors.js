@@ -48,10 +48,21 @@ export function orderMatchesUrgencyFilter(order) {
   return getUrgencyLabel(order) === state.urgencyFilter;
 }
 
+export function orderMatchesTaskPoolDeliveryDateFilter(order) {
+  if (!state.taskPoolDeliveryDateFilter) {
+    return true;
+  }
+
+  return order.delivery_date === state.taskPoolDeliveryDateFilter;
+}
+
 export function getFilteredUnassignedOrders() {
   const searchText = normalizeSearchText(state.taskPoolSearch);
   return getUnassignedOrders().filter(
-    (order) => orderMatchesSearch(order, searchText) && orderMatchesUrgencyFilter(order),
+    (order) =>
+      orderMatchesSearch(order, searchText) &&
+      orderMatchesUrgencyFilter(order) &&
+      orderMatchesTaskPoolDeliveryDateFilter(order),
   );
 }
 

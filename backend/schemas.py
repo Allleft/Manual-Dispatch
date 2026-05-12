@@ -235,6 +235,7 @@ class UpdateOrderRequest:
     delivery_address: Optional[str] = None
     suburb: Optional[str] = None
     postcode: Optional[str] = None
+    delivery_date: Optional[str] = None
     zone: Optional[str] = None
     urgency: Optional[str] = None
     preferred_driver_id: Optional[str] = None

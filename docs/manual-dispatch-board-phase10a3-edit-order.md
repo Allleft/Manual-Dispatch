@@ -38,6 +38,7 @@ GET  /api/manual-dispatch/export-excel
 - Delivery Address
 - Suburb
 - Postcode
+- Delivery Date
 - Zone
 - Urgency
 - Preferred Driver
@@ -47,7 +48,7 @@ GET  /api/manual-dispatch/export-excel
 - End Time
 - Note
 
-Delivery Date is intentionally read-only in this first edit version to avoid cross-date assignment complexity.
+Delivery Date is editable for active Orders. Changing it updates the Order's customer Delivery Date while preserving any existing Dispatch Date / Driver / Trip assignment.
 
 ## 5. Frontend Behavior
 - Read-only detail popup now shows `Edit`.

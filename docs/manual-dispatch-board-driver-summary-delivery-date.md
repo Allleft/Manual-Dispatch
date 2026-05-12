@@ -10,6 +10,7 @@ Driver Summary now has its own Delivery Date view control. This separates the op
 - Delivery Date is the customer/order delivery date.
 - Driver Summary Delivery Date controls which assigned Orders are visible inside Driver Summary cards.
 - Task Pool remains a global unassigned active Order pool and is not filtered by Driver Summary Delivery Date.
+- Task Pool can apply its own optional Delivery Date display filter without changing assignment membership or Driver Summary state.
 
 ## Driver Summary Behavior
 
@@ -29,6 +30,14 @@ driver_id + dispatch_date + delivery_date
 ```
 
 Selecting or clearing a vehicle for one Delivery Date does not overwrite vehicle selections for another Delivery Date.
+
+## Editable Order Delivery Date
+
+- Active Orders can update `delivery_date` through Edit Order.
+- An unassigned Order stays in Task Pool after its Delivery Date changes; it may disappear only from the current Task Pool display filter if the new date no longer matches.
+- An assigned Order keeps its existing Dispatch Date / Driver / Trip assignment after its Delivery Date changes.
+- Driver Summary then shows that assigned Order only when its updated Delivery Date matches the selected Driver Summary Delivery Date.
+- Existing vehicle selections for other Delivery Dates are preserved.
 
 Legacy vehicle selections that existed before this scope was added are migrated with:
 

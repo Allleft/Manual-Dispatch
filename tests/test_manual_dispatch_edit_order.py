@@ -62,6 +62,14 @@ class ManualDispatchEditOrderTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.service.update_order("ORD-001", self._request(loose_bags_quantity=-1))
 
+    def test_update_order_rejects_missing_delivery_date(self):
+        with self.assertRaisesRegex(ValueError, "delivery_date is required"):
+            self.service.update_order("ORD-001", self._request(delivery_date=""))
+
+    def test_update_order_rejects_invalid_delivery_date(self):
+        with self.assertRaisesRegex(ValueError, "delivery_date must"):
+            self.service.update_order("ORD-001", self._request(delivery_date="2026-5-7"))
+
     def test_assigned_order_remains_assigned_after_edit(self):
         self._assign_order("ORD-001", "D001", "trip2")
 
@@ -108,13 +116,33 @@ class ManualDispatchEditOrderTest(unittest.TestCase):
         self.assertEqual(7, data_rows[0][12])
         self.assertEqual("Excel sees this note", data_rows[0][16])
 
-    def test_delivery_date_cannot_be_modified_through_edit_service(self):
-        request = self._request(suburb="Date Safe")
-        request.delivery_date = "2026-06-06"
+    def test_delivery_date_can_be_modified_through_edit_service(self):
+        updated = self.service.update_order(
+            "ORD-001",
+            self._request(suburb="Date Safe", delivery_date="2026-06-06"),
+        )
 
-        updated = self.service.update_order("ORD-001", request)
+        reloaded = self.repository.get_order("ORD-001")
 
-        self.assertEqual(self.dispatch_date, updated.delivery_date)
+        self.assertEqual("2026-06-06", updated.delivery_date)
+        self.assertEqual("2026-06-06", reloaded.delivery_date)
+
+    def test_assigned_order_keeps_assignment_after_delivery_date_change(self):
+        self._assign_order("ORD-001", "D001", "trip2")
+
+        updated = self.service.update_order(
+            "ORD-001",
+            self._request(delivery_date="2026-05-06"),
+        )
+        board = self.service.get_board(self.dispatch_date)
+
+        self.assertEqual("2026-05-06", updated.delivery_date)
+        self.assertEqual("ORD-001", board.assignments[0].task_id)
+        self.assertEqual("trip2", board.assignments[0].trip_no)
+        self.assertEqual(
+            "2026-05-06",
+            next(order for order in board.orders if order.order_id == "ORD-001").delivery_date,
+        )
 
     def _assign_order(self, order_id, driver_id, trip_no):
         self.service.assign_task(
@@ -135,6 +163,7 @@ class ManualDispatchEditOrderTest(unittest.TestCase):
             "delivery_address": "1 Demo Street",
             "suburb": "Dandenong",
             "postcode": "3175",
+            "delivery_date": self.dispatch_date,
             "zone": "South East",
             "urgency": "Normal",
             "preferred_driver_id": "D001",

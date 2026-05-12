@@ -210,6 +210,16 @@ function renderTaskPoolFilters() {
       renderTaskPoolFilters();
       renderTaskPool();
     },
+    onDeliveryDateChange: (value) => {
+      state.taskPoolDeliveryDateFilter = value;
+      renderTaskPoolFilters();
+      renderTaskPool();
+    },
+    onClearDeliveryDate: () => {
+      state.taskPoolDeliveryDateFilter = "";
+      renderTaskPoolFilters();
+      renderTaskPool();
+    },
   });
 }
 

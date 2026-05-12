@@ -76,6 +76,7 @@ export function createOrderActions({
       delivery_address: order.delivery_address || "",
       suburb: order.suburb || "",
       postcode: order.postcode || "",
+      delivery_date: order.delivery_date || "",
       zone: order.zone || "",
       urgency: getUrgencyLabel(order),
       preferred_driver_id: order.preferred_driver_id || "",
