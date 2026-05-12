@@ -34,10 +34,10 @@ class ManualDispatchServiceTest(unittest.TestCase):
         self.assertEqual([False, True, False], [driver.pallet_only for driver in board.drivers])
         self.assertEqual(["ABC123", "XYZ888", "MCC001"], [vehicle.rego for vehicle in board.vehicles])
 
-    def test_get_board_filters_orders_by_dispatch_date(self):
+    def test_get_board_keeps_task_pool_orders_global_across_delivery_dates(self):
         created = self.service.create_order(
             CreateOrderRequest(
-                company_name="Date Filter Customer",
+                company_name="Future Delivery Customer",
                 suburb="Richmond",
                 delivery_date="2026-05-06",
             )
@@ -46,14 +46,9 @@ class ManualDispatchServiceTest(unittest.TestCase):
         board_0505 = self.service.get_board("2026-05-05")
         board_0506 = self.service.get_board("2026-05-06")
 
-        self.assertNotIn(created.order_id, [order.order_id for order in board_0505.orders])
+        self.assertIn(created.order_id, [order.order_id for order in board_0505.orders])
         self.assertIn(created.order_id, [order.order_id for order in board_0506.orders])
-        self.assertTrue(
-            all(order.delivery_date == "2026-05-05" for order in board_0505.orders)
-        )
-        self.assertTrue(
-            all(order.delivery_date == "2026-05-06" for order in board_0506.orders)
-        )
+        self.assertIn("2026-05-06", {order.delivery_date for order in board_0505.orders})
 
     def test_assign_task_creates_assignment_with_task_type_and_task_id(self):
         assignment = self.service.assign_task(
@@ -104,8 +99,40 @@ class ManualDispatchServiceTest(unittest.TestCase):
         )
 
         self.assertEqual("2026-05-05", vehicle_assignment.dispatch_date)
+        self.assertEqual("2026-05-05", vehicle_assignment.delivery_date)
         self.assertEqual("D001", vehicle_assignment.driver_id)
         self.assertEqual("V002", vehicle_assignment.vehicle_id)
+
+    def test_vehicle_selection_is_scoped_by_dispatch_and_delivery_date(self):
+        first = self.service.assign_vehicle_to_driver(
+            AssignDriverVehicleRequest(
+                dispatch_date="2026-05-05",
+                delivery_date="2026-05-05",
+                driver_id="D001",
+                vehicle_id="V001",
+            )
+        )
+        second = self.service.assign_vehicle_to_driver(
+            AssignDriverVehicleRequest(
+                dispatch_date="2026-05-05",
+                delivery_date="2026-05-06",
+                driver_id="D001",
+                vehicle_id="V002",
+            )
+        )
+
+        board = self.service.get_board("2026-05-05")
+
+        self.assertEqual("V001", first.vehicle_id)
+        self.assertEqual("V002", second.vehicle_id)
+        self.assertEqual(
+            [("2026-05-05", "V001"), ("2026-05-06", "V002")],
+            [
+                (assignment.delivery_date, assignment.vehicle_id)
+                for assignment in board.driver_vehicle_assignments
+                if assignment.driver_id == "D001"
+            ],
+        )
 
     def test_assigning_vehicle_does_not_modify_task_assignment_records(self):
         task_assignment = self.service.assign_task(

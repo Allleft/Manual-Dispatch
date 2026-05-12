@@ -183,21 +183,27 @@ def save_final_trip_summary(payload: dict = Body(...)):
 
 
 @router.get("/final-summaries")
-def list_final_trip_summaries(dispatch_date: str):
+def list_final_trip_summaries(dispatch_date: str, delivery_date: str = None):
     try:
-        return [to_dict(summary) for summary in service.list_final_trip_summaries(dispatch_date)]
+        return [
+            to_dict(summary)
+            for summary in service.list_final_trip_summaries(
+                dispatch_date,
+                delivery_date,
+            )
+        ]
     except ValueError as error:
         raise _to_http_exception(error) from error
 
 
 @router.get("/final-summaries/export-excel")
-def export_final_trip_summaries_excel(dispatch_date: str):
+def export_final_trip_summaries_excel(dispatch_date: str, delivery_date: str = None):
     try:
-        summaries = service.list_final_trip_summaries(dispatch_date)
+        summaries = service.list_final_trip_summaries(dispatch_date, delivery_date)
     except ValueError as error:
         raise _to_http_exception(error) from error
 
-    workbook_bytes = build_final_summary_excel(summaries, dispatch_date)
+    workbook_bytes = build_final_summary_excel(summaries, dispatch_date, delivery_date)
     filename = f"final-trip-summary-{dispatch_date}.xlsx"
     return Response(
         content=workbook_bytes,
@@ -223,6 +229,7 @@ def _assign_driver_vehicle_request_from_payload(payload):
     payload = payload or {}
     return AssignDriverVehicleRequest(
         dispatch_date=payload.get("dispatch_date"),
+        delivery_date=payload.get("delivery_date"),
         driver_id=payload.get("driver_id"),
         vehicle_id=payload.get("vehicle_id") or None,
     )
@@ -232,6 +239,7 @@ def _save_final_trip_summary_request_from_payload(payload):
     payload = payload or {}
     return SaveFinalTripSummaryRequest(
         dispatch_date=payload.get("dispatch_date"),
+        delivery_date=payload.get("delivery_date"),
         driver_id=payload.get("driver_id"),
         driver_name_snapshot=payload.get("driver_name_snapshot")
         or payload.get("driver_name"),

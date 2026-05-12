@@ -9,6 +9,7 @@ import {
   findDriverById,
   getAssignedOrdersForDriver,
   getAssignmentsForDriver,
+  getFinalSummaryKey,
   getOrderByTaskId,
   getSelectedVehicleForDriver,
   getTaskKey,
@@ -49,6 +50,7 @@ export function createFinalSummaryActions({
     return {
       summary_id: summary.summary_id || "",
       dispatch_date: summary.dispatch_date || state.dispatchDate,
+      delivery_date: summary.delivery_date || state.driverSummaryDeliveryDate || summary.dispatch_date || state.dispatchDate,
       driver_id: summary.driver_id || "",
       driver_name: summary.driver_name || summary.driver_name_snapshot || "",
       driver_name_snapshot: summary.driver_name_snapshot || summary.driver_name || "",
@@ -91,8 +93,8 @@ export function createFinalSummaryActions({
     };
   }
 
-  async function exportFinalSummariesExcel(dispatchDate) {
-    const response = await apiExportFinalSummariesExcel(dispatchDate);
+  async function exportFinalSummariesExcel(dispatchDate, deliveryDate) {
+    const response = await apiExportFinalSummariesExcel(dispatchDate, deliveryDate);
     if (!response.ok) {
       let message = `Export failed with status ${response.status}`;
       try {
@@ -108,6 +110,10 @@ export function createFinalSummaryActions({
   }
 
   function buildFinalTripSummarySnapshot(driverId) {
+    if (!state.driverSummaryDeliveryDate) {
+      throw new Error("Please select a Delivery Date before generating Final Trip Summary.");
+    }
+
     const driver = findDriverById(driverId);
     if (!driver) {
       throw new Error(`Driver does not exist: ${driverId}`);
@@ -161,6 +167,7 @@ export function createFinalSummaryActions({
     return {
       generated_at: new Date().toISOString(),
       dispatch_date: state.dispatchDate,
+      delivery_date: state.driverSummaryDeliveryDate,
       driver_id: driver.driver_id,
       driver_name: driver.name,
       driver_name_snapshot: driver.name,
@@ -181,7 +188,14 @@ export function createFinalSummaryActions({
       return;
     }
 
-    if (state.finalTripSummaries[driverId]) {
+    if (!state.driverSummaryDeliveryDate) {
+      showError("Please select a Delivery Date before generating Final Trip Summary.");
+      renderBoard();
+      return;
+    }
+
+    const summaryKey = getFinalSummaryKey(driverId);
+    if (state.finalTripSummaries[summaryKey]) {
       showError("Final Trip Summary for this driver is already generated and locked.");
       renderBoard();
       return;
@@ -209,7 +223,7 @@ export function createFinalSummaryActions({
       return;
     }
 
-    state.finalTripSummaries[driverId] = snapshot;
+    state.finalTripSummaries[summaryKey] = snapshot;
     state.finalSummaryGlobalSaveError = "";
     state.finalSummaryGlobalSaveSuccess = "";
     snapshot.trips.forEach((trip) => {
@@ -246,6 +260,7 @@ export function createFinalSummaryActions({
     const normalized = normalizeFinalSummary(summary);
     return {
       dispatch_date: normalized.dispatch_date,
+      delivery_date: normalized.delivery_date,
       driver_id: normalized.driver_id,
       driver_name_snapshot: normalized.driver_name_snapshot || normalized.driver_name,
       vehicle_id: normalized.vehicle_id || null,
@@ -277,6 +292,10 @@ export function createFinalSummaryActions({
   function getUnsavedFinalSummaries() {
     return Object.values(state.finalTripSummaries)
       .map(normalizeFinalSummary)
+      .filter((summary) =>
+        summary.dispatch_date === state.dispatchDate &&
+        summary.delivery_date === state.driverSummaryDeliveryDate,
+      )
       .filter((summary) => !summary.summary_id);
   }
 
@@ -290,10 +309,18 @@ export function createFinalSummaryActions({
 
     for (const [dispatchDate, dateSummaries] of summariesByDate.entries()) {
       const savedSummaries = await apiListFinalSummaries(dispatchDate);
-      const savedDriverIds = new Set((savedSummaries || []).map((summary) => summary.driver_id));
-      const duplicate = dateSummaries.find((summary) => savedDriverIds.has(summary.driver_id));
+      const savedKeys = new Set(
+        (savedSummaries || []).map((summary) =>
+          getFinalSummaryKey(summary.driver_id, summary.delivery_date || summary.dispatch_date),
+        ),
+      );
+      const duplicate = dateSummaries.find((summary) =>
+        savedKeys.has(getFinalSummaryKey(summary.driver_id, summary.delivery_date)),
+      );
       if (duplicate) {
-        throw new Error("Final Summary for this driver and dispatch date has already been saved.");
+        throw new Error(
+          "Final Summary for this driver, dispatch date, and delivery date has already been saved.",
+        );
       }
     }
   }
@@ -310,6 +337,13 @@ export function createFinalSummaryActions({
     if (!state.isLoggedIn || !state.accountName) {
       state.finalSummaryGlobalSaveError =
         "Please log in before saving and exporting Final Trip Summary.";
+      renderFinalTripSummaries();
+      return;
+    }
+
+    if (!state.driverSummaryDeliveryDate) {
+      state.finalSummaryGlobalSaveError =
+        "Please select a Delivery Date before generating Final Trip Summary.";
       renderFinalTripSummaries();
       return;
     }
@@ -333,11 +367,11 @@ export function createFinalSummaryActions({
         const savedSummary = normalizeFinalSummary(
           await apiSaveFinalSummary(getFinalSummarySavePayload(summary)),
         );
-        state.finalTripSummaries[savedSummary.driver_id] = savedSummary;
+        state.finalTripSummaries[getFinalSummaryKey(savedSummary.driver_id, savedSummary.delivery_date)] = savedSummary;
         savedSummaries.push(savedSummary);
       }
 
-      await exportFinalSummariesExcel(state.dispatchDate);
+      await exportFinalSummariesExcel(state.dispatchDate, state.driverSummaryDeliveryDate);
 
       state.finalSummaryGlobalSaveSuccess = `Final Trip Summary saved and exported by ${state.accountName}.`;
       state.historyLoaded = false;

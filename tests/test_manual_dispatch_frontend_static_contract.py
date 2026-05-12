@@ -15,6 +15,12 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         script_sources = re.findall(r"<script[^>]+src=\"([^\"]+)\"", index_html)
         self.assertEqual(["app.js"], script_sources)
 
+    def test_driver_summary_delivery_date_control_is_present(self):
+        index_html = (FRONTEND_ROOT / "index.html").read_text(encoding="utf-8")
+
+        self.assertIn('id="driver-summary-delivery-date"', index_html)
+        self.assertIn('type="date"', index_html)
+
     def test_frontend_module_import_paths_exist(self):
         frontend_sources = list(FRONTEND_ROOT.rglob("*.js"))
         import_paths = []

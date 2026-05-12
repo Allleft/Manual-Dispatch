@@ -48,7 +48,7 @@
 ## Duplicate Save Rule
 - A Driver can have only one saved Final Trip Summary per dispatch date.
 - Duplicate save attempts are rejected with:
-  `Final Summary for this driver and dispatch date has already been saved.`
+  `Final Summary for this driver, dispatch date, and delivery date has already been saved.`
 - Saved summaries are not overwritten or duplicated.
 
 ## Validation Results

@@ -34,13 +34,19 @@ function normalizeBoardResponse(payload) {
     drivers: payload.drivers || [],
     vehicles: payload.vehicles || [],
     assignments: payload.assignments || [],
-    driverVehicleAssignments: payload.driver_vehicle_assignments || [],
+    driverVehicleAssignments: (payload.driver_vehicle_assignments || []).map((assignment) => ({
+      ...assignment,
+      delivery_date: assignment.delivery_date || assignment.dispatch_date || payload.dispatch_date || state.dispatchDate,
+    })),
   };
 }
 
 function applyBoardResponse(payload) {
   const board = normalizeBoardResponse(payload);
   state.dispatchDate = board.dispatchDate;
+  if (!state.driverSummaryDeliveryDate) {
+    state.driverSummaryDeliveryDate = board.dispatchDate;
+  }
   state.orders = board.orders;
   state.drivers = board.drivers;
   state.vehicles = board.vehicles;
@@ -165,6 +171,7 @@ function renderBoardControls() {
   dateInput.onchange = () => {
     const nextDate = dateInput.value || DEFAULT_DISPATCH_DATE;
     state.dispatchDate = nextDate;
+    state.driverSummaryDeliveryDate = nextDate;
     state.finalTripSummaries = {};
     state.generatedTaskKeys = new Set();
     state.isSavingFinalSummaries = false;
@@ -216,6 +223,13 @@ function renderTaskPool() {
 }
 function renderDriverSummary() {
   renderDriverSummaryView({
+    onDeliveryDateChange: (deliveryDate) => {
+      state.driverSummaryDeliveryDate = deliveryDate;
+      state.finalSummaryGlobalSaveError = "";
+      state.finalSummaryGlobalSaveSuccess = "";
+      renderDriverSummary();
+      renderFinalTripSummaries();
+    },
     onVehicleChange: vehicleActions.handleVehicleChange,
     onGenerateDriverSummary: finalSummaryActions.handleGenerateDriverSummary,
     onOpenOrderDetail: orderActions.openOrderDetail,

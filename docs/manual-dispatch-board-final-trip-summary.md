@@ -1,14 +1,14 @@
 # Manual Dispatch Board Final Trip Summary
 
 ## Summary
-- Final Trip Summary is a locked frontend-memory snapshot generated from a Driver's current editable Trip Summary.
+- Final Trip Summary is a locked frontend-memory snapshot generated from a Driver's current editable Trip Summary for the selected Driver Summary Delivery Date.
 - It is read-only and does not auto-update after later board changes.
 - It uses existing assignment data and existing unassign API calls during Generate.
 - Phase 10G adds optional SQLite persistence for saved Final Trip Summary snapshots.
 
 ## Generate Behavior
 1. User clicks `Generate` on a Driver card.
-2. Frontend collects that Driver's current assignments for the selected Dispatch Date.
+2. Frontend collects that Driver's current assignments for the selected Dispatch Date whose Orders match the selected Driver Summary Delivery Date.
 3. If there are no assigned Orders, no summary is generated.
 4. Frontend builds and stores a locked snapshot before calling unassign.
 5. Frontend calls `POST /api/manual-dispatch/unassign` for each generated Order.
@@ -20,7 +20,7 @@
 - Final Trip Summary must not render from live board state.
 - Snapshot data is stored in `state.finalTripSummaries`.
 - Later Assign, Unassign, Edit Order, or Vehicle changes do not change an existing locked summary.
-- A Driver can have only one locked Final Trip Summary in this phase.
+- A Driver can have one locked Final Trip Summary per Dispatch Date + Delivery Date in this phase.
 
 ## Session Limitation
 - Generated-but-unsaved Final Trip Summary previews are frontend-memory only.
@@ -31,10 +31,10 @@
 
 ## Final Summary Header
 Each locked block shows:
-- Date
+- Dispatch Date
+- Delivery Date
 - Driver
 - Rego #
-- Generated At
 - Locked
 
 ## Excluded Header Fields

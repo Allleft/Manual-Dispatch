@@ -47,6 +47,21 @@ class ManualDispatchDriverVehicleClearTest(unittest.TestCase):
         board = self.service.get_board(self.dispatch_date)
         self.assertEqual([], board.driver_vehicle_assignments)
 
+    def test_clearing_vehicle_only_removes_selected_delivery_date_assignment(self):
+        self._assign_vehicle("D001", "V001", delivery_date="2026-05-05")
+        self._assign_vehicle("D001", "V002", delivery_date="2026-05-06")
+
+        self._clear_vehicle("D001", delivery_date="2026-05-06")
+
+        board = self.service.get_board(self.dispatch_date)
+        self.assertEqual(
+            [("2026-05-05", "V001")],
+            [
+                (assignment.delivery_date, assignment.vehicle_id)
+                for assignment in board.driver_vehicle_assignments
+            ],
+        )
+
     def test_clearing_vehicle_with_none_vehicle_id_removes_assignment(self):
         self._assign_vehicle("D001", "V002")
 
@@ -130,19 +145,21 @@ class ManualDispatchDriverVehicleClearTest(unittest.TestCase):
             )
         )
 
-    def _assign_vehicle(self, driver_id, vehicle_id):
+    def _assign_vehicle(self, driver_id, vehicle_id, delivery_date=None):
         return self.service.assign_vehicle_to_driver(
             AssignDriverVehicleRequest(
                 dispatch_date=self.dispatch_date,
+                delivery_date=delivery_date or self.dispatch_date,
                 driver_id=driver_id,
                 vehicle_id=vehicle_id,
             )
         )
 
-    def _clear_vehicle(self, driver_id):
+    def _clear_vehicle(self, driver_id, delivery_date=None):
         return self.service.assign_vehicle_to_driver(
             AssignDriverVehicleRequest(
                 dispatch_date=self.dispatch_date,
+                delivery_date=delivery_date or self.dispatch_date,
                 driver_id=driver_id,
                 vehicle_id="",
             )

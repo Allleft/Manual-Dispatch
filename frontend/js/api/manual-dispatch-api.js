@@ -160,9 +160,9 @@ export async function apiSaveFinalSummary(payload) {
 }
 
 
-export async function apiListFinalSummaries(dispatchDate) {
+export async function apiListFinalSummaries(dispatchDate, deliveryDate) {
   return requestJson("/api/manual-dispatch/final-summaries", {
-    query: { dispatch_date: dispatchDate },
+    query: { dispatch_date: dispatchDate, delivery_date: deliveryDate },
   });
 }
 
@@ -223,13 +223,14 @@ export async function apiDeleteVehicle(vehicleId) {
 }
 
 
-export function getFinalSummaryExcelExportUrl(dispatchDate) {
+export function getFinalSummaryExcelExportUrl(dispatchDate, deliveryDate) {
   return getApiUrl("/api/manual-dispatch/final-summaries/export-excel", {
     dispatch_date: dispatchDate,
+    delivery_date: deliveryDate,
   });
 }
 
 
-export function apiExportFinalSummariesExcel(dispatchDate) {
-  return fetch(getFinalSummaryExcelExportUrl(dispatchDate));
+export function apiExportFinalSummariesExcel(dispatchDate, deliveryDate) {
+  return fetch(getFinalSummaryExcelExportUrl(dispatchDate, deliveryDate));
 }

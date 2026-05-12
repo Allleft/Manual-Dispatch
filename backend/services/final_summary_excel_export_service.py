@@ -9,14 +9,19 @@ FINAL_SUMMARY_HEADERS = ["No.", "Customer Name", "Suburb", "Invoice #", "Product
 INVALID_SHEET_CHARACTERS = re.compile(r"[\[\]\*:/\\?]")
 
 
-def build_final_summary_excel(final_summaries, dispatch_date):
+def build_final_summary_excel(final_summaries, dispatch_date, delivery_date=None):
     """Build an Excel workbook from saved Final Trip Summary snapshots."""
     workbook = Workbook()
 
     if not final_summaries:
         worksheet = workbook.active
         worksheet.title = "Final Summaries"
-        worksheet["A1"] = f"No saved Final Trip Summaries for {dispatch_date}"
+        empty_scope = (
+            f"{dispatch_date} / {delivery_date}"
+            if delivery_date
+            else dispatch_date
+        )
+        worksheet["A1"] = f"No saved Final Trip Summaries for {empty_scope}"
         worksheet["A1"].font = Font(bold=True)
         worksheet.column_dimensions["A"].width = 48
         return _save_workbook(workbook)
@@ -34,7 +39,8 @@ def build_final_summary_excel(final_summaries, dispatch_date):
 
 def _write_summary_sheet(worksheet, summary):
     meta_rows = [
-        ("Date", summary.dispatch_date),
+        ("Dispatch Date", summary.dispatch_date),
+        ("Delivery Date", summary.delivery_date),
         ("Driver", summary.driver_name_snapshot),
         ("Rego #", summary.vehicle_rego_snapshot or "No vehicle selected"),
         ("Saved By", summary.saved_by_account_name or "Unknown"),

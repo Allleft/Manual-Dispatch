@@ -90,19 +90,19 @@ Assignment rules:
 - One task should not be assigned to multiple drivers on the same dispatch date.
 
 ## Manual Driver Vehicle Assignment
-Manual Driver Vehicle Assignment records the selected Vehicle for a Driver on a Dispatch Date.
+Manual Driver Vehicle Assignment records the selected Vehicle for a Driver on a Dispatch Date and Driver Summary Delivery Date.
 
 | Field | Purpose |
 | --- | --- |
-| `id` | Unique vehicle assignment identifier. |
 | `dispatch_date` | Dispatch Date for the vehicle choice. |
+| `delivery_date` | Driver Summary Delivery Date for the vehicle choice. |
 | `driver_id` | Driver receiving the vehicle assignment. |
 | `vehicle_id` | Selected Vehicle. |
 | `created_at` | Timestamp when the vehicle assignment was created. |
 | `updated_at` | Timestamp when the vehicle assignment was last updated. |
 
 Vehicle assignment rules:
-- Vehicle selection belongs to Driver + Dispatch Date.
+- Vehicle selection belongs to Driver + Dispatch Date + Delivery Date.
 - Vehicle is not assigned to each individual Order in the MVP.
-- Example: John + 2026-05-05 -> ABC123.
-- John's `trip1` and `trip2` should use the same selected vehicle by default.
+- Example: John + dispatch date `2026-05-05` + delivery date `2026-05-06` -> ABC123.
+- John's `trip1` and `trip2` for the same Dispatch Date + Delivery Date use the same selected vehicle by default.

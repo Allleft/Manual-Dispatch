@@ -5,11 +5,12 @@ Manual Dispatch Board is a small FastAPI + vanilla HTML/CSS/JavaScript app for o
 It supports a manual workflow:
 
 1. Load a Dispatch Date.
-2. Review unassigned Orders in the Task Pool.
+2. Review unassigned Orders in the global Task Pool.
 3. Assign Orders to a Driver and `trip1` or `trip2`.
-4. Choose a Vehicle for a Driver + Dispatch Date.
-5. Generate a locked Final Trip Summary snapshot.
-6. Save and export saved Final Trip Summary history.
+4. Choose a Driver Summary Delivery Date.
+5. Choose a Vehicle for a Driver + Dispatch Date + Delivery Date.
+6. Generate a locked Final Trip Summary snapshot for that Dispatch Date + Delivery Date.
+7. Save and export saved Final Trip Summary history.
 
 This project is intentionally not a route optimizer. It does not automatically select drivers, vehicles, trips, routes, ETAs, or capacity plans.
 
@@ -24,7 +25,7 @@ Implemented focus areas:
 - Driver and Vehicle master-data management through the Driver & Vehicle Specification modal.
 - Final Trip Summary generation, save/history, and Excel export from saved snapshot records.
 - Lightweight database-backed operator login for Final Trip Summary attribution.
-- Dispatch Date defaults to the browser's local current date. Demo data may still be dated `2026-05-05`, so today's Task Pool can be empty unless local data exists for today.
+- Dispatch Date defaults to the browser's local current date. Demo data may still be dated `2026-05-05`; Task Pool is global, while Driver Summary visibility depends on the selected Driver Summary Delivery Date.
 
 Runtime SQLite database files are local and ignored by Git.
 
@@ -34,11 +35,12 @@ Runtime SQLite database files are local and ignored by Git.
 
 - Login/register gate using Account Name + Password before the board can be used.
 - Logged-in operator badge and Logout button in the page header.
-- Dispatch Date board loading.
+- Dispatch Date board loading for the operational assignment date.
+- Driver Summary Delivery Date controls which assigned customer delivery-date Orders are shown inside Driver cards.
 - Top-bottom layout:
   - Top: Task Pool.
   - Bottom: Trip Summary.
-- Task Pool shows unassigned active Orders for the selected Dispatch Date.
+- Task Pool is a global unassigned active Order pool and is not filtered by Driver Summary Delivery Date.
 - Compact Order cards show Invoice #, Company, Suburb, Pallet quantity, urgency, note preview, and start time.
 - Task Pool search and urgency filter apply only to unassigned Orders.
 - Clicking an Order card opens a detail popup.
@@ -50,7 +52,7 @@ Runtime SQLite database files are local and ignored by Git.
 - Unassign Orders back to the Task Pool.
 - Pending Driver/Trip selections are preserved after assigning another Order.
 - Trip Summary groups assigned Orders by Driver and Trip.
-- Vehicle selection is stored at Driver + Dispatch Date level, not per Order.
+- Vehicle selection is stored at Driver + Dispatch Date + Delivery Date level, not per Order.
 - Vehicle selection can be cleared back to no selected vehicle.
 - Pallet-only and vehicle-capacity hints are display-only and non-blocking.
 
@@ -77,7 +79,7 @@ Runtime SQLite database files are local and ignored by Git.
 
 ### Final Trip Summary
 
-- Generate creates a locked frontend snapshot from a Driver's current assigned Orders and selected Vehicle.
+- Generate creates a locked frontend snapshot from a Driver's current assigned Orders for the selected Driver Summary Delivery Date and selected Vehicle.
 - Generated snapshots preserve Driver name, vehicle rego, trip grouping, totals, and Order row details at generation time.
 - Generated Orders are unassigned through the backend API and hidden from Task Pool in the same browser session.
 - Generated-but-unsaved Final Trip Summary snapshots are frontend-memory only and can be lost on refresh.
@@ -89,8 +91,8 @@ Runtime SQLite database files are local and ignored by Git.
 - `FINALIZED` Orders are hidden from Task Pool and editable Trip Summary.
 - Saved history can be loaded by History Date in the Final Trip Summary section.
 - Saved summaries do not update when live Orders, Drivers, or Vehicles are later edited.
-- Duplicate saved summaries for the same Driver + Dispatch Date are rejected.
-- Final Trip Summary Excel export uses saved snapshot fields, includes `Saved By`, and excludes Generated At / Saved At.
+- Duplicate saved summaries for the same Driver + Dispatch Date + Delivery Date are rejected.
+- Final Trip Summary Excel export uses saved snapshot fields, includes Dispatch Date, Delivery Date, `Saved By`, and excludes Generated At / Saved At.
 - The older active-assignment Excel export route remains in the backend for compatibility, but it is not exposed as a top-level frontend button.
 
 ### Operator Accounts
@@ -187,7 +189,7 @@ The test suite uses temporary SQLite databases for automated tests. Do not commi
 
 The repository includes seed/demo data for local development. Recent demo reset tooling creates 20 Victoria Orders dated `2026-05-05` while preserving Driver and Vehicle master data.
 
-The Dispatch Date input now defaults to the browser's local current date. If there are no Orders for today's date in your local SQLite database, the Task Pool may appear empty. Select a date with demo Orders, add Orders for today, or run the manual demo reset tooling if you need sample data.
+The Dispatch Date input now defaults to the browser's local current date. Task Pool is global for active unassigned Orders, so demo Orders can still appear even when their customer Delivery Date differs from the Dispatch Date. Driver Summary and Final Trip Summary use the Driver Summary Delivery Date, so select `2026-05-05` there when working with the seeded demo Orders.
 
 The demo reset script is manual/dev-only and must not run automatically on app startup.
 
@@ -233,6 +235,7 @@ Do not add these unless explicitly requested:
 - [Phase 2 frontend skeleton](docs/manual-dispatch-board-phase2.md)
 - [Phase 3 manual assignment flow](docs/manual-dispatch-board-phase3.md)
 - [Phase 4 vehicle selection](docs/manual-dispatch-board-phase4.md)
+- [Driver Summary Delivery Date behavior](docs/manual-dispatch-board-driver-summary-delivery-date.md)
 - [Phase 7 business hints](docs/manual-dispatch-board-phase7.md)
 - [Phase 10A-0 compact Order card UI](docs/manual-dispatch-board-phase10a0-ui-refinement.md)
 

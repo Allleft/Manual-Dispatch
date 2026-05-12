@@ -12,6 +12,10 @@ class FinalSummaryService:
 
     def save_final_trip_summary(self, request):
         dispatch_date = clean_required_text(request.dispatch_date, "dispatch_date")
+        delivery_date = clean_required_text(
+            getattr(request, "delivery_date", None) or dispatch_date,
+            "delivery_date",
+        )
         driver_id = clean_required_text(request.driver_id, "driver_id")
         self.validator.validate_driver_exists(driver_id)
         saved_by_account = self.validator.validate_saved_by_account(
@@ -23,17 +27,22 @@ class FinalSummaryService:
         if vehicle_id:
             self.validator.validate_vehicle_exists(vehicle_id)
 
-        if self.repository.has_saved_final_trip_summary(dispatch_date, driver_id):
+        if self.repository.has_saved_final_trip_summary(
+            dispatch_date,
+            driver_id,
+            delivery_date,
+        ):
             raise ValueError(
-                "Final Summary for this driver and dispatch date has already been saved."
+                "Final Summary for this driver, dispatch date, and delivery date has already been saved."
             )
 
-        rows = self._normalize_final_summary_rows(request.trips)
+        rows = self._normalize_final_summary_rows(request.trips, delivery_date)
         if not rows:
             raise ValueError("At least one final summary row is required")
 
         summary = {
             "dispatch_date": dispatch_date,
+            "delivery_date": delivery_date,
             "driver_id": driver_id,
             "driver_name_snapshot": clean_required_text(
                 request.driver_name_snapshot,
@@ -54,9 +63,10 @@ class FinalSummaryService:
         }
         return self.repository.save_final_trip_summary(summary, rows)
 
-    def list_final_trip_summaries(self, dispatch_date):
+    def list_final_trip_summaries(self, dispatch_date, delivery_date=None):
         dispatch_date = clean_required_text(dispatch_date, "dispatch_date")
-        return self.repository.list_final_trip_summaries(dispatch_date)
+        delivery_date = clean_optional_text(delivery_date)
+        return self.repository.list_final_trip_summaries(dispatch_date, delivery_date)
 
     def list_final_summary_dates(self):
         return self.repository.list_final_summary_dates()
@@ -68,7 +78,7 @@ class FinalSummaryService:
             raise ValueError(f"Final Trip Summary does not exist: {summary_id}")
         return summary
 
-    def _normalize_final_summary_rows(self, trips):
+    def _normalize_final_summary_rows(self, trips, delivery_date):
         if not isinstance(trips, list):
             raise ValueError("trips must be a list")
 
@@ -103,6 +113,13 @@ class FinalSummaryService:
                 task = self.repository.get_task(task_type, task_id)
                 if not task:
                     raise ValueError(f"Task does not exist: {task_type} {task_id}")
+                if (
+                    task_type == "ORDER"
+                    and getattr(task, "delivery_date", None) != delivery_date
+                ):
+                    raise ValueError(
+                        "Final Summary rows must match the selected delivery date"
+                    )
 
                 normalized_rows.append(
                     {

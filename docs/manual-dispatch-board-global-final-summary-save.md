@@ -27,7 +27,8 @@ Generated driver final summary cards are read-only display cards.
 
 Cards keep:
 - Locked / Saved badge
-- Date
+- Dispatch Date
+- Delivery Date
 - Driver
 - Rego #
 - Total Pallets
@@ -54,12 +55,12 @@ Object.values(state.finalTripSummaries).filter((summary) => !summary.summary_id)
 Saved summaries have `summary_id` from SQLite and are shown as locked historical records.
 
 ## Duplicate Save Handling
-Before saving, the frontend checks existing saved final summaries for the relevant dispatch date and driver IDs.
+Before saving, the frontend checks existing saved final summaries for the relevant dispatch date, delivery date, and driver IDs.
 
 If a duplicate exists, the Final Trip Summary section shows:
 
 ```text
-Unable to save Final Trip Summary. Final Summary for this driver and dispatch date has already been saved.
+Unable to save Final Trip Summary. Final Summary for this driver, dispatch date, and delivery date has already been saved.
 ```
 
 The page does not crash, generated previews remain visible, and nothing is silently overwritten.

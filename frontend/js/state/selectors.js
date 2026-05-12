@@ -70,7 +70,9 @@ export function findVehicleById(vehicleId) {
 export function getDriverVehicleAssignment(driverId) {
   return state.driverVehicleAssignments.find(
     (assignment) =>
-      assignment.driver_id === driverId && assignment.dispatch_date === state.dispatchDate,
+      assignment.driver_id === driverId &&
+      assignment.dispatch_date === state.dispatchDate &&
+      assignment.delivery_date === state.driverSummaryDeliveryDate,
   );
 }
 
@@ -87,6 +89,7 @@ export function isVehicleSelectedByAnotherDriver(driverId, vehicleId) {
   return state.driverVehicleAssignments.some(
     (assignment) =>
       assignment.dispatch_date === state.dispatchDate &&
+      assignment.delivery_date === state.driverSummaryDeliveryDate &&
       assignment.vehicle_id === vehicleId &&
       assignment.driver_id !== driverId,
   );
@@ -98,15 +101,13 @@ export function getOrderPreferredDriverName(order) {
 }
 
 export function getAssignedOrdersForDriver(driverId) {
-  return state.assignments
-    .filter((assignment) => assignment.driver_id === driverId)
+  return getAssignmentsForDriver(driverId)
     .map((assignment) => getOrderByTaskId(assignment.task_id))
     .filter(Boolean);
 }
 
 export function getAssignedOrdersForTrip(driverId, tripNo) {
-  return state.assignments
-    .filter((assignment) => assignment.driver_id === driverId && assignment.trip_no === tripNo)
+  return getAssignmentsForDriverTrip(driverId, tripNo)
     .map((assignment) => getOrderByTaskId(assignment.task_id))
     .filter(Boolean);
 }
@@ -115,7 +116,8 @@ export function getAssignmentsForDriver(driverId) {
   return state.assignments.filter(
     (assignment) =>
       assignment.driver_id === driverId &&
-      (!assignment.dispatch_date || assignment.dispatch_date === state.dispatchDate),
+      (!assignment.dispatch_date || assignment.dispatch_date === state.dispatchDate) &&
+      assignmentMatchesDriverSummaryDeliveryDate(assignment),
   );
 }
 
@@ -178,4 +180,17 @@ export function getDriverExceptions(driver) {
   });
 
   return messages;
+}
+
+export function getFinalSummaryKey(driverId, deliveryDate = state.driverSummaryDeliveryDate) {
+  return `${driverId}:${deliveryDate || ""}`;
+}
+
+function assignmentMatchesDriverSummaryDeliveryDate(assignment) {
+  if (!state.driverSummaryDeliveryDate) {
+    return false;
+  }
+
+  const order = getOrderByTaskId(assignment.task_id);
+  return Boolean(order && order.delivery_date === state.driverSummaryDeliveryDate);
 }

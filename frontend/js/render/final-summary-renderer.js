@@ -28,12 +28,17 @@ export function renderFinalTripSummaries({
   }
 
   finalSummaryList.innerHTML = "";
-  const summaries = Object.values(state.finalTripSummaries).map(normalizeFinalSummary);
+  const summaries = Object.values(state.finalTripSummaries)
+    .map(normalizeFinalSummary)
+    .filter((summary) =>
+      summary.dispatch_date === state.dispatchDate &&
+      summary.delivery_date === state.driverSummaryDeliveryDate,
+    );
 
   if (summaries.length === 0) {
     const emptyState = document.createElement("p");
     emptyState.className = "empty-board";
-    emptyState.textContent = "No generated Final Trip Summary previews in this session.";
+    emptyState.textContent = "No generated Final Trip Summary previews for this delivery date.";
     finalSummaryList.append(emptyState);
   } else {
     summaries
@@ -202,7 +207,8 @@ function createFinalTripSummaryCard(summary, options = {}) {
   const meta = document.createElement("dl");
   meta.className = "final-summary-meta";
   meta.append(
-    createDetailField("Date", summary.dispatch_date),
+    createDetailField("Dispatch Date", summary.dispatch_date),
+    createDetailField("Delivery Date", summary.delivery_date),
     createDetailField("Driver", summary.driver_name),
     createDetailField("Rego #", summary.vehicle_rego),
     createDetailField(

@@ -86,19 +86,18 @@ Planned fields and constraints:
 
 | Field | Requirement |
 | --- | --- |
-| `id` | Primary key. |
 | `dispatch_date` | Required. |
+| `delivery_date` | Required. |
 | `driver_id` | Required. |
 | `vehicle_id` | Required. |
 | `created_at` | Creation timestamp. |
 | `updated_at` | Last update timestamp. |
 
 Recommended constraints:
-- Primary key on `id`.
-- Required values for `dispatch_date`, `driver_id`, and `vehicle_id`.
-- Unique constraint on `dispatch_date + driver_id`.
+- Primary key on `dispatch_date + delivery_date + driver_id`.
+- Required values for `dispatch_date`, `delivery_date`, `driver_id`, and `vehicle_id`.
 
-The unique constraint keeps vehicle assignment at Driver + Dispatch Date level. Vehicle is not assigned to each individual Order in the MVP.
+The key keeps vehicle assignment at Driver + Dispatch Date + Delivery Date level. Vehicle is not assigned to each individual Order.
 
 ## Future Task Types
 Assignments use `task_type + task_id` so future tasks can be added without redesigning assignment records.

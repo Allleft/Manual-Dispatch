@@ -11,7 +11,7 @@ class BoardService:
     def get_board(self, dispatch_date):
         return ManualDispatchBoardResponse(
             dispatch_date=dispatch_date,
-            orders=self.repository.list_orders(dispatch_date),
+            orders=self.repository.list_orders(),
             drivers=self.repository.list_drivers(),
             vehicles=self.repository.list_vehicles(),
             assignments=self.repository.list_assignments(dispatch_date),

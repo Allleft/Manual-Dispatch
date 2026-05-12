@@ -32,13 +32,13 @@ The global **Save and Export** button:
 - Shows `Final Summary saved and exported.` on success.
 - Reloads the board after success so finalized Orders stay out of the active Task Pool and editable Trip Summary.
 
-If a duplicate summary exists for the same Driver and Dispatch Date, the backend error is shown inside the Final Trip Summary section and no export is attempted.
+If a duplicate summary exists for the same Driver, Dispatch Date, and Delivery Date, the backend error is shown inside the Final Trip Summary section and no export is attempted.
 
 ## Final Summary Excel Export
 
 New endpoint:
 
-`GET /api/manual-dispatch/final-summaries/export-excel?dispatch_date=YYYY-MM-DD`
+`GET /api/manual-dispatch/final-summaries/export-excel?dispatch_date=YYYY-MM-DD&delivery_date=YYYY-MM-DD`
 
 The export uses saved snapshot data from:
 
@@ -55,7 +55,8 @@ Workbook behavior:
 
 Each worksheet includes:
 
-- Date
+- Dispatch Date
+- Delivery Date
 - Driver
 - Rego #
 - Total Pallets

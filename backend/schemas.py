@@ -64,6 +64,7 @@ class ManualDispatchAssignment:
 @dataclass
 class ManualDriverVehicleAssignment:
     dispatch_date: str
+    delivery_date: str
     driver_id: str
     vehicle_id: str
 
@@ -99,12 +100,14 @@ class AssignDriverVehicleRequest:
     dispatch_date: str
     driver_id: str
     vehicle_id: Optional[str] = None
+    delivery_date: Optional[str] = None
 
 
 @dataclass
 class ManualDriverVehicleClearResponse:
     dispatch_date: str
     driver_id: str
+    delivery_date: Optional[str] = None
     vehicle_id: Optional[str] = None
     cleared: bool = True
 
@@ -137,6 +140,7 @@ class FinalTripSummaryTrip:
 class FinalTripSummary:
     summary_id: str
     dispatch_date: str
+    delivery_date: str
     driver_id: str
     driver_name_snapshot: str
     vehicle_id: Optional[str]
@@ -162,6 +166,7 @@ class SaveFinalTripSummaryRequest:
     total_loose_bags: int
     generated_at: Optional[str]
     trips: List[dict]
+    delivery_date: Optional[str] = None
     saved_by_account_name: Optional[str] = None
     saved_by_account_id: Optional[int] = None
 

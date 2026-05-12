@@ -126,23 +126,34 @@ class SQLiteManualDispatchRepository:
                 SELECT *
                 FROM manual_driver_vehicle_assignments
                 WHERE dispatch_date = ?
-                ORDER BY driver_id
+                ORDER BY driver_id, delivery_date
                 """,
                 (dispatch_date,),
             ).fetchall()
         return [self._row_to_driver_vehicle_assignment(row) for row in rows]
 
-    def list_final_trip_summaries(self, dispatch_date):
+    def list_final_trip_summaries(self, dispatch_date, delivery_date=None):
         with connect(self.db_path) as connection:
-            rows = connection.execute(
-                """
-                SELECT *
-                FROM final_trip_summaries
-                WHERE dispatch_date = ?
-                ORDER BY saved_at DESC, summary_id
-                """,
-                (dispatch_date,),
-            ).fetchall()
+            if delivery_date:
+                rows = connection.execute(
+                    """
+                    SELECT *
+                    FROM final_trip_summaries
+                    WHERE dispatch_date = ? AND delivery_date = ?
+                    ORDER BY saved_at DESC, summary_id
+                    """,
+                    (dispatch_date, delivery_date),
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    """
+                    SELECT *
+                    FROM final_trip_summaries
+                    WHERE dispatch_date = ?
+                    ORDER BY saved_at DESC, summary_id
+                    """,
+                    (dispatch_date,),
+                ).fetchall()
         return [self._row_to_final_trip_summary(row) for row in rows]
 
     def list_final_summary_dates(self):
@@ -157,17 +168,31 @@ class SQLiteManualDispatchRepository:
             ).fetchall()
         return [row["dispatch_date"] for row in rows]
 
-    def has_saved_final_trip_summary(self, dispatch_date, driver_id):
+    def has_saved_final_trip_summary(self, dispatch_date, driver_id, delivery_date=None):
         with connect(self.db_path) as connection:
-            row = connection.execute(
-                """
-                SELECT 1
-                FROM final_trip_summaries
-                WHERE dispatch_date = ? AND driver_id = ? AND status = 'SAVED'
-                LIMIT 1
-                """,
-                (dispatch_date, driver_id),
-            ).fetchone()
+            if delivery_date:
+                row = connection.execute(
+                    """
+                    SELECT 1
+                    FROM final_trip_summaries
+                    WHERE dispatch_date = ?
+                        AND delivery_date = ?
+                        AND driver_id = ?
+                        AND status = 'SAVED'
+                    LIMIT 1
+                    """,
+                    (dispatch_date, delivery_date, driver_id),
+                ).fetchone()
+            else:
+                row = connection.execute(
+                    """
+                    SELECT 1
+                    FROM final_trip_summaries
+                    WHERE dispatch_date = ? AND driver_id = ? AND status = 'SAVED'
+                    LIMIT 1
+                    """,
+                    (dispatch_date, driver_id),
+                ).fetchone()
         return row is not None
 
     def get_final_trip_summary(self, summary_id):
@@ -698,7 +723,7 @@ class SQLiteManualDispatchRepository:
             connection.commit()
         return cursor.rowcount > 0
 
-    def upsert_driver_vehicle_assignment(self, dispatch_date, driver_id, vehicle_id):
+    def upsert_driver_vehicle_assignment(self, dispatch_date, delivery_date, driver_id, vehicle_id):
         timestamp = self._timestamp()
 
         with connect(self.db_path) as connection:
@@ -706,35 +731,46 @@ class SQLiteManualDispatchRepository:
                 """
                 INSERT INTO manual_driver_vehicle_assignments (
                     dispatch_date,
+                    delivery_date,
                     driver_id,
                     vehicle_id,
                     created_at,
                     updated_at
-                ) VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT(dispatch_date, driver_id)
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(dispatch_date, delivery_date, driver_id)
                 DO UPDATE SET
                     vehicle_id = excluded.vehicle_id,
                     updated_at = excluded.updated_at
                 """,
-                (dispatch_date, driver_id, vehicle_id, timestamp, timestamp),
+                (dispatch_date, delivery_date, driver_id, vehicle_id, timestamp, timestamp),
             )
             connection.commit()
 
         return ManualDriverVehicleAssignment(
             dispatch_date=dispatch_date,
+            delivery_date=delivery_date,
             driver_id=driver_id,
             vehicle_id=vehicle_id,
         )
 
-    def remove_driver_vehicle_assignment(self, dispatch_date, driver_id):
+    def remove_driver_vehicle_assignment(self, dispatch_date, driver_id, delivery_date=None):
         with connect(self.db_path) as connection:
-            cursor = connection.execute(
-                """
-                DELETE FROM manual_driver_vehicle_assignments
-                WHERE dispatch_date = ? AND driver_id = ?
-                """,
-                (dispatch_date, driver_id),
-            )
+            if delivery_date:
+                cursor = connection.execute(
+                    """
+                    DELETE FROM manual_driver_vehicle_assignments
+                    WHERE dispatch_date = ? AND delivery_date = ? AND driver_id = ?
+                    """,
+                    (dispatch_date, delivery_date, driver_id),
+                )
+            else:
+                cursor = connection.execute(
+                    """
+                    DELETE FROM manual_driver_vehicle_assignments
+                    WHERE dispatch_date = ? AND driver_id = ?
+                    """,
+                    (dispatch_date, driver_id),
+                )
             connection.commit()
         return cursor.rowcount > 0
 
@@ -746,14 +782,21 @@ class SQLiteManualDispatchRepository:
                 """
                 SELECT 1
                 FROM final_trip_summaries
-                WHERE dispatch_date = ? AND driver_id = ? AND status = 'SAVED'
+                WHERE dispatch_date = ?
+                    AND delivery_date = ?
+                    AND driver_id = ?
+                    AND status = 'SAVED'
                 LIMIT 1
                 """,
-                (summary["dispatch_date"], summary["driver_id"]),
+                (
+                    summary["dispatch_date"],
+                    summary["delivery_date"],
+                    summary["driver_id"],
+                ),
             ).fetchone()
             if existing_summary:
                 raise ValueError(
-                    "Final Summary for this driver and dispatch date has already been saved."
+                    "Final Summary for this driver, dispatch date, and delivery date has already been saved."
                 )
 
             summary_id = self._create_final_trip_summary_id(connection)
@@ -762,6 +805,7 @@ class SQLiteManualDispatchRepository:
                 INSERT INTO final_trip_summaries (
                     summary_id,
                     dispatch_date,
+                    delivery_date,
                     driver_id,
                     driver_name_snapshot,
                     vehicle_id,
@@ -773,11 +817,12 @@ class SQLiteManualDispatchRepository:
                     saved_at,
                     saved_by_account_name,
                     saved_by_account_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     summary_id,
                     summary["dispatch_date"],
+                    summary["delivery_date"],
                     summary["driver_id"],
                     summary["driver_name_snapshot"],
                     summary.get("vehicle_id"),
@@ -963,6 +1008,7 @@ class SQLiteManualDispatchRepository:
     def _row_to_driver_vehicle_assignment(self, row):
         return ManualDriverVehicleAssignment(
             dispatch_date=row["dispatch_date"],
+            delivery_date=row["delivery_date"],
             driver_id=row["driver_id"],
             vehicle_id=row["vehicle_id"],
         )
@@ -998,6 +1044,7 @@ class SQLiteManualDispatchRepository:
         return FinalTripSummary(
             summary_id=row["summary_id"],
             dispatch_date=row["dispatch_date"],
+            delivery_date=row["delivery_date"],
             driver_id=row["driver_id"],
             driver_name_snapshot=row["driver_name_snapshot"],
             vehicle_id=row["vehicle_id"],

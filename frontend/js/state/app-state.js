@@ -8,6 +8,7 @@ export const AUTH_ACCOUNT_ID_SESSION_KEY = "manualDispatchAccountId";
 
 export const state = {
   dispatchDate: DEFAULT_DISPATCH_DATE,
+  driverSummaryDeliveryDate: DEFAULT_DISPATCH_DATE,
   accountName: "",
   accountId: "",
   isLoggedIn: false,

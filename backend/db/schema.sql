@@ -62,11 +62,12 @@ CREATE TABLE IF NOT EXISTS manual_dispatch_assignments (
 
 CREATE TABLE IF NOT EXISTS manual_driver_vehicle_assignments (
     dispatch_date TEXT NOT NULL,
+    delivery_date TEXT NOT NULL,
     driver_id TEXT NOT NULL,
     vehicle_id TEXT NOT NULL,
     created_at TEXT,
     updated_at TEXT,
-    PRIMARY KEY(dispatch_date, driver_id),
+    PRIMARY KEY(dispatch_date, delivery_date, driver_id),
     FOREIGN KEY(driver_id) REFERENCES manual_drivers(driver_id),
     FOREIGN KEY(vehicle_id) REFERENCES manual_vehicles(vehicle_id)
 );
@@ -83,6 +84,7 @@ CREATE TABLE IF NOT EXISTS operator_accounts (
 CREATE TABLE IF NOT EXISTS final_trip_summaries (
     summary_id TEXT PRIMARY KEY,
     dispatch_date TEXT NOT NULL,
+    delivery_date TEXT NOT NULL,
     driver_id TEXT NOT NULL,
     driver_name_snapshot TEXT NOT NULL,
     vehicle_id TEXT,

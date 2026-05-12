@@ -66,10 +66,10 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
             [vehicle.rego for vehicle in board.vehicles],
         )
 
-    def test_board_only_loads_orders_for_requested_dispatch_date(self):
+    def test_board_keeps_task_pool_orders_global_across_delivery_dates(self):
         created = self.service.create_order(
             CreateOrderRequest(
-                company_name="SQLite Date Filter Customer",
+                company_name="SQLite Future Delivery Customer",
                 suburb="Geelong",
                 delivery_date="2026-05-06",
             )
@@ -78,14 +78,9 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
         board_0505 = self.service.get_board("2026-05-05")
         board_0506 = self.service.get_board("2026-05-06")
 
-        self.assertNotIn(created.order_id, [order.order_id for order in board_0505.orders])
+        self.assertIn(created.order_id, [order.order_id for order in board_0505.orders])
         self.assertIn(created.order_id, [order.order_id for order in board_0506.orders])
-        self.assertTrue(
-            all(order.delivery_date == "2026-05-05" for order in board_0505.orders)
-        )
-        self.assertTrue(
-            all(order.delivery_date == "2026-05-06" for order in board_0506.orders)
-        )
+        self.assertIn("2026-05-06", {order.delivery_date for order in board_0505.orders})
 
     def test_existing_database_without_new_columns_is_upgraded(self):
         legacy_path = self.temp_dir / "legacy_manual_dispatch.sqlite3"
@@ -110,10 +105,24 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
                 row[1]
                 for row in connection.execute("PRAGMA table_info(manual_drivers)").fetchall()
             }
+            vehicle_assignment_columns = {
+                row[1]
+                for row in connection.execute(
+                    "PRAGMA table_info(manual_driver_vehicle_assignments)"
+                ).fetchall()
+            }
+            final_summary_columns = {
+                row[1]
+                for row in connection.execute(
+                    "PRAGMA table_info(final_trip_summaries)"
+                ).fetchall()
+            }
 
         self.assertIn("invoice_number", order_columns)
         self.assertIn("phone", order_columns)
         self.assertIn("pallet_only", driver_columns)
+        self.assertIn("delivery_date", vehicle_assignment_columns)
+        self.assertIn("delivery_date", final_summary_columns)
 
     def test_assign_task_persists_assignment(self):
         self.service.assign_task(
@@ -170,7 +179,38 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
 
         self.assertEqual(1, len(board.driver_vehicle_assignments))
         self.assertEqual("D001", board.driver_vehicle_assignments[0].driver_id)
+        self.assertEqual("2026-05-05", board.driver_vehicle_assignments[0].delivery_date)
         self.assertEqual("V002", board.driver_vehicle_assignments[0].vehicle_id)
+
+    def test_vehicle_selection_is_scoped_by_dispatch_and_delivery_date(self):
+        self.service.assign_vehicle_to_driver(
+            AssignDriverVehicleRequest(
+                dispatch_date="2026-05-05",
+                delivery_date="2026-05-05",
+                driver_id="D001",
+                vehicle_id="V001",
+            )
+        )
+        self.service.assign_vehicle_to_driver(
+            AssignDriverVehicleRequest(
+                dispatch_date="2026-05-05",
+                delivery_date="2026-05-06",
+                driver_id="D001",
+                vehicle_id="V002",
+            )
+        )
+
+        repository = SQLiteManualDispatchRepository(self.db_path)
+        board = ManualDispatchService(repository).get_board("2026-05-05")
+
+        self.assertEqual(
+            [("2026-05-05", "V001"), ("2026-05-06", "V002")],
+            [
+                (assignment.delivery_date, assignment.vehicle_id)
+                for assignment in board.driver_vehicle_assignments
+                if assignment.driver_id == "D001"
+            ],
+        )
 
     def test_vehicle_assignment_does_not_modify_task_assignment_records(self):
         self.service.assign_task(
