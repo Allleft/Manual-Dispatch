@@ -91,15 +91,17 @@ Future task types may include:
 - Commit only files related to the current task.
 - Do not commit local runtime data, cache files, generated database files, or temporary scripts.
 
-## Active Refactor Branch Policy
+## Active Development Branch Policy
 
-For the current comprehensive Manual Dispatch Board structure refactor, all code changes must be committed and pushed to:
+The comprehensive structure refactor was developed on:
 
 `refactor/manual-dispatch-structure`
 
-Do not push refactor commits to `main` or `feature/manual-dispatch-board`.
+After the refactor has been reviewed and the project returns to normal feature development, all future code changes should be made on:
 
-`feature/manual-dispatch-board` is the source baseline branch for this refactor. It should remain available as the stable pre-refactor comparison branch.
+`feature/manual-dispatch-board`
+
+Do not continue ordinary feature work on `refactor/manual-dispatch-structure`.
 
 Before making any code change, confirm the current branch with:
 
@@ -107,22 +109,111 @@ Before making any code change, confirm the current branch with:
 git branch --show-current
 ```
 
-If the current branch is not `refactor/manual-dispatch-structure`, stop and switch to the correct branch before editing files.
-
-Every completed refactor phase must be committed and pushed to:
+If the current task is normal feature development, bug fixing, UI adjustment, testing, or documentation related to the Manual Dispatch Board, switch to:
 
 ```bash
-git push origin refactor/manual-dispatch-structure
+git checkout feature/manual-dispatch-board
 ```
 
-Final reports must include:
+Only use `refactor/manual-dispatch-structure` for reviewing, comparing, or finalizing the completed structure refactor.
 
-- current branch
-- commit hash
-- pushed status
-- files changed
-- tests run
-- any behavior-preservation risks
+Do not push future normal code changes to `main` unless explicitly instructed.
+
+## Future Feature Architecture Policy
+
+Future features must preserve the modular Manual Dispatch Board architecture. Do not add new functionality by placing large blocks of unrelated logic into central files.
+
+### General Rules
+
+- New features must be placed in the correct domain module.
+- Keep `frontend/app.js` as the browser entry point and orchestration layer.
+- Do not put large render functions, API calls, or workflow implementations directly into `frontend/app.js`.
+- Frontend API calls must stay centralized in `frontend/js/api/manual-dispatch-api.js`.
+- Shared frontend state belongs in `frontend/js/state/app-state.js`.
+- Read-only state lookup and derived state belong in `frontend/js/state/selectors.js`.
+- Rendering code belongs in `frontend/js/render/`.
+- Render modules should receive data and callbacks.
+- Render modules must not call `fetch`.
+- User workflow logic belongs in `frontend/js/actions/`.
+- Action modules may coordinate validation, API calls, state updates, and rerender callbacks.
+- Shared helper logic belongs in `frontend/js/utils/`.
+- Backend route handlers should remain thin and delegate to services.
+- `ManualDispatchService` should remain a stable facade, not a large implementation file again.
+- New backend business behavior should normally live under `backend/services/manual_dispatch/`.
+- Repository classes should handle persistence only, not business workflow rules.
+- Excel export behavior should stay isolated in the existing Excel export services.
+- Do not mix API access, state mutation, DOM rendering, validation, and persistence in the same function.
+- Do not duplicate API endpoint strings, DOM selectors, validation logic, or formatting logic across files.
+- Keep refactors and feature changes separate where possible.
+- Do not add speculative abstractions that are not required by the current feature.
+- Do not introduce `localStorage` or extra `sessionStorage` usage unless explicitly required and reviewed.
+- Do not change API routes, database schema, persisted fields, response fields, DOM IDs, CSS class names, user-facing labels, Final Summary snapshot semantics, or Excel output unless the feature explicitly requires it.
+
+### Prohibited Feature Creep
+
+Do not add the following unless explicitly requested:
+
+- auto-dispatch
+- automatic driver selection
+- automatic vehicle selection
+- automatic order grouping
+- automatic trip planning
+- route optimization
+- ETA prediction
+- geocoding
+- Google Maps integration
+- CP-SAT or other optimization engines
+- capacity blocking
+- zone blocking
+- hidden browser-storage persistence
+
+Manual Dispatch Board must remain a manual dispatch workflow unless the product requirement explicitly changes.
+
+### New Feature Placement Checklist
+
+Before implementing a new feature, answer:
+
+1. Which backend domain does this feature belong to?
+2. Which frontend layer does this feature affect?
+   - API
+   - state/selectors
+   - render
+   - actions
+   - utils
+3. Does this require a database schema change?
+4. Does this require an API contract change?
+5. Does this affect Excel export behavior?
+6. Does this affect Final Trip Summary snapshot semantics?
+7. Does this affect existing DOM IDs, CSS classes, or user-facing labels?
+8. What tests protect the old behavior?
+9. What tests protect the new behavior?
+10. Does this require browser smoke testing?
+
+### Test Requirements For New Features
+
+At minimum, run:
+
+```powershell
+python -m compileall backend tests
+python -m unittest discover -s tests -v
+node --check frontend/app.js
+Get-ChildItem frontend -Recurse -Filter *.js | ForEach-Object { node --check $_.FullName }
+git diff --check
+```
+
+When frontend behavior changes, also run the Playwright browser smoke test.
+
+When API behavior changes, add or update route-level tests.
+
+When Excel behavior changes, verify the workbook with `openpyxl`.
+
+When Final Trip Summary behavior changes, verify:
+
+- generated snapshot behavior
+- saved snapshot behavior
+- finalized order visibility
+- history loading
+- export uses saved snapshot data, not live mutable data
 
 ## 9. GitHub Push Rules
 - After completing a task, commit and push to the current feature branch.

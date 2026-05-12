@@ -29,6 +29,7 @@ coverage/
 *.log
 *.tmp
 *.temp
+agent.md
 tmp/
 temp/
 
