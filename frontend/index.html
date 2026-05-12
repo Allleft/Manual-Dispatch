@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Manual Dispatch Board</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="page-hero">
+      <div>
+        <p class="eyebrow">Manual office workflow</p>
+        <h1>Manual Dispatch Board</h1>
+      </div>
+      <div id="account-status" class="account-status" aria-live="polite"></div>
+    </header>
+
+    <main class="board-shell" aria-label="Manual Dispatch Board">
+      <section class="board-section board-controls" aria-labelledby="board-controls-title">
+
+        <div class="dispatch-date-controls">
+          <label for="dispatch-date">Dispatch date</label>
+          <input id="dispatch-date" type="date">
+
+          <button id="specification-button" class="button-secondary" type="button">Driver &amp; Vehicle Specification</button>
+        </div>
+        <p id="board-status" class="board-status" aria-live="polite"></p>
+        <p id="board-error" class="board-error" aria-live="assertive" hidden></p>
+      </section>
+
+      <section class="board-section task-pool" aria-labelledby="task-pool-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="task-pool-title">Task Pool</h2>
+          </div>
+          <div class="section-actions">
+            <button id="add-order-button" type="button">Add Order</button>
+          </div>
+        </div>
+        <div class="task-filter-bar" aria-label="Task Pool search and filters">
+          <label for="order-search">
+            Search Orders
+            <input id="order-search" type="search" placeholder="Invoice, company, suburb, postcode, note">
+          </label>
+          <label for="urgency-filter">
+            Urgency
+            <select id="urgency-filter">
+              <option value="All">All</option>
+              <option value="Normal">Normal</option>
+              <option value="Urgent">Urgent</option>
+            </select>
+          </label>
+          <p id="task-filter-summary" class="filter-summary" aria-live="polite"></p>
+        </div>
+        <div id="task-pool-list" class="task-grid" aria-live="polite"></div>
+      </section>
+
+      <section class="board-section driver-summary" aria-labelledby="trip-summary-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="trip-summary-title">Trip Summary</h2>
+          </div>
+        </div>
+        <div id="driver-summary-list" class="driver-grid" aria-live="polite"></div>
+      </section>
+
+      <section class="board-section final-trip-summary" aria-labelledby="final-trip-summary-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="final-trip-summary-title">Final Trip Summary</h2>
+          </div>
+        </div>
+        <div class="final-summary-control-bar final-summary-controls" aria-label="Final Trip Summary controls">
+          <div class="final-summary-save-controls">
+            <button id="save-final-summary-button" class="button-secondary" type="button">Save and Export</button>
+          </div>
+          <p id="final-summary-control-message" class="board-status" aria-live="polite" hidden></p>
+        </div>
+        <div id="final-trip-summary-list" class="final-summary-grid" aria-live="polite"></div>
+        <div class="final-history-panel" aria-labelledby="final-history-title">
+          <div class="final-history-heading">
+            <h3 id="final-history-title">Saved Final Trip Summary History</h3>
+            <div class="final-summary-history-controls">
+              <label for="history-date-select">
+                History Date
+                <select id="history-date-select"></select>
+              </label>
+              <button id="load-history-button" class="button-secondary" type="button">Load History</button>
+            </div>
+          </div>
+          <div id="final-summary-history-list" class="final-summary-history" aria-live="polite"></div>
+        </div>
+      </section>
+    </main>
+
+    <div id="order-detail-root"></div>
+    <div id="add-order-root"></div>
+    <div id="specification-root"></div>
+    <div id="auth-root"></div>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
