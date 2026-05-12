@@ -49,6 +49,14 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
             source = source_path.read_text(encoding="utf-8")
             self.assertNotIn("fetch(", source, f"Render module should not call fetch: {source_path}")
 
+    def test_action_modules_do_not_call_fetch_directly(self):
+        action_sources = list((FRONTEND_ROOT / "js" / "actions").glob("*.js"))
+
+        self.assertGreaterEqual(len(action_sources), 1)
+        for source_path in action_sources:
+            source = source_path.read_text(encoding="utf-8")
+            self.assertNotIn("fetch(", source, f"Action module should use API client helpers: {source_path}")
+
     def test_frontend_fetch_calls_remain_in_api_module(self):
         api_module = FRONTEND_ROOT / "js" / "api" / "manual-dispatch-api.js"
 
