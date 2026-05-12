@@ -1,6 +1,4 @@
 ﻿import {
-  apiAssignDriverVehicle,
-  apiAssignTask,
   apiCreateDriver,
   apiCreateVehicle,
   apiDeleteDriver,
@@ -16,8 +14,10 @@
   apiUpdateVehicle,
   formatApiErrorDetail,
 } from "./js/api/manual-dispatch-api.js";
+import { createAssignmentActions } from "./js/actions/assignment-actions.js";
 import { createAuthActions } from "./js/actions/auth-actions.js";
 import { createOrderActions } from "./js/actions/order-actions.js";
+import { createVehicleActions } from "./js/actions/vehicle-actions.js";
 import { DEFAULT_DISPATCH_DATE, state } from "./js/state/app-state.js";
 import {
   findDriverById,
@@ -27,7 +27,6 @@ import {
   getOrderByTaskId,
   getSelectedVehicleForDriver,
   getTaskKey,
-  isGeneratedTask,
 } from "./js/state/selectors.js";
 import {
   formatOptional,
@@ -68,7 +67,7 @@ function applyBoardResponse(payload) {
   state.vehicles = board.vehicles;
   state.assignments = board.assignments;
   state.driverVehicleAssignments = board.driverVehicleAssignments;
-  cleanupPendingSelections();
+  assignmentActions.cleanupPendingSelections();
 }
 
 function getExportFilename(response, fallbackFilename) {
@@ -567,120 +566,6 @@ function normalizeFinalSummary(summary) {
   };
 }
 
-function getPendingSelection(orderId) {
-  if (!state.pendingSelections[orderId]) {
-    state.pendingSelections[orderId] = { driver_id: "", trip_no: "trip1" };
-  }
-  return state.pendingSelections[orderId];
-}
-
-function updatePendingSelection(orderId, updates) {
-  state.pendingSelections[orderId] = {
-    ...getPendingSelection(orderId),
-    ...updates,
-  };
-}
-
-function cleanupPendingSelections() {
-  const orderIds = new Set(state.orders.map((order) => order.order_id));
-  const assignedOrderIds = new Set(
-    state.assignments
-      .filter((assignment) => assignment.task_type === "ORDER")
-      .map((assignment) => assignment.task_id),
-  );
-  const driverIds = new Set(state.drivers.map((driver) => driver.driver_id));
-
-  Object.entries(state.pendingSelections).forEach(([orderId, selection]) => {
-    if (!orderIds.has(orderId) || assignedOrderIds.has(orderId)) {
-      delete state.pendingSelections[orderId];
-      return;
-    }
-
-    if (selection.driver_id && !driverIds.has(selection.driver_id)) {
-      selection.driver_id = "";
-    }
-
-    if (!["trip1", "trip2"].includes(selection.trip_no)) {
-      selection.trip_no = "trip1";
-    }
-  });
-}
-
-async function handleAssign(orderId) {
-  const selection = getPendingSelection(orderId);
-  if (!selection.driver_id || state.isSaving) {
-    return;
-  }
-
-  state.isSaving = true;
-  clearError();
-  renderBoard();
-
-  try {
-    await apiAssignTask({
-      dispatch_date: state.dispatchDate,
-      task_type: "ORDER",
-      task_id: orderId,
-      driver_id: selection.driver_id,
-      trip_no: selection.trip_no || "trip1",
-    });
-    delete state.pendingSelections[orderId];
-    orderActions.closeOrderDetail();
-    await loadBoard(state.dispatchDate);
-  } catch (error) {
-    state.isSaving = false;
-    showError(`Unable to assign task. ${error.message}`);
-    renderBoard();
-  }
-}
-
-async function handleUnassign(taskType, taskId) {
-  if (state.isSaving) {
-    return;
-  }
-
-  state.isSaving = true;
-  clearError();
-  renderBoard();
-
-  try {
-    await apiUnassignTask({
-      dispatch_date: state.dispatchDate,
-      task_type: taskType,
-      task_id: taskId,
-    });
-    updatePendingSelection(taskId, { driver_id: "", trip_no: "trip1" });
-    await loadBoard(state.dispatchDate);
-  } catch (error) {
-    state.isSaving = false;
-    showError(`Unable to unassign task. ${error.message}`);
-    renderBoard();
-  }
-}
-
-async function handleVehicleChange(driverId, vehicleId) {
-  if (state.isSaving) {
-    return;
-  }
-
-  state.isSaving = true;
-  clearError();
-  renderBoard();
-
-  try {
-    await apiAssignDriverVehicle({
-      dispatch_date: state.dispatchDate,
-      driver_id: driverId,
-      vehicle_id: vehicleId || null,
-    });
-    await loadBoard(state.dispatchDate);
-  } catch (error) {
-    state.isSaving = false;
-    showError(`Unable to update vehicle selection. ${error.message}`);
-    renderBoard();
-  }
-}
-
 function buildFinalTripSummarySnapshot(driverId) {
   const driver = findDriverById(driverId);
   if (!driver) {
@@ -1042,18 +927,18 @@ function renderTaskPoolFilters() {
 
 function renderTaskPool() {
   renderTaskPoolView({
-    getPendingSelection,
+    getPendingSelection: assignmentActions.getPendingSelection,
     onOpenOrderDetail: orderActions.openOrderDetail,
-    onPendingSelectionChange: updatePendingSelection,
-    onAssign: handleAssign,
+    onPendingSelectionChange: assignmentActions.updatePendingSelection,
+    onAssign: assignmentActions.handleAssign,
   });
 }
 function renderDriverSummary() {
   renderDriverSummaryView({
-    onVehicleChange: handleVehicleChange,
+    onVehicleChange: vehicleActions.handleVehicleChange,
     onGenerateDriverSummary: handleGenerateDriverSummary,
     onOpenOrderDetail: orderActions.openOrderDetail,
-    onUnassign: handleUnassign,
+    onUnassign: assignmentActions.handleUnassign,
   });
 }
 function renderFinalTripSummaries() {
@@ -1556,6 +1441,23 @@ const orderActions = createOrderActions({
   renderAddOrderPopup,
   renderBoard,
   renderOrderDetailPopup,
+  showError,
+  state,
+});
+
+const assignmentActions = createAssignmentActions({
+  clearError,
+  closeOrderDetail: orderActions.closeOrderDetail,
+  loadBoard,
+  renderBoard,
+  showError,
+  state,
+});
+
+const vehicleActions = createVehicleActions({
+  clearError,
+  loadBoard,
+  renderBoard,
   showError,
   state,
 });
