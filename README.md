@@ -177,6 +177,7 @@ Recommended checks:
 python -m compileall backend tests
 python -m unittest discover -s tests -v
 node --check frontend/app.js
+Get-ChildItem frontend -Recurse -Filter *.js | ForEach-Object { node --check $_.FullName }
 git diff --check
 ```
 
