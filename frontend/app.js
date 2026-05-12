@@ -3,35 +3,24 @@
   apiCreateVehicle,
   apiDeleteDriver,
   apiDeleteVehicle,
-  apiExportFinalSummariesExcel,
   apiGetBoard,
   apiGetSpecifications,
-  apiListFinalSummaries,
   apiListFinalSummaryDates,
-  apiSaveFinalSummary,
-  apiUnassignTask,
   apiUpdateDriver,
   apiUpdateVehicle,
-  formatApiErrorDetail,
 } from "./js/api/manual-dispatch-api.js";
 import { createAssignmentActions } from "./js/actions/assignment-actions.js";
 import { createAuthActions } from "./js/actions/auth-actions.js";
+import { createFinalSummaryActions } from "./js/actions/final-summary-actions.js";
 import { createOrderActions } from "./js/actions/order-actions.js";
 import { createVehicleActions } from "./js/actions/vehicle-actions.js";
 import { DEFAULT_DISPATCH_DATE, state } from "./js/state/app-state.js";
 import {
   findDriverById,
   findVehicleById,
-  getAssignedOrdersForDriver,
-  getAssignmentsForDriver,
-  getOrderByTaskId,
-  getSelectedVehicleForDriver,
-  getTaskKey,
 } from "./js/state/selectors.js";
 import {
   formatOptional,
-  getDisplayPalletQuantity,
-  getLooseBagsQuantity,
 } from "./js/utils/format-utils.js";
 import {
   renderAccountStatus as renderAccountStatusView,
@@ -68,24 +57,6 @@ function applyBoardResponse(payload) {
   state.assignments = board.assignments;
   state.driverVehicleAssignments = board.driverVehicleAssignments;
   assignmentActions.cleanupPendingSelections();
-}
-
-function getExportFilename(response, fallbackFilename) {
-  const disposition = response.headers.get("Content-Disposition") || "";
-  const match = disposition.match(/filename="?([^"]+)"?/i);
-  return match ? match[1] : fallbackFilename;
-}
-
-async function downloadExcelResponse(response, fallbackFilename) {
-  const blob = await response.blob();
-  const downloadUrl = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = downloadUrl;
-  link.download = getExportFilename(response, fallbackFilename);
-  document.body.append(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(downloadUrl);
 }
 
 async function loadBoard(dispatchDate = state.dispatchDate, options = {}) {
@@ -332,22 +303,6 @@ function updateSpecificationVehicleLocal(vehicleId, updates) {
   );
 }
 
-async function exportFinalSummariesExcel(dispatchDate) {
-  const response = await apiExportFinalSummariesExcel(dispatchDate);
-  if (!response.ok) {
-    let message = `Export failed with status ${response.status}`;
-    try {
-      const payload = await response.json();
-      message = formatApiErrorDetail(payload.detail) || message;
-    } catch (error) {
-      message = response.statusText || message;
-    }
-    throw new Error(message);
-  }
-
-  await downloadExcelResponse(response, `final-trip-summary-${dispatchDate}.xlsx`);
-}
-
 async function refreshSpecificationsOnly({ markDirty = true } = {}) {
   if (markDirty) {
     state.specificationDirty = true;
@@ -520,319 +475,6 @@ async function handleDeleteVehicleSpecification(vehicleId) {
   }
 }
 
-function normalizeFinalSummary(summary) {
-  return {
-    summary_id: summary.summary_id || "",
-    dispatch_date: summary.dispatch_date || state.dispatchDate,
-    driver_id: summary.driver_id || "",
-    driver_name: summary.driver_name || summary.driver_name_snapshot || "",
-    driver_name_snapshot: summary.driver_name_snapshot || summary.driver_name || "",
-    vehicle_id: summary.vehicle_id || "",
-    vehicle_rego: summary.vehicle_rego || summary.vehicle_rego_snapshot || "No vehicle selected",
-    vehicle_rego_snapshot: summary.vehicle_rego_snapshot || summary.vehicle_rego || "No vehicle selected",
-    total_pallets: Number(summary.total_pallets || 0),
-    total_loose_bags: Number(summary.total_loose_bags || 0),
-    status: summary.status || (summary.summary_id ? "SAVED" : "LOCKED"),
-    generated_at: summary.generated_at || "",
-    saved_at: summary.saved_at || "",
-    saved_by_account_name:
-      summary.saved_by_account_name ||
-      (summary.summary_id ? "Unknown" : state.accountName || "Unknown"),
-    saved_by_account_id: summary.saved_by_account_id || "",
-    trips: (summary.trips || [])
-      .map((trip) => ({
-        trip_no: trip.trip_no,
-        orders: (trip.orders || []).map((order) => ({
-          row_id: order.row_id || "",
-          row_no: Number(order.row_no || 0),
-          task_type: order.task_type || "ORDER",
-          task_id: order.task_id || order.order_id || order.order_id_snapshot || "",
-          order_id: order.order_id || order.order_id_snapshot || order.task_id || "",
-          invoice_number: order.invoice_number || order.invoice_number_snapshot || "",
-          company_name: order.company_name || order.company_name_snapshot || "",
-          suburb: order.suburb || order.suburb_snapshot || "",
-          delivery_address: order.delivery_address || order.delivery_address_snapshot || "",
-          product: order.product || order.product_snapshot || "",
-          pallet_quantity: Number(
-            order.pallet_quantity ?? order.pallet_quantity_snapshot ?? 0,
-          ),
-          loose_bags_quantity: Number(
-            order.loose_bags_quantity ?? order.loose_bags_quantity_snapshot ?? 0,
-          ),
-          note: order.note || order.note_snapshot || "",
-        })),
-      }))
-      .filter((trip) => trip.orders.length > 0),
-  };
-}
-
-function buildFinalTripSummarySnapshot(driverId) {
-  const driver = findDriverById(driverId);
-  if (!driver) {
-    throw new Error(`Driver does not exist: ${driverId}`);
-  }
-
-  const selectedVehicle = getSelectedVehicleForDriver(driverId);
-  const assignments = getAssignmentsForDriver(driverId);
-  const trips = ["trip1", "trip2"]
-    .map((tripNo) => {
-      const tripOrders = assignments
-        .filter((assignment) => assignment.trip_no === tripNo)
-        .map((assignment) => {
-          const order = getOrderByTaskId(assignment.task_id);
-          if (!order) {
-            return null;
-          }
-          return {
-            task_type: assignment.task_type,
-            task_id: assignment.task_id,
-            order_id: order.order_id,
-            order_id_snapshot: order.order_id,
-            invoice_number_snapshot: order.invoice_number || "",
-            company_name_snapshot: order.company_name || "",
-            suburb_snapshot: order.suburb || "",
-            delivery_address_snapshot: order.delivery_address || "",
-            product_snapshot: "",
-            pallet_quantity_snapshot: getDisplayPalletQuantity(order),
-            loose_bags_quantity_snapshot: getLooseBagsQuantity(order),
-            note_snapshot: order.note || "",
-            company_name: order.company_name || "",
-            suburb: order.suburb || "",
-            invoice_number: order.invoice_number || "",
-            delivery_address: order.delivery_address || "",
-            pallet_quantity: getDisplayPalletQuantity(order),
-            loose_bags_quantity: getLooseBagsQuantity(order),
-            note: order.note || "",
-            product: "",
-          };
-        })
-        .filter(Boolean);
-
-      return {
-        trip_no: tripNo,
-        orders: tripOrders,
-      };
-    })
-    .filter((trip) => trip.orders.length > 0);
-
-  const allOrders = trips.flatMap((trip) => trip.orders);
-
-  return {
-    generated_at: new Date().toISOString(),
-    dispatch_date: state.dispatchDate,
-    driver_id: driver.driver_id,
-    driver_name: driver.name,
-    driver_name_snapshot: driver.name,
-    vehicle_id: selectedVehicle ? selectedVehicle.vehicle_id : "",
-    vehicle_rego: selectedVehicle ? selectedVehicle.rego : "No vehicle selected",
-    vehicle_rego_snapshot: selectedVehicle ? selectedVehicle.rego : "No vehicle selected",
-    total_pallets: allOrders.reduce((total, order) => total + Number(order.pallet_quantity || 0), 0),
-    total_loose_bags: allOrders.reduce((total, order) => total + Number(order.loose_bags_quantity || 0), 0),
-    saved_by_account_name: state.accountName || "",
-    saved_by_account_id: state.accountId || "",
-    status: "LOCKED",
-    trips,
-  };
-}
-
-async function handleGenerateDriverSummary(driverId) {
-  if (state.isSaving || state.isLoading) {
-    return;
-  }
-
-  if (state.finalTripSummaries[driverId]) {
-    showError("Final Trip Summary for this driver is already generated and locked.");
-    renderBoard();
-    return;
-  }
-
-  const assignedOrders = getAssignedOrdersForDriver(driverId);
-  if (assignedOrders.length === 0) {
-    showError("Assign at least one Order before generating a Final Trip Summary.");
-    renderBoard();
-    return;
-  }
-
-  let snapshot;
-  try {
-    snapshot = buildFinalTripSummarySnapshot(driverId);
-  } catch (error) {
-    showError(`Unable to generate Final Trip Summary. ${error.message}`);
-    renderBoard();
-    return;
-  }
-
-  if (snapshot.trips.length === 0) {
-    showError("No Order tasks are available to include in the Final Trip Summary.");
-    renderBoard();
-    return;
-  }
-
-  state.finalTripSummaries[driverId] = snapshot;
-  state.finalSummaryGlobalSaveError = "";
-  state.finalSummaryGlobalSaveSuccess = "";
-  snapshot.trips.forEach((trip) => {
-    trip.orders.forEach((order) => {
-      state.generatedTaskKeys.add(getTaskKey(order.task_type, order.task_id));
-    });
-  });
-
-  state.isSaving = true;
-  clearError();
-  renderBoard();
-
-  const generatedTasks = snapshot.trips.flatMap((trip) => trip.orders);
-
-  try {
-    await Promise.all(
-      generatedTasks.map((order) =>
-        apiUnassignTask({
-          dispatch_date: state.dispatchDate,
-          task_type: order.task_type,
-          task_id: order.task_id,
-        }),
-      ),
-    );
-    await loadBoard(state.dispatchDate);
-  } catch (error) {
-    state.isSaving = false;
-    showError(`Final Trip Summary was captured, but clearing editable assignments failed. ${error.message}`);
-    renderBoard();
-  }
-}
-
-function getFinalSummarySavePayload(summary) {
-  const normalized = normalizeFinalSummary(summary);
-  return {
-    dispatch_date: normalized.dispatch_date,
-    driver_id: normalized.driver_id,
-    driver_name_snapshot: normalized.driver_name_snapshot || normalized.driver_name,
-    vehicle_id: normalized.vehicle_id || null,
-    vehicle_rego_snapshot: normalized.vehicle_rego_snapshot || "No vehicle selected",
-    total_pallets: normalized.total_pallets,
-    total_loose_bags: normalized.total_loose_bags,
-    generated_at: normalized.generated_at,
-    saved_by_account_name: state.accountName || normalized.saved_by_account_name,
-    saved_by_account_id: state.accountId || normalized.saved_by_account_id || null,
-    trips: normalized.trips.map((trip) => ({
-      trip_no: trip.trip_no,
-      orders: trip.orders.map((order) => ({
-        task_type: order.task_type,
-        task_id: order.task_id,
-        order_id_snapshot: order.order_id,
-        invoice_number_snapshot: order.invoice_number,
-        company_name_snapshot: order.company_name,
-        suburb_snapshot: order.suburb,
-        delivery_address_snapshot: order.delivery_address,
-        product_snapshot: order.product,
-        pallet_quantity_snapshot: order.pallet_quantity,
-        loose_bags_quantity_snapshot: order.loose_bags_quantity,
-        note_snapshot: order.note,
-      })),
-    })),
-  };
-}
-
-function getUnsavedFinalSummaries() {
-  return Object.values(state.finalTripSummaries)
-    .map(normalizeFinalSummary)
-    .filter((summary) => !summary.summary_id);
-}
-
-async function ensureNoDuplicateFinalSummaries(summaries) {
-  const summariesByDate = new Map();
-  summaries.forEach((summary) => {
-    const existing = summariesByDate.get(summary.dispatch_date) || [];
-    existing.push(summary);
-    summariesByDate.set(summary.dispatch_date, existing);
-  });
-
-  for (const [dispatchDate, dateSummaries] of summariesByDate.entries()) {
-    const savedSummaries = await apiListFinalSummaries(dispatchDate);
-    const savedDriverIds = new Set((savedSummaries || []).map((summary) => summary.driver_id));
-    const duplicate = dateSummaries.find((summary) => savedDriverIds.has(summary.driver_id));
-    if (duplicate) {
-      throw new Error("Final Summary for this driver and dispatch date has already been saved.");
-    }
-  }
-}
-
-async function handleSaveAllFinalSummaries() {
-  if (state.isSaving || state.isSavingFinalSummaries || state.isLoading) {
-    return;
-  }
-
-  const unsavedSummaries = getUnsavedFinalSummaries();
-  state.finalSummaryGlobalSaveError = "";
-  state.finalSummaryGlobalSaveSuccess = "";
-
-  if (!state.isLoggedIn || !state.accountName) {
-    state.finalSummaryGlobalSaveError =
-      "Please log in before saving and exporting Final Trip Summary.";
-    renderFinalTripSummaries();
-    return;
-  }
-
-  if (unsavedSummaries.length === 0) {
-    state.finalSummaryGlobalSaveError = "Generate at least one Final Trip Summary before saving and exporting.";
-    renderFinalTripSummaries();
-    return;
-  }
-
-  state.isSavingFinalSummaries = true;
-  state.isSaving = true;
-  clearError();
-  renderBoard();
-
-  try {
-    await ensureNoDuplicateFinalSummaries(unsavedSummaries);
-
-    const savedSummaries = [];
-    for (const summary of unsavedSummaries) {
-      const savedSummary = normalizeFinalSummary(
-        await apiSaveFinalSummary(getFinalSummarySavePayload(summary)),
-      );
-      state.finalTripSummaries[savedSummary.driver_id] = savedSummary;
-      savedSummaries.push(savedSummary);
-    }
-
-    await exportFinalSummariesExcel(state.dispatchDate);
-
-    state.finalSummaryGlobalSaveSuccess = `Final Trip Summary saved and exported by ${state.accountName}.`;
-    state.historyLoaded = false;
-    await loadFinalSummaryDates({ render: false });
-    state.isSavingFinalSummaries = false;
-    await loadBoard(state.dispatchDate);
-  } catch (error) {
-    state.isSaving = false;
-    state.isSavingFinalSummaries = false;
-    state.finalSummaryGlobalSaveError = `Unable to save and export Final Summary. ${error.message}`;
-    renderBoard();
-  }
-}
-
-async function handleLoadFinalSummaryHistory() {
-  if (state.isSaving || state.isLoading || state.isHistoryLoading) {
-    return;
-  }
-
-  state.isHistoryLoading = true;
-  state.historyError = "";
-  clearError();
-  renderBoard();
-
-  try {
-    const summaries = await apiListFinalSummaries(state.historyDate || state.dispatchDate);
-    state.finalSummaryHistory = (summaries || []).map(normalizeFinalSummary);
-    state.historyLoaded = true;
-  } catch (error) {
-    state.historyError = `Unable to load Final Trip Summary history. ${error.message}`;
-  } finally {
-    state.isHistoryLoading = false;
-    renderBoard();
-  }
-}
-
 function renderAccountStatus() {
   renderAccountStatusView({ onLogout: authActions.logoutAccount });
 }
@@ -936,15 +578,15 @@ function renderTaskPool() {
 function renderDriverSummary() {
   renderDriverSummaryView({
     onVehicleChange: vehicleActions.handleVehicleChange,
-    onGenerateDriverSummary: handleGenerateDriverSummary,
+    onGenerateDriverSummary: finalSummaryActions.handleGenerateDriverSummary,
     onOpenOrderDetail: orderActions.openOrderDetail,
     onUnassign: assignmentActions.handleUnassign,
   });
 }
 function renderFinalTripSummaries() {
   renderFinalTripSummariesView({
-    getUnsavedFinalSummaries,
-    normalizeFinalSummary,
+    getUnsavedFinalSummaries: finalSummaryActions.getUnsavedFinalSummaries,
+    normalizeFinalSummary: finalSummaryActions.normalizeFinalSummary,
     onHistoryDateChange: (historyDate) => {
       state.historyDate = historyDate;
       state.historyLoaded = false;
@@ -952,8 +594,8 @@ function renderFinalTripSummaries() {
       state.finalSummaryHistory = [];
       renderFinalTripSummaries();
     },
-    onLoadFinalSummaryHistory: handleLoadFinalSummaryHistory,
-    onSaveAllFinalSummaries: handleSaveAllFinalSummaries,
+    onLoadFinalSummaryHistory: finalSummaryActions.handleLoadFinalSummaryHistory,
+    onSaveAllFinalSummaries: finalSummaryActions.handleSaveAllFinalSummaries,
     syncHistoryDateSelection,
   });
 }
@@ -1458,6 +1100,16 @@ const vehicleActions = createVehicleActions({
   clearError,
   loadBoard,
   renderBoard,
+  showError,
+  state,
+});
+
+const finalSummaryActions = createFinalSummaryActions({
+  clearError,
+  loadBoard,
+  loadFinalSummaryDates,
+  renderBoard,
+  renderFinalTripSummaries,
   showError,
   state,
 });
