@@ -111,6 +111,7 @@ Runtime SQLite database files are local and ignored by Git.
 - `tests/`: Python unittest coverage for service, repository, lifecycle, final summary, export, and route-level behavior.
 - `tools/`: Manual development utilities, including demo Order reset tooling.
 - `requirements.txt`: Runtime Python dependencies: FastAPI, Uvicorn, and openpyxl.
+- `requirements-dev.txt`: Development/test dependencies for route-level API tests and browser smoke tests.
 
 For a more detailed developer map, see [Manual Dispatch Board code structure](docs/manual-dispatch-board-code-structure.md).
 
@@ -122,6 +123,12 @@ These commands assume PowerShell on Windows from the repository root.
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
+```
+
+For the full validation suite, including FastAPI `TestClient` route tests and Playwright browser smoke tests, install development dependencies:
+
+```powershell
+python -m pip install -r requirements-dev.txt
 ```
 
 Run the backend and static frontend:
@@ -144,13 +151,13 @@ data/manual_dispatch.sqlite3
 
 That database is runtime data and is ignored by Git.
 
-### Optional TestClient Dependency
-
-Some route-level tests use FastAPI/Starlette `TestClient`, which requires `httpx` in the test environment. If route tests are skipped because `httpx` is missing, install it in your local virtual environment:
+### Browser Test Dependency
 
 ```powershell
-python -m pip install httpx
+python -m playwright install chromium
 ```
+
+For local-only browser installs inside an ignored workspace folder, set `PLAYWRIGHT_BROWSERS_PATH` to a path under `tmp/` before installing.
 
 ### Local Admin Reset Code
 
@@ -170,6 +177,7 @@ Recommended checks:
 python -m compileall backend tests
 python -m unittest discover -s tests -v
 node --check frontend/app.js
+Get-ChildItem frontend -Recurse -Filter *.js | ForEach-Object { node --check $_.FullName }
 git diff --check
 ```
 

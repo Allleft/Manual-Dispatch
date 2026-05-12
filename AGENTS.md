@@ -91,6 +91,39 @@ Future task types may include:
 - Commit only files related to the current task.
 - Do not commit local runtime data, cache files, generated database files, or temporary scripts.
 
+## Active Refactor Branch Policy
+
+For the current comprehensive Manual Dispatch Board structure refactor, all code changes must be committed and pushed to:
+
+`refactor/manual-dispatch-structure`
+
+Do not push refactor commits to `main` or `feature/manual-dispatch-board`.
+
+`feature/manual-dispatch-board` is the source baseline branch for this refactor. It should remain available as the stable pre-refactor comparison branch.
+
+Before making any code change, confirm the current branch with:
+
+```bash
+git branch --show-current
+```
+
+If the current branch is not `refactor/manual-dispatch-structure`, stop and switch to the correct branch before editing files.
+
+Every completed refactor phase must be committed and pushed to:
+
+```bash
+git push origin refactor/manual-dispatch-structure
+```
+
+Final reports must include:
+
+- current branch
+- commit hash
+- pushed status
+- files changed
+- tests run
+- any behavior-preservation risks
+
 ## 9. GitHub Push Rules
 - After completing a task, commit and push to the current feature branch.
 - After every completed phase, commit and push the current feature branch to `https://github.com/Allleft/Manual-Dispatch.git` unless the user explicitly says not to push.
