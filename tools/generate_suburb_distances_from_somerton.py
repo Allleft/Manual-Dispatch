@@ -23,7 +23,7 @@ def haversine_km(origin_latitude, origin_longitude, latitude, longitude):
     return 2 * EARTH_RADIUS_KM * asin(sqrt(chord))
 
 
-def build_rows():
+def build_dataset():
     source = json.loads(SOURCE_PATH.read_text(encoding="utf-8"))
     warehouse = source["warehouse"]
     generated_rows = []
@@ -55,16 +55,26 @@ def build_rows():
             }
         )
 
-    return generated_rows
+    source_note = source["source_note"]
+    return {
+        "metadata": {
+            "warehouse_origin": source_note["warehouse_origin"],
+            "centroid_source": source_note["centroid_source"],
+            "calculation_method": source_note["calculation_method"],
+            "date_generated": source_note["date_generated"],
+            "limitations": source_note["limitations"],
+        },
+        "records": generated_rows,
+    }
 
 
 def main():
-    rows = build_rows()
+    dataset = build_dataset()
     OUTPUT_PATH.write_text(
-        json.dumps(rows, indent=2, ensure_ascii=True) + "\n",
+        json.dumps(dataset, indent=2, ensure_ascii=True) + "\n",
         encoding="utf-8",
     )
-    print(f"Wrote {len(rows)} suburb distance records to {OUTPUT_PATH}")
+    print(f"Wrote {len(dataset['records'])} suburb distance records to {OUTPUT_PATH}")
 
 
 if __name__ == "__main__":

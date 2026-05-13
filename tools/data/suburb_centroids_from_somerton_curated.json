@@ -1,4 +1,11 @@
 {
+  "source_note": {
+    "warehouse_origin": "98-102 Hume Hwy, Somerton, VIC, 3062",
+    "centroid_source": "Curated manually for demo sorting only. Coordinates were not derived from or copied from an official/open locality dataset.",
+    "calculation_method": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine.",
+    "date_generated": "2026-05-14",
+    "limitations": "Static suburb-level estimated straight-line distance only; not driving distance, ETA, or route optimization."
+  },
   "warehouse": {
     "label": "98-102 Hume Hwy, Somerton, VIC, 3062",
     "latitude": -37.6424,

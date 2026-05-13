@@ -2,7 +2,7 @@
 
 ## Summary
 
-Phase 18 adds suburb-level estimated warehouse distance support for Final Trip Summary ordering.
+Phase 18 adds static suburb-level estimated straight-line distance support for Final Trip Summary ordering.
 
 - Warehouse origin: `98-102 Hume Hwy, Somerton, VIC, 3062`
 - Sorting scope: Final Trip Summary rows only
@@ -22,13 +22,31 @@ The table is generated offline by:
 - `tools/generate_suburb_distances_from_somerton.py`
 - `tools/data/suburb_centroids_from_somerton_curated.json`
 
-The curated source file stores locality-centroid coordinates and a small set of retained Phase 18 compatibility overrides for previously published demo/test estimates. New expanded coverage uses:
+The curated source file stores locality-centroid coordinates and a small set of retained Phase 18 compatibility overrides for previously published demo/test estimates.
+
+Centroid provenance is explicit:
+
+```text
+Curated manually for demo sorting only.
+```
+
+Coordinates were not derived from or copied from an official/open locality dataset in this repository revision.
+
+The generated runtime table now carries dataset-level metadata for:
+
+- warehouse origin,
+- centroid source,
+- calculation method,
+- generation date,
+- limitations.
+
+New expanded coverage uses:
 
 ```text
 Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine.
 ```
 
-The output is a static local suburb-level estimate table prepared for board/demo sorting. It is not a turn-by-turn routing distance, does not calculate ETA, and does not call any external API at runtime.
+The output is a static local suburb-level estimated straight-line distance table prepared for board/demo sorting. It is not a turn-by-turn routing distance, does not calculate ETA, and does not call any external API at runtime.
 
 Each record stores:
 
@@ -141,3 +159,8 @@ Phase 18 adds tests for:
 - saved snapshot distance persistence,
 - Excel distance column and row order,
 - unchanged Phase 15/16 behavior.
+
+The follow-up hardening pass also adds:
+
+- `tools/qa_suburb_distances_from_somerton.py`
+- committed-dataset QA checks for required fields, duplicate normalized suburbs, non-negative numeric distances, alphabetical ordering, and known suburb/alias resolution

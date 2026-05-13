@@ -26,7 +26,8 @@ def normalize_suburb_name(suburb):
 
 @lru_cache(maxsize=1)
 def _distance_lookup():
-    rows = json.loads(DISTANCE_DATA_PATH.read_text(encoding="utf-8"))
+    payload = json.loads(DISTANCE_DATA_PATH.read_text(encoding="utf-8"))
+    rows = payload.get("records", []) if isinstance(payload, dict) else payload
     return {
         normalize_suburb_name(row.get("suburb")): float(row["estimated_distance_km"])
         for row in rows

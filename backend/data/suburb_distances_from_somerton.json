@@ -1,786 +1,795 @@
-[
-  {
-    "suburb": "Abbotsford",
-    "state": "VIC",
-    "postcode": "3067",
-    "estimated_distance_km": 18.5,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Airport West",
-    "state": "VIC",
-    "postcode": "3042",
-    "estimated_distance_km": 10.6,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Albury",
-    "state": "NSW",
-    "postcode": "2640",
-    "estimated_distance_km": 246.6,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Altona",
-    "state": "VIC",
-    "postcode": "3018",
-    "estimated_distance_km": 27.2,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Altona North",
-    "state": "VIC",
-    "postcode": "3025",
-    "estimated_distance_km": 23.0,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Avalon",
-    "state": "VIC",
-    "postcode": "3212",
-    "estimated_distance_km": 60.2,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Bairnsdale",
-    "state": "VIC",
-    "postcode": "3875",
-    "estimated_distance_km": 237.0,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Ballarat",
-    "state": "VIC",
-    "postcode": "3350",
-    "estimated_distance_km": 117.0,
-    "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
-  },
-  {
-    "suburb": "Ballarat Central",
-    "state": "VIC",
-    "postcode": "3350",
-    "estimated_distance_km": 97.0,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Bendigo",
-    "state": "VIC",
-    "postcode": "3550",
-    "estimated_distance_km": 114.7,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Bendigo Central",
-    "state": "VIC",
-    "postcode": "3550",
-    "estimated_distance_km": 114.6,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Berwick",
-    "state": "VIC",
-    "postcode": "3806",
-    "estimated_distance_km": 55.8,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Blackburn",
-    "state": "VIC",
-    "postcode": "3130",
-    "estimated_distance_km": 26.6,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Box Hill",
-    "state": "VIC",
-    "postcode": "3128",
-    "estimated_distance_km": 25.0,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Braeside",
-    "state": "VIC",
-    "postcode": "3195",
-    "estimated_distance_km": 49.0,
-    "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
-  },
-  {
-    "suburb": "Broadmeadows",
-    "state": "VIC",
-    "postcode": "3047",
-    "estimated_distance_km": 5.2,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Brooklyn",
-    "state": "VIC",
-    "postcode": "3012",
-    "estimated_distance_km": 21.5,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Brunswick",
-    "state": "VIC",
-    "postcode": "3056",
-    "estimated_distance_km": 13.8,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Brunswick East",
-    "state": "VIC",
-    "postcode": "3057",
-    "estimated_distance_km": 14.7,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Brunswick West",
-    "state": "VIC",
-    "postcode": "3055",
-    "estimated_distance_km": 13.3,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Camberwell",
-    "state": "VIC",
-    "postcode": "3124",
-    "estimated_distance_km": 24.7,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Campbellfield",
-    "state": "VIC",
-    "postcode": "3061",
-    "estimated_distance_km": 4.0,
-    "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
-  },
-  {
-    "suburb": "Carlton",
-    "state": "VIC",
-    "postcode": "3053",
-    "estimated_distance_km": 22.0,
-    "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
-  },
-  {
-    "suburb": "Carlton North",
-    "state": "VIC",
-    "postcode": "3054",
-    "estimated_distance_km": 15.9,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Carrum Downs",
-    "state": "VIC",
-    "postcode": "3201",
-    "estimated_distance_km": 54.9,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Cheltenham",
-    "state": "VIC",
-    "postcode": "3192",
-    "estimated_distance_km": 36.9,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Clayton",
-    "state": "VIC",
-    "postcode": "3168",
-    "estimated_distance_km": 42.0,
-    "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
-  },
-  {
-    "suburb": "Coburg",
-    "state": "VIC",
-    "postcode": "3058",
-    "estimated_distance_km": 14.0,
-    "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
-  },
-  {
-    "suburb": "Colac",
-    "state": "VIC",
-    "postcode": "3250",
-    "estimated_distance_km": 142.4,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Collingwood",
-    "state": "VIC",
-    "postcode": "3066",
-    "estimated_distance_km": 18.0,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Coolaroo",
-    "state": "VIC",
-    "postcode": "3048",
-    "estimated_distance_km": 2.2,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Craigieburn",
-    "state": "VIC",
-    "postcode": "3064",
-    "estimated_distance_km": 4.6,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Cranbourne",
-    "state": "VIC",
-    "postcode": "3977",
-    "estimated_distance_km": 72.0,
-    "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
-  },
-  {
-    "suburb": "Dallas",
-    "state": "VIC",
-    "postcode": "3047",
-    "estimated_distance_km": 3.6,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Dandenong",
-    "state": "VIC",
-    "postcode": "3175",
-    "estimated_distance_km": 43.0,
-    "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
-  },
-  {
-    "suburb": "Dandenong North",
-    "state": "VIC",
-    "postcode": "3175",
-    "estimated_distance_km": 41.9,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Dandenong South",
-    "state": "VIC",
-    "postcode": "3175",
-    "estimated_distance_km": 47.2,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Date Safe",
-    "state": "VIC",
-    "postcode": null,
-    "estimated_distance_km": 999.0,
-    "method_note": "Static test-fixture estimate retained only so existing edit-order fixtures resolve deterministically."
-  },
-  {
-    "suburb": "Derrimut",
-    "state": "VIC",
-    "postcode": "3026",
-    "estimated_distance_km": 22.8,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Docklands",
-    "state": "VIC",
-    "postcode": "3008",
-    "estimated_distance_km": 19.1,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Doncaster",
-    "state": "VIC",
-    "postcode": "3108",
-    "estimated_distance_km": 22.5,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "East Bendigo",
-    "state": "VIC",
-    "postcode": "3550",
-    "estimated_distance_km": 114.0,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Echuca",
-    "state": "VIC",
-    "postcode": "3564",
-    "estimated_distance_km": 169.3,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Epping",
-    "state": "VIC",
-    "postcode": "3076",
-    "estimated_distance_km": 14.0,
-    "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
-  },
-  {
-    "suburb": "Essendon",
-    "state": "VIC",
-    "postcode": "3040",
-    "estimated_distance_km": 12.3,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Fitzroy",
-    "state": "VIC",
-    "postcode": "3065",
-    "estimated_distance_km": 17.5,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Flemington",
-    "state": "VIC",
-    "postcode": "3031",
-    "estimated_distance_km": 16.0,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Footscray",
-    "state": "VIC",
-    "postcode": "3011",
-    "estimated_distance_km": 18.0,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Frankston",
-    "state": "VIC",
-    "postcode": "3199",
-    "estimated_distance_km": 66.0,
-    "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
-  },
-  {
-    "suburb": "Geelong",
-    "state": "VIC",
-    "postcode": "3220",
-    "estimated_distance_km": 79.0,
-    "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
-  },
-  {
-    "suburb": "Glen Waverley",
-    "state": "VIC",
-    "postcode": "3150",
-    "estimated_distance_km": 32.5,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Hallam",
-    "state": "VIC",
-    "postcode": "3803",
-    "estimated_distance_km": 49.3,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Hawthorn",
-    "state": "VIC",
-    "postcode": "3122",
-    "estimated_distance_km": 21.4,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Heatherton",
-    "state": "VIC",
-    "postcode": "3202",
-    "estimated_distance_km": 40.0,
-    "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
-  },
-  {
-    "suburb": "Hoppers Crossing",
-    "state": "VIC",
-    "postcode": "3029",
-    "estimated_distance_km": 34.4,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Horsham",
-    "state": "VIC",
-    "postcode": "3400",
-    "estimated_distance_km": 264.5,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Kangaroo Flat",
-    "state": "VIC",
-    "postcode": "3555",
-    "estimated_distance_km": 112.5,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Keilor East",
-    "state": "VIC",
-    "postcode": "3033",
-    "estimated_distance_km": 12.4,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Keilor Park",
-    "state": "VIC",
-    "postcode": "3042",
-    "estimated_distance_km": 12.6,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Kew",
-    "state": "VIC",
-    "postcode": "3101",
-    "estimated_distance_km": 19.8,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Keysborough",
-    "state": "VIC",
-    "postcode": "3173",
-    "estimated_distance_km": 47.0,
-    "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
-  },
-  {
-    "suburb": "Lalor",
-    "state": "VIC",
-    "postcode": "3075",
-    "estimated_distance_km": 6.8,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Lara",
-    "state": "VIC",
-    "postcode": "3212",
-    "estimated_distance_km": 63.4,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Laverton",
-    "state": "VIC",
-    "postcode": "3028",
-    "estimated_distance_km": 29.0,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Melbourne",
-    "state": "VIC",
-    "postcode": "3000",
-    "estimated_distance_km": 19.1,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Melton",
-    "state": "VIC",
-    "postcode": "3337",
-    "estimated_distance_km": 32.3,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Mentone",
-    "state": "VIC",
-    "postcode": "3194",
-    "estimated_distance_km": 39.3,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Mildura",
-    "state": "VIC",
-    "postcode": "3500",
-    "estimated_distance_km": 458.9,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Mitcham",
-    "state": "VIC",
-    "postcode": "3132",
-    "estimated_distance_km": 29.1,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Moonee Ponds",
-    "state": "VIC",
-    "postcode": "3039",
-    "estimated_distance_km": 13.9,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Moorabbin",
-    "state": "VIC",
-    "postcode": "3189",
-    "estimated_distance_km": 39.0,
-    "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
-  },
-  {
-    "suburb": "Moorabbin Airport",
-    "state": "VIC",
-    "postcode": "3194",
-    "estimated_distance_km": 39.4,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Mooroopna",
-    "state": "VIC",
-    "postcode": "3629",
-    "estimated_distance_km": 143.5,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Mordialloc",
-    "state": "VIC",
-    "postcode": "3195",
-    "estimated_distance_km": 42.2,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Morwell",
-    "state": "VIC",
-    "postcode": "3840",
-    "estimated_distance_km": 143.5,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Mount Waverley",
-    "state": "VIC",
-    "postcode": "3149",
-    "estimated_distance_km": 30.6,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Mulgrave",
-    "state": "VIC",
-    "postcode": "3170",
-    "estimated_distance_km": 46.0,
-    "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
-  },
-  {
-    "suburb": "Narre Warren",
-    "state": "VIC",
-    "postcode": "3805",
-    "estimated_distance_km": 53.0,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Noble Park",
-    "state": "VIC",
-    "postcode": "3174",
-    "estimated_distance_km": 46.0,
-    "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
-  },
-  {
-    "suburb": "North Geelong",
-    "state": "VIC",
-    "postcode": "3215",
-    "estimated_distance_km": 73.8,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "North Melbourne",
-    "state": "VIC",
-    "postcode": "3051",
-    "estimated_distance_km": 17.3,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Northcote",
-    "state": "VIC",
-    "postcode": "3070",
-    "estimated_distance_km": 15.0,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Nunawading",
-    "state": "VIC",
-    "postcode": "3131",
-    "estimated_distance_km": 28.2,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Pakenham",
-    "state": "VIC",
-    "postcode": "3810",
-    "estimated_distance_km": 67.0,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Preston",
-    "state": "VIC",
-    "postcode": "3072",
-    "estimated_distance_km": 17.0,
-    "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
-  },
-  {
-    "suburb": "Reservoir",
-    "state": "VIC",
-    "postcode": "3073",
-    "estimated_distance_km": 9.9,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Richmond",
-    "state": "VIC",
-    "postcode": "3121",
-    "estimated_distance_km": 25.0,
-    "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
-  },
-  {
-    "suburb": "Ringwood",
-    "state": "VIC",
-    "postcode": "3134",
-    "estimated_distance_km": 40.0,
-    "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
-  },
-  {
-    "suburb": "Roxburgh Park",
-    "state": "VIC",
-    "postcode": "3064",
-    "estimated_distance_km": 2.3,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Sale",
-    "state": "VIC",
-    "postcode": "3850",
-    "estimated_distance_km": 193.3,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Scoresby",
-    "state": "VIC",
-    "postcode": "3179",
-    "estimated_distance_km": 42.0,
-    "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
-  },
-  {
-    "suburb": "Seaford",
-    "state": "VIC",
-    "postcode": "3198",
-    "estimated_distance_km": 53.9,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Sebastopol",
-    "state": "VIC",
-    "postcode": "3356",
-    "estimated_distance_km": 97.7,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Shepparton",
-    "state": "VIC",
-    "postcode": "3630",
-    "estimated_distance_km": 145.9,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Somerton",
-    "state": "VIC",
-    "postcode": "3062",
-    "estimated_distance_km": 0.0,
-    "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
-  },
-  {
-    "suburb": "South Geelong",
-    "state": "VIC",
-    "postcode": "3220",
-    "estimated_distance_km": 77.2,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "South Melbourne",
-    "state": "VIC",
-    "postcode": "3205",
-    "estimated_distance_km": 28.0,
-    "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
-  },
-  {
-    "suburb": "Southbank",
-    "state": "VIC",
-    "postcode": "3006",
-    "estimated_distance_km": 20.1,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Springvale",
-    "state": "VIC",
-    "postcode": "3171",
-    "estimated_distance_km": 44.0,
-    "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
-  },
-  {
-    "suburb": "Sunshine",
-    "state": "VIC",
-    "postcode": "3020",
-    "estimated_distance_km": 19.0,
-    "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
-  },
-  {
-    "suburb": "Sunshine West",
-    "state": "VIC",
-    "postcode": "3020",
-    "estimated_distance_km": 20.0,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Tarneit",
-    "state": "VIC",
-    "postcode": "3029",
-    "estimated_distance_km": 32.5,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Thomastown",
-    "state": "VIC",
-    "postcode": "3074",
-    "estimated_distance_km": 11.0,
-    "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
-  },
-  {
-    "suburb": "Traralgon",
-    "state": "VIC",
-    "postcode": "3844",
-    "estimated_distance_km": 152.5,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Truganina",
-    "state": "VIC",
-    "postcode": "3029",
-    "estimated_distance_km": 29.0,
-    "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
-  },
-  {
-    "suburb": "Tullamarine",
-    "state": "VIC",
-    "postcode": "3043",
-    "estimated_distance_km": 10.0,
-    "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
-  },
-  {
-    "suburb": "Wangaratta",
-    "state": "VIC",
-    "postcode": "3677",
-    "estimated_distance_km": 188.3,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Warragul",
-    "state": "VIC",
-    "postcode": "3820",
-    "estimated_distance_km": 103.7,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Warrnambool",
-    "state": "VIC",
-    "postcode": "3280",
-    "estimated_distance_km": 231.0,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Wendouree",
-    "state": "VIC",
-    "postcode": "3355",
-    "estimated_distance_km": 99.0,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  },
-  {
-    "suburb": "Werribee",
-    "state": "VIC",
-    "postcode": "3030",
-    "estimated_distance_km": 39.0,
-    "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
-  },
-  {
-    "suburb": "Wodonga",
-    "state": "VIC",
-    "postcode": "3690",
-    "estimated_distance_km": 241.7,
-    "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
-  }
-]
+{
+  "metadata": {
+    "warehouse_origin": "98-102 Hume Hwy, Somerton, VIC, 3062",
+    "centroid_source": "Curated manually for demo sorting only. Coordinates were not derived from or copied from an official/open locality dataset.",
+    "calculation_method": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine.",
+    "date_generated": "2026-05-14",
+    "limitations": "Static suburb-level estimated straight-line distance only; not driving distance, ETA, or route optimization."
+  },
+  "records": [
+    {
+      "suburb": "Abbotsford",
+      "state": "VIC",
+      "postcode": "3067",
+      "estimated_distance_km": 18.5,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Airport West",
+      "state": "VIC",
+      "postcode": "3042",
+      "estimated_distance_km": 10.6,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Albury",
+      "state": "NSW",
+      "postcode": "2640",
+      "estimated_distance_km": 246.6,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Altona",
+      "state": "VIC",
+      "postcode": "3018",
+      "estimated_distance_km": 27.2,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Altona North",
+      "state": "VIC",
+      "postcode": "3025",
+      "estimated_distance_km": 23.0,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Avalon",
+      "state": "VIC",
+      "postcode": "3212",
+      "estimated_distance_km": 60.2,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Bairnsdale",
+      "state": "VIC",
+      "postcode": "3875",
+      "estimated_distance_km": 237.0,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Ballarat",
+      "state": "VIC",
+      "postcode": "3350",
+      "estimated_distance_km": 117.0,
+      "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
+    },
+    {
+      "suburb": "Ballarat Central",
+      "state": "VIC",
+      "postcode": "3350",
+      "estimated_distance_km": 97.0,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Bendigo",
+      "state": "VIC",
+      "postcode": "3550",
+      "estimated_distance_km": 114.7,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Bendigo Central",
+      "state": "VIC",
+      "postcode": "3550",
+      "estimated_distance_km": 114.6,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Berwick",
+      "state": "VIC",
+      "postcode": "3806",
+      "estimated_distance_km": 55.8,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Blackburn",
+      "state": "VIC",
+      "postcode": "3130",
+      "estimated_distance_km": 26.6,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Box Hill",
+      "state": "VIC",
+      "postcode": "3128",
+      "estimated_distance_km": 25.0,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Braeside",
+      "state": "VIC",
+      "postcode": "3195",
+      "estimated_distance_km": 49.0,
+      "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
+    },
+    {
+      "suburb": "Broadmeadows",
+      "state": "VIC",
+      "postcode": "3047",
+      "estimated_distance_km": 5.2,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Brooklyn",
+      "state": "VIC",
+      "postcode": "3012",
+      "estimated_distance_km": 21.5,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Brunswick",
+      "state": "VIC",
+      "postcode": "3056",
+      "estimated_distance_km": 13.8,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Brunswick East",
+      "state": "VIC",
+      "postcode": "3057",
+      "estimated_distance_km": 14.7,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Brunswick West",
+      "state": "VIC",
+      "postcode": "3055",
+      "estimated_distance_km": 13.3,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Camberwell",
+      "state": "VIC",
+      "postcode": "3124",
+      "estimated_distance_km": 24.7,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Campbellfield",
+      "state": "VIC",
+      "postcode": "3061",
+      "estimated_distance_km": 4.0,
+      "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
+    },
+    {
+      "suburb": "Carlton",
+      "state": "VIC",
+      "postcode": "3053",
+      "estimated_distance_km": 22.0,
+      "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
+    },
+    {
+      "suburb": "Carlton North",
+      "state": "VIC",
+      "postcode": "3054",
+      "estimated_distance_km": 15.9,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Carrum Downs",
+      "state": "VIC",
+      "postcode": "3201",
+      "estimated_distance_km": 54.9,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Cheltenham",
+      "state": "VIC",
+      "postcode": "3192",
+      "estimated_distance_km": 36.9,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Clayton",
+      "state": "VIC",
+      "postcode": "3168",
+      "estimated_distance_km": 42.0,
+      "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
+    },
+    {
+      "suburb": "Coburg",
+      "state": "VIC",
+      "postcode": "3058",
+      "estimated_distance_km": 14.0,
+      "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
+    },
+    {
+      "suburb": "Colac",
+      "state": "VIC",
+      "postcode": "3250",
+      "estimated_distance_km": 142.4,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Collingwood",
+      "state": "VIC",
+      "postcode": "3066",
+      "estimated_distance_km": 18.0,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Coolaroo",
+      "state": "VIC",
+      "postcode": "3048",
+      "estimated_distance_km": 2.2,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Craigieburn",
+      "state": "VIC",
+      "postcode": "3064",
+      "estimated_distance_km": 4.6,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Cranbourne",
+      "state": "VIC",
+      "postcode": "3977",
+      "estimated_distance_km": 72.0,
+      "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
+    },
+    {
+      "suburb": "Dallas",
+      "state": "VIC",
+      "postcode": "3047",
+      "estimated_distance_km": 3.6,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Dandenong",
+      "state": "VIC",
+      "postcode": "3175",
+      "estimated_distance_km": 43.0,
+      "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
+    },
+    {
+      "suburb": "Dandenong North",
+      "state": "VIC",
+      "postcode": "3175",
+      "estimated_distance_km": 41.9,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Dandenong South",
+      "state": "VIC",
+      "postcode": "3175",
+      "estimated_distance_km": 47.2,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Date Safe",
+      "state": "VIC",
+      "postcode": null,
+      "estimated_distance_km": 999.0,
+      "method_note": "Static test-fixture estimate retained only so existing edit-order fixtures resolve deterministically."
+    },
+    {
+      "suburb": "Derrimut",
+      "state": "VIC",
+      "postcode": "3026",
+      "estimated_distance_km": 22.8,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Docklands",
+      "state": "VIC",
+      "postcode": "3008",
+      "estimated_distance_km": 19.1,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Doncaster",
+      "state": "VIC",
+      "postcode": "3108",
+      "estimated_distance_km": 22.5,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "East Bendigo",
+      "state": "VIC",
+      "postcode": "3550",
+      "estimated_distance_km": 114.0,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Echuca",
+      "state": "VIC",
+      "postcode": "3564",
+      "estimated_distance_km": 169.3,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Epping",
+      "state": "VIC",
+      "postcode": "3076",
+      "estimated_distance_km": 14.0,
+      "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
+    },
+    {
+      "suburb": "Essendon",
+      "state": "VIC",
+      "postcode": "3040",
+      "estimated_distance_km": 12.3,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Fitzroy",
+      "state": "VIC",
+      "postcode": "3065",
+      "estimated_distance_km": 17.5,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Flemington",
+      "state": "VIC",
+      "postcode": "3031",
+      "estimated_distance_km": 16.0,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Footscray",
+      "state": "VIC",
+      "postcode": "3011",
+      "estimated_distance_km": 18.0,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Frankston",
+      "state": "VIC",
+      "postcode": "3199",
+      "estimated_distance_km": 66.0,
+      "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
+    },
+    {
+      "suburb": "Geelong",
+      "state": "VIC",
+      "postcode": "3220",
+      "estimated_distance_km": 79.0,
+      "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
+    },
+    {
+      "suburb": "Glen Waverley",
+      "state": "VIC",
+      "postcode": "3150",
+      "estimated_distance_km": 32.5,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Hallam",
+      "state": "VIC",
+      "postcode": "3803",
+      "estimated_distance_km": 49.3,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Hawthorn",
+      "state": "VIC",
+      "postcode": "3122",
+      "estimated_distance_km": 21.4,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Heatherton",
+      "state": "VIC",
+      "postcode": "3202",
+      "estimated_distance_km": 40.0,
+      "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
+    },
+    {
+      "suburb": "Hoppers Crossing",
+      "state": "VIC",
+      "postcode": "3029",
+      "estimated_distance_km": 34.4,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Horsham",
+      "state": "VIC",
+      "postcode": "3400",
+      "estimated_distance_km": 264.5,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Kangaroo Flat",
+      "state": "VIC",
+      "postcode": "3555",
+      "estimated_distance_km": 112.5,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Keilor East",
+      "state": "VIC",
+      "postcode": "3033",
+      "estimated_distance_km": 12.4,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Keilor Park",
+      "state": "VIC",
+      "postcode": "3042",
+      "estimated_distance_km": 12.6,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Kew",
+      "state": "VIC",
+      "postcode": "3101",
+      "estimated_distance_km": 19.8,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Keysborough",
+      "state": "VIC",
+      "postcode": "3173",
+      "estimated_distance_km": 47.0,
+      "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
+    },
+    {
+      "suburb": "Lalor",
+      "state": "VIC",
+      "postcode": "3075",
+      "estimated_distance_km": 6.8,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Lara",
+      "state": "VIC",
+      "postcode": "3212",
+      "estimated_distance_km": 63.4,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Laverton",
+      "state": "VIC",
+      "postcode": "3028",
+      "estimated_distance_km": 29.0,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Melbourne",
+      "state": "VIC",
+      "postcode": "3000",
+      "estimated_distance_km": 19.1,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Melton",
+      "state": "VIC",
+      "postcode": "3337",
+      "estimated_distance_km": 32.3,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Mentone",
+      "state": "VIC",
+      "postcode": "3194",
+      "estimated_distance_km": 39.3,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Mildura",
+      "state": "VIC",
+      "postcode": "3500",
+      "estimated_distance_km": 458.9,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Mitcham",
+      "state": "VIC",
+      "postcode": "3132",
+      "estimated_distance_km": 29.1,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Moonee Ponds",
+      "state": "VIC",
+      "postcode": "3039",
+      "estimated_distance_km": 13.9,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Moorabbin",
+      "state": "VIC",
+      "postcode": "3189",
+      "estimated_distance_km": 39.0,
+      "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
+    },
+    {
+      "suburb": "Moorabbin Airport",
+      "state": "VIC",
+      "postcode": "3194",
+      "estimated_distance_km": 39.4,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Mooroopna",
+      "state": "VIC",
+      "postcode": "3629",
+      "estimated_distance_km": 143.5,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Mordialloc",
+      "state": "VIC",
+      "postcode": "3195",
+      "estimated_distance_km": 42.2,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Morwell",
+      "state": "VIC",
+      "postcode": "3840",
+      "estimated_distance_km": 143.5,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Mount Waverley",
+      "state": "VIC",
+      "postcode": "3149",
+      "estimated_distance_km": 30.6,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Mulgrave",
+      "state": "VIC",
+      "postcode": "3170",
+      "estimated_distance_km": 46.0,
+      "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
+    },
+    {
+      "suburb": "Narre Warren",
+      "state": "VIC",
+      "postcode": "3805",
+      "estimated_distance_km": 53.0,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Noble Park",
+      "state": "VIC",
+      "postcode": "3174",
+      "estimated_distance_km": 46.0,
+      "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
+    },
+    {
+      "suburb": "North Geelong",
+      "state": "VIC",
+      "postcode": "3215",
+      "estimated_distance_km": 73.8,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "North Melbourne",
+      "state": "VIC",
+      "postcode": "3051",
+      "estimated_distance_km": 17.3,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Northcote",
+      "state": "VIC",
+      "postcode": "3070",
+      "estimated_distance_km": 15.0,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Nunawading",
+      "state": "VIC",
+      "postcode": "3131",
+      "estimated_distance_km": 28.2,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Pakenham",
+      "state": "VIC",
+      "postcode": "3810",
+      "estimated_distance_km": 67.0,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Preston",
+      "state": "VIC",
+      "postcode": "3072",
+      "estimated_distance_km": 17.0,
+      "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
+    },
+    {
+      "suburb": "Reservoir",
+      "state": "VIC",
+      "postcode": "3073",
+      "estimated_distance_km": 9.9,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Richmond",
+      "state": "VIC",
+      "postcode": "3121",
+      "estimated_distance_km": 25.0,
+      "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
+    },
+    {
+      "suburb": "Ringwood",
+      "state": "VIC",
+      "postcode": "3134",
+      "estimated_distance_km": 40.0,
+      "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
+    },
+    {
+      "suburb": "Roxburgh Park",
+      "state": "VIC",
+      "postcode": "3064",
+      "estimated_distance_km": 2.3,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Sale",
+      "state": "VIC",
+      "postcode": "3850",
+      "estimated_distance_km": 193.3,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Scoresby",
+      "state": "VIC",
+      "postcode": "3179",
+      "estimated_distance_km": 42.0,
+      "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
+    },
+    {
+      "suburb": "Seaford",
+      "state": "VIC",
+      "postcode": "3198",
+      "estimated_distance_km": 53.9,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Sebastopol",
+      "state": "VIC",
+      "postcode": "3356",
+      "estimated_distance_km": 97.7,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Shepparton",
+      "state": "VIC",
+      "postcode": "3630",
+      "estimated_distance_km": 145.9,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Somerton",
+      "state": "VIC",
+      "postcode": "3062",
+      "estimated_distance_km": 0.0,
+      "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
+    },
+    {
+      "suburb": "South Geelong",
+      "state": "VIC",
+      "postcode": "3220",
+      "estimated_distance_km": 77.2,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "South Melbourne",
+      "state": "VIC",
+      "postcode": "3205",
+      "estimated_distance_km": 28.0,
+      "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
+    },
+    {
+      "suburb": "Southbank",
+      "state": "VIC",
+      "postcode": "3006",
+      "estimated_distance_km": 20.1,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Springvale",
+      "state": "VIC",
+      "postcode": "3171",
+      "estimated_distance_km": 44.0,
+      "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
+    },
+    {
+      "suburb": "Sunshine",
+      "state": "VIC",
+      "postcode": "3020",
+      "estimated_distance_km": 19.0,
+      "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
+    },
+    {
+      "suburb": "Sunshine West",
+      "state": "VIC",
+      "postcode": "3020",
+      "estimated_distance_km": 20.0,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Tarneit",
+      "state": "VIC",
+      "postcode": "3029",
+      "estimated_distance_km": 32.5,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Thomastown",
+      "state": "VIC",
+      "postcode": "3074",
+      "estimated_distance_km": 11.0,
+      "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
+    },
+    {
+      "suburb": "Traralgon",
+      "state": "VIC",
+      "postcode": "3844",
+      "estimated_distance_km": 152.5,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Truganina",
+      "state": "VIC",
+      "postcode": "3029",
+      "estimated_distance_km": 29.0,
+      "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
+    },
+    {
+      "suburb": "Tullamarine",
+      "state": "VIC",
+      "postcode": "3043",
+      "estimated_distance_km": 10.0,
+      "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
+    },
+    {
+      "suburb": "Wangaratta",
+      "state": "VIC",
+      "postcode": "3677",
+      "estimated_distance_km": 188.3,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Warragul",
+      "state": "VIC",
+      "postcode": "3820",
+      "estimated_distance_km": 103.7,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Warrnambool",
+      "state": "VIC",
+      "postcode": "3280",
+      "estimated_distance_km": 231.0,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Wendouree",
+      "state": "VIC",
+      "postcode": "3355",
+      "estimated_distance_km": 99.0,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    },
+    {
+      "suburb": "Werribee",
+      "state": "VIC",
+      "postcode": "3030",
+      "estimated_distance_km": 39.0,
+      "method_note": "Retained static Phase 18 compatibility estimate from the existing suburb table; still a local estimate, not routing distance or ETA."
+    },
+    {
+      "suburb": "Wodonga",
+      "state": "VIC",
+      "postcode": "3690",
+      "estimated_distance_km": 241.7,
+      "method_note": "Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine; static estimate only, not routing distance or ETA."
+    }
+  ]
+}
