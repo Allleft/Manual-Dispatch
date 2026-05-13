@@ -15,7 +15,7 @@ This project is not a route optimizer. It does not perform auto-assignment, ETA 
 
 ## Current Status
 
-Current status: **Phase 18** on `feature/manual-dispatch-board`.
+Current status: **Phase 19: Release Candidate QA** on `feature/manual-dispatch-board`.
 
 Implemented capabilities now include:
 
@@ -27,6 +27,9 @@ Implemented capabilities now include:
 - Historical Final Trip Summary save, history, and Excel export from snapshot data.
 - Final Trip Summary suburb-distance sorting using a static local estimate table.
 - Distance dataset provenance, QA validation, and explicit non-optimization wording.
+- Phase 19 release-candidate QA validating the full manual dispatch workflow before office trial use.
+
+Phase 19 does not add automatic assignment or optimization. It focuses on regression checks, browser smoke testing, documentation, and small targeted fixes if QA finds a real bug.
 
 Runtime SQLite database files are local development data and remain ignored by Git.
 
@@ -259,6 +262,7 @@ node --check frontend/overrides.js
 - [Phase 14B save and export polish](docs/manual-dispatch-board-phase14b-final-summary-save-export.md)
 - [Phase 15 login and operator attribution](docs/manual-dispatch-board-phase15-login-final-summary-operator.md)
 - [Phase 18 suburb distance sorting](docs/manual-dispatch-board-phase18-suburb-distance-sorting.md)
+- [Phase 19 release candidate QA](docs/manual-dispatch-board-phase19-release-candidate-qa.md)
 
 ### UI Stability / Refactor Notes
 
