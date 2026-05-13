@@ -29,6 +29,7 @@ class Order:
     note: Optional[str]
     status: str = "ACTIVE"
     product_lines: List[ProductDetailLine] = field(default_factory=list)
+    estimated_distance_km_from_warehouse: Optional[float] = None
 
 
 @dataclass
@@ -137,6 +138,7 @@ class FinalTripSummaryOrderSnapshot:
     loose_bags_quantity_snapshot: int
     note_snapshot: Optional[str]
     product_lines_snapshot: List[ProductDetailLine] = field(default_factory=list)
+    estimated_distance_km_from_warehouse_snapshot: Optional[float] = None
 
 
 @dataclass

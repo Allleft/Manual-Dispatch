@@ -1,0 +1,205 @@
+[
+  {
+    "suburb": "Somerton",
+    "state": "VIC",
+    "postcode": "3062",
+    "estimated_distance_km": 0.0,
+    "method_note": "Static suburb-level estimate from the Somerton warehouse; not a routing distance."
+  },
+  {
+    "suburb": "Campbellfield",
+    "state": "VIC",
+    "postcode": "3061",
+    "estimated_distance_km": 4.0,
+    "method_note": "Static suburb-level estimate from the Somerton warehouse; not a routing distance."
+  },
+  {
+    "suburb": "Tullamarine",
+    "state": "VIC",
+    "postcode": "3043",
+    "estimated_distance_km": 10.0,
+    "method_note": "Static suburb-level estimate from the Somerton warehouse; not a routing distance."
+  },
+  {
+    "suburb": "Thomastown",
+    "state": "VIC",
+    "postcode": "3074",
+    "estimated_distance_km": 11.0,
+    "method_note": "Static suburb-level estimate from the Somerton warehouse; not a routing distance."
+  },
+  {
+    "suburb": "Coburg",
+    "state": "VIC",
+    "postcode": "3058",
+    "estimated_distance_km": 14.0,
+    "method_note": "Static suburb-level estimate from the Somerton warehouse; not a routing distance."
+  },
+  {
+    "suburb": "Epping",
+    "state": "VIC",
+    "postcode": "3076",
+    "estimated_distance_km": 14.0,
+    "method_note": "Static suburb-level estimate from the Somerton warehouse; not a routing distance."
+  },
+  {
+    "suburb": "Preston",
+    "state": "VIC",
+    "postcode": "3072",
+    "estimated_distance_km": 17.0,
+    "method_note": "Static suburb-level estimate from the Somerton warehouse; not a routing distance."
+  },
+  {
+    "suburb": "Sunshine",
+    "state": "VIC",
+    "postcode": "3020",
+    "estimated_distance_km": 19.0,
+    "method_note": "Static suburb-level estimate from the Somerton warehouse; not a routing distance."
+  },
+  {
+    "suburb": "Carlton",
+    "state": "VIC",
+    "postcode": "3053",
+    "estimated_distance_km": 22.0,
+    "method_note": "Static suburb-level estimate from the Somerton warehouse; not a routing distance."
+  },
+  {
+    "suburb": "Richmond",
+    "state": "VIC",
+    "postcode": "3121",
+    "estimated_distance_km": 25.0,
+    "method_note": "Static suburb-level estimate from the Somerton warehouse; not a routing distance."
+  },
+  {
+    "suburb": "South Melbourne",
+    "state": "VIC",
+    "postcode": "3205",
+    "estimated_distance_km": 28.0,
+    "method_note": "Static suburb-level estimate from the Somerton warehouse; not a routing distance."
+  },
+  {
+    "suburb": "Truganina",
+    "state": "VIC",
+    "postcode": "3029",
+    "estimated_distance_km": 29.0,
+    "method_note": "Static suburb-level estimate from the Somerton warehouse; not a routing distance."
+  },
+  {
+    "suburb": "Werribee",
+    "state": "VIC",
+    "postcode": "3030",
+    "estimated_distance_km": 39.0,
+    "method_note": "Static suburb-level estimate from the Somerton warehouse; not a routing distance."
+  },
+  {
+    "suburb": "Moorabbin",
+    "state": "VIC",
+    "postcode": "3189",
+    "estimated_distance_km": 39.0,
+    "method_note": "Static suburb-level estimate from the Somerton warehouse; not a routing distance."
+  },
+  {
+    "suburb": "Heatherton",
+    "state": "VIC",
+    "postcode": "3202",
+    "estimated_distance_km": 40.0,
+    "method_note": "Static suburb-level estimate from the Somerton warehouse; not a routing distance."
+  },
+  {
+    "suburb": "Ringwood",
+    "state": "VIC",
+    "postcode": "3134",
+    "estimated_distance_km": 40.0,
+    "method_note": "Static suburb-level estimate from the Somerton warehouse; not a routing distance."
+  },
+  {
+    "suburb": "Clayton",
+    "state": "VIC",
+    "postcode": "3168",
+    "estimated_distance_km": 42.0,
+    "method_note": "Static suburb-level estimate from the Somerton warehouse; not a routing distance."
+  },
+  {
+    "suburb": "Scoresby",
+    "state": "VIC",
+    "postcode": "3179",
+    "estimated_distance_km": 42.0,
+    "method_note": "Static suburb-level estimate from the Somerton warehouse; not a routing distance."
+  },
+  {
+    "suburb": "Dandenong",
+    "state": "VIC",
+    "postcode": "3175",
+    "estimated_distance_km": 43.0,
+    "method_note": "Static suburb-level estimate from the Somerton warehouse; not a routing distance."
+  },
+  {
+    "suburb": "Springvale",
+    "state": "VIC",
+    "postcode": "3171",
+    "estimated_distance_km": 44.0,
+    "method_note": "Static suburb-level estimate from the Somerton warehouse; not a routing distance."
+  },
+  {
+    "suburb": "Mulgrave",
+    "state": "VIC",
+    "postcode": "3170",
+    "estimated_distance_km": 46.0,
+    "method_note": "Static suburb-level estimate from the Somerton warehouse; not a routing distance."
+  },
+  {
+    "suburb": "Noble Park",
+    "state": "VIC",
+    "postcode": "3174",
+    "estimated_distance_km": 46.0,
+    "method_note": "Static suburb-level estimate from the Somerton warehouse; not a routing distance."
+  },
+  {
+    "suburb": "Keysborough",
+    "state": "VIC",
+    "postcode": "3173",
+    "estimated_distance_km": 47.0,
+    "method_note": "Static suburb-level estimate from the Somerton warehouse; not a routing distance."
+  },
+  {
+    "suburb": "Braeside",
+    "state": "VIC",
+    "postcode": "3195",
+    "estimated_distance_km": 49.0,
+    "method_note": "Static suburb-level estimate from the Somerton warehouse; not a routing distance."
+  },
+  {
+    "suburb": "Frankston",
+    "state": "VIC",
+    "postcode": "3199",
+    "estimated_distance_km": 66.0,
+    "method_note": "Static suburb-level estimate from the Somerton warehouse; not a routing distance."
+  },
+  {
+    "suburb": "Cranbourne",
+    "state": "VIC",
+    "postcode": "3977",
+    "estimated_distance_km": 72.0,
+    "method_note": "Static suburb-level estimate from the Somerton warehouse; not a routing distance."
+  },
+  {
+    "suburb": "Geelong",
+    "state": "VIC",
+    "postcode": "3220",
+    "estimated_distance_km": 79.0,
+    "method_note": "Static suburb-level estimate from the Somerton warehouse; not a routing distance."
+  },
+  {
+    "suburb": "Ballarat",
+    "state": "VIC",
+    "postcode": "3350",
+    "estimated_distance_km": 117.0,
+    "method_note": "Static suburb-level estimate from the Somerton warehouse; not a routing distance."
+  },
+  {
+    "suburb": "Date Safe",
+    "state": "VIC",
+    "postcode": "",
+    "estimated_distance_km": 999.0,
+    "method_note": "Static test-fixture estimate retained only so existing edit-order fixtures resolve deterministically."
+  }
+]

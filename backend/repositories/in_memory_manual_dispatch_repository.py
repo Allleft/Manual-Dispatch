@@ -524,6 +524,9 @@ class InMemoryManualDispatchRepository:
                             )
                             for line in (row.get("product_lines_snapshot") or [])
                         ],
+                        estimated_distance_km_from_warehouse_snapshot=row.get(
+                            "estimated_distance_km_from_warehouse_snapshot"
+                        ),
                     )
                 )
             if trip_orders:

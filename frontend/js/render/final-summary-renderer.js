@@ -243,7 +243,15 @@ function createFinalTripSummaryCard(summary, options = {}) {
 
     const thead = document.createElement("thead");
     const headerRow = document.createElement("tr");
-    ["No.", "Customer Name", "Suburb", "Invoice #", "Product Details", "Load"].forEach((label) => {
+    [
+      "No.",
+      "Customer Name",
+      "Suburb",
+      "Estimated Distance From Warehouse (km)",
+      "Invoice #",
+      "Product Details",
+      "Load",
+    ].forEach((label) => {
       const th = document.createElement("th");
       th.scope = "col";
       th.textContent = label;
@@ -258,13 +266,14 @@ function createFinalTripSummaryCard(summary, options = {}) {
         rowNumber,
         formatOptional(order.company_name, ""),
         formatOptional(order.suburb, ""),
+        formatEstimatedDistance(order),
         formatOptional(order.invoice_number, ""),
         formatProductDetails(order),
         formatOrderLoadQuantity(order),
       ].forEach((value, columnIndex) => {
         const td = document.createElement("td");
         td.textContent = value;
-        if (columnIndex === 4) {
+        if (columnIndex === 5) {
           td.className = "final-summary-product-details";
         }
         row.append(td);
@@ -290,4 +299,15 @@ function formatProductDetails(order) {
   return productLines
     .map((line, index) => formatProductDetailLine(line, index + 1))
     .join("\n");
+}
+
+function formatEstimatedDistance(order) {
+  const distance =
+    order.estimated_distance_km_from_warehouse_snapshot ??
+    order.estimated_distance_km_from_warehouse ??
+    null;
+  if (distance === null || distance === undefined || distance === "") {
+    return "Unknown";
+  }
+  return `${Number(distance).toFixed(1)} km`;
 }

@@ -127,6 +127,7 @@ CREATE TABLE IF NOT EXISTS final_trip_summary_rows (
     delivery_address_snapshot TEXT,
     product_snapshot TEXT,
     product_details_snapshot TEXT NOT NULL DEFAULT '[]',
+    estimated_distance_km_from_warehouse_snapshot REAL,
     pallet_quantity_snapshot INTEGER NOT NULL DEFAULT 0,
     loose_bags_quantity_snapshot INTEGER NOT NULL DEFAULT 0,
     note_snapshot TEXT,

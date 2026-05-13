@@ -6,6 +6,7 @@
 - It uses existing assignment data and existing unassign API calls during Generate.
 - Phase 10G adds optional SQLite persistence for saved Final Trip Summary snapshots.
 - Phase 16 preserves structured Product Details inside saved snapshot rows and export output.
+- Phase 18 stores suburb-level estimated warehouse distance in saved snapshot rows and sorts Final Summary Orders by that estimate.
 
 ## Generate Behavior
 1. User clicks `Generate` on a Driver card.
@@ -58,6 +59,9 @@ Final Trip Summary does not show:
 - Show only trips with Orders.
 - Do not show empty trips.
 - Editable Trip Summary also shows only trips that currently contain assigned Orders.
+- Within each Trip section, saved Orders are shown nearest estimated suburb to farthest estimated suburb.
+- Orders in the same suburb use Start Time earliest-to-latest as the tie-breaker.
+- Unknown-distance suburbs appear after known-distance suburbs.
 - Drivers with no editable assigned Orders show a small empty state.
 
 ## Final Table Columns
@@ -65,13 +69,15 @@ Final Trip Summary does not show:
 2. Customer Name
 3. Suburb
 4. Invoice #
-5. Product Details
-6. Load
+5. Estimated Distance From Warehouse (km)
+6. Product Details
+7. Load
 
 ## Column Rules
 - `No.` starts from 1 within each Driver snapshot across displayed trips.
 - `Customer Name` comes from `order.company_name`.
 - `Suburb` comes from `order.suburb`.
+- `Estimated Distance From Warehouse (km)` comes from the saved suburb-level distance snapshot when available, or `Unknown`.
 - `Invoice #` comes from `order.invoice_number`.
 - `Product Details` shows saved numbered product lines, or `No product details recorded.` when none exist.
 - `Load` shows the saved single load unit, such as `3 Pallets` or `5 Bags`.

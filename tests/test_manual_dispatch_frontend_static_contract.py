@@ -96,6 +96,18 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn('addButton.textContent = "Add Product Line"', order_modal_renderer)
         self.assertIn('"Product Details"', final_summary_renderer)
 
+    def test_phase18_final_summary_distance_display_is_present(self):
+        final_summary_renderer = (
+            FRONTEND_ROOT / "js" / "render" / "final-summary-renderer.js"
+        ).read_text(encoding="utf-8")
+        final_summary_actions = (
+            FRONTEND_ROOT / "js" / "actions" / "final-summary-actions.js"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('"Estimated Distance From Warehouse (km)"', final_summary_renderer)
+        self.assertIn("function formatEstimatedDistance(order)", final_summary_renderer)
+        self.assertIn("function sortFinalSummaryOrders(orders)", final_summary_actions)
+
     def test_product_line_typing_updates_state_without_popup_rerender(self):
         order_actions = (
             FRONTEND_ROOT / "js" / "actions" / "order-actions.js"

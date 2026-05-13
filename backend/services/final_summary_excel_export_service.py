@@ -9,6 +9,7 @@ FINAL_SUMMARY_HEADERS = [
     "No.",
     "Customer Name",
     "Suburb",
+    "Estimated Distance From Warehouse (km)",
     "Invoice #",
     "Product Details",
     "Load",
@@ -79,13 +80,14 @@ def _write_summary_sheet(worksheet, summary):
                 row_number,
                 order.company_name_snapshot or "",
                 order.suburb_snapshot or "",
+                _format_estimated_distance(order),
                 order.invoice_number_snapshot or "",
                 _format_product_details(order),
                 _format_load_quantity(order),
             ]
             for column_index, value in enumerate(values, start=1):
                 cell = worksheet.cell(row=row_index, column=column_index, value=value)
-                if column_index == 5:
+                if column_index == 6:
                     cell.alignment = Alignment(wrap_text=True, vertical="top")
             row_index += 1
             row_number += 1
@@ -134,6 +136,17 @@ def _format_load_quantity(order):
     if loose_bags > 0:
         return f"{loose_bags} {_pluralized_unit('BAGS', loose_bags)}"
     return "-"
+
+
+def _format_estimated_distance(order):
+    distance = getattr(
+        order,
+        "estimated_distance_km_from_warehouse_snapshot",
+        None,
+    )
+    if distance in ("", None):
+        return "Unknown"
+    return float(distance)
 
 
 def _pluralized_unit(unit, quantity):

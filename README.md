@@ -16,7 +16,7 @@ This project is intentionally not a route optimizer. It does not automatically s
 
 ## Current Status
 
-Current status: Phase 17 on `feature/manual-dispatch-board`.
+Current status: Phase 18 on `feature/manual-dispatch-board`.
 
 Implemented focus areas:
 
@@ -28,6 +28,7 @@ Implemented focus areas:
 - Structured Product Details for Orders, including saved Final Trip Summary snapshots and Excel export.
 - Order load validation that allows either Pallets or Bags, never both on the same Order.
 - Order Details now uses the same read-only form-style layout as Edit Order for easier visual comparison.
+- Final Trip Summary orders now use static suburb-level distance estimates from the Somerton warehouse and sort nearest to farthest, with same-suburb Orders sorted by Start Time.
 - Dispatch Date defaults to the browser's local current date. Demo data may still be dated `2026-05-05`; Task Pool is global, while Driver Summary visibility depends on the selected Driver Summary Delivery Date.
 
 Runtime SQLite database files are local and ignored by Git.
@@ -99,7 +100,9 @@ Runtime SQLite database files are local and ignored by Git.
 - Saved history can be loaded by History Date in the Final Trip Summary section.
 - Saved summaries do not update when live Orders, Drivers, or Vehicles are later edited.
 - Duplicate saved summaries for the same Driver + Dispatch Date + Delivery Date are rejected.
-- Final Trip Summary Excel export uses saved snapshot fields, includes Dispatch Date, Delivery Date, `Saved By`, `Product Details`, and excludes Generated At / Saved At.
+- Final Trip Summary rows display saved estimated warehouse distance values, or `Unknown` when no local suburb estimate exists.
+- Distance estimates use the documented warehouse origin `98-102 Hume Hwy, Somerton, VIC, 3062`; they are suburb-level estimates, not ETA or route optimization.
+- Final Trip Summary Excel export uses saved snapshot fields, includes Dispatch Date, Delivery Date, `Saved By`, `Product Details`, `Estimated Distance From Warehouse (km)`, and excludes Generated At / Saved At.
 - The older active-assignment Excel export route remains in the backend for compatibility, but it is not exposed as a top-level frontend button.
 
 ### Operator Accounts
@@ -264,6 +267,7 @@ Do not add these unless explicitly requested:
 - [Phase 15 login and operator attribution](docs/manual-dispatch-board-phase15-login-final-summary-operator.md)
 - [Phase 16 Product Details and load-unit exclusivity](docs/manual-dispatch-board-phase16-product-details.md)
 - [Phase 17 Order Details UI alignment](docs/manual-dispatch-board-phase17-order-details-ui.md)
+- [Phase 18 suburb distance sorting](docs/manual-dispatch-board-phase18-suburb-distance-sorting.md)
 
 ### Driver, Vehicle, and UI Stability
 

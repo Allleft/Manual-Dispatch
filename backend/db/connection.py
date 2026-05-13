@@ -106,6 +106,12 @@ def _ensure_manual_dispatch_columns(connection):
         "product_details_snapshot",
         "TEXT NOT NULL DEFAULT '[]'",
     )
+    _ensure_column(
+        connection,
+        "final_trip_summary_rows",
+        "estimated_distance_km_from_warehouse_snapshot",
+        "REAL",
+    )
 
 
 def _ensure_column(connection, table_name, column_name, column_definition):

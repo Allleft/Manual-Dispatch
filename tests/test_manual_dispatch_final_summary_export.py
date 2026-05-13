@@ -80,6 +80,7 @@ class ManualDispatchFinalSummaryExportTest(unittest.TestCase):
         self.assertIn("No.", values)
         self.assertIn("Customer Name", values)
         self.assertIn("Suburb", values)
+        self.assertIn("Estimated Distance From Warehouse (km)", values)
         self.assertIn("Invoice #", values)
         self.assertIn("Product Details", values)
         self.assertIn("Load", values)

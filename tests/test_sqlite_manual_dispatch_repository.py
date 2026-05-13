@@ -131,6 +131,10 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
         self.assertIn("delivery_date", vehicle_assignment_columns)
         self.assertIn("delivery_date", final_summary_columns)
         self.assertIn("product_details_snapshot", final_summary_row_columns)
+        self.assertIn(
+            "estimated_distance_km_from_warehouse_snapshot",
+            final_summary_row_columns,
+        )
 
     def test_assign_task_persists_assignment(self):
         self.service.assign_task(

@@ -37,6 +37,65 @@ async function downloadExcelResponse(response, fallbackFilename) {
   URL.revokeObjectURL(downloadUrl);
 }
 
+function normalizeSuburbName(suburb) {
+  return String(suburb || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLocaleLowerCase();
+}
+
+function normalizeStartTime(startTime) {
+  const text = String(startTime || "").trim();
+  if (!text) {
+    return "";
+  }
+  const parts = text.split(":");
+  if (parts.length < 2) {
+    return text;
+  }
+  return `${String(parts[0]).padStart(2, "0")}:${String(parts[1]).padStart(2, "0")}`;
+}
+
+function sortFinalSummaryOrders(orders) {
+  return [...orders].sort((first, second) => {
+    const firstDistance = first.estimated_distance_km_from_warehouse_snapshot ??
+      first.estimated_distance_km_from_warehouse;
+    const secondDistance = second.estimated_distance_km_from_warehouse_snapshot ??
+      second.estimated_distance_km_from_warehouse;
+    const firstKnown = firstDistance !== null && firstDistance !== undefined && firstDistance !== "";
+    const secondKnown = secondDistance !== null && secondDistance !== undefined && secondDistance !== "";
+    if (firstKnown !== secondKnown) {
+      return firstKnown ? -1 : 1;
+    }
+    if (firstKnown && Number(firstDistance) !== Number(secondDistance)) {
+      return Number(firstDistance) - Number(secondDistance);
+    }
+
+    const suburbCompare = normalizeSuburbName(first.suburb || first.suburb_snapshot)
+      .localeCompare(normalizeSuburbName(second.suburb || second.suburb_snapshot));
+    if (suburbCompare !== 0) {
+      return suburbCompare;
+    }
+
+    const firstStart = normalizeStartTime(first.start_time || first.start_time_snapshot);
+    const secondStart = normalizeStartTime(second.start_time || second.start_time_snapshot);
+    if (Boolean(firstStart) !== Boolean(secondStart)) {
+      return firstStart ? -1 : 1;
+    }
+    if (firstStart && secondStart && firstStart !== secondStart) {
+      return firstStart.localeCompare(secondStart);
+    }
+
+    const invoiceCompare = String(first.invoice_number || first.invoice_number_snapshot || "")
+      .localeCompare(String(second.invoice_number || second.invoice_number_snapshot || ""));
+    if (invoiceCompare !== 0) {
+      return invoiceCompare;
+    }
+    return String(first.order_id || first.order_id_snapshot || first.task_id || "")
+      .localeCompare(String(second.order_id || second.order_id_snapshot || second.task_id || ""));
+  });
+}
+
 export function createFinalSummaryActions({
   clearError,
   loadBoard,
@@ -80,6 +139,14 @@ export function createFinalSummaryActions({
             suburb: order.suburb || order.suburb_snapshot || "",
             delivery_address: order.delivery_address || order.delivery_address_snapshot || "",
             product: order.product || order.product_snapshot || "",
+            estimated_distance_km_from_warehouse:
+              order.estimated_distance_km_from_warehouse ??
+              order.estimated_distance_km_from_warehouse_snapshot ??
+              null,
+            estimated_distance_km_from_warehouse_snapshot:
+              order.estimated_distance_km_from_warehouse_snapshot ??
+              order.estimated_distance_km_from_warehouse ??
+              null,
             product_lines_snapshot:
               order.product_lines_snapshot ||
               order.product_lines ||
@@ -91,6 +158,7 @@ export function createFinalSummaryActions({
               order.loose_bags_quantity ?? order.loose_bags_quantity_snapshot ?? 0,
             ),
             note: order.note || order.note_snapshot || "",
+            start_time: order.start_time || order.start_time_snapshot || "",
           })),
         }))
         .filter((trip) => trip.orders.length > 0),
@@ -152,10 +220,15 @@ export function createFinalSummaryActions({
               pallet_quantity_snapshot: getDisplayPalletQuantity(order),
               loose_bags_quantity_snapshot: getLooseBagsQuantity(order),
               note_snapshot: order.note || "",
+              estimated_distance_km_from_warehouse_snapshot:
+                order.estimated_distance_km_from_warehouse ?? null,
+              estimated_distance_km_from_warehouse:
+                order.estimated_distance_km_from_warehouse ?? null,
               company_name: order.company_name || "",
               suburb: order.suburb || "",
               invoice_number: order.invoice_number || "",
               delivery_address: order.delivery_address || "",
+              start_time: order.start_time || "",
               pallet_quantity: getDisplayPalletQuantity(order),
               loose_bags_quantity: getLooseBagsQuantity(order),
               note: order.note || "",
@@ -171,7 +244,7 @@ export function createFinalSummaryActions({
 
         return {
           trip_no: tripNo,
-          orders: tripOrders,
+          orders: sortFinalSummaryOrders(tripOrders),
         };
       })
       .filter((trip) => trip.orders.length > 0);
@@ -296,6 +369,11 @@ export function createFinalSummaryActions({
           delivery_address_snapshot: order.delivery_address,
           product_snapshot: order.product,
           product_lines_snapshot: order.product_lines_snapshot || order.product_lines || [],
+          estimated_distance_km_from_warehouse_snapshot:
+            order.estimated_distance_km_from_warehouse_snapshot ??
+            order.estimated_distance_km_from_warehouse ??
+            null,
+          start_time: order.start_time || "",
           pallet_quantity_snapshot: order.pallet_quantity,
           loose_bags_quantity_snapshot: order.loose_bags_quantity,
           note_snapshot: order.note,

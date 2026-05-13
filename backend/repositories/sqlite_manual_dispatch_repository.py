@@ -861,10 +861,11 @@ class SQLiteManualDispatchRepository:
                         delivery_address_snapshot,
                         product_snapshot,
                         product_details_snapshot,
+                        estimated_distance_km_from_warehouse_snapshot,
                         pallet_quantity_snapshot,
                         loose_bags_quantity_snapshot,
                         note_snapshot
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         row_id,
@@ -880,6 +881,7 @@ class SQLiteManualDispatchRepository:
                         row.get("delivery_address_snapshot"),
                         row.get("product_snapshot"),
                         self._serialize_product_lines(row.get("product_lines_snapshot") or []),
+                        row.get("estimated_distance_km_from_warehouse_snapshot"),
                         row["pallet_quantity_snapshot"],
                         row["loose_bags_quantity_snapshot"],
                         row.get("note_snapshot"),
@@ -1088,6 +1090,11 @@ class SQLiteManualDispatchRepository:
                 row["product_details_snapshot"]
                 if "product_details_snapshot" in row.keys()
                 else "[]"
+            ),
+            estimated_distance_km_from_warehouse_snapshot=(
+                row["estimated_distance_km_from_warehouse_snapshot"]
+                if "estimated_distance_km_from_warehouse_snapshot" in row.keys()
+                else None
             ),
         )
 

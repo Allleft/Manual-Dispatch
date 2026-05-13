@@ -5,6 +5,10 @@ from backend.services.manual_dispatch.normalization import (
     normalize_product_detail_lines,
     quantity_or_default,
 )
+from backend.services.manual_dispatch.suburb_distance_service import (
+    get_estimated_distance_km,
+    sort_orders_by_suburb_distance_then_start_time,
+)
 
 
 class FinalSummaryService:
@@ -158,6 +162,21 @@ class FinalSummaryService:
                     load_unit,
                     "product_lines_snapshot",
                 )
+                suburb_snapshot = clean_optional_text(
+                    order_snapshot.get("suburb_snapshot")
+                    or order_snapshot.get("suburb")
+                ) or ""
+                estimated_distance = order_snapshot.get(
+                    "estimated_distance_km_from_warehouse_snapshot"
+                )
+                if estimated_distance in ("", None):
+                    estimated_distance = order_snapshot.get(
+                        "estimated_distance_km_from_warehouse"
+                    )
+                if estimated_distance in ("", None):
+                    estimated_distance = get_estimated_distance_km(suburb_snapshot)
+                if estimated_distance not in ("", None):
+                    estimated_distance = float(estimated_distance)
 
                 normalized_rows.append(
                     {
@@ -179,11 +198,7 @@ class FinalSummaryService:
                             or order_snapshot.get("company_name")
                         )
                         or "",
-                        "suburb_snapshot": clean_optional_text(
-                            order_snapshot.get("suburb_snapshot")
-                            or order_snapshot.get("suburb")
-                        )
-                        or "",
+                        "suburb_snapshot": suburb_snapshot,
                         "delivery_address_snapshot": clean_optional_text(
                             order_snapshot.get("delivery_address_snapshot")
                             or order_snapshot.get("delivery_address")
@@ -207,8 +222,25 @@ class FinalSummaryService:
                             order_snapshot.get("note_snapshot")
                             or order_snapshot.get("note")
                         ),
+                        "estimated_distance_km_from_warehouse_snapshot": estimated_distance,
+                        "_sort_start_time": clean_optional_text(
+                            order_snapshot.get("start_time_snapshot")
+                            or order_snapshot.get("start_time")
+                            or getattr(task, "start_time", None)
+                        ),
                     }
                 )
                 row_no += 1
 
-        return normalized_rows
+        sorted_rows = []
+        row_no = 1
+        for trip_no in ("trip1", "trip2"):
+            trip_rows = [
+                row for row in normalized_rows if row["trip_no"] == trip_no
+            ]
+            for row in sort_orders_by_suburb_distance_then_start_time(trip_rows):
+                row["row_no"] = row_no
+                sorted_rows.append(row)
+                row_no += 1
+
+        return sorted_rows
