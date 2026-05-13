@@ -704,21 +704,30 @@ function createActionsCell(actions) {
 
 function renderAddOrderPopup() {
   renderAddOrderPopupView({
+    onAddProductLine: () => orderActions.addProductLine("add"),
     onCloseAddOrder: orderActions.closeAddOrder,
     onCreateOrder: orderActions.handleCreateOrder,
+    onRemoveProductLine: (index) => orderActions.removeProductLine("add", index),
     onUpdateAddOrderForm: orderActions.updateAddOrderForm,
+    onUpdateProductLine: (index, field, value) =>
+      orderActions.updateProductLine("add", index, field, value),
   });
 }
 
 function renderOrderDetailPopup() {
   renderOrderDetailPopupView({
     getOrderEditForm: orderActions.getOrderEditForm,
+    onAddProductLine: () => orderActions.addProductLine("edit"),
     onCancelOrder: orderActions.handleCancelOrder,
     onCancelOrderEdit: orderActions.cancelOrderEdit,
     onCloseOrderDetail: orderActions.closeOrderDetail,
+    onRemoveProductLine: (index) => orderActions.removeProductLine("edit", index),
     onSaveOrderEdit: orderActions.handleUpdateOrder,
     onStartOrderEdit: orderActions.startOrderEdit,
+    onToggleProductDetail: orderActions.toggleProductDetail,
     onUpdateOrderEditForm: orderActions.updateOrderEditForm,
+    onUpdateProductLine: (index, field, value) =>
+      orderActions.updateProductLine("edit", index, field, value),
   });
 }
 function renderBoard() {

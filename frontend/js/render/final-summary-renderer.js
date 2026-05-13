@@ -4,7 +4,11 @@ import {
   createDetailField,
   createOption,
 } from "../utils/dom-utils.js";
-import { formatOptional } from "../utils/format-utils.js";
+import {
+  formatOptional,
+  formatOrderLoadQuantity,
+  formatProductDetailLine,
+} from "../utils/format-utils.js";
 
 export function renderFinalTripSummaries({
   getUnsavedFinalSummaries,
@@ -239,7 +243,7 @@ function createFinalTripSummaryCard(summary, options = {}) {
 
     const thead = document.createElement("thead");
     const headerRow = document.createElement("tr");
-    ["No.", "Customer Name", "Suburb", "Invoice #", "Product", "Pallets"].forEach((label) => {
+    ["No.", "Customer Name", "Suburb", "Invoice #", "Product Details", "Load"].forEach((label) => {
       const th = document.createElement("th");
       th.scope = "col";
       th.textContent = label;
@@ -255,11 +259,14 @@ function createFinalTripSummaryCard(summary, options = {}) {
         formatOptional(order.company_name, ""),
         formatOptional(order.suburb, ""),
         formatOptional(order.invoice_number, ""),
-        formatOptional(order.product, ""),
-        order.pallet_quantity,
-      ].forEach((value) => {
+        formatProductDetails(order),
+        formatOrderLoadQuantity(order),
+      ].forEach((value, columnIndex) => {
         const td = document.createElement("td");
         td.textContent = value;
+        if (columnIndex === 4) {
+          td.className = "final-summary-product-details";
+        }
         row.append(td);
       });
       tbody.append(row);
@@ -273,4 +280,14 @@ function createFinalTripSummaryCard(summary, options = {}) {
 
   card.append(header, meta, trips);
   return card;
+}
+
+function formatProductDetails(order) {
+  const productLines = order.product_lines_snapshot || order.product_lines || [];
+  if (!productLines.length) {
+    return "No product details recorded.";
+  }
+  return productLines
+    .map((line, index) => formatProductDetailLine(line, index + 1))
+    .join("\n");
 }

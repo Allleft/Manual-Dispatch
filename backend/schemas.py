@@ -1,5 +1,12 @@
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from typing import List, Optional
+
+
+@dataclass
+class ProductDetailLine:
+    product_name: str
+    quantity: int
+    unit: str
 
 
 @dataclass
@@ -21,6 +28,7 @@ class Order:
     end_time: Optional[str]
     note: Optional[str]
     status: str = "ACTIVE"
+    product_lines: List[ProductDetailLine] = field(default_factory=list)
 
 
 @dataclass
@@ -128,6 +136,7 @@ class FinalTripSummaryOrderSnapshot:
     pallet_quantity_snapshot: int
     loose_bags_quantity_snapshot: int
     note_snapshot: Optional[str]
+    product_lines_snapshot: List[ProductDetailLine] = field(default_factory=list)
 
 
 @dataclass
@@ -225,6 +234,7 @@ class CreateOrderRequest:
     start_time: Optional[str] = None
     end_time: Optional[str] = None
     note: Optional[str] = None
+    product_lines: Optional[List[dict]] = None
 
 
 @dataclass
@@ -244,6 +254,7 @@ class UpdateOrderRequest:
     start_time: Optional[str] = None
     end_time: Optional[str] = None
     note: Optional[str] = None
+    product_lines: Optional[List[dict]] = None
 
 
 @dataclass

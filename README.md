@@ -16,7 +16,7 @@ This project is intentionally not a route optimizer. It does not automatically s
 
 ## Current Status
 
-Current status: Phase 15 on `feature/manual-dispatch-board`.
+Current status: Phase 16 on `feature/manual-dispatch-board`.
 
 Implemented focus areas:
 
@@ -25,6 +25,8 @@ Implemented focus areas:
 - Driver and Vehicle master-data management through the Driver & Vehicle Specification modal.
 - Final Trip Summary generation, save/history, and Excel export from saved snapshot records.
 - Lightweight database-backed operator login for Final Trip Summary attribution.
+- Structured Product Details for Orders, including saved Final Trip Summary snapshots and Excel export.
+- Order load validation that allows either Pallets or Bags, never both on the same Order.
 - Dispatch Date defaults to the browser's local current date. Demo data may still be dated `2026-05-05`; Task Pool is global, while Driver Summary visibility depends on the selected Driver Summary Delivery Date.
 
 Runtime SQLite database files are local and ignored by Git.
@@ -41,7 +43,7 @@ Runtime SQLite database files are local and ignored by Git.
   - Top: Task Pool.
   - Bottom: Trip Summary.
 - Task Pool is a global unassigned active Order pool and is not filtered by Driver Summary Delivery Date.
-- Compact Order cards show Invoice #, Company, Suburb, Delivery Date, Pallet quantity, urgency, note preview, and start time.
+- Compact Order cards show Invoice #, Company, Suburb, Delivery Date, load quantity, urgency, note preview, and start time.
 - Task Pool search, urgency, and optional Delivery Date display filters apply only to visible unassigned Orders; they do not change Task Pool membership.
 - Clicking an Order card opens a detail popup.
 
@@ -61,6 +63,9 @@ Runtime SQLite database files are local and ignored by Git.
 - Add Order popup saves new Orders to SQLite.
 - Add Order defaults delivery date to the currently selected Dispatch Date.
 - Edit Order supports operational fields, including editable Delivery Date for active Orders.
+- Add/Edit Order supports Product Details with multiple same-unit product lines.
+- Orders use either Pallets or Bags, never both; product-line units must match that Order load unit.
+- Order detail popups expose a `Product Detail` view and show `No product details recorded.` for legacy Orders without product lines.
 - Editing an assigned Order preserves the existing Driver + Trip assignment.
 - Cancel Order uses soft delete with `status = CANCELLED`.
 - Cancelled Orders are hidden from Task Pool and normal active exports.
@@ -80,7 +85,7 @@ Runtime SQLite database files are local and ignored by Git.
 ### Final Trip Summary
 
 - Generate creates a locked frontend snapshot from a Driver's current assigned Orders for the selected Driver Summary Delivery Date and selected Vehicle.
-- Generated snapshots preserve Driver name, vehicle rego, trip grouping, totals, and Order row details at generation time.
+- Generated snapshots preserve Driver name, vehicle rego, trip grouping, totals, Product Details, and Order row details at generation time.
 - Generated Orders are unassigned through the backend API and hidden from Task Pool in the same browser session.
 - Generated-but-unsaved Final Trip Summary snapshots are frontend-memory only and can be lost on refresh.
 - One global Save and Export button saves all generated unsaved summaries.
@@ -92,7 +97,7 @@ Runtime SQLite database files are local and ignored by Git.
 - Saved history can be loaded by History Date in the Final Trip Summary section.
 - Saved summaries do not update when live Orders, Drivers, or Vehicles are later edited.
 - Duplicate saved summaries for the same Driver + Dispatch Date + Delivery Date are rejected.
-- Final Trip Summary Excel export uses saved snapshot fields, includes Dispatch Date, Delivery Date, `Saved By`, and excludes Generated At / Saved At.
+- Final Trip Summary Excel export uses saved snapshot fields, includes Dispatch Date, Delivery Date, `Saved By`, `Product Details`, and excludes Generated At / Saved At.
 - The older active-assignment Excel export route remains in the backend for compatibility, but it is not exposed as a top-level frontend button.
 
 ### Operator Accounts
@@ -255,6 +260,7 @@ Do not add these unless explicitly requested:
 - [Phase 14 redesign and demo reset](docs/manual-dispatch-board-phase14-final-summary-redesign.md)
 - [Phase 14B save and export polish](docs/manual-dispatch-board-phase14b-final-summary-save-export.md)
 - [Phase 15 login and operator attribution](docs/manual-dispatch-board-phase15-login-final-summary-operator.md)
+- [Phase 16 Product Details and load-unit exclusivity](docs/manual-dispatch-board-phase16-product-details.md)
 
 ### Driver, Vehicle, and UI Stability
 

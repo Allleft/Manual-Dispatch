@@ -9,7 +9,7 @@ import {
 } from "../utils/dom-utils.js";
 import {
   formatOptional,
-  getDisplayPalletQuantity,
+  formatOrderLoadQuantity,
   getUrgencyLabel,
   isUrgent,
   truncateText,
@@ -141,7 +141,7 @@ export function renderTaskPool({
     const meta = document.createElement("div");
     meta.className = "compact-meta";
     meta.append(
-      createBadge(`Pallet: ${getDisplayPalletQuantity(order)}`),
+      createBadge(`Load: ${formatOrderLoadQuantity(order)}`),
       createBadge(getUrgencyLabel(order), isUrgent(order) ? "urgent" : "neutral"),
       createBadge(`Delivery Date: ${formatOptional(order.delivery_date)}`),
       createBadge(`Start: ${formatOptional(order.start_time)}`),

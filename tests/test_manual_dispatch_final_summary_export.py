@@ -81,8 +81,8 @@ class ManualDispatchFinalSummaryExportTest(unittest.TestCase):
         self.assertIn("Customer Name", values)
         self.assertIn("Suburb", values)
         self.assertIn("Invoice #", values)
-        self.assertIn("Product", values)
-        self.assertIn("Pallets", values)
+        self.assertIn("Product Details", values)
+        self.assertIn("Load", values)
 
     def test_export_skips_empty_trips(self):
         self._assign_order("ORD-001", "D001", "trip1")

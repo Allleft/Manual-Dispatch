@@ -37,7 +37,7 @@ class ManualDispatchEditOrderTest(unittest.TestCase):
                 phone="0499 111 222",
                 suburb="Mulgrave",
                 pallet_quantity=5,
-                loose_bags_quantity=2,
+                loose_bags_quantity=0,
                 note="Updated delivery note",
             ),
         )
@@ -47,7 +47,7 @@ class ManualDispatchEditOrderTest(unittest.TestCase):
         self.assertEqual("0499 111 222", updated.phone)
         self.assertEqual("Mulgrave", updated.suburb)
         self.assertEqual(5, updated.pallet_quantity)
-        self.assertEqual(2, updated.loose_bags_quantity)
+        self.assertEqual(0, updated.loose_bags_quantity)
         self.assertEqual("Updated delivery note", updated.note)
 
     def test_update_order_rejects_missing_suburb(self):
@@ -61,6 +61,16 @@ class ManualDispatchEditOrderTest(unittest.TestCase):
     def test_update_order_rejects_negative_loose_bags_quantity(self):
         with self.assertRaises(ValueError):
             self.service.update_order("ORD-001", self._request(loose_bags_quantity=-1))
+
+    def test_update_order_rejects_mixed_pallet_and_bag_quantities(self):
+        with self.assertRaisesRegex(
+            ValueError,
+            "Order must use either Pallets or Bags, not both",
+        ):
+            self.service.update_order(
+                "ORD-001",
+                self._request(pallet_quantity=5, loose_bags_quantity=2),
+            )
 
     def test_update_order_rejects_missing_delivery_date(self):
         with self.assertRaisesRegex(ValueError, "delivery_date is required"):

@@ -5,6 +5,7 @@
 - It is read-only and does not auto-update after later board changes.
 - It uses existing assignment data and existing unassign API calls during Generate.
 - Phase 10G adds optional SQLite persistence for saved Final Trip Summary snapshots.
+- Phase 16 preserves structured Product Details inside saved snapshot rows and export output.
 
 ## Generate Behavior
 1. User clicks `Generate` on a Driver card.
@@ -64,17 +65,17 @@ Final Trip Summary does not show:
 2. Customer Name
 3. Suburb
 4. Invoice #
-5. Product
-6. Pallets
+5. Product Details
+6. Load
 
 ## Column Rules
 - `No.` starts from 1 within each Driver snapshot across displayed trips.
 - `Customer Name` comes from `order.company_name`.
 - `Suburb` comes from `order.suburb`.
 - `Invoice #` comes from `order.invoice_number`.
-- `Product` remains blank unless a real product field exists.
-- `Pallets` comes from `order.pallet_quantity`.
-- Loose-bag-only Orders show Pallets as `0`.
+- `Product Details` shows saved numbered product lines, or `No product details recorded.` when none exist.
+- `Load` shows the saved single load unit, such as `3 Pallets` or `5 Bags`.
+- Orders do not mix Pallets and Bags in the same saved row.
 
 ## Read-Only Rule
 Final Trip Summary does not include:
@@ -87,7 +88,6 @@ Final Trip Summary does not include:
 - Delete or Cancel controls
 
 ## Excluded Work
-- Excel export changes
 - Lock/unlock workflow
 - Batch unassign endpoint
 - Add/Edit/Delete Order changes

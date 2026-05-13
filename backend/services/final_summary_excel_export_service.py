@@ -2,10 +2,17 @@ from io import BytesIO
 import re
 
 from openpyxl import Workbook
-from openpyxl.styles import Font
+from openpyxl.styles import Alignment, Font
 
 
-FINAL_SUMMARY_HEADERS = ["No.", "Customer Name", "Suburb", "Invoice #", "Product", "Pallets"]
+FINAL_SUMMARY_HEADERS = [
+    "No.",
+    "Customer Name",
+    "Suburb",
+    "Invoice #",
+    "Product Details",
+    "Load",
+]
 INVALID_SHEET_CHARACTERS = re.compile(r"[\[\]\*:/\\?]")
 
 
@@ -73,11 +80,13 @@ def _write_summary_sheet(worksheet, summary):
                 order.company_name_snapshot or "",
                 order.suburb_snapshot or "",
                 order.invoice_number_snapshot or "",
-                order.product_snapshot or "",
-                order.pallet_quantity_snapshot,
+                _format_product_details(order),
+                _format_load_quantity(order),
             ]
             for column_index, value in enumerate(values, start=1):
-                worksheet.cell(row=row_index, column=column_index, value=value)
+                cell = worksheet.cell(row=row_index, column=column_index, value=value)
+                if column_index == 5:
+                    cell.alignment = Alignment(wrap_text=True, vertical="top")
             row_index += 1
             row_number += 1
 
@@ -105,6 +114,32 @@ def _safe_sheet_title(summary, used_titles):
 
 def _trip_label(trip_no):
     return "Trip 1" if trip_no == "trip1" else "Trip 2"
+
+
+def _format_product_details(order):
+    product_lines = getattr(order, "product_lines_snapshot", None) or []
+    if not product_lines:
+        return "No product details recorded."
+    return "\n".join(
+        f"{index}. {line.product_name} - {line.quantity} {_pluralized_unit(line.unit, line.quantity)}"
+        for index, line in enumerate(product_lines, start=1)
+    )
+
+
+def _format_load_quantity(order):
+    pallets = int(getattr(order, "pallet_quantity_snapshot", 0) or 0)
+    loose_bags = int(getattr(order, "loose_bags_quantity_snapshot", 0) or 0)
+    if pallets > 0:
+        return f"{pallets} {_pluralized_unit('PALLETS', pallets)}"
+    if loose_bags > 0:
+        return f"{loose_bags} {_pluralized_unit('BAGS', loose_bags)}"
+    return "-"
+
+
+def _pluralized_unit(unit, quantity):
+    normalized = str(unit or "").upper()
+    singular = "Pallet" if normalized == "PALLETS" else "Bag"
+    return singular if quantity == 1 else f"{singular}s"
 
 
 def _apply_column_widths(worksheet):

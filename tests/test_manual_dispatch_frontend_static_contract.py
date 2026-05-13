@@ -44,6 +44,19 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn('createOrderEditField("Delivery Date", "delivery_date"', order_modal_renderer)
         self.assertNotIn("Delivery Date (read-only)", order_modal_renderer)
 
+    def test_phase16_product_detail_controls_are_present(self):
+        order_modal_renderer = (
+            FRONTEND_ROOT / "js" / "render" / "order-modal-renderer.js"
+        ).read_text(encoding="utf-8")
+        final_summary_renderer = (
+            FRONTEND_ROOT / "js" / "render" / "final-summary-renderer.js"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('productDetailButton.textContent = "Product Detail"', order_modal_renderer)
+        self.assertIn('title.textContent = "Product Details"', order_modal_renderer)
+        self.assertIn('addButton.textContent = "Add Product Line"', order_modal_renderer)
+        self.assertIn('"Product Details"', final_summary_renderer)
+
     def test_frontend_module_import_paths_exist(self):
         frontend_sources = list(FRONTEND_ROOT.rglob("*.js"))
         import_paths = []

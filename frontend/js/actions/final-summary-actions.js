@@ -80,6 +80,10 @@ export function createFinalSummaryActions({
             suburb: order.suburb || order.suburb_snapshot || "",
             delivery_address: order.delivery_address || order.delivery_address_snapshot || "",
             product: order.product || order.product_snapshot || "",
+            product_lines_snapshot:
+              order.product_lines_snapshot ||
+              order.product_lines ||
+              [],
             pallet_quantity: Number(
               order.pallet_quantity ?? order.pallet_quantity_snapshot ?? 0,
             ),
@@ -140,6 +144,11 @@ export function createFinalSummaryActions({
               suburb_snapshot: order.suburb || "",
               delivery_address_snapshot: order.delivery_address || "",
               product_snapshot: "",
+              product_lines_snapshot: (order.product_lines || []).map((line) => ({
+                product_name: line.product_name || "",
+                quantity: Number(line.quantity || 0),
+                unit: line.unit || "",
+              })),
               pallet_quantity_snapshot: getDisplayPalletQuantity(order),
               loose_bags_quantity_snapshot: getLooseBagsQuantity(order),
               note_snapshot: order.note || "",
@@ -151,6 +160,11 @@ export function createFinalSummaryActions({
               loose_bags_quantity: getLooseBagsQuantity(order),
               note: order.note || "",
               product: "",
+              product_lines: (order.product_lines || []).map((line) => ({
+                product_name: line.product_name || "",
+                quantity: Number(line.quantity || 0),
+                unit: line.unit || "",
+              })),
             };
           })
           .filter(Boolean);
@@ -281,6 +295,7 @@ export function createFinalSummaryActions({
           suburb_snapshot: order.suburb,
           delivery_address_snapshot: order.delivery_address,
           product_snapshot: order.product,
+          product_lines_snapshot: order.product_lines_snapshot || order.product_lines || [],
           pallet_quantity_snapshot: order.pallet_quantity,
           loose_bags_quantity_snapshot: order.loose_bags_quantity,
           note_snapshot: order.note,

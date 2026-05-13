@@ -3,6 +3,8 @@ from backend.services.manual_dispatch.normalization import (
     clean_optional_text,
     clean_required_iso_date,
     clean_required_text,
+    load_unit_for_quantities,
+    normalize_product_detail_lines,
     quantity_or_default,
 )
 
@@ -26,6 +28,11 @@ class OrderService:
             request.loose_bags_quantity,
             "loose_bags_quantity",
         )
+        load_unit = load_unit_for_quantities(pallet_quantity, loose_bags_quantity)
+        product_lines = normalize_product_detail_lines(
+            request.product_lines,
+            load_unit,
+        )
 
         order = Order(
             order_id=self.id_generator.generate_order_id(delivery_date),
@@ -45,6 +52,7 @@ class OrderService:
             end_time=clean_optional_text(request.end_time),
             note=clean_optional_text(request.note),
             status="ACTIVE",
+            product_lines=product_lines,
         )
         return self.repository.create_order(order)
 
@@ -66,6 +74,21 @@ class OrderService:
             request.loose_bags_quantity,
             "loose_bags_quantity",
         )
+        load_unit = load_unit_for_quantities(pallet_quantity, loose_bags_quantity)
+        product_lines_payload = request.product_lines
+        if product_lines_payload is None:
+            product_lines_payload = [
+                {
+                    "product_name": line.product_name,
+                    "quantity": line.quantity,
+                    "unit": line.unit,
+                }
+                for line in existing.product_lines
+            ]
+        product_lines = normalize_product_detail_lines(
+            product_lines_payload,
+            load_unit,
+        )
 
         order = Order(
             order_id=existing.order_id,
@@ -85,6 +108,7 @@ class OrderService:
             end_time=clean_optional_text(request.end_time),
             note=clean_optional_text(request.note),
             status=existing.status,
+            product_lines=product_lines,
         )
         return self.repository.update_order(order)
 

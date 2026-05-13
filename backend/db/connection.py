@@ -100,6 +100,12 @@ def _ensure_manual_dispatch_columns(connection):
         "saved_by_account_id",
         "INTEGER",
     )
+    _ensure_column(
+        connection,
+        "final_trip_summary_rows",
+        "product_details_snapshot",
+        "TEXT NOT NULL DEFAULT '[]'",
+    )
 
 
 def _ensure_column(connection, table_name, column_name, column_definition):

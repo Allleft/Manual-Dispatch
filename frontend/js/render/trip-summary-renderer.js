@@ -16,8 +16,7 @@ import {
   createOption,
 } from "../utils/dom-utils.js";
 import {
-  getDisplayPalletQuantity,
-  getLooseBagsQuantity,
+  formatOrderLoadQuantity,
 } from "../utils/format-utils.js";
 
 export function renderDriverSummary({
@@ -248,7 +247,7 @@ function createAssignedTask(assignment, order, { onOpenOrderDetail, onUnassign }
   row.setAttribute("title", "View order details");
   row.setAttribute(
     "aria-label",
-    `View details for ${order.invoice_number || order.order_id}, ${order.suburb}, Pallet ${getDisplayPalletQuantity(order)}`,
+    `View details for ${order.invoice_number || order.order_id}, ${order.suburb}, ${formatOrderLoadQuantity(order)}`,
   );
   row.addEventListener("click", () => onOpenOrderDetail(order.order_id));
   row.addEventListener("keydown", (event) => {
@@ -266,7 +265,7 @@ function createAssignedTask(assignment, order, { onOpenOrderDetail, onUnassign }
 
   const pallet = document.createElement("p");
   pallet.className = "assigned-pallet";
-  pallet.textContent = `Pallet: ${getDisplayPalletQuantity(order)} | Loose bags: ${getLooseBagsQuantity(order)}`;
+  pallet.textContent = `Load: ${formatOrderLoadQuantity(order)}`;
 
   const deliveryDate = document.createElement("p");
   deliveryDate.className = "assigned-delivery-date";

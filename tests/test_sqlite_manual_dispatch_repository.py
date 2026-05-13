@@ -43,6 +43,7 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
         self.assertIn("manual_vehicles", tables)
         self.assertIn("manual_dispatch_assignments", tables)
         self.assertIn("manual_driver_vehicle_assignments", tables)
+        self.assertIn("order_product_lines", tables)
 
     def test_seed_data_loads_orders_drivers_and_vehicles(self):
         board = self.service.get_board("2026-05-05")
@@ -117,12 +118,19 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
                     "PRAGMA table_info(final_trip_summaries)"
                 ).fetchall()
             }
+            final_summary_row_columns = {
+                row[1]
+                for row in connection.execute(
+                    "PRAGMA table_info(final_trip_summary_rows)"
+                ).fetchall()
+            }
 
         self.assertIn("invoice_number", order_columns)
         self.assertIn("phone", order_columns)
         self.assertIn("pallet_only", driver_columns)
         self.assertIn("delivery_date", vehicle_assignment_columns)
         self.assertIn("delivery_date", final_summary_columns)
+        self.assertIn("product_details_snapshot", final_summary_row_columns)
 
     def test_assign_task_persists_assignment(self):
         self.service.assign_task(

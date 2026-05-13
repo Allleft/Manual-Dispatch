@@ -20,6 +20,20 @@ CREATE TABLE IF NOT EXISTS manual_orders (
     status TEXT NOT NULL DEFAULT 'ACTIVE'
 );
 
+CREATE TABLE IF NOT EXISTS order_product_lines (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id TEXT NOT NULL,
+    line_no INTEGER NOT NULL,
+    product_name TEXT NOT NULL,
+    quantity INTEGER NOT NULL,
+    unit TEXT NOT NULL,
+    UNIQUE(order_id, line_no),
+    CHECK(quantity > 0),
+    CHECK(unit IN ('PALLETS', 'BAGS')),
+    FOREIGN KEY(order_id) REFERENCES manual_orders(order_id)
+        ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS manual_drivers (
     driver_id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -112,6 +126,7 @@ CREATE TABLE IF NOT EXISTS final_trip_summary_rows (
     suburb_snapshot TEXT,
     delivery_address_snapshot TEXT,
     product_snapshot TEXT,
+    product_details_snapshot TEXT NOT NULL DEFAULT '[]',
     pallet_quantity_snapshot INTEGER NOT NULL DEFAULT 0,
     loose_bags_quantity_snapshot INTEGER NOT NULL DEFAULT 0,
     note_snapshot TEXT,

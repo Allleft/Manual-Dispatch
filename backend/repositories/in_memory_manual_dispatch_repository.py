@@ -7,6 +7,7 @@ from backend.schemas import (
     ManualDriverVehicleAssignment,
     Order,
     OperatorAccountRecord,
+    ProductDetailLine,
     Vehicle,
 )
 
@@ -515,6 +516,14 @@ class InMemoryManualDispatchRepository:
                         pallet_quantity_snapshot=row["pallet_quantity_snapshot"],
                         loose_bags_quantity_snapshot=row["loose_bags_quantity_snapshot"],
                         note_snapshot=row.get("note_snapshot"),
+                        product_lines_snapshot=[
+                            ProductDetailLine(
+                                product_name=line.get("product_name") or "",
+                                quantity=int(line.get("quantity") or 0),
+                                unit=line.get("unit") or "",
+                            )
+                            for line in (row.get("product_lines_snapshot") or [])
+                        ],
                     )
                 )
             if trip_orders:

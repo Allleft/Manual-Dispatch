@@ -54,6 +54,7 @@ export const state = {
   vehicleSpecificationForm: null,
   vehicleSpecificationEditingId: "",
   activeOrderDetailId: "",
+  isProductDetailOpen: false,
   isAddOrderOpen: false,
   addOrderError: "",
   addOrderForm: {},

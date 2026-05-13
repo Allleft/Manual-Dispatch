@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import json
 
 from backend.db.connection import connect, get_database_path, initialize_database
 from backend.schemas import (
@@ -10,6 +11,7 @@ from backend.schemas import (
     ManualDriverVehicleAssignment,
     Order,
     OperatorAccountRecord,
+    ProductDetailLine,
     Vehicle,
 )
 
@@ -305,6 +307,7 @@ class SQLiteManualDispatchRepository:
                     order.status,
                 ),
             )
+            self._replace_order_product_lines(connection, order.order_id, order.product_lines)
             connection.commit()
         return self.get_order(order.order_id)
 
@@ -350,6 +353,7 @@ class SQLiteManualDispatchRepository:
                     order.order_id,
                 ),
             )
+            self._replace_order_product_lines(connection, order.order_id, order.product_lines)
             connection.commit()
 
         if cursor.rowcount == 0:
@@ -856,10 +860,11 @@ class SQLiteManualDispatchRepository:
                         suburb_snapshot,
                         delivery_address_snapshot,
                         product_snapshot,
+                        product_details_snapshot,
                         pallet_quantity_snapshot,
                         loose_bags_quantity_snapshot,
                         note_snapshot
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         row_id,
@@ -874,6 +879,7 @@ class SQLiteManualDispatchRepository:
                         row.get("suburb_snapshot"),
                         row.get("delivery_address_snapshot"),
                         row.get("product_snapshot"),
+                        self._serialize_product_lines(row.get("product_lines_snapshot") or []),
                         row["pallet_quantity_snapshot"],
                         row["loose_bags_quantity_snapshot"],
                         row.get("note_snapshot"),
@@ -967,6 +973,7 @@ class SQLiteManualDispatchRepository:
             end_time=row["end_time"],
             note=row["note"],
             status=row["status"],
+            product_lines=self._list_order_product_lines(row["order_id"]),
         )
 
     def _row_to_driver(self, row):
@@ -1077,6 +1084,11 @@ class SQLiteManualDispatchRepository:
             pallet_quantity_snapshot=row["pallet_quantity_snapshot"],
             loose_bags_quantity_snapshot=row["loose_bags_quantity_snapshot"],
             note_snapshot=row["note_snapshot"],
+            product_lines_snapshot=self._deserialize_product_lines(
+                row["product_details_snapshot"]
+                if "product_details_snapshot" in row.keys()
+                else "[]"
+            ),
         )
 
     def _row_to_operator_account(self, row):
@@ -1091,3 +1103,81 @@ class SQLiteManualDispatchRepository:
 
     def _timestamp(self):
         return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+    def _replace_order_product_lines(self, connection, order_id, product_lines):
+        connection.execute(
+            "DELETE FROM order_product_lines WHERE order_id = ?",
+            (order_id,),
+        )
+        for line_no, line in enumerate(product_lines or [], start=1):
+            connection.execute(
+                """
+                INSERT INTO order_product_lines (
+                    order_id,
+                    line_no,
+                    product_name,
+                    quantity,
+                    unit
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    order_id,
+                    line_no,
+                    line.product_name,
+                    line.quantity,
+                    line.unit,
+                ),
+            )
+
+    def _list_order_product_lines(self, order_id):
+        with connect(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT product_name, quantity, unit
+                FROM order_product_lines
+                WHERE order_id = ?
+                ORDER BY line_no
+                """,
+                (order_id,),
+            ).fetchall()
+        return [
+            ProductDetailLine(
+                product_name=row["product_name"],
+                quantity=row["quantity"],
+                unit=row["unit"],
+            )
+            for row in rows
+        ]
+
+    def _serialize_product_lines(self, product_lines):
+        return json.dumps(
+            [
+                {
+                    "product_name": line["product_name"]
+                    if isinstance(line, dict)
+                    else line.product_name,
+                    "quantity": line["quantity"]
+                    if isinstance(line, dict)
+                    else line.quantity,
+                    "unit": line["unit"]
+                    if isinstance(line, dict)
+                    else line.unit,
+                }
+                for line in product_lines
+            ]
+        )
+
+    def _deserialize_product_lines(self, serialized):
+        try:
+            raw_lines = json.loads(serialized or "[]")
+        except (TypeError, ValueError, json.JSONDecodeError):
+            raw_lines = []
+        return [
+            ProductDetailLine(
+                product_name=str(line.get("product_name") or ""),
+                quantity=int(line.get("quantity") or 0),
+                unit=str(line.get("unit") or ""),
+            )
+            for line in raw_lines
+            if isinstance(line, dict)
+        ]

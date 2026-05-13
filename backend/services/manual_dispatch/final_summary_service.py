@@ -1,6 +1,8 @@
 from backend.services.manual_dispatch.normalization import (
     clean_optional_text,
     clean_required_text,
+    load_unit_for_quantities,
+    normalize_product_detail_lines,
     quantity_or_default,
 )
 
@@ -121,6 +123,42 @@ class FinalSummaryService:
                         "Final Summary rows must match the selected delivery date"
                     )
 
+                pallet_quantity_snapshot = quantity_or_default(
+                    order_snapshot.get("pallet_quantity_snapshot")
+                    if "pallet_quantity_snapshot" in order_snapshot
+                    else order_snapshot.get("pallet_quantity"),
+                    "pallet_quantity_snapshot",
+                )
+                loose_bags_quantity_snapshot = quantity_or_default(
+                    order_snapshot.get("loose_bags_quantity_snapshot")
+                    if "loose_bags_quantity_snapshot" in order_snapshot
+                    else order_snapshot.get("loose_bags_quantity"),
+                    "loose_bags_quantity_snapshot",
+                )
+                load_unit = load_unit_for_quantities(
+                    pallet_quantity_snapshot,
+                    loose_bags_quantity_snapshot,
+                )
+                product_line_payload = (
+                    order_snapshot.get("product_lines_snapshot")
+                    if "product_lines_snapshot" in order_snapshot
+                    else order_snapshot.get("product_lines")
+                )
+                if product_line_payload is None and getattr(task, "product_lines", None):
+                    product_line_payload = [
+                        {
+                            "product_name": line.product_name,
+                            "quantity": line.quantity,
+                            "unit": line.unit,
+                        }
+                        for line in task.product_lines
+                    ]
+                product_lines_snapshot = normalize_product_detail_lines(
+                    product_line_payload or [],
+                    load_unit,
+                    "product_lines_snapshot",
+                )
+
                 normalized_rows.append(
                     {
                         "trip_no": trip_no,
@@ -155,18 +193,16 @@ class FinalSummaryService:
                             order_snapshot.get("product_snapshot")
                             or order_snapshot.get("product")
                         ),
-                        "pallet_quantity_snapshot": quantity_or_default(
-                            order_snapshot.get("pallet_quantity_snapshot")
-                            if "pallet_quantity_snapshot" in order_snapshot
-                            else order_snapshot.get("pallet_quantity"),
-                            "pallet_quantity_snapshot",
-                        ),
-                        "loose_bags_quantity_snapshot": quantity_or_default(
-                            order_snapshot.get("loose_bags_quantity_snapshot")
-                            if "loose_bags_quantity_snapshot" in order_snapshot
-                            else order_snapshot.get("loose_bags_quantity"),
-                            "loose_bags_quantity_snapshot",
-                        ),
+                        "product_lines_snapshot": [
+                            {
+                                "product_name": line.product_name,
+                                "quantity": line.quantity,
+                                "unit": line.unit,
+                            }
+                            for line in product_lines_snapshot
+                        ],
+                        "pallet_quantity_snapshot": pallet_quantity_snapshot,
+                        "loose_bags_quantity_snapshot": loose_bags_quantity_snapshot,
                         "note_snapshot": clean_optional_text(
                             order_snapshot.get("note_snapshot")
                             or order_snapshot.get("note")

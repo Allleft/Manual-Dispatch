@@ -9,15 +9,18 @@ import {
 } from "../utils/dom-utils.js";
 import {
   formatOptional,
-  getDisplayPalletQuantity,
-  getLooseBagsQuantity,
+  formatOrderLoadQuantity,
+  formatProductDetailLine,
   getUrgencyLabel,
 } from "../utils/format-utils.js";
 
 export function renderAddOrderPopup({
+  onAddProductLine,
   onCloseAddOrder,
   onCreateOrder,
+  onRemoveProductLine,
   onUpdateAddOrderForm,
+  onUpdateProductLine,
 }) {
   const root = document.querySelector("#add-order-root");
   if (!root) {
@@ -140,7 +143,17 @@ export function renderAddOrderPopup({
   saveButton.disabled = state.isSaving;
 
   actions.append(cancelButton, saveButton);
-  form.append(formGrid, error, actions);
+  form.append(
+    formGrid,
+    createProductLineEditor({
+      formState: state.addOrderForm,
+      onAddProductLine,
+      onRemoveProductLine,
+      onUpdateProductLine,
+    }),
+    error,
+    actions,
+  );
   modal.append(header, form);
   backdrop.append(modal);
   root.append(backdrop);
@@ -148,12 +161,16 @@ export function renderAddOrderPopup({
 
 export function renderOrderDetailPopup({
   getOrderEditForm,
+  onAddProductLine,
   onCancelOrder,
   onCancelOrderEdit,
   onCloseOrderDetail,
+  onRemoveProductLine,
   onSaveOrderEdit,
   onStartOrderEdit,
+  onToggleProductDetail,
   onUpdateOrderEditForm,
+  onUpdateProductLine,
 }) {
   let root = document.querySelector("#order-detail-root");
   if (!root) {
@@ -207,6 +224,12 @@ export function renderOrderDetailPopup({
   headerActions.className = "detail-actions";
 
   if (!state.isOrderEditMode) {
+    const productDetailButton = document.createElement("button");
+    productDetailButton.type = "button";
+    productDetailButton.className = "button-secondary";
+    productDetailButton.textContent = "Product Detail";
+    productDetailButton.addEventListener("click", onToggleProductDetail);
+
     const editButton = document.createElement("button");
     editButton.type = "button";
     editButton.textContent = "Edit";
@@ -219,7 +242,7 @@ export function renderOrderDetailPopup({
     cancelButton.disabled = state.isSaving;
     cancelButton.addEventListener("click", () => onCancelOrder(order.order_id));
 
-    headerActions.append(editButton, cancelButton);
+    headerActions.append(productDetailButton, editButton, cancelButton);
   }
 
   headerActions.append(closeButton);
@@ -234,9 +257,12 @@ export function renderOrderDetailPopup({
     modal.append(
       header,
       createOrderEditForm(order, {
+        onAddProductLine,
         onCancelOrderEdit,
+        onRemoveProductLine,
         onSaveOrderEdit,
         onUpdateOrderEditForm,
+        onUpdateProductLine,
       }),
     );
     backdrop.append(modal);
@@ -258,12 +284,13 @@ export function renderOrderDetailPopup({
     createDetailField("Zone", order.zone),
     createDetailField("Urgency", getUrgencyLabel(order)),
     createDetailField("Preferred Driver", getOrderPreferredDriverName(order)),
-    createDetailField("Pallet Quantity", getDisplayPalletQuantity(order)),
-    createDetailField("Loose Bags Quantity", getLooseBagsQuantity(order)),
+    createDetailField("Load", formatOrderLoadQuantity(order)),
     createDetailField("Start Time", order.start_time),
     createDetailField("End Time", order.end_time),
     createDetailField("Note", order.note),
   );
+
+  const productDetails = createProductDetailPanel(order);
 
   const detailError = document.createElement("p");
   detailError.className = "board-error";
@@ -271,6 +298,9 @@ export function renderOrderDetailPopup({
   detailError.textContent = state.errorMessage;
 
   modal.append(header, detailError, details);
+  if (state.isProductDetailOpen) {
+    modal.append(productDetails);
+  }
   backdrop.append(modal);
   root.append(backdrop);
 }
@@ -283,7 +313,8 @@ function createAddOrderField(label, field, options = {}) {
   const input = document.createElement(options.multiline ? "textarea" : "input");
   input.name = field;
   input.value = state.addOrderForm[field] ?? "";
-  input.disabled = state.isSaving;
+  input.disabled =
+    state.isSaving || isOppositeQuantityFieldDisabled(state.addOrderForm, field);
   if (!options.multiline) {
     input.type = options.type || "text";
   }
@@ -295,6 +326,7 @@ function createAddOrderField(label, field, options = {}) {
   }
   input.addEventListener("input", () => {
     options.onUpdateAddOrderForm(field, input.value);
+    syncLoadQuantityInputs(input.closest("form"), state.addOrderForm);
   });
 
   wrapper.append(input);
@@ -328,7 +360,8 @@ function createOrderEditField(label, field, options = {}) {
   const input = document.createElement(options.multiline ? "textarea" : "input");
   input.name = field;
   input.value = state.orderEditForm[field] ?? "";
-  input.disabled = state.isSaving;
+  input.disabled =
+    state.isSaving || isOppositeQuantityFieldDisabled(state.orderEditForm, field);
   if (!options.multiline) {
     input.type = options.type || "text";
   }
@@ -340,6 +373,7 @@ function createOrderEditField(label, field, options = {}) {
   }
   input.addEventListener("input", () => {
     options.onUpdateOrderEditForm(field, input.value);
+    syncLoadQuantityInputs(input.closest("form"), state.orderEditForm);
   });
 
   wrapper.append(input);
@@ -438,6 +472,188 @@ function createOrderEditForm(order, handlers) {
   saveButton.disabled = state.isSaving;
 
   actions.append(cancelButton, saveButton);
-  form.append(formGrid, error, actions);
+  form.append(
+    formGrid,
+    createProductLineEditor({
+      formState: state.orderEditForm,
+      onAddProductLine: handlers.onAddProductLine,
+      onRemoveProductLine: handlers.onRemoveProductLine,
+      onUpdateProductLine: handlers.onUpdateProductLine,
+    }),
+    error,
+    actions,
+  );
   return form;
+}
+
+function createProductDetailPanel(order) {
+  const panel = document.createElement("section");
+  panel.className = "product-detail-panel";
+
+  const heading = document.createElement("h3");
+  heading.textContent = "Product Detail";
+  panel.append(heading);
+
+  const productLines = order.product_lines || [];
+  if (productLines.length === 0) {
+    const emptyState = document.createElement("p");
+    emptyState.className = "empty-trip";
+    emptyState.textContent = "No product details recorded.";
+    panel.append(emptyState);
+    return panel;
+  }
+
+  const list = document.createElement("div");
+  list.className = "product-detail-list";
+  productLines.forEach((line, index) => {
+    const item = document.createElement("p");
+    item.className = "product-detail-row";
+    item.textContent = formatProductDetailLine(line, index + 1);
+    list.append(item);
+  });
+  panel.append(list);
+  return panel;
+}
+
+function createProductLineEditor({
+  formState,
+  onAddProductLine,
+  onRemoveProductLine,
+  onUpdateProductLine,
+}) {
+  const section = document.createElement("section");
+  section.className = "product-line-editor";
+
+  const heading = document.createElement("div");
+  heading.className = "product-line-heading";
+
+  const title = document.createElement("h3");
+  title.textContent = "Product Details";
+
+  const addButton = document.createElement("button");
+  addButton.type = "button";
+  addButton.className = "button-secondary";
+  addButton.textContent = "Add Product Line";
+  addButton.disabled = state.isSaving;
+  addButton.addEventListener("click", onAddProductLine);
+  heading.append(title, addButton);
+
+  const helper = document.createElement("p");
+  helper.className = "compact-note";
+  helper.textContent = "Each Order can use Pallets or Bags, never both. Product lines must match that load unit.";
+
+  section.append(heading, helper);
+
+  const productLines = formState.product_lines || [];
+  if (productLines.length === 0) {
+    const emptyState = document.createElement("p");
+    emptyState.className = "empty-trip";
+    emptyState.textContent = "No product details recorded.";
+    section.append(emptyState);
+    return section;
+  }
+
+  const list = document.createElement("div");
+  list.className = "product-line-list";
+  productLines.forEach((line, index) => {
+    const row = document.createElement("div");
+    row.className = "product-line-row";
+
+    const productName = createProductLineInput("Product Name", "product_name", line, index, {
+      onUpdateProductLine,
+      required: true,
+    });
+    const quantity = createProductLineInput("Quantity", "quantity", line, index, {
+      min: "1",
+      onUpdateProductLine,
+      required: true,
+      type: "number",
+    });
+    const unit = createProductLineUnitSelect(line, index, onUpdateProductLine);
+
+    const removeButton = document.createElement("button");
+    removeButton.type = "button";
+    removeButton.className = "button-secondary";
+    removeButton.textContent = "Remove";
+    removeButton.disabled = state.isSaving;
+    removeButton.addEventListener("click", () => onRemoveProductLine(index));
+
+    row.append(productName, quantity, unit, removeButton);
+    list.append(row);
+  });
+  section.append(list);
+  return section;
+}
+
+function createProductLineInput(label, field, line, index, options) {
+  const wrapper = document.createElement("label");
+  wrapper.className = "form-field";
+  wrapper.textContent = label;
+
+  const input = document.createElement("input");
+  input.name = `product_line_${index}_${field}`;
+  input.type = options.type || "text";
+  input.value = line[field] ?? "";
+  input.disabled = state.isSaving;
+  if (options.required) {
+    input.required = true;
+  }
+  if (options.min !== undefined) {
+    input.min = options.min;
+  }
+  input.addEventListener("input", () => {
+    options.onUpdateProductLine(index, field, input.value);
+  });
+  wrapper.append(input);
+  return wrapper;
+}
+
+function createProductLineUnitSelect(line, index, onUpdateProductLine) {
+  const wrapper = document.createElement("label");
+  wrapper.className = "form-field";
+  wrapper.textContent = "Unit";
+
+  const select = document.createElement("select");
+  select.name = `product_line_${index}_unit`;
+  select.disabled = state.isSaving;
+  [
+    { value: "PALLETS", label: "Pallets" },
+    { value: "BAGS", label: "Bags" },
+  ].forEach((option) => {
+    select.append(createOption(option.value, option.label, line.unit === option.value));
+  });
+  select.addEventListener("change", () => {
+    onUpdateProductLine(index, "unit", select.value);
+  });
+  wrapper.append(select);
+  return wrapper;
+}
+
+function isOppositeQuantityFieldDisabled(formState, field) {
+  if (field === "pallet_quantity") {
+    return Number(formState.loose_bags_quantity || 0) > 0;
+  }
+  if (field === "loose_bags_quantity") {
+    return Number(formState.pallet_quantity || 0) > 0;
+  }
+  return false;
+}
+
+function syncLoadQuantityInputs(form, formState) {
+  if (!form) {
+    return;
+  }
+
+  const palletInput = form.querySelector('[name="pallet_quantity"]');
+  const bagInput = form.querySelector('[name="loose_bags_quantity"]');
+  if (!palletInput || !bagInput) {
+    return;
+  }
+
+  palletInput.value = formState.pallet_quantity ?? palletInput.value;
+  bagInput.value = formState.loose_bags_quantity ?? bagInput.value;
+  palletInput.disabled =
+    state.isSaving || isOppositeQuantityFieldDisabled(formState, "pallet_quantity");
+  bagInput.disabled =
+    state.isSaving || isOppositeQuantityFieldDisabled(formState, "loose_bags_quantity");
 }
