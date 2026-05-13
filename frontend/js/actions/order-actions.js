@@ -252,13 +252,13 @@ export function createOrderActions({
   function addProductLine(formKey) {
     const form = formKey === "edit" ? state.orderEditForm : state.addOrderForm;
     const nextLines = [...(form.product_lines || []), createEmptyProductLine(form)];
-    updateProductLines(formKey, nextLines);
+    updateProductLines(formKey, nextLines, { rerenderPopup: true });
   }
 
   function removeProductLine(formKey, index) {
     const form = formKey === "edit" ? state.orderEditForm : state.addOrderForm;
     const nextLines = (form.product_lines || []).filter((_, lineIndex) => lineIndex !== index);
-    updateProductLines(formKey, nextLines);
+    updateProductLines(formKey, nextLines, { rerenderPopup: true });
   }
 
   function updateProductLine(formKey, index, field, value) {
@@ -266,16 +266,18 @@ export function createOrderActions({
     const nextLines = (form.product_lines || []).map((line, lineIndex) =>
       lineIndex === index ? { ...line, [field]: value } : line,
     );
-    updateProductLines(formKey, nextLines);
+    updateProductLines(formKey, nextLines, { rerenderPopup: false });
   }
 
-  function updateProductLines(formKey, productLines) {
+  function updateProductLines(formKey, productLines, { rerenderPopup = true } = {}) {
     if (formKey === "edit") {
       state.orderEditForm = {
         ...state.orderEditForm,
         product_lines: productLines,
       };
-      renderOrderDetailPopup();
+      if (rerenderPopup) {
+        renderOrderDetailPopup();
+      }
       return;
     }
 
@@ -283,7 +285,9 @@ export function createOrderActions({
       ...state.addOrderForm,
       product_lines: productLines,
     };
-    renderAddOrderPopup();
+    if (rerenderPopup) {
+      renderAddOrderPopup();
+    }
   }
 
   function createEmptyProductLine(form) {

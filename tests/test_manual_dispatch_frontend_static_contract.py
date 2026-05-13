@@ -57,6 +57,21 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn('addButton.textContent = "Add Product Line"', order_modal_renderer)
         self.assertIn('"Product Details"', final_summary_renderer)
 
+    def test_product_line_typing_updates_state_without_popup_rerender(self):
+        order_actions = (
+            FRONTEND_ROOT / "js" / "actions" / "order-actions.js"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            "updateProductLines(formKey, nextLines, { rerenderPopup: false });",
+            order_actions,
+        )
+        self.assertGreaterEqual(order_actions.count("{ rerenderPopup: true }"), 2)
+        self.assertIn(
+            "function updateProductLines(formKey, productLines, { rerenderPopup = true } = {})",
+            order_actions,
+        )
+
     def test_frontend_module_import_paths_exist(self):
         frontend_sources = list(FRONTEND_ROOT.rglob("*.js"))
         import_paths = []
