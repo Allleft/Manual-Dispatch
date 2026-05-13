@@ -1161,6 +1161,13 @@ select:disabled {
   resize: vertical;
 }
 
+.order-readonly-form input:disabled,
+.order-readonly-form select:disabled,
+.order-readonly-form textarea:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
 .form-actions {
   display: flex;
   justify-content: flex-end;

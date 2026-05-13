@@ -41,8 +41,47 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
 
         self.assertIn("Delivery Date:", task_pool_renderer)
         self.assertIn("assigned-delivery-date", trip_summary_renderer)
-        self.assertIn('createOrderEditField("Delivery Date", "delivery_date"', order_modal_renderer)
+        self.assertIn('createField("Delivery Date", "delivery_date"', order_modal_renderer)
         self.assertNotIn("Delivery Date (read-only)", order_modal_renderer)
+
+    def test_order_details_reuses_form_grid_in_read_only_mode(self):
+        order_modal_renderer = (
+            FRONTEND_ROOT / "js" / "render" / "order-modal-renderer.js"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("function createOrderReadOnlyLayout(formState)", order_modal_renderer)
+        self.assertIn('layout.className = "order-form order-readonly-form"', order_modal_renderer)
+        self.assertIn('layout.append(createOrderFormGrid(formState, { mode: "view" }))', order_modal_renderer)
+        self.assertIn("input.disabled = true", order_modal_renderer)
+        self.assertIn("input.readOnly = true", order_modal_renderer)
+        self.assertIn("select.disabled = true", order_modal_renderer)
+        self.assertIn('mode: "edit"', order_modal_renderer)
+
+    def test_order_details_and_edit_share_core_field_order(self):
+        order_modal_renderer = (
+            FRONTEND_ROOT / "js" / "render" / "order-modal-renderer.js"
+        ).read_text(encoding="utf-8")
+
+        field_labels = [
+            "Invoice #",
+            "Company Name",
+            "Phone",
+            "Delivery Address",
+            "Suburb",
+            "Postcode",
+            "Delivery Date",
+            "Zone",
+            "Urgency",
+            "Preferred Driver",
+            "Pallet Quantity",
+            "Loose Bags Quantity",
+            "Start Time",
+            "End Time",
+            "Note",
+        ]
+        shared_grid_source = order_modal_renderer.split("function createOrderFormGrid", 1)[1]
+        field_positions = [shared_grid_source.index(f'"{label}"') for label in field_labels]
+        self.assertEqual(sorted(field_positions), field_positions)
 
     def test_phase16_product_detail_controls_are_present(self):
         order_modal_renderer = (

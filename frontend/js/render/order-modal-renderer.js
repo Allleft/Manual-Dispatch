@@ -1,15 +1,10 @@
 import { state } from "../state/app-state.js";
+import { getOrderByTaskId } from "../state/selectors.js";
 import {
-  getOrderByTaskId,
-  getOrderPreferredDriverName,
-} from "../state/selectors.js";
-import {
-  createDetailField,
   createOption,
 } from "../utils/dom-utils.js";
 import {
   formatOptional,
-  formatOrderLoadQuantity,
   formatProductDetailLine,
   getUrgencyLabel,
 } from "../utils/format-utils.js";
@@ -270,25 +265,10 @@ export function renderOrderDetailPopup({
     return;
   }
 
-  const details = document.createElement("dl");
-  details.className = "detail-grid";
-  details.append(
-    createDetailField("Order ID", order.order_id),
-    createDetailField("Invoice #", order.invoice_number),
-    createDetailField("Company Name", order.company_name),
-    createDetailField("Phone", order.phone),
-    createDetailField("Delivery Address", order.delivery_address),
-    createDetailField("Suburb", order.suburb),
-    createDetailField("Postcode", order.postcode),
-    createDetailField("Delivery Date", order.delivery_date),
-    createDetailField("Zone", order.zone),
-    createDetailField("Urgency", getUrgencyLabel(order)),
-    createDetailField("Preferred Driver", getOrderPreferredDriverName(order)),
-    createDetailField("Load", formatOrderLoadQuantity(order)),
-    createDetailField("Start Time", order.start_time),
-    createDetailField("End Time", order.end_time),
-    createDetailField("Note", order.note),
-  );
+  const details = createOrderReadOnlyLayout({
+    ...getOrderEditForm(order),
+    urgency: getUrgencyLabel(order),
+  });
 
   const productDetails = createProductDetailPanel(order);
 
@@ -399,14 +379,48 @@ function createOrderEditSelect(label, field, options, handlers) {
   return wrapper;
 }
 
-function createOrderEditForm(order, handlers) {
-  const form = document.createElement("form");
-  form.className = "order-form";
-  form.addEventListener("submit", (event) => {
-    event.preventDefault();
-    handlers.onSaveOrderEdit(order.order_id);
+function createOrderReadOnlyField(label, field, formState, options = {}) {
+  const wrapper = document.createElement("label");
+  wrapper.className = options.wide ? "form-field form-field-wide" : "form-field";
+  wrapper.textContent = label;
+
+  const input = document.createElement(options.multiline ? "textarea" : "input");
+  input.name = `readonly_${field}`;
+  input.value = formState[field] ?? "";
+  input.disabled = true;
+  input.readOnly = true;
+  if (!options.multiline) {
+    input.type = options.type || "text";
+  }
+
+  wrapper.append(input);
+  return wrapper;
+}
+
+function createOrderReadOnlySelect(label, field, formState, options) {
+  const wrapper = document.createElement("label");
+  wrapper.className = "form-field";
+  wrapper.textContent = label;
+
+  const select = document.createElement("select");
+  select.name = `readonly_${field}`;
+  select.disabled = true;
+  options.forEach((option) => {
+    select.append(createOption(option.value, option.label, formState[field] === option.value));
   });
 
+  wrapper.append(select);
+  return wrapper;
+}
+
+function createOrderReadOnlyLayout(formState) {
+  const layout = document.createElement("section");
+  layout.className = "order-form order-readonly-form";
+  layout.append(createOrderFormGrid(formState, { mode: "view" }));
+  return layout;
+}
+
+function createOrderFormGrid(formState, { mode, handlers = {} }) {
   const formGrid = document.createElement("div");
   formGrid.className = "form-grid";
 
@@ -418,38 +432,61 @@ function createOrderEditForm(order, handlers) {
     })),
   ];
 
+  const createField = (label, field, options = {}) =>
+    mode === "edit"
+      ? createOrderEditField(label, field, { ...options, ...handlers })
+      : createOrderReadOnlyField(label, field, formState, options);
+
+  const createSelectField = (label, field, options) =>
+    mode === "edit"
+      ? createOrderEditSelect(label, field, options, handlers)
+      : createOrderReadOnlySelect(label, field, formState, options);
+
   formGrid.append(
-    createOrderEditField("Invoice #", "invoice_number", handlers),
-    createOrderEditField("Company Name", "company_name", handlers),
-    createOrderEditField("Phone", "phone", { type: "tel", ...handlers }),
-    createOrderEditField("Delivery Address", "delivery_address", handlers),
-    createOrderEditField("Suburb", "suburb", { required: true, ...handlers }),
-    createOrderEditField("Postcode", "postcode", handlers),
-    createOrderEditField("Delivery Date", "delivery_date", {
+    createField("Invoice #", "invoice_number"),
+    createField("Company Name", "company_name"),
+    createField("Phone", "phone", { type: "tel" }),
+    createField("Delivery Address", "delivery_address"),
+    createField("Suburb", "suburb", { required: true }),
+    createField("Postcode", "postcode"),
+    createField("Delivery Date", "delivery_date", {
       type: "date",
       required: true,
-      ...handlers,
     }),
-    createOrderEditField("Zone", "zone", handlers),
-    createOrderEditSelect("Urgency", "urgency", [
+    createField("Zone", "zone"),
+    createSelectField("Urgency", "urgency", [
       { value: "Normal", label: "Normal" },
       { value: "Urgent", label: "Urgent" },
-    ], handlers),
-    createOrderEditSelect("Preferred Driver", "preferred_driver_id", preferredDriverOptions, handlers),
-    createOrderEditField("Pallet Quantity", "pallet_quantity", {
+    ]),
+    createSelectField("Preferred Driver", "preferred_driver_id", preferredDriverOptions),
+    createField("Pallet Quantity", "pallet_quantity", {
       type: "number",
       min: "0",
-      ...handlers,
     }),
-    createOrderEditField("Loose Bags Quantity", "loose_bags_quantity", {
+    createField("Loose Bags Quantity", "loose_bags_quantity", {
       type: "number",
       min: "0",
-      ...handlers,
     }),
-    createOrderEditField("Start Time", "start_time", { type: "time", ...handlers }),
-    createOrderEditField("End Time", "end_time", { type: "time", ...handlers }),
-    createOrderEditField("Note", "note", { multiline: true, wide: true, ...handlers }),
+    createField("Start Time", "start_time", { type: "time" }),
+    createField("End Time", "end_time", { type: "time" }),
+    createField("Note", "note", { multiline: true, wide: true }),
   );
+
+  return formGrid;
+}
+
+function createOrderEditForm(order, handlers) {
+  const form = document.createElement("form");
+  form.className = "order-form";
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    handlers.onSaveOrderEdit(order.order_id);
+  });
+
+  const formGrid = createOrderFormGrid(state.orderEditForm, {
+    handlers,
+    mode: "edit",
+  });
 
   const error = document.createElement("p");
   error.className = "board-error";

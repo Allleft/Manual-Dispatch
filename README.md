@@ -16,7 +16,7 @@ This project is intentionally not a route optimizer. It does not automatically s
 
 ## Current Status
 
-Current status: Phase 16 on `feature/manual-dispatch-board`.
+Current status: Phase 17 on `feature/manual-dispatch-board`.
 
 Implemented focus areas:
 
@@ -27,6 +27,7 @@ Implemented focus areas:
 - Lightweight database-backed operator login for Final Trip Summary attribution.
 - Structured Product Details for Orders, including saved Final Trip Summary snapshots and Excel export.
 - Order load validation that allows either Pallets or Bags, never both on the same Order.
+- Order Details now uses the same read-only form-style layout as Edit Order for easier visual comparison.
 - Dispatch Date defaults to the browser's local current date. Demo data may still be dated `2026-05-05`; Task Pool is global, while Driver Summary visibility depends on the selected Driver Summary Delivery Date.
 
 Runtime SQLite database files are local and ignored by Git.
@@ -66,6 +67,7 @@ Runtime SQLite database files are local and ignored by Git.
 - Add/Edit Order supports Product Details with multiple same-unit product lines.
 - Orders use either Pallets or Bags, never both; product-line units must match that Order load unit.
 - Order detail popups expose a `Product Detail` view and show `No product details recorded.` for legacy Orders without product lines.
+- Read-only Order Details mirrors the Edit Order field layout while keeping edits behind the explicit `Edit` action.
 - Editing an assigned Order preserves the existing Driver + Trip assignment.
 - Cancel Order uses soft delete with `status = CANCELLED`.
 - Cancelled Orders are hidden from Task Pool and normal active exports.
@@ -261,6 +263,7 @@ Do not add these unless explicitly requested:
 - [Phase 14B save and export polish](docs/manual-dispatch-board-phase14b-final-summary-save-export.md)
 - [Phase 15 login and operator attribution](docs/manual-dispatch-board-phase15-login-final-summary-operator.md)
 - [Phase 16 Product Details and load-unit exclusivity](docs/manual-dispatch-board-phase16-product-details.md)
+- [Phase 17 Order Details UI alignment](docs/manual-dispatch-board-phase17-order-details-ui.md)
 
 ### Driver, Vehicle, and UI Stability
 
