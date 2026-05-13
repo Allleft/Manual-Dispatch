@@ -10,6 +10,14 @@ DISTANCE_DATA_PATH = (
     / "data"
     / "suburb_distances_from_somerton.json"
 )
+SUBURB_ALIASES = {
+    "ballarat central": "ballarat",
+    "bendigo central": "bendigo",
+    "cbd": "melbourne",
+    "dandenong sth": "dandenong south",
+    "melbourne cbd": "melbourne",
+    "tulla": "tullamarine",
+}
 
 
 def normalize_suburb_name(suburb):
@@ -31,7 +39,15 @@ def get_estimated_distance_km(suburb):
     normalized = normalize_suburb_name(suburb)
     if not normalized:
         return None
-    return _distance_lookup().get(normalized)
+    lookup = _distance_lookup()
+    exact_distance = lookup.get(normalized)
+    if exact_distance is not None:
+        return exact_distance
+
+    canonical_suburb = SUBURB_ALIASES.get(normalized)
+    if canonical_suburb:
+        return lookup.get(canonical_suburb)
+    return None
 
 
 def sort_orders_by_suburb_distance_then_start_time(orders):

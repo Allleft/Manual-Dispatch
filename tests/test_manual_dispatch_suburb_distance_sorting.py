@@ -58,6 +58,47 @@ class ManualDispatchSuburbDistanceSortingTest(unittest.TestCase):
             WAREHOUSE_ORIGIN,
         )
 
+    def test_expanded_suburbs_and_aliases_resolve_to_known_distances(self):
+        expanded_suburbs = [
+            "Dandenong South",
+            "Pakenham",
+            "Ballarat Central",
+            "Bendigo",
+            "Footscray",
+            "Northcote",
+            "Box Hill",
+            "Essendon",
+            "Shepparton",
+        ]
+        for suburb in expanded_suburbs:
+            with self.subTest(suburb=suburb):
+                self.assertIsNotNone(get_estimated_distance_km(suburb))
+
+        self.assertEqual(
+            get_estimated_distance_km("Dandenong South"),
+            get_estimated_distance_km("  dandenong south  "),
+        )
+        self.assertEqual(
+            get_estimated_distance_km("Dandenong South"),
+            get_estimated_distance_km("DANDENONG SOUTH"),
+        )
+        self.assertEqual(
+            get_estimated_distance_km("Ballarat Central"),
+            get_estimated_distance_km("Ballarat   Central"),
+        )
+        self.assertEqual(
+            get_estimated_distance_km("Dandenong South"),
+            get_estimated_distance_km("Dandenong Sth"),
+        )
+        self.assertEqual(
+            get_estimated_distance_km("Melbourne"),
+            get_estimated_distance_km("Melbourne CBD"),
+        )
+        self.assertEqual(
+            get_estimated_distance_km("Melbourne"),
+            get_estimated_distance_km("CBD"),
+        )
+
     def test_board_orders_expose_estimated_suburb_distance(self):
         created = self._create_order("BOARD-DISTANCE", "Clayton", "09:00")
         board_order = next(
@@ -160,6 +201,36 @@ class ManualDispatchSuburbDistanceSortingTest(unittest.TestCase):
             [row[2] for row in data_rows],
         )
         self.assertEqual([4.0, 14.0, 42.0], [row[3] for row in data_rows])
+
+    def test_expanded_suburbs_keep_distances_in_saved_summary_and_excel(self):
+        orders = [
+            self._create_order("INV-DANDY-SOUTH", "Dandenong South", "09:00"),
+            self._create_order("INV-PAKENHAM", "Pakenham", "10:00"),
+            self._create_order("INV-BALLARAT-CENTRAL", "Ballarat Central", "11:00"),
+        ]
+        saved = self.service.save_final_trip_summary(self._summary_request(orders))
+        saved_orders = saved.trips[0].orders
+
+        self.assertEqual(3, len(saved_orders))
+        self.assertTrue(
+            all(
+                order.estimated_distance_km_from_warehouse_snapshot is not None
+                for order in saved_orders
+            )
+        )
+
+        workbook = load_workbook(
+            BytesIO(build_final_summary_excel([saved], self.dispatch_date)),
+            data_only=True,
+        )
+        worksheet = workbook.active
+        rows = list(worksheet.iter_rows(values_only=True))
+        data_rows = [row for row in rows if isinstance(row[0], int)]
+        suburb_to_distance = {row[2]: row[3] for row in data_rows}
+
+        self.assertIsInstance(suburb_to_distance["Dandenong South"], (int, float))
+        self.assertIsInstance(suburb_to_distance["Pakenham"], (int, float))
+        self.assertIsInstance(suburb_to_distance["Ballarat Central"], (int, float))
 
     def _create_order(self, invoice_number, suburb, start_time):
         return self.service.create_order(

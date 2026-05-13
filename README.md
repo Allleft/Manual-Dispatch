@@ -29,6 +29,7 @@ Implemented focus areas:
 - Order load validation that allows either Pallets or Bags, never both on the same Order.
 - Order Details now uses the same read-only form-style layout as Edit Order for easier visual comparison.
 - Final Trip Summary orders now use static suburb-level distance estimates from the Somerton warehouse and sort nearest to farthest, with same-suburb Orders sorted by Start Time.
+- Phase 18 distance coverage now spans common Melbourne and regional delivery suburbs; unmapped suburbs still fall back to `Unknown`.
 - Dispatch Date defaults to the browser's local current date. Demo data may still be dated `2026-05-05`; Task Pool is global, while Driver Summary visibility depends on the selected Driver Summary Delivery Date.
 
 Runtime SQLite database files are local and ignored by Git.
@@ -102,6 +103,7 @@ Runtime SQLite database files are local and ignored by Git.
 - Duplicate saved summaries for the same Driver + Dispatch Date + Delivery Date are rejected.
 - Final Trip Summary rows display saved estimated warehouse distance values, or `Unknown` when no local suburb estimate exists.
 - Distance estimates use the documented warehouse origin `98-102 Hume Hwy, Somerton, VIC, 3062`; they are suburb-level estimates, not ETA or route optimization.
+- Expanded Melbourne / regional Victoria coverage is generated offline from curated locality-centroid inputs; runtime never calls Google Maps or geocoding services.
 - Final Trip Summary Excel export uses saved snapshot fields, includes Dispatch Date, Delivery Date, `Saved By`, `Product Details`, `Estimated Distance From Warehouse (km)`, and excludes Generated At / Saved At.
 - The older active-assignment Excel export route remains in the backend for compatibility, but it is not exposed as a top-level frontend button.
 

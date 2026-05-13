@@ -17,7 +17,18 @@ Distance estimates live in:
 
 - `backend/data/suburb_distances_from_somerton.json`
 
-The data is a static local suburb-level estimate table prepared for board/demo sorting. It is not a turn-by-turn routing distance and does not call any external API.
+The table is generated offline by:
+
+- `tools/generate_suburb_distances_from_somerton.py`
+- `tools/data/suburb_centroids_from_somerton_curated.json`
+
+The curated source file stores locality-centroid coordinates and a small set of retained Phase 18 compatibility overrides for previously published demo/test estimates. New expanded coverage uses:
+
+```text
+Estimated straight-line distance from curated suburb/locality centroid to warehouse via Haversine.
+```
+
+The output is a static local suburb-level estimate table prepared for board/demo sorting. It is not a turn-by-turn routing distance, does not calculate ETA, and does not call any external API at runtime.
 
 Each record stores:
 
@@ -32,6 +43,36 @@ Suburb lookup normalizes:
 - leading/trailing whitespace,
 - repeated spaces,
 - letter casing.
+
+Phase 18 follow-up coverage expands the table from a small demo subset to common Melbourne and regional delivery localities, including examples such as:
+
+- Dandenong South
+- Pakenham
+- Ballarat Central
+- Bendigo
+- Footscray
+- Northcote
+- Box Hill
+- Essendon
+- Shepparton
+
+Unknown remains a valid fallback for any locality not present in the static table.
+
+## Alias Behavior
+
+Lookup priority is:
+
+1. exact normalized suburb match,
+2. alias/canonical fallback,
+3. `Unknown`.
+
+Alias examples:
+
+- `Dandenong Sth` -> `Dandenong South`
+- `Melbourne CBD` -> `Melbourne`
+- `CBD` -> `Melbourne`
+- `Tulla` -> `Tullamarine`
+- `Ballarat Central` and `Bendigo Central` keep their exact rows when present, with canonical fallback available if those exact rows are removed later.
 
 ## Sorting Rules
 
@@ -92,6 +133,8 @@ Phase 18 adds tests for:
 
 - suburb normalization,
 - known and unknown lookups,
+- expanded Melbourne / regional suburb coverage,
+- alias resolution,
 - distance sorting,
 - same-suburb Start Time sorting,
 - unknown-distance rows placed last,
