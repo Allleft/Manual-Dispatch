@@ -40,6 +40,10 @@ temp/
 data/*.db
 data/*.sqlite
 data/*.sqlite3
+backups/
+backups/*.db
+backups/*.sqlite
+backups/*.sqlite3
 
 # OS/editor files
 .DS_Store

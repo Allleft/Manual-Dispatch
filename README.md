@@ -15,7 +15,7 @@ This project is not a route optimizer. It does not perform auto-assignment, ETA 
 
 ## Current Status
 
-Current status: **Phase 19: Release Candidate QA** on `feature/manual-dispatch-board`.
+Current status: **Phase 20: Office Trial Deployment & Backup** on `feature/manual-dispatch-board`.
 
 Implemented capabilities now include:
 
@@ -28,10 +28,11 @@ Implemented capabilities now include:
 - Final Trip Summary suburb-distance sorting using a static local estimate table.
 - Distance dataset provenance, QA validation, and explicit non-optimization wording.
 - Phase 19 release-candidate QA validating the full manual dispatch workflow before office trial use.
+- Phase 20 office-trial startup, SQLite backup/restore guidance, runtime configuration examples, and staff operating checklists.
 
-Phase 19 does not add automatic assignment or optimization. It focuses on regression checks, browser smoke testing, documentation, and small targeted fixes if QA finds a real bug.
+Phase 20 does not add automatic assignment or optimization. It focuses on local deployment safety, backup/recovery, office-trial documentation, and small targeted fixes only if deployment QA finds a real bug.
 
-Runtime SQLite database files are local development data and remain ignored by Git.
+Runtime SQLite database files and backup files are local office-trial data and remain ignored by Git.
 
 ## Core Workflow
 
@@ -153,7 +154,7 @@ Runtime SQLite database files are local development data and remain ignored by G
 - `frontend/`: Static HTML/CSS/JavaScript app, modular renderers/actions/state/selectors, and the `frontend/app.js` entry point.
 - `docs/`: Focused feature and phase documentation.
 - `tests/`: Service, repository, API, static frontend, export, auth, product, and distance QA coverage.
-- `tools/`: Local utility scripts, demo data reset tooling, and distance dataset QA/generation helpers.
+- `tools/`: Local utility scripts, office-trial startup/backup/restore scripts, demo data reset tooling, and distance dataset QA/generation helpers.
 - `requirements.txt`: Runtime Python dependencies.
 - `requirements-dev.txt`: Route-test and browser-smoke development dependencies.
 
@@ -176,7 +177,19 @@ Configure local password-reset support before starting the server:
 $env:MANUAL_DISPATCH_ADMIN_RESET_CODE="replace-with-your-local-admin-reset-code"
 ```
 
-Run the app:
+For office trial use, start the app with:
+
+```powershell
+.\tools\start_office_trial.ps1
+```
+
+The default office-trial URL is:
+
+```text
+http://127.0.0.1:8130/frontend/
+```
+
+For developer startup without the helper script:
 
 ```powershell
 python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
@@ -188,12 +201,26 @@ Open:
 http://127.0.0.1:8000/frontend/
 ```
 
+Create an end-of-day SQLite backup with:
+
+```powershell
+.\tools\backup_sqlite_db.ps1
+```
+
+Restore from a known-good backup with:
+
+```powershell
+.\tools\restore_sqlite_db.ps1 -BackupPath .\backups\<backup-file>.sqlite3
+```
+
 Local environment notes:
 
 - Do not commit `.env`.
 - `.env.example` may contain placeholders only.
 - Runtime SQLite files are generated locally and ignored by Git.
+- Backup files under `backups/` are generated locally and ignored by Git.
 - The local database path is `data/manual_dispatch.sqlite3`.
+- `.env` can set `MANUAL_DISPATCH_DB_PATH`, `MANUAL_DISPATCH_HOST`, and `MANUAL_DISPATCH_PORT` for local startup scripts.
 
 ## Validation / Tests
 
@@ -263,6 +290,8 @@ node --check frontend/overrides.js
 - [Phase 15 login and operator attribution](docs/manual-dispatch-board-phase15-login-final-summary-operator.md)
 - [Phase 18 suburb distance sorting](docs/manual-dispatch-board-phase18-suburb-distance-sorting.md)
 - [Phase 19 release candidate QA](docs/manual-dispatch-board-phase19-release-candidate-qa.md)
+- [Phase 20 office trial deployment and backup](docs/manual-dispatch-board-phase20-office-trial-deployment.md)
+- [Office trial checklist](docs/manual-dispatch-board-office-trial-checklist.md)
 
 ### UI Stability / Refactor Notes
 
