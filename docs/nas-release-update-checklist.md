@@ -125,7 +125,21 @@ If future code changes alter schema:
 - Test migration on staging or a copy of the database.
 - Never replace the production SQLite file with a seeded demo database.
 
-## I. Release Tags
+## I. Database / Master Data Maintenance
+
+If a new NAS database needs Driver and Vehicle master data from an older SQLite database or backup, use:
+
+```sh
+python tools/import_driver_vehicle_master_data.py \
+  --source-db ./backups/old_manual_dispatch.sqlite3 \
+  --target-db ./data/manual_dispatch.sqlite3
+```
+
+The import tool only imports `manual_drivers` and `manual_vehicles`. It does not import Orders, assignments, Final Trip Summaries, or operator accounts.
+
+Test the import on a copied database first when possible. Stop the app or confirm no one is actively dispatching before importing into production.
+
+## J. Release Tags
 
 Tag stable office releases:
 

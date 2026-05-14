@@ -147,6 +147,44 @@ Stop the app before restoring a database:
 
 After creating a backup, periodically test restore on a staging database or separate copy. Do not test restores against the active production SQLite file while office users are dispatching.
 
+## One-Off Driver and Vehicle Master Data Import
+
+If the NAS database was created with `MANUAL_DISPATCH_SEED_DEMO_DATA=false`, the Driver and Vehicle tables may start empty. If an older SQLite database or backup contains the correct Driver and Vehicle master data, import only those records instead of restoring the whole old database.
+
+Use:
+
+```sh
+python tools/import_driver_vehicle_master_data.py \
+  --source-db ./backups/old_manual_dispatch.sqlite3 \
+  --target-db ./data/manual_dispatch.sqlite3
+```
+
+The import tool only reads:
+
+- `manual_drivers`
+- `manual_vehicles`
+
+It does not import Orders, assignments, Final Trip Summaries, or operator accounts.
+
+Default behavior:
+
+- Insert missing Drivers/Vehicles.
+- Skip existing Driver/Vehicle IDs.
+- Create a timestamped target backup before importing.
+
+To update existing Driver/Vehicle rows from the old database, explicitly add:
+
+```sh
+--overwrite-existing
+```
+
+Before importing:
+
+- Stop the app or make sure no one is dispatching.
+- Confirm the source backup is the correct old database.
+- Confirm the current NAS database has been backed up.
+- Prefer testing the import on a copied database first.
+
 ## Security Notes
 
 - Do not port-forward `8130` to the public internet.
