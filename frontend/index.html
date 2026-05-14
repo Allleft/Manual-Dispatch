@@ -50,6 +50,11 @@
               <option value="Urgent">Urgent</option>
             </select>
           </label>
+          <label for="task-pool-delivery-date-filter">
+            Delivery Date
+            <input id="task-pool-delivery-date-filter" type="date">
+          </label>
+          <button id="clear-task-pool-delivery-date-filter" class="button-secondary" type="button">All delivery dates</button>
           <p id="task-filter-summary" class="filter-summary" aria-live="polite"></p>
         </div>
         <div id="task-pool-list" class="task-grid" aria-live="polite"></div>
@@ -59,6 +64,12 @@
         <div class="section-heading">
           <div>
             <h2 id="trip-summary-title">Trip Summary</h2>
+          </div>
+          <div class="section-actions driver-summary-date-controls">
+            <label for="driver-summary-delivery-date">
+              Delivery Date
+              <input id="driver-summary-delivery-date" type="date">
+            </label>
           </div>
         </div>
         <div id="driver-summary-list" class="driver-grid" aria-live="polite"></div>

@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import json
 
 from backend.db.connection import connect, get_database_path, initialize_database
 from backend.schemas import (
@@ -10,6 +11,7 @@ from backend.schemas import (
     ManualDriverVehicleAssignment,
     Order,
     OperatorAccountRecord,
+    ProductDetailLine,
     Vehicle,
 )
 
@@ -126,23 +128,34 @@ class SQLiteManualDispatchRepository:
                 SELECT *
                 FROM manual_driver_vehicle_assignments
                 WHERE dispatch_date = ?
-                ORDER BY driver_id
+                ORDER BY driver_id, delivery_date
                 """,
                 (dispatch_date,),
             ).fetchall()
         return [self._row_to_driver_vehicle_assignment(row) for row in rows]
 
-    def list_final_trip_summaries(self, dispatch_date):
+    def list_final_trip_summaries(self, dispatch_date, delivery_date=None):
         with connect(self.db_path) as connection:
-            rows = connection.execute(
-                """
-                SELECT *
-                FROM final_trip_summaries
-                WHERE dispatch_date = ?
-                ORDER BY saved_at DESC, summary_id
-                """,
-                (dispatch_date,),
-            ).fetchall()
+            if delivery_date:
+                rows = connection.execute(
+                    """
+                    SELECT *
+                    FROM final_trip_summaries
+                    WHERE dispatch_date = ? AND delivery_date = ?
+                    ORDER BY saved_at DESC, summary_id
+                    """,
+                    (dispatch_date, delivery_date),
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    """
+                    SELECT *
+                    FROM final_trip_summaries
+                    WHERE dispatch_date = ?
+                    ORDER BY saved_at DESC, summary_id
+                    """,
+                    (dispatch_date,),
+                ).fetchall()
         return [self._row_to_final_trip_summary(row) for row in rows]
 
     def list_final_summary_dates(self):
@@ -157,17 +170,31 @@ class SQLiteManualDispatchRepository:
             ).fetchall()
         return [row["dispatch_date"] for row in rows]
 
-    def has_saved_final_trip_summary(self, dispatch_date, driver_id):
+    def has_saved_final_trip_summary(self, dispatch_date, driver_id, delivery_date=None):
         with connect(self.db_path) as connection:
-            row = connection.execute(
-                """
-                SELECT 1
-                FROM final_trip_summaries
-                WHERE dispatch_date = ? AND driver_id = ? AND status = 'SAVED'
-                LIMIT 1
-                """,
-                (dispatch_date, driver_id),
-            ).fetchone()
+            if delivery_date:
+                row = connection.execute(
+                    """
+                    SELECT 1
+                    FROM final_trip_summaries
+                    WHERE dispatch_date = ?
+                        AND delivery_date = ?
+                        AND driver_id = ?
+                        AND status = 'SAVED'
+                    LIMIT 1
+                    """,
+                    (dispatch_date, delivery_date, driver_id),
+                ).fetchone()
+            else:
+                row = connection.execute(
+                    """
+                    SELECT 1
+                    FROM final_trip_summaries
+                    WHERE dispatch_date = ? AND driver_id = ? AND status = 'SAVED'
+                    LIMIT 1
+                    """,
+                    (dispatch_date, driver_id),
+                ).fetchone()
         return row is not None
 
     def get_final_trip_summary(self, summary_id):
@@ -280,6 +307,7 @@ class SQLiteManualDispatchRepository:
                     order.status,
                 ),
             )
+            self._replace_order_product_lines(connection, order.order_id, order.product_lines)
             connection.commit()
         return self.get_order(order.order_id)
 
@@ -295,6 +323,7 @@ class SQLiteManualDispatchRepository:
                     delivery_address = ?,
                     suburb = ?,
                     postcode = ?,
+                    delivery_date = ?,
                     zone = ?,
                     urgency = ?,
                     preferred_driver_id = ?,
@@ -312,6 +341,7 @@ class SQLiteManualDispatchRepository:
                     order.delivery_address,
                     order.suburb,
                     order.postcode,
+                    order.delivery_date,
                     order.zone,
                     order.urgency,
                     order.preferred_driver_id,
@@ -323,6 +353,7 @@ class SQLiteManualDispatchRepository:
                     order.order_id,
                 ),
             )
+            self._replace_order_product_lines(connection, order.order_id, order.product_lines)
             connection.commit()
 
         if cursor.rowcount == 0:
@@ -698,7 +729,7 @@ class SQLiteManualDispatchRepository:
             connection.commit()
         return cursor.rowcount > 0
 
-    def upsert_driver_vehicle_assignment(self, dispatch_date, driver_id, vehicle_id):
+    def upsert_driver_vehicle_assignment(self, dispatch_date, delivery_date, driver_id, vehicle_id):
         timestamp = self._timestamp()
 
         with connect(self.db_path) as connection:
@@ -706,35 +737,46 @@ class SQLiteManualDispatchRepository:
                 """
                 INSERT INTO manual_driver_vehicle_assignments (
                     dispatch_date,
+                    delivery_date,
                     driver_id,
                     vehicle_id,
                     created_at,
                     updated_at
-                ) VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT(dispatch_date, driver_id)
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(dispatch_date, delivery_date, driver_id)
                 DO UPDATE SET
                     vehicle_id = excluded.vehicle_id,
                     updated_at = excluded.updated_at
                 """,
-                (dispatch_date, driver_id, vehicle_id, timestamp, timestamp),
+                (dispatch_date, delivery_date, driver_id, vehicle_id, timestamp, timestamp),
             )
             connection.commit()
 
         return ManualDriverVehicleAssignment(
             dispatch_date=dispatch_date,
+            delivery_date=delivery_date,
             driver_id=driver_id,
             vehicle_id=vehicle_id,
         )
 
-    def remove_driver_vehicle_assignment(self, dispatch_date, driver_id):
+    def remove_driver_vehicle_assignment(self, dispatch_date, driver_id, delivery_date=None):
         with connect(self.db_path) as connection:
-            cursor = connection.execute(
-                """
-                DELETE FROM manual_driver_vehicle_assignments
-                WHERE dispatch_date = ? AND driver_id = ?
-                """,
-                (dispatch_date, driver_id),
-            )
+            if delivery_date:
+                cursor = connection.execute(
+                    """
+                    DELETE FROM manual_driver_vehicle_assignments
+                    WHERE dispatch_date = ? AND delivery_date = ? AND driver_id = ?
+                    """,
+                    (dispatch_date, delivery_date, driver_id),
+                )
+            else:
+                cursor = connection.execute(
+                    """
+                    DELETE FROM manual_driver_vehicle_assignments
+                    WHERE dispatch_date = ? AND driver_id = ?
+                    """,
+                    (dispatch_date, driver_id),
+                )
             connection.commit()
         return cursor.rowcount > 0
 
@@ -746,14 +788,21 @@ class SQLiteManualDispatchRepository:
                 """
                 SELECT 1
                 FROM final_trip_summaries
-                WHERE dispatch_date = ? AND driver_id = ? AND status = 'SAVED'
+                WHERE dispatch_date = ?
+                    AND delivery_date = ?
+                    AND driver_id = ?
+                    AND status = 'SAVED'
                 LIMIT 1
                 """,
-                (summary["dispatch_date"], summary["driver_id"]),
+                (
+                    summary["dispatch_date"],
+                    summary["delivery_date"],
+                    summary["driver_id"],
+                ),
             ).fetchone()
             if existing_summary:
                 raise ValueError(
-                    "Final Summary for this driver and dispatch date has already been saved."
+                    "Final Summary for this driver, dispatch date, and delivery date has already been saved."
                 )
 
             summary_id = self._create_final_trip_summary_id(connection)
@@ -762,6 +811,7 @@ class SQLiteManualDispatchRepository:
                 INSERT INTO final_trip_summaries (
                     summary_id,
                     dispatch_date,
+                    delivery_date,
                     driver_id,
                     driver_name_snapshot,
                     vehicle_id,
@@ -773,11 +823,12 @@ class SQLiteManualDispatchRepository:
                     saved_at,
                     saved_by_account_name,
                     saved_by_account_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     summary_id,
                     summary["dispatch_date"],
+                    summary["delivery_date"],
                     summary["driver_id"],
                     summary["driver_name_snapshot"],
                     summary.get("vehicle_id"),
@@ -809,10 +860,12 @@ class SQLiteManualDispatchRepository:
                         suburb_snapshot,
                         delivery_address_snapshot,
                         product_snapshot,
+                        product_details_snapshot,
+                        estimated_distance_km_from_warehouse_snapshot,
                         pallet_quantity_snapshot,
                         loose_bags_quantity_snapshot,
                         note_snapshot
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         row_id,
@@ -827,6 +880,8 @@ class SQLiteManualDispatchRepository:
                         row.get("suburb_snapshot"),
                         row.get("delivery_address_snapshot"),
                         row.get("product_snapshot"),
+                        self._serialize_product_lines(row.get("product_lines_snapshot") or []),
+                        row.get("estimated_distance_km_from_warehouse_snapshot"),
                         row["pallet_quantity_snapshot"],
                         row["loose_bags_quantity_snapshot"],
                         row.get("note_snapshot"),
@@ -920,6 +975,7 @@ class SQLiteManualDispatchRepository:
             end_time=row["end_time"],
             note=row["note"],
             status=row["status"],
+            product_lines=self._list_order_product_lines(row["order_id"]),
         )
 
     def _row_to_driver(self, row):
@@ -963,6 +1019,7 @@ class SQLiteManualDispatchRepository:
     def _row_to_driver_vehicle_assignment(self, row):
         return ManualDriverVehicleAssignment(
             dispatch_date=row["dispatch_date"],
+            delivery_date=row["delivery_date"],
             driver_id=row["driver_id"],
             vehicle_id=row["vehicle_id"],
         )
@@ -998,6 +1055,7 @@ class SQLiteManualDispatchRepository:
         return FinalTripSummary(
             summary_id=row["summary_id"],
             dispatch_date=row["dispatch_date"],
+            delivery_date=row["delivery_date"],
             driver_id=row["driver_id"],
             driver_name_snapshot=row["driver_name_snapshot"],
             vehicle_id=row["vehicle_id"],
@@ -1028,6 +1086,16 @@ class SQLiteManualDispatchRepository:
             pallet_quantity_snapshot=row["pallet_quantity_snapshot"],
             loose_bags_quantity_snapshot=row["loose_bags_quantity_snapshot"],
             note_snapshot=row["note_snapshot"],
+            product_lines_snapshot=self._deserialize_product_lines(
+                row["product_details_snapshot"]
+                if "product_details_snapshot" in row.keys()
+                else "[]"
+            ),
+            estimated_distance_km_from_warehouse_snapshot=(
+                row["estimated_distance_km_from_warehouse_snapshot"]
+                if "estimated_distance_km_from_warehouse_snapshot" in row.keys()
+                else None
+            ),
         )
 
     def _row_to_operator_account(self, row):
@@ -1042,3 +1110,81 @@ class SQLiteManualDispatchRepository:
 
     def _timestamp(self):
         return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+    def _replace_order_product_lines(self, connection, order_id, product_lines):
+        connection.execute(
+            "DELETE FROM order_product_lines WHERE order_id = ?",
+            (order_id,),
+        )
+        for line_no, line in enumerate(product_lines or [], start=1):
+            connection.execute(
+                """
+                INSERT INTO order_product_lines (
+                    order_id,
+                    line_no,
+                    product_name,
+                    quantity,
+                    unit
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    order_id,
+                    line_no,
+                    line.product_name,
+                    line.quantity,
+                    line.unit,
+                ),
+            )
+
+    def _list_order_product_lines(self, order_id):
+        with connect(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT product_name, quantity, unit
+                FROM order_product_lines
+                WHERE order_id = ?
+                ORDER BY line_no
+                """,
+                (order_id,),
+            ).fetchall()
+        return [
+            ProductDetailLine(
+                product_name=row["product_name"],
+                quantity=row["quantity"],
+                unit=row["unit"],
+            )
+            for row in rows
+        ]
+
+    def _serialize_product_lines(self, product_lines):
+        return json.dumps(
+            [
+                {
+                    "product_name": line["product_name"]
+                    if isinstance(line, dict)
+                    else line.product_name,
+                    "quantity": line["quantity"]
+                    if isinstance(line, dict)
+                    else line.quantity,
+                    "unit": line["unit"]
+                    if isinstance(line, dict)
+                    else line.unit,
+                }
+                for line in product_lines
+            ]
+        )
+
+    def _deserialize_product_lines(self, serialized):
+        try:
+            raw_lines = json.loads(serialized or "[]")
+        except (TypeError, ValueError, json.JSONDecodeError):
+            raw_lines = []
+        return [
+            ProductDetailLine(
+                product_name=str(line.get("product_name") or ""),
+                quantity=int(line.get("quantity") or 0),
+                unit=str(line.get("unit") or ""),
+            )
+            for line in raw_lines
+            if isinstance(line, dict)
+        ]

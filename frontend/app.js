@@ -34,13 +34,19 @@ function normalizeBoardResponse(payload) {
     drivers: payload.drivers || [],
     vehicles: payload.vehicles || [],
     assignments: payload.assignments || [],
-    driverVehicleAssignments: payload.driver_vehicle_assignments || [],
+    driverVehicleAssignments: (payload.driver_vehicle_assignments || []).map((assignment) => ({
+      ...assignment,
+      delivery_date: assignment.delivery_date || assignment.dispatch_date || payload.dispatch_date || state.dispatchDate,
+    })),
   };
 }
 
 function applyBoardResponse(payload) {
   const board = normalizeBoardResponse(payload);
   state.dispatchDate = board.dispatchDate;
+  if (!state.driverSummaryDeliveryDate) {
+    state.driverSummaryDeliveryDate = board.dispatchDate;
+  }
   state.orders = board.orders;
   state.drivers = board.drivers;
   state.vehicles = board.vehicles;
@@ -165,6 +171,7 @@ function renderBoardControls() {
   dateInput.onchange = () => {
     const nextDate = dateInput.value || DEFAULT_DISPATCH_DATE;
     state.dispatchDate = nextDate;
+    state.driverSummaryDeliveryDate = nextDate;
     state.finalTripSummaries = {};
     state.generatedTaskKeys = new Set();
     state.isSavingFinalSummaries = false;
@@ -203,6 +210,16 @@ function renderTaskPoolFilters() {
       renderTaskPoolFilters();
       renderTaskPool();
     },
+    onDeliveryDateChange: (value) => {
+      state.taskPoolDeliveryDateFilter = value;
+      renderTaskPoolFilters();
+      renderTaskPool();
+    },
+    onClearDeliveryDate: () => {
+      state.taskPoolDeliveryDateFilter = "";
+      renderTaskPoolFilters();
+      renderTaskPool();
+    },
   });
 }
 
@@ -216,6 +233,13 @@ function renderTaskPool() {
 }
 function renderDriverSummary() {
   renderDriverSummaryView({
+    onDeliveryDateChange: (deliveryDate) => {
+      state.driverSummaryDeliveryDate = deliveryDate;
+      state.finalSummaryGlobalSaveError = "";
+      state.finalSummaryGlobalSaveSuccess = "";
+      renderDriverSummary();
+      renderFinalTripSummaries();
+    },
     onVehicleChange: vehicleActions.handleVehicleChange,
     onGenerateDriverSummary: finalSummaryActions.handleGenerateDriverSummary,
     onOpenOrderDetail: orderActions.openOrderDetail,
@@ -680,21 +704,30 @@ function createActionsCell(actions) {
 
 function renderAddOrderPopup() {
   renderAddOrderPopupView({
+    onAddProductLine: () => orderActions.addProductLine("add"),
     onCloseAddOrder: orderActions.closeAddOrder,
     onCreateOrder: orderActions.handleCreateOrder,
+    onRemoveProductLine: (index) => orderActions.removeProductLine("add", index),
     onUpdateAddOrderForm: orderActions.updateAddOrderForm,
+    onUpdateProductLine: (index, field, value) =>
+      orderActions.updateProductLine("add", index, field, value),
   });
 }
 
 function renderOrderDetailPopup() {
   renderOrderDetailPopupView({
     getOrderEditForm: orderActions.getOrderEditForm,
+    onAddProductLine: () => orderActions.addProductLine("edit"),
     onCancelOrder: orderActions.handleCancelOrder,
     onCancelOrderEdit: orderActions.cancelOrderEdit,
     onCloseOrderDetail: orderActions.closeOrderDetail,
+    onRemoveProductLine: (index) => orderActions.removeProductLine("edit", index),
     onSaveOrderEdit: orderActions.handleUpdateOrder,
     onStartOrderEdit: orderActions.startOrderEdit,
+    onToggleProductDetail: orderActions.toggleProductDetail,
     onUpdateOrderEditForm: orderActions.updateOrderEditForm,
+    onUpdateProductLine: (index, field, value) =>
+      orderActions.updateProductLine("edit", index, field, value),
   });
 }
 function renderBoard() {

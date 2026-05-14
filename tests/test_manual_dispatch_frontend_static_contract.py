@@ -15,6 +15,114 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         script_sources = re.findall(r"<script[^>]+src=\"([^\"]+)\"", index_html)
         self.assertEqual(["app.js"], script_sources)
 
+    def test_driver_summary_delivery_date_control_is_present(self):
+        index_html = (FRONTEND_ROOT / "index.html").read_text(encoding="utf-8")
+
+        self.assertIn('id="driver-summary-delivery-date"', index_html)
+        self.assertIn('type="date"', index_html)
+
+    def test_task_pool_delivery_date_filter_controls_are_present(self):
+        index_html = (FRONTEND_ROOT / "index.html").read_text(encoding="utf-8")
+
+        self.assertIn('id="task-pool-delivery-date-filter"', index_html)
+        self.assertIn('id="clear-task-pool-delivery-date-filter"', index_html)
+        self.assertIn("All delivery dates", index_html)
+
+    def test_order_renderers_show_delivery_date_and_edit_form_is_not_read_only(self):
+        task_pool_renderer = (
+            FRONTEND_ROOT / "js" / "render" / "task-pool-renderer.js"
+        ).read_text(encoding="utf-8")
+        trip_summary_renderer = (
+            FRONTEND_ROOT / "js" / "render" / "trip-summary-renderer.js"
+        ).read_text(encoding="utf-8")
+        order_modal_renderer = (
+            FRONTEND_ROOT / "js" / "render" / "order-modal-renderer.js"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("Delivery Date:", task_pool_renderer)
+        self.assertIn("assigned-delivery-date", trip_summary_renderer)
+        self.assertIn('createField("Delivery Date", "delivery_date"', order_modal_renderer)
+        self.assertNotIn("Delivery Date (read-only)", order_modal_renderer)
+
+    def test_order_details_reuses_form_grid_in_read_only_mode(self):
+        order_modal_renderer = (
+            FRONTEND_ROOT / "js" / "render" / "order-modal-renderer.js"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("function createOrderReadOnlyLayout(formState)", order_modal_renderer)
+        self.assertIn('layout.className = "order-form order-readonly-form"', order_modal_renderer)
+        self.assertIn('layout.append(createOrderFormGrid(formState, { mode: "view" }))', order_modal_renderer)
+        self.assertIn("input.disabled = true", order_modal_renderer)
+        self.assertIn("input.readOnly = true", order_modal_renderer)
+        self.assertIn("select.disabled = true", order_modal_renderer)
+        self.assertIn('mode: "edit"', order_modal_renderer)
+
+    def test_order_details_and_edit_share_core_field_order(self):
+        order_modal_renderer = (
+            FRONTEND_ROOT / "js" / "render" / "order-modal-renderer.js"
+        ).read_text(encoding="utf-8")
+
+        field_labels = [
+            "Invoice #",
+            "Company Name",
+            "Phone",
+            "Delivery Address",
+            "Suburb",
+            "Postcode",
+            "Delivery Date",
+            "Zone",
+            "Urgency",
+            "Preferred Driver",
+            "Pallet Quantity",
+            "Loose Bags Quantity",
+            "Start Time",
+            "End Time",
+            "Note",
+        ]
+        shared_grid_source = order_modal_renderer.split("function createOrderFormGrid", 1)[1]
+        field_positions = [shared_grid_source.index(f'"{label}"') for label in field_labels]
+        self.assertEqual(sorted(field_positions), field_positions)
+
+    def test_phase16_product_detail_controls_are_present(self):
+        order_modal_renderer = (
+            FRONTEND_ROOT / "js" / "render" / "order-modal-renderer.js"
+        ).read_text(encoding="utf-8")
+        final_summary_renderer = (
+            FRONTEND_ROOT / "js" / "render" / "final-summary-renderer.js"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('productDetailButton.textContent = "Product Detail"', order_modal_renderer)
+        self.assertIn('title.textContent = "Product Details"', order_modal_renderer)
+        self.assertIn('addButton.textContent = "Add Product Line"', order_modal_renderer)
+        self.assertIn('"Product Details"', final_summary_renderer)
+
+    def test_phase18_final_summary_distance_display_is_present(self):
+        final_summary_renderer = (
+            FRONTEND_ROOT / "js" / "render" / "final-summary-renderer.js"
+        ).read_text(encoding="utf-8")
+        final_summary_actions = (
+            FRONTEND_ROOT / "js" / "actions" / "final-summary-actions.js"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('"Estimated Distance From Warehouse (km)"', final_summary_renderer)
+        self.assertIn("function formatEstimatedDistance(order)", final_summary_renderer)
+        self.assertIn("function sortFinalSummaryOrders(orders)", final_summary_actions)
+
+    def test_product_line_typing_updates_state_without_popup_rerender(self):
+        order_actions = (
+            FRONTEND_ROOT / "js" / "actions" / "order-actions.js"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            "updateProductLines(formKey, nextLines, { rerenderPopup: false });",
+            order_actions,
+        )
+        self.assertGreaterEqual(order_actions.count("{ rerenderPopup: true }"), 2)
+        self.assertIn(
+            "function updateProductLines(formKey, productLines, { rerenderPopup = true } = {})",
+            order_actions,
+        )
+
     def test_frontend_module_import_paths_exist(self):
         frontend_sources = list(FRONTEND_ROOT.rglob("*.js"))
         import_paths = []

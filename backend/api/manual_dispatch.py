@@ -1,3 +1,5 @@
+import os
+
 from fastapi import APIRouter, Body, HTTPException
 from fastapi.responses import Response
 
@@ -26,6 +28,8 @@ from backend.services.manual_dispatch_service import ManualDispatchService
 
 router = APIRouter(prefix="/api/manual-dispatch", tags=["manual-dispatch"])
 service = ManualDispatchService(SQLiteManualDispatchRepository())
+ALLOW_REGISTRATION_ENV = "MANUAL_DISPATCH_ALLOW_REGISTRATION"
+REGISTRATION_DISABLED_MESSAGE = "Registration is disabled. Please contact an administrator."
 
 
 @router.get("/board")
@@ -54,6 +58,9 @@ def export_excel(dispatch_date: str):
 
 @router.post("/auth/register")
 def register_operator_account(request: RegisterOperatorAccountRequest):
+    if not _is_env_flag_enabled(ALLOW_REGISTRATION_ENV, default=True):
+        raise HTTPException(status_code=403, detail=REGISTRATION_DISABLED_MESSAGE)
+
     try:
         return to_dict(service.register_operator_account(request))
     except ValueError as error:
@@ -183,21 +190,27 @@ def save_final_trip_summary(payload: dict = Body(...)):
 
 
 @router.get("/final-summaries")
-def list_final_trip_summaries(dispatch_date: str):
+def list_final_trip_summaries(dispatch_date: str, delivery_date: str = None):
     try:
-        return [to_dict(summary) for summary in service.list_final_trip_summaries(dispatch_date)]
+        return [
+            to_dict(summary)
+            for summary in service.list_final_trip_summaries(
+                dispatch_date,
+                delivery_date,
+            )
+        ]
     except ValueError as error:
         raise _to_http_exception(error) from error
 
 
 @router.get("/final-summaries/export-excel")
-def export_final_trip_summaries_excel(dispatch_date: str):
+def export_final_trip_summaries_excel(dispatch_date: str, delivery_date: str = None):
     try:
-        summaries = service.list_final_trip_summaries(dispatch_date)
+        summaries = service.list_final_trip_summaries(dispatch_date, delivery_date)
     except ValueError as error:
         raise _to_http_exception(error) from error
 
-    workbook_bytes = build_final_summary_excel(summaries, dispatch_date)
+    workbook_bytes = build_final_summary_excel(summaries, dispatch_date, delivery_date)
     filename = f"final-trip-summary-{dispatch_date}.xlsx"
     return Response(
         content=workbook_bytes,
@@ -223,6 +236,7 @@ def _assign_driver_vehicle_request_from_payload(payload):
     payload = payload or {}
     return AssignDriverVehicleRequest(
         dispatch_date=payload.get("dispatch_date"),
+        delivery_date=payload.get("delivery_date"),
         driver_id=payload.get("driver_id"),
         vehicle_id=payload.get("vehicle_id") or None,
     )
@@ -232,6 +246,7 @@ def _save_final_trip_summary_request_from_payload(payload):
     payload = payload or {}
     return SaveFinalTripSummaryRequest(
         dispatch_date=payload.get("dispatch_date"),
+        delivery_date=payload.get("delivery_date"),
         driver_id=payload.get("driver_id"),
         driver_name_snapshot=payload.get("driver_name_snapshot")
         or payload.get("driver_name"),
@@ -251,3 +266,16 @@ def _to_http_exception(error):
     message = str(error)
     status_code = 404 if "does not exist" in message else 400
     return HTTPException(status_code=status_code, detail=message)
+
+
+def _is_env_flag_enabled(name, default=False):
+    raw_value = os.environ.get(name)
+    if raw_value is None:
+        return default
+
+    normalized = raw_value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    return default

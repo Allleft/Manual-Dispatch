@@ -1,0 +1,29 @@
+services:
+  manual-dispatch:
+    build: .
+    container_name: manual-dispatch
+    restart: unless-stopped
+    ports:
+      - "8130:8130"
+    environment:
+      MANUAL_DISPATCH_DB_PATH: /app/data/manual_dispatch.sqlite3
+      MANUAL_DISPATCH_HOST: 0.0.0.0
+      MANUAL_DISPATCH_PORT: 8130
+      MANUAL_DISPATCH_ADMIN_RESET_CODE: ${MANUAL_DISPATCH_ADMIN_RESET_CODE}
+      MANUAL_DISPATCH_ALLOW_REGISTRATION: ${MANUAL_DISPATCH_ALLOW_REGISTRATION:-false}
+      MANUAL_DISPATCH_SEED_DEMO_DATA: ${MANUAL_DISPATCH_SEED_DEMO_DATA:-false}
+    volumes:
+      - ./data:/app/data
+      - ./backups:/app/backups
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8130/health', timeout=5).read()",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s

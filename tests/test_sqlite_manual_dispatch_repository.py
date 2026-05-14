@@ -1,3 +1,4 @@
+import os
 import sqlite3
 import shutil
 import unittest
@@ -7,6 +8,7 @@ from pathlib import Path
 from backend.repositories.sqlite_manual_dispatch_repository import (
     SQLiteManualDispatchRepository,
 )
+from backend.db.connection import connect
 from backend.schemas import (
     AssignDriverVehicleRequest,
     AssignTaskRequest,
@@ -43,6 +45,17 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
         self.assertIn("manual_vehicles", tables)
         self.assertIn("manual_dispatch_assignments", tables)
         self.assertIn("manual_driver_vehicle_assignments", tables)
+        self.assertIn("order_product_lines", tables)
+
+    def test_connection_uses_wal_and_busy_timeout_for_office_deployment(self):
+        with connect(self.db_path) as connection:
+            journal_mode = connection.execute("PRAGMA journal_mode").fetchone()[0]
+            busy_timeout = connection.execute("PRAGMA busy_timeout").fetchone()[0]
+            foreign_keys = connection.execute("PRAGMA foreign_keys").fetchone()[0]
+
+        self.assertEqual("wal", journal_mode.lower())
+        self.assertEqual(5000, busy_timeout)
+        self.assertEqual(1, foreign_keys)
 
     def test_seed_data_loads_orders_drivers_and_vehicles(self):
         board = self.service.get_board("2026-05-05")
@@ -66,10 +79,27 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
             [vehicle.rego for vehicle in board.vehicles],
         )
 
-    def test_board_only_loads_orders_for_requested_dispatch_date(self):
+    def test_seed_data_can_be_disabled_by_environment(self):
+        previous_value = os.environ.get("MANUAL_DISPATCH_SEED_DEMO_DATA")
+        os.environ["MANUAL_DISPATCH_SEED_DEMO_DATA"] = "false"
+        try:
+            db_path = self.temp_dir / "manual_dispatch_no_seed.sqlite3"
+            service = ManualDispatchService(SQLiteManualDispatchRepository(db_path))
+            board = service.get_board("2026-05-05")
+        finally:
+            if previous_value is None:
+                os.environ.pop("MANUAL_DISPATCH_SEED_DEMO_DATA", None)
+            else:
+                os.environ["MANUAL_DISPATCH_SEED_DEMO_DATA"] = previous_value
+
+        self.assertEqual([], board.orders)
+        self.assertEqual([], board.drivers)
+        self.assertEqual([], board.vehicles)
+
+    def test_board_keeps_task_pool_orders_global_across_delivery_dates(self):
         created = self.service.create_order(
             CreateOrderRequest(
-                company_name="SQLite Date Filter Customer",
+                company_name="SQLite Future Delivery Customer",
                 suburb="Geelong",
                 delivery_date="2026-05-06",
             )
@@ -78,14 +108,9 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
         board_0505 = self.service.get_board("2026-05-05")
         board_0506 = self.service.get_board("2026-05-06")
 
-        self.assertNotIn(created.order_id, [order.order_id for order in board_0505.orders])
+        self.assertIn(created.order_id, [order.order_id for order in board_0505.orders])
         self.assertIn(created.order_id, [order.order_id for order in board_0506.orders])
-        self.assertTrue(
-            all(order.delivery_date == "2026-05-05" for order in board_0505.orders)
-        )
-        self.assertTrue(
-            all(order.delivery_date == "2026-05-06" for order in board_0506.orders)
-        )
+        self.assertIn("2026-05-06", {order.delivery_date for order in board_0505.orders})
 
     def test_existing_database_without_new_columns_is_upgraded(self):
         legacy_path = self.temp_dir / "legacy_manual_dispatch.sqlite3"
@@ -110,10 +135,35 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
                 row[1]
                 for row in connection.execute("PRAGMA table_info(manual_drivers)").fetchall()
             }
+            vehicle_assignment_columns = {
+                row[1]
+                for row in connection.execute(
+                    "PRAGMA table_info(manual_driver_vehicle_assignments)"
+                ).fetchall()
+            }
+            final_summary_columns = {
+                row[1]
+                for row in connection.execute(
+                    "PRAGMA table_info(final_trip_summaries)"
+                ).fetchall()
+            }
+            final_summary_row_columns = {
+                row[1]
+                for row in connection.execute(
+                    "PRAGMA table_info(final_trip_summary_rows)"
+                ).fetchall()
+            }
 
         self.assertIn("invoice_number", order_columns)
         self.assertIn("phone", order_columns)
         self.assertIn("pallet_only", driver_columns)
+        self.assertIn("delivery_date", vehicle_assignment_columns)
+        self.assertIn("delivery_date", final_summary_columns)
+        self.assertIn("product_details_snapshot", final_summary_row_columns)
+        self.assertIn(
+            "estimated_distance_km_from_warehouse_snapshot",
+            final_summary_row_columns,
+        )
 
     def test_assign_task_persists_assignment(self):
         self.service.assign_task(
@@ -170,7 +220,38 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
 
         self.assertEqual(1, len(board.driver_vehicle_assignments))
         self.assertEqual("D001", board.driver_vehicle_assignments[0].driver_id)
+        self.assertEqual("2026-05-05", board.driver_vehicle_assignments[0].delivery_date)
         self.assertEqual("V002", board.driver_vehicle_assignments[0].vehicle_id)
+
+    def test_vehicle_selection_is_scoped_by_dispatch_and_delivery_date(self):
+        self.service.assign_vehicle_to_driver(
+            AssignDriverVehicleRequest(
+                dispatch_date="2026-05-05",
+                delivery_date="2026-05-05",
+                driver_id="D001",
+                vehicle_id="V001",
+            )
+        )
+        self.service.assign_vehicle_to_driver(
+            AssignDriverVehicleRequest(
+                dispatch_date="2026-05-05",
+                delivery_date="2026-05-06",
+                driver_id="D001",
+                vehicle_id="V002",
+            )
+        )
+
+        repository = SQLiteManualDispatchRepository(self.db_path)
+        board = ManualDispatchService(repository).get_board("2026-05-05")
+
+        self.assertEqual(
+            [("2026-05-05", "V001"), ("2026-05-06", "V002")],
+            [
+                (assignment.delivery_date, assignment.vehicle_id)
+                for assignment in board.driver_vehicle_assignments
+                if assignment.driver_id == "D001"
+            ],
+        )
 
     def test_vehicle_assignment_does_not_modify_task_assignment_records(self):
         self.service.assign_task(

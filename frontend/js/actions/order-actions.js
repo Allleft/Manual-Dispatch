@@ -36,6 +36,7 @@ export function createOrderActions({
       start_time: "",
       end_time: "",
       note: "",
+      product_lines: [],
     };
   }
 
@@ -54,9 +55,18 @@ export function createOrderActions({
   }
 
   function updateAddOrderForm(field, value) {
-    state.addOrderForm = {
+    const nextForm = {
       ...state.addOrderForm,
       [field]: value,
+    };
+    if (field === "pallet_quantity" && Number(value || 0) > 0) {
+      nextForm.loose_bags_quantity = "0";
+    }
+    if (field === "loose_bags_quantity" && Number(value || 0) > 0) {
+      nextForm.pallet_quantity = "0";
+    }
+    state.addOrderForm = {
+      ...nextForm,
     };
   }
 
@@ -65,6 +75,7 @@ export function createOrderActions({
       ...state.addOrderForm,
       pallet_quantity: Number(state.addOrderForm.pallet_quantity || 0),
       loose_bags_quantity: Number(state.addOrderForm.loose_bags_quantity || 0),
+      product_lines: normalizeProductLinePayload(state.addOrderForm.product_lines),
     };
   }
 
@@ -76,6 +87,7 @@ export function createOrderActions({
       delivery_address: order.delivery_address || "",
       suburb: order.suburb || "",
       postcode: order.postcode || "",
+      delivery_date: order.delivery_date || "",
       zone: order.zone || "",
       urgency: getUrgencyLabel(order),
       preferred_driver_id: order.preferred_driver_id || "",
@@ -84,6 +96,11 @@ export function createOrderActions({
       start_time: order.start_time || "",
       end_time: order.end_time || "",
       note: order.note || "",
+      product_lines: (order.product_lines || []).map((line) => ({
+        product_name: line.product_name || "",
+        quantity: String(line.quantity || ""),
+        unit: line.unit || "PALLETS",
+      })),
     };
   }
 
@@ -102,9 +119,18 @@ export function createOrderActions({
   }
 
   function updateOrderEditForm(field, value) {
-    state.orderEditForm = {
+    const nextForm = {
       ...state.orderEditForm,
       [field]: value,
+    };
+    if (field === "pallet_quantity" && Number(value || 0) > 0) {
+      nextForm.loose_bags_quantity = "0";
+    }
+    if (field === "loose_bags_quantity" && Number(value || 0) > 0) {
+      nextForm.pallet_quantity = "0";
+    }
+    state.orderEditForm = {
+      ...nextForm,
     };
   }
 
@@ -113,11 +139,13 @@ export function createOrderActions({
       ...state.orderEditForm,
       pallet_quantity: Number(state.orderEditForm.pallet_quantity || 0),
       loose_bags_quantity: Number(state.orderEditForm.loose_bags_quantity || 0),
+      product_lines: normalizeProductLinePayload(state.orderEditForm.product_lines),
     };
   }
 
   function openOrderDetail(orderId) {
     state.activeOrderDetailId = orderId;
+    state.isProductDetailOpen = false;
     state.isOrderEditMode = false;
     state.orderEditError = "";
     state.orderEditForm = {};
@@ -126,6 +154,7 @@ export function createOrderActions({
 
   function closeOrderDetail() {
     state.activeOrderDetailId = "";
+    state.isProductDetailOpen = false;
     state.isOrderEditMode = false;
     state.orderEditError = "";
     state.orderEditForm = {};
@@ -134,6 +163,13 @@ export function createOrderActions({
 
   async function handleCreateOrder() {
     if (state.isSaving) {
+      return;
+    }
+
+    const loadError = getLoadExclusivityError(state.addOrderForm);
+    if (loadError) {
+      state.addOrderError = loadError;
+      renderAddOrderPopup();
       return;
     }
 
@@ -154,6 +190,13 @@ export function createOrderActions({
 
   async function handleUpdateOrder(orderId) {
     if (state.isSaving) {
+      return;
+    }
+
+    const loadError = getLoadExclusivityError(state.orderEditForm);
+    if (loadError) {
+      state.orderEditError = loadError;
+      renderOrderDetailPopup();
       return;
     }
 
@@ -201,6 +244,83 @@ export function createOrderActions({
     }
   }
 
+  function toggleProductDetail() {
+    state.isProductDetailOpen = !state.isProductDetailOpen;
+    renderOrderDetailPopup();
+  }
+
+  function addProductLine(formKey) {
+    const form = formKey === "edit" ? state.orderEditForm : state.addOrderForm;
+    const nextLines = [...(form.product_lines || []), createEmptyProductLine(form)];
+    updateProductLines(formKey, nextLines, { rerenderPopup: true });
+  }
+
+  function removeProductLine(formKey, index) {
+    const form = formKey === "edit" ? state.orderEditForm : state.addOrderForm;
+    const nextLines = (form.product_lines || []).filter((_, lineIndex) => lineIndex !== index);
+    updateProductLines(formKey, nextLines, { rerenderPopup: true });
+  }
+
+  function updateProductLine(formKey, index, field, value) {
+    const form = formKey === "edit" ? state.orderEditForm : state.addOrderForm;
+    const nextLines = (form.product_lines || []).map((line, lineIndex) =>
+      lineIndex === index ? { ...line, [field]: value } : line,
+    );
+    updateProductLines(formKey, nextLines, { rerenderPopup: false });
+  }
+
+  function updateProductLines(formKey, productLines, { rerenderPopup = true } = {}) {
+    if (formKey === "edit") {
+      state.orderEditForm = {
+        ...state.orderEditForm,
+        product_lines: productLines,
+      };
+      if (rerenderPopup) {
+        renderOrderDetailPopup();
+      }
+      return;
+    }
+
+    state.addOrderForm = {
+      ...state.addOrderForm,
+      product_lines: productLines,
+    };
+    if (rerenderPopup) {
+      renderAddOrderPopup();
+    }
+  }
+
+  function createEmptyProductLine(form) {
+    return {
+      product_name: "",
+      quantity: "1",
+      unit: getPreferredProductUnit(form),
+    };
+  }
+
+  function getPreferredProductUnit(form) {
+    if (Number(form.loose_bags_quantity || 0) > 0) {
+      return "BAGS";
+    }
+    return "PALLETS";
+  }
+
+  function normalizeProductLinePayload(productLines) {
+    return (productLines || []).map((line) => ({
+      product_name: line.product_name || "",
+      quantity: Number(line.quantity || 0),
+      unit: line.unit || "",
+    }));
+  }
+
+  function getLoadExclusivityError(form) {
+    const pallets = Number(form.pallet_quantity || 0);
+    const looseBags = Number(form.loose_bags_quantity || 0);
+    return pallets > 0 && looseBags > 0
+      ? "Order must use either Pallets or Bags, not both."
+      : "";
+  }
+
   return {
     cancelOrderEdit,
     closeAddOrder,
@@ -209,10 +329,14 @@ export function createOrderActions({
     handleCancelOrder,
     handleCreateOrder,
     handleUpdateOrder,
+    addProductLine,
     openAddOrder,
     openOrderDetail,
+    removeProductLine,
     startOrderEdit,
+    toggleProductDetail,
     updateAddOrderForm,
+    updateProductLine,
     updateOrderEditForm,
   };
 }

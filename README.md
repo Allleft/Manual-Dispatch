@@ -1,240 +1,293 @@
-﻿# Manual Dispatch Board
+# Manual Dispatch Board
 
-Manual Dispatch Board is a small FastAPI + vanilla HTML/CSS/JavaScript app for office staff who manually dispatch delivery Orders to Drivers, Trips, and Vehicles.
+## Project Overview
 
-It supports a manual workflow:
+Manual Dispatch Board is a FastAPI + vanilla HTML/CSS/JavaScript workflow for office staff who manually dispatch delivery Orders to Drivers, Trips, and Vehicles.
 
-1. Load a Dispatch Date.
-2. Review unassigned Orders in the Task Pool.
-3. Assign Orders to a Driver and `trip1` or `trip2`.
-4. Choose a Vehicle for a Driver + Dispatch Date.
-5. Generate a locked Final Trip Summary snapshot.
-6. Save and export saved Final Trip Summary history.
+The board is intentionally manual:
 
-This project is intentionally not a route optimizer. It does not automatically select drivers, vehicles, trips, routes, ETAs, or capacity plans.
+- Top: global Task Pool for active unassigned Orders.
+- Bottom: Driver Summary / Trip Summary / Final Trip Summary.
+- Dispatch Date is the operational assignment date.
+- Delivery Date is customer/order metadata and the Driver Summary view scope.
+
+This project is not a route optimizer. It does not perform auto-assignment, ETA prediction, geocoding, Google Maps routing, automatic trip planning, or automatic driver/vehicle selection.
 
 ## Current Status
 
-Current status: Phase 15 on `feature/manual-dispatch-board`.
+Current status: **Phase 20: Office Trial Deployment & Backup** on `feature/manual-dispatch-board`.
 
-Implemented focus areas:
+Implemented capabilities now include:
 
-- Manual dispatch board backed by SQLite persistence.
-- Order lifecycle: Add, Edit, Cancel via soft delete.
-- Driver and Vehicle master-data management through the Driver & Vehicle Specification modal.
-- Final Trip Summary generation, save/history, and Excel export from saved snapshot records.
-- Lightweight database-backed operator login for Final Trip Summary attribution.
-- Dispatch Date defaults to the browser's local current date. Demo data may still be dated `2026-05-05`, so today's Task Pool can be empty unless local data exists for today.
+- Database-backed login with operator attribution for Final Trip Summary save/export.
+- Global Task Pool with search, urgency, and Delivery Date display filtering.
+- Driver Summary filtered by selected Delivery Date without changing Task Pool membership.
+- Vehicle selection scoped by `driver_id + dispatch_date + delivery_date`.
+- Product Details with pallet/bag exclusivity.
+- Historical Final Trip Summary save, history, and Excel export from snapshot data.
+- Final Trip Summary suburb-distance sorting using a static local estimate table.
+- Distance dataset provenance, QA validation, and explicit non-optimization wording.
+- Phase 19 release-candidate QA validating the full manual dispatch workflow before office trial use.
+- Phase 20 office-trial startup, SQLite backup/restore guidance, runtime configuration examples, and staff operating checklists.
+- Deployment-preparation branch support for NAS/internal-domain office hosting with Docker Compose, `/health`, and Linux backup/restore scripts.
 
-Runtime SQLite database files are local and ignored by Git.
+Phase 20 does not add automatic assignment or optimization. It focuses on local deployment safety, backup/recovery, office-trial documentation, and small targeted fixes only if deployment QA finds a real bug.
+
+Runtime SQLite database files and backup files are local office-trial data and remain ignored by Git.
+
+## Core Workflow
+
+1. Log in.
+2. Select the Dispatch Date.
+3. Review the global Task Pool.
+4. Filter or search Orders if needed.
+5. Assign Orders to Driver + Trip.
+6. Select the Driver Summary Delivery Date.
+7. Choose a Vehicle for Driver + Dispatch Date + Delivery Date.
+8. Generate the Final Trip Summary.
+9. Save and Export the historical snapshot.
+
+## Key Concepts
+
+| Concept | Meaning |
+| --- | --- |
+| Dispatch Date | Operational board date used for assignments and dispatch-day workflow. |
+| Delivery Date | Customer/order delivery date. It is editable for active Orders and also scopes Driver Summary visibility. |
+| Task Pool | Global active unassigned Order pool. It is not controlled by Dispatch Date or Driver Summary Delivery Date membership rules. |
+| Driver Summary Delivery Date | The date filter that decides which already-assigned Orders appear inside driver cards. |
+| Vehicle Assignment Scope | Vehicle selection is stored per `driver_id + dispatch_date + delivery_date`. |
+| Final Trip Summary | A generated and then saved historical snapshot scoped by `dispatch_date + delivery_date`. |
+| Product Details | Structured product lines attached to an Order and copied into saved Final Trip Summary snapshots. |
+| Estimated Distance | Static suburb-level estimated straight-line distance from the Somerton warehouse, used only for Final Trip Summary sorting. |
 
 ## Features
 
-### Dispatch Board
+### Authentication / Operator Attribution
 
-- Login/register gate using Account Name + Password before the board can be used.
-- Logged-in operator badge and Logout button in the page header.
-- Dispatch Date board loading.
-- Top-bottom layout:
-  - Top: Task Pool.
-  - Bottom: Trip Summary.
-- Task Pool shows unassigned active Orders for the selected Dispatch Date.
-- Compact Order cards show Invoice #, Company, Suburb, Pallet quantity, urgency, note preview, and start time.
-- Task Pool search and urgency filter apply only to unassigned Orders.
-- Clicking an Order card opens a detail popup.
+- Login/register flow backed by SQLite operator accounts.
+- Passwords are stored as salted PBKDF2-HMAC-SHA256 hashes, never in plain text.
+- Save and Export requires a logged-in operator.
+- Saved Final Trip Summaries record the operator account name.
+- Forgot Password resets a password using `MANUAL_DISPATCH_ADMIN_RESET_CODE`; it never reveals the old password.
+- This is lightweight MVP/demo authentication, not production-grade enterprise auth.
+
+### Task Pool
+
+- Shows active unassigned Orders globally.
+- Search, urgency, and optional Delivery Date filters affect display only.
+- Delivery Date filtering does not assign, unassign, or mutate Orders.
+- Compact cards show core Order context such as invoice, company, suburb, delivery date, urgency, note preview, timing, and load-unit information.
+
+### Order Lifecycle
+
+- Add Order, Edit Order, and soft-delete Cancel Order flows.
+- Delivery Date is editable for active Orders.
+- Assigned Orders keep their existing assignment when editable fields change.
+- Cancelled/finalized/soft-deleted Orders are excluded from the normal active workflow.
+- Order Details uses a read-only form-style layout aligned with Edit Order.
+
+### Product Details and Load Units
+
+- Orders can store multiple Product Detail lines.
+- Product Detail display is available from Order detail views.
+- One Order uses either Pallets or Bags, never both.
+- Product-line units must align with the Order load unit.
+- Legacy Orders without product lines remain valid and display `No product details recorded.`
+
+### Driver & Vehicle Specification
+
+- Driver and Vehicle specification modal supports add, edit, safe delete, and availability toggles.
+- Unavailable Drivers and Vehicles are hidden from operational dropdowns where appropriate.
+- Main board refresh stays deferred until the modal closes.
 
 ### Manual Assignment
 
 - Assign Orders to a Driver and `trip1` or `trip2`.
-- Reassign Orders by assigning the same Order again to a different Driver/Trip.
+- Reassign by assigning the same Order to another Driver/Trip.
 - Unassign Orders back to the Task Pool.
-- Pending Driver/Trip selections are preserved after assigning another Order.
-- Trip Summary groups assigned Orders by Driver and Trip.
-- Vehicle selection is stored at Driver + Dispatch Date level, not per Order.
-- Vehicle selection can be cleared back to no selected vehicle.
-- Pallet-only and vehicle-capacity hints are display-only and non-blocking.
+- The workflow remains manual; no optimizer or auto-selection logic is introduced.
 
-### Order Lifecycle
+### Driver Summary / Trip Summary
 
-- Add Order popup saves new Orders to SQLite.
-- Add Order defaults delivery date to the currently selected Dispatch Date.
-- Edit Order supports operational fields while keeping Delivery Date read-only.
-- Editing an assigned Order preserves the existing Driver + Trip assignment.
-- Cancel Order uses soft delete with `status = CANCELLED`.
-- Cancelled Orders are hidden from Task Pool and normal active exports.
-- Assigned Orders must be unassigned before cancellation.
-- Physical Delete Order is not implemented.
-
-### Driver & Vehicle Specification
-
-- Driver & Vehicle Specification modal lists Drivers and Vehicles.
-- Add, edit, safe delete, and availability toggle are supported for Drivers and Vehicles.
-- Availability controls main board visibility:
-  - Unavailable Drivers are hidden from Driver dropdowns and empty Trip Summary cards.
-  - Unavailable Vehicles are hidden from Choose Vehicle dropdowns.
-- Main board refresh is deferred until the specification modal closes.
-- Preferred Zone can be stored in specifications but remains hidden from the main dispatch board.
+- Driver cards remain stable while the Driver Summary Delivery Date changes.
+- Each driver card shows only assigned Orders matching the selected Driver Summary Delivery Date.
+- If no matching Orders exist, the card stays visible with an empty state.
+- Vehicle selection reflects the current `driver_id + dispatch_date + delivery_date` combination.
 
 ### Final Trip Summary
 
-- Generate creates a locked frontend snapshot from a Driver's current assigned Orders and selected Vehicle.
-- Generated snapshots preserve Driver name, vehicle rego, trip grouping, totals, and Order row details at generation time.
-- Generated Orders are unassigned through the backend API and hidden from Task Pool in the same browser session.
-- Generated-but-unsaved Final Trip Summary snapshots are frontend-memory only and can be lost on refresh.
-- One global Save and Export button saves all generated unsaved summaries.
-- Save and Export requires a logged-in operator account.
-- Saved Final Trip Summaries are persisted to SQLite as historical snapshots.
-- Saved summaries record the logged-in account name as the operator attribution.
-- Saving marks included Orders as `FINALIZED`.
-- `FINALIZED` Orders are hidden from Task Pool and editable Trip Summary.
-- Saved history can be loaded by History Date in the Final Trip Summary section.
-- Saved summaries do not update when live Orders, Drivers, or Vehicles are later edited.
-- Duplicate saved summaries for the same Driver + Dispatch Date are rejected.
-- Final Trip Summary Excel export uses saved snapshot fields, includes `Saved By`, and excludes Generated At / Saved At.
-- The older active-assignment Excel export route remains in the backend for compatibility, but it is not exposed as a top-level frontend button.
+- Generated summaries are scoped by selected Dispatch Date + selected Driver Summary Delivery Date.
+- Saved summaries are historical snapshots, not live views of mutable Order/Driver/Vehicle data.
+- Saved snapshots do not auto-update after later edits.
+- Duplicate saves are rejected for the same Driver + Dispatch Date + Delivery Date.
+- Generated-but-unsaved previews remain frontend-memory only and may be lost on refresh.
+- Static frontend assets are served with `Cache-Control: no-store` for local/demo reliability.
 
-### Operator Accounts
+### Excel Export
 
-- Operator accounts are stored in SQLite.
-- Passwords are stored as salted PBKDF2-HMAC-SHA256 hashes, not plain text.
-- Login returns account identity only: account id and account name.
-- Forgot Password resets the password; it does not recover or reveal the old password.
-- Password reset requires an administrator reset code from `MANUAL_DISPATCH_ADMIN_RESET_CODE`.
-- Raw passwords, password hashes, and salts are not displayed, exported, logged, or returned by the API.
-- This is lightweight MVP/demo login, not production enterprise authentication.
+- Save and Export writes historical Final Trip Summary data and downloads XLSX output.
+- Export uses saved snapshot records, not active assignment rows.
+- Export includes Dispatch Date, Delivery Date, Saved By, Product Details, and estimated suburb distance.
+- Generated At / Saved At are intentionally excluded from the workbook layout.
+
+### Suburb Distance Sorting
+
+- Final Trip Summary Orders sort by known estimated distance ascending.
+- Same-suburb Orders sort by Start Time earliest to latest.
+- Unknown-distance suburbs appear after known-distance suburbs.
+- Unknown values display as `Unknown` rather than breaking summary generation.
+
+## Distance Estimation
+
+- Warehouse origin: `98-102 Hume Hwy, Somerton, VIC, 3062`.
+- Runtime distance data lives in `backend/data/suburb_distances_from_somerton.json`.
+- The current table contains **112** static suburb/locality records.
+- Centroid inputs are documented as **manually curated for demo sorting only** in `tools/data/suburb_centroids_from_somerton_curated.json`.
+- Distances are calculated as static suburb-level estimated straight-line distance using Haversine math.
+- The current centroid set is not claimed to be official/open dataset-derived.
+- These values are not driving distance, not ETA, and not route optimization output.
+- Unknown or unmapped suburbs fall back to `Unknown` and sort after known distances.
+- QA validation is available through `tools/qa_suburb_distances_from_somerton.py`.
 
 ## Project Structure
 
-- `backend/`: FastAPI app, API routes, schemas, services, SQLite repository, schema initialization, and Excel export services.
-- `frontend/`: Static board UI served by FastAPI at `/frontend/`; implemented with plain HTML, CSS, and JavaScript.
-- `docs/`: Phase notes and design documentation for data model, API/persistence, UI behavior, and final summaries.
-- `tests/`: Python unittest coverage for service, repository, lifecycle, final summary, export, and route-level behavior.
-- `tools/`: Manual development utilities, including demo Order reset tooling.
-- `requirements.txt`: Runtime Python dependencies: FastAPI, Uvicorn, and openpyxl.
-- `requirements-dev.txt`: Development/test dependencies for route-level API tests and browser smoke tests.
+- `backend/`: FastAPI app, manual-dispatch APIs, schemas, services, repositories, database bootstrap, and Excel export logic.
+- `frontend/`: Static HTML/CSS/JavaScript app, modular renderers/actions/state/selectors, and the `frontend/app.js` entry point.
+- `docs/`: Focused feature and phase documentation.
+- `tests/`: Service, repository, API, static frontend, export, auth, product, and distance QA coverage.
+- `tools/`: Local utility scripts, office-trial startup/backup/restore scripts, demo data reset tooling, and distance dataset QA/generation helpers.
+- `requirements.txt`: Runtime Python dependencies.
+- `requirements-dev.txt`: Route-test and browser-smoke development dependencies.
 
-For a more detailed developer map, see [Manual Dispatch Board code structure](docs/manual-dispatch-board-code-structure.md).
+See [Manual Dispatch Board code structure](docs/manual-dispatch-board-code-structure.md) for a deeper implementation map.
 
 ## Getting Started
 
-These commands assume PowerShell on Windows from the repository root.
+These commands assume Windows PowerShell from the repository root.
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
-```
-
-For the full validation suite, including FastAPI `TestClient` route tests and Playwright browser smoke tests, install development dependencies:
-
-```powershell
 python -m pip install -r requirements-dev.txt
 ```
 
-Run the backend and static frontend:
-
-```powershell
-python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
-```
-
-Open the board:
-
-```text
-http://127.0.0.1:8000/frontend/
-```
-
-The app creates or migrates the local SQLite database at:
-
-```text
-data/manual_dispatch.sqlite3
-```
-
-That database is runtime data and is ignored by Git.
-
-### Browser Test Dependency
-
-```powershell
-python -m playwright install chromium
-```
-
-For local-only browser installs inside an ignored workspace folder, set `PLAYWRIGHT_BROWSERS_PATH` to a path under `tmp/` before installing.
-
-### Local Admin Reset Code
-
-Forgot Password uses a local environment variable:
+Configure local password-reset support before starting the server:
 
 ```powershell
 $env:MANUAL_DISPATCH_ADMIN_RESET_CODE="replace-with-your-local-admin-reset-code"
 ```
 
-The reset code must not be committed. If it is not set, password reset is disabled.
+For office trial use, start the app with:
+
+```powershell
+.\tools\start_office_trial.ps1
+```
+
+The default office-trial URL is:
+
+```text
+http://127.0.0.1:8130/frontend/
+```
+
+For developer startup without the helper script:
+
+```powershell
+python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+```
+
+Open:
+
+```text
+http://127.0.0.1:8000/frontend/
+```
+
+Create an end-of-day SQLite backup with:
+
+```powershell
+.\tools\backup_sqlite_db.ps1
+```
+
+Restore from a known-good backup with:
+
+```powershell
+.\tools\restore_sqlite_db.ps1 -BackupPath .\backups\<backup-file>.sqlite3
+```
+
+Local environment notes:
+
+- Do not commit `.env`.
+- `.env.example` may contain placeholders only.
+- Runtime SQLite files are generated locally and ignored by Git.
+- Backup files under `backups/` are generated locally and ignored by Git.
+- The local database path is `data/manual_dispatch.sqlite3`.
+- `.env` can set `MANUAL_DISPATCH_DB_PATH`, `MANUAL_DISPATCH_HOST`, and `MANUAL_DISPATCH_PORT` for local startup scripts.
+
+## NAS / Internal Office Deployment
+
+Deployment preparation for NAS/internal-domain office use lives on `deployment/nas-internal-office-release`.
+
+Key deployment docs:
+
+- [NAS and internal DNS deployment](docs/nas-cpanel-internal-dns-deployment.md)
+- [NAS release update checklist](docs/nas-release-update-checklist.md)
+- [NAS deployment validation checklist](docs/nas-deployment-validation-checklist.md)
+
+Quick Docker Compose flow:
+
+```powershell
+Copy-Item .env.nas.example .env
+docker compose up -d --build
+```
+
+Open:
+
+```text
+http://NAS_IP:8130/frontend/
+```
+
+The NAS deployment keeps the frontend and API same-origin through FastAPI, stores SQLite on the NAS local volume, and does not expose the app to the public internet by default.
 
 ## Validation / Tests
 
-Recommended checks:
+Repository validation currently uses:
 
 ```powershell
-python -m compileall backend tests
-python -m unittest discover -s tests -v
+git diff --check
+.\tmp\route-test-venv\Scripts\python.exe -m unittest discover -s tests -v
+.\tmp\route-test-venv\Scripts\python.exe -m compileall backend tests tools
+.\tmp\route-test-venv\Scripts\python.exe tools\qa_suburb_distances_from_somerton.py
 node --check frontend/app.js
 Get-ChildItem frontend -Recurse -Filter *.js | ForEach-Object { node --check $_.FullName }
-git diff --check
 ```
 
-The test suite uses temporary SQLite databases for automated tests. Do not commit runtime databases, cache folders, generated Excel files, or temporary logs.
+`frontend/overrides.js` does not currently exist. If it is added later, validate it with:
 
-## Demo Data
+```powershell
+node --check frontend/overrides.js
+```
 
-The repository includes seed/demo data for local development. Recent demo reset tooling creates 20 Victoria Orders dated `2026-05-05` while preserving Driver and Vehicle master data.
+## Demo Data / Local Data
 
-The Dispatch Date input now defaults to the browser's local current date. If there are no Orders for today's date in your local SQLite database, the Task Pool may appear empty. Select a date with demo Orders, add Orders for today, or run the manual demo reset tooling if you need sample data.
+- Demo Orders may still use dated sample records such as `2026-05-05`.
+- Dispatch Date defaults to the browser's local current date.
+- Because Task Pool is global, future Delivery Date Orders can still appear before their Delivery Date when they are active and unassigned.
+- Driver Summary and Final Trip Summary remain controlled by the selected Driver Summary Delivery Date.
+- Runtime SQLite data is local and should not be committed.
 
-The demo reset script is manual/dev-only and must not run automatically on app startup.
+## Documentation Index
 
-## Non-Goals
+### Data Model and Schema
 
-Manual Dispatch Board is a manual office workflow tool, not an optimization engine.
-
-Do not add these unless explicitly requested:
-
-- auto-assignment
-- CP-SAT
-- route optimization
-- ETA calculation
-- geocoding
-- Google Maps logic
-- automatic driver selection
-- automatic vehicle selection
-- automatic trip planning
-- automatic route sequencing
-- capacity-based blocking
-- zone-based blocking
-- external auth providers
-- role-based access control
-- MySQL/MariaDB
-
-## Documentation / Phase Notes
-
-### Data Model and Governance
-
-- [Phase 0 governance](docs/manual-dispatch-board-phase0.md)
 - [Data model direction](docs/manual-dispatch-board-data-model.md)
 - [Schema design](docs/manual-dispatch-board-schema.md)
 
-### Backend, API, Persistence, and Export
+### Backend / API / Persistence
 
 - [Phase 5 backend API skeleton](docs/manual-dispatch-board-phase5.md)
 - [Phase 6 SQLite persistence](docs/manual-dispatch-board-phase6.md)
 - [Phase 8 frontend/backend integration](docs/manual-dispatch-board-phase8.md)
 - [Phase 9 Excel export](docs/manual-dispatch-board-phase9.md)
-
-### Frontend Board Behavior
-
-- [Phase 2 frontend skeleton](docs/manual-dispatch-board-phase2.md)
-- [Phase 3 manual assignment flow](docs/manual-dispatch-board-phase3.md)
-- [Phase 4 vehicle selection](docs/manual-dispatch-board-phase4.md)
-- [Phase 7 business hints](docs/manual-dispatch-board-phase7.md)
-- [Phase 10A-0 compact Order card UI](docs/manual-dispatch-board-phase10a0-ui-refinement.md)
 
 ### Order Lifecycle
 
@@ -242,6 +295,15 @@ Do not add these unless explicitly requested:
 - [Phase 10A-3 Edit Order](docs/manual-dispatch-board-phase10a3-edit-order.md)
 - [Phase 10A-4 Cancel Order](docs/manual-dispatch-board-phase10a4-cancel-order.md)
 - [Phase 10A-5 Order search and filter](docs/manual-dispatch-board-phase10a5-order-filter.md)
+- [Phase 16 Product Details and load-unit exclusivity](docs/manual-dispatch-board-phase16-product-details.md)
+- [Phase 17 Order Details UI alignment](docs/manual-dispatch-board-phase17-order-details-ui.md)
+
+### Driver / Vehicle Specification
+
+- [Driver Summary Delivery Date behavior](docs/manual-dispatch-board-driver-summary-delivery-date.md)
+- [Driver & Vehicle Specification](docs/manual-dispatch-board-driver-vehicle-specification.md)
+- [Phase 12 deferred specification refresh](docs/manual-dispatch-board-phase12-ui-stability.md)
+- [Phase 12C specification modal rebuild](docs/manual-dispatch-board-phase12c-specification-modal-rebuild.md)
 
 ### Final Trip Summary
 
@@ -252,9 +314,32 @@ Do not add these unless explicitly requested:
 - [Phase 14 redesign and demo reset](docs/manual-dispatch-board-phase14-final-summary-redesign.md)
 - [Phase 14B save and export polish](docs/manual-dispatch-board-phase14b-final-summary-save-export.md)
 - [Phase 15 login and operator attribution](docs/manual-dispatch-board-phase15-login-final-summary-operator.md)
+- [Phase 18 suburb distance sorting](docs/manual-dispatch-board-phase18-suburb-distance-sorting.md)
+- [Phase 19 release candidate QA](docs/manual-dispatch-board-phase19-release-candidate-qa.md)
+- [Phase 20 office trial deployment and backup](docs/manual-dispatch-board-phase20-office-trial-deployment.md)
+- [Office trial checklist](docs/manual-dispatch-board-office-trial-checklist.md)
 
-### Driver, Vehicle, and UI Stability
+### UI Stability / Refactor Notes
 
-- [Driver & Vehicle Specification](docs/manual-dispatch-board-driver-vehicle-specification.md)
-- [Phase 12 deferred specification refresh](docs/manual-dispatch-board-phase12-ui-stability.md)
-- [Phase 12C specification modal rebuild](docs/manual-dispatch-board-phase12c-specification-modal-rebuild.md)
+- [Manual Dispatch Board code structure](docs/manual-dispatch-board-code-structure.md)
+- [Phase 0 governance](docs/manual-dispatch-board-phase0.md)
+- [Phase 2 frontend skeleton](docs/manual-dispatch-board-phase2.md)
+- [Phase 3 manual assignment flow](docs/manual-dispatch-board-phase3.md)
+- [Phase 4 vehicle selection](docs/manual-dispatch-board-phase4.md)
+- [Phase 7 business hints](docs/manual-dispatch-board-phase7.md)
+- [Phase 10A-0 compact Order card UI](docs/manual-dispatch-board-phase10a0-ui-refinement.md)
+
+## Explicit Non-Goals
+
+Manual Dispatch Board remains a manual dispatch workflow. It does not claim or implement:
+
+- auto-assignment
+- CP-SAT
+- route optimization
+- ETA calculation
+- live geocoding
+- Google Maps logic
+- automatic driver selection
+- automatic vehicle selection
+- automatic trip planning
+- production-grade authentication

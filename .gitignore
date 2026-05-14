@@ -2,11 +2,13 @@
 .env
 .env.*
 !.env.example
+!.env.nas.example
 
 # Python
 __pycache__/
 *.py[cod]
 .venv/
+.venv_broken_*/
 venv/
 .pytest_cache/
 .mypy_cache/
@@ -29,6 +31,7 @@ coverage/
 *.log
 *.tmp
 *.temp
+agent.md
 tmp/
 temp/
 
@@ -36,9 +39,31 @@ temp/
 *.db
 *.sqlite
 *.sqlite3
+*.db-wal
+*.db-shm
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3-wal
+*.sqlite3-shm
 data/*.db
 data/*.sqlite
 data/*.sqlite3
+data/*.db-wal
+data/*.db-shm
+data/*.sqlite-wal
+data/*.sqlite-shm
+data/*.sqlite3-wal
+data/*.sqlite3-shm
+backups/
+backups/*.db
+backups/*.sqlite
+backups/*.sqlite3
+backups/*.db-wal
+backups/*.db-shm
+backups/*.sqlite-wal
+backups/*.sqlite-shm
+backups/*.sqlite3-wal
+backups/*.sqlite3-shm
 
 # OS/editor files
 .DS_Store

@@ -1,23 +1,21 @@
 import { state } from "../state/app-state.js";
+import { getOrderByTaskId } from "../state/selectors.js";
 import {
-  getOrderByTaskId,
-  getOrderPreferredDriverName,
-} from "../state/selectors.js";
-import {
-  createDetailField,
   createOption,
 } from "../utils/dom-utils.js";
 import {
   formatOptional,
-  getDisplayPalletQuantity,
-  getLooseBagsQuantity,
+  formatProductDetailLine,
   getUrgencyLabel,
 } from "../utils/format-utils.js";
 
 export function renderAddOrderPopup({
+  onAddProductLine,
   onCloseAddOrder,
   onCreateOrder,
+  onRemoveProductLine,
   onUpdateAddOrderForm,
+  onUpdateProductLine,
 }) {
   const root = document.querySelector("#add-order-root");
   if (!root) {
@@ -140,7 +138,17 @@ export function renderAddOrderPopup({
   saveButton.disabled = state.isSaving;
 
   actions.append(cancelButton, saveButton);
-  form.append(formGrid, error, actions);
+  form.append(
+    formGrid,
+    createProductLineEditor({
+      formState: state.addOrderForm,
+      onAddProductLine,
+      onRemoveProductLine,
+      onUpdateProductLine,
+    }),
+    error,
+    actions,
+  );
   modal.append(header, form);
   backdrop.append(modal);
   root.append(backdrop);
@@ -148,12 +156,16 @@ export function renderAddOrderPopup({
 
 export function renderOrderDetailPopup({
   getOrderEditForm,
+  onAddProductLine,
   onCancelOrder,
   onCancelOrderEdit,
   onCloseOrderDetail,
+  onRemoveProductLine,
   onSaveOrderEdit,
   onStartOrderEdit,
+  onToggleProductDetail,
   onUpdateOrderEditForm,
+  onUpdateProductLine,
 }) {
   let root = document.querySelector("#order-detail-root");
   if (!root) {
@@ -207,6 +219,12 @@ export function renderOrderDetailPopup({
   headerActions.className = "detail-actions";
 
   if (!state.isOrderEditMode) {
+    const productDetailButton = document.createElement("button");
+    productDetailButton.type = "button";
+    productDetailButton.className = "button-secondary";
+    productDetailButton.textContent = "Product Detail";
+    productDetailButton.addEventListener("click", onToggleProductDetail);
+
     const editButton = document.createElement("button");
     editButton.type = "button";
     editButton.textContent = "Edit";
@@ -219,7 +237,7 @@ export function renderOrderDetailPopup({
     cancelButton.disabled = state.isSaving;
     cancelButton.addEventListener("click", () => onCancelOrder(order.order_id));
 
-    headerActions.append(editButton, cancelButton);
+    headerActions.append(productDetailButton, editButton, cancelButton);
   }
 
   headerActions.append(closeButton);
@@ -234,9 +252,12 @@ export function renderOrderDetailPopup({
     modal.append(
       header,
       createOrderEditForm(order, {
+        onAddProductLine,
         onCancelOrderEdit,
+        onRemoveProductLine,
         onSaveOrderEdit,
         onUpdateOrderEditForm,
+        onUpdateProductLine,
       }),
     );
     backdrop.append(modal);
@@ -244,26 +265,12 @@ export function renderOrderDetailPopup({
     return;
   }
 
-  const details = document.createElement("dl");
-  details.className = "detail-grid";
-  details.append(
-    createDetailField("Order ID", order.order_id),
-    createDetailField("Invoice #", order.invoice_number),
-    createDetailField("Company Name", order.company_name),
-    createDetailField("Phone", order.phone),
-    createDetailField("Delivery Address", order.delivery_address),
-    createDetailField("Suburb", order.suburb),
-    createDetailField("Postcode", order.postcode),
-    createDetailField("Delivery Date", order.delivery_date),
-    createDetailField("Zone", order.zone),
-    createDetailField("Urgency", getUrgencyLabel(order)),
-    createDetailField("Preferred Driver", getOrderPreferredDriverName(order)),
-    createDetailField("Pallet Quantity", getDisplayPalletQuantity(order)),
-    createDetailField("Loose Bags Quantity", getLooseBagsQuantity(order)),
-    createDetailField("Start Time", order.start_time),
-    createDetailField("End Time", order.end_time),
-    createDetailField("Note", order.note),
-  );
+  const details = createOrderReadOnlyLayout({
+    ...getOrderEditForm(order),
+    urgency: getUrgencyLabel(order),
+  });
+
+  const productDetails = createProductDetailPanel(order);
 
   const detailError = document.createElement("p");
   detailError.className = "board-error";
@@ -271,6 +278,9 @@ export function renderOrderDetailPopup({
   detailError.textContent = state.errorMessage;
 
   modal.append(header, detailError, details);
+  if (state.isProductDetailOpen) {
+    modal.append(productDetails);
+  }
   backdrop.append(modal);
   root.append(backdrop);
 }
@@ -283,7 +293,8 @@ function createAddOrderField(label, field, options = {}) {
   const input = document.createElement(options.multiline ? "textarea" : "input");
   input.name = field;
   input.value = state.addOrderForm[field] ?? "";
-  input.disabled = state.isSaving;
+  input.disabled =
+    state.isSaving || isOppositeQuantityFieldDisabled(state.addOrderForm, field);
   if (!options.multiline) {
     input.type = options.type || "text";
   }
@@ -295,6 +306,7 @@ function createAddOrderField(label, field, options = {}) {
   }
   input.addEventListener("input", () => {
     options.onUpdateAddOrderForm(field, input.value);
+    syncLoadQuantityInputs(input.closest("form"), state.addOrderForm);
   });
 
   wrapper.append(input);
@@ -328,7 +340,8 @@ function createOrderEditField(label, field, options = {}) {
   const input = document.createElement(options.multiline ? "textarea" : "input");
   input.name = field;
   input.value = state.orderEditForm[field] ?? "";
-  input.disabled = state.isSaving;
+  input.disabled =
+    state.isSaving || isOppositeQuantityFieldDisabled(state.orderEditForm, field);
   if (!options.multiline) {
     input.type = options.type || "text";
   }
@@ -340,21 +353,8 @@ function createOrderEditField(label, field, options = {}) {
   }
   input.addEventListener("input", () => {
     options.onUpdateOrderEditForm(field, input.value);
+    syncLoadQuantityInputs(input.closest("form"), state.orderEditForm);
   });
-
-  wrapper.append(input);
-  return wrapper;
-}
-
-function createOrderEditReadOnlyField(label, value) {
-  const wrapper = document.createElement("label");
-  wrapper.className = "form-field";
-  wrapper.textContent = label;
-
-  const input = document.createElement("input");
-  input.type = "text";
-  input.value = formatOptional(value);
-  input.disabled = true;
 
   wrapper.append(input);
   return wrapper;
@@ -379,14 +379,48 @@ function createOrderEditSelect(label, field, options, handlers) {
   return wrapper;
 }
 
-function createOrderEditForm(order, handlers) {
-  const form = document.createElement("form");
-  form.className = "order-form";
-  form.addEventListener("submit", (event) => {
-    event.preventDefault();
-    handlers.onSaveOrderEdit(order.order_id);
+function createOrderReadOnlyField(label, field, formState, options = {}) {
+  const wrapper = document.createElement("label");
+  wrapper.className = options.wide ? "form-field form-field-wide" : "form-field";
+  wrapper.textContent = label;
+
+  const input = document.createElement(options.multiline ? "textarea" : "input");
+  input.name = `readonly_${field}`;
+  input.value = formState[field] ?? "";
+  input.disabled = true;
+  input.readOnly = true;
+  if (!options.multiline) {
+    input.type = options.type || "text";
+  }
+
+  wrapper.append(input);
+  return wrapper;
+}
+
+function createOrderReadOnlySelect(label, field, formState, options) {
+  const wrapper = document.createElement("label");
+  wrapper.className = "form-field";
+  wrapper.textContent = label;
+
+  const select = document.createElement("select");
+  select.name = `readonly_${field}`;
+  select.disabled = true;
+  options.forEach((option) => {
+    select.append(createOption(option.value, option.label, formState[field] === option.value));
   });
 
+  wrapper.append(select);
+  return wrapper;
+}
+
+function createOrderReadOnlyLayout(formState) {
+  const layout = document.createElement("section");
+  layout.className = "order-form order-readonly-form";
+  layout.append(createOrderFormGrid(formState, { mode: "view" }));
+  return layout;
+}
+
+function createOrderFormGrid(formState, { mode, handlers = {} }) {
   const formGrid = document.createElement("div");
   formGrid.className = "form-grid";
 
@@ -398,34 +432,61 @@ function createOrderEditForm(order, handlers) {
     })),
   ];
 
+  const createField = (label, field, options = {}) =>
+    mode === "edit"
+      ? createOrderEditField(label, field, { ...options, ...handlers })
+      : createOrderReadOnlyField(label, field, formState, options);
+
+  const createSelectField = (label, field, options) =>
+    mode === "edit"
+      ? createOrderEditSelect(label, field, options, handlers)
+      : createOrderReadOnlySelect(label, field, formState, options);
+
   formGrid.append(
-    createOrderEditField("Invoice #", "invoice_number", handlers),
-    createOrderEditField("Company Name", "company_name", handlers),
-    createOrderEditField("Phone", "phone", { type: "tel", ...handlers }),
-    createOrderEditField("Delivery Address", "delivery_address", handlers),
-    createOrderEditField("Suburb", "suburb", { required: true, ...handlers }),
-    createOrderEditField("Postcode", "postcode", handlers),
-    createOrderEditReadOnlyField("Delivery Date (read-only)", order.delivery_date),
-    createOrderEditField("Zone", "zone", handlers),
-    createOrderEditSelect("Urgency", "urgency", [
+    createField("Invoice #", "invoice_number"),
+    createField("Company Name", "company_name"),
+    createField("Phone", "phone", { type: "tel" }),
+    createField("Delivery Address", "delivery_address"),
+    createField("Suburb", "suburb", { required: true }),
+    createField("Postcode", "postcode"),
+    createField("Delivery Date", "delivery_date", {
+      type: "date",
+      required: true,
+    }),
+    createField("Zone", "zone"),
+    createSelectField("Urgency", "urgency", [
       { value: "Normal", label: "Normal" },
       { value: "Urgent", label: "Urgent" },
-    ], handlers),
-    createOrderEditSelect("Preferred Driver", "preferred_driver_id", preferredDriverOptions, handlers),
-    createOrderEditField("Pallet Quantity", "pallet_quantity", {
+    ]),
+    createSelectField("Preferred Driver", "preferred_driver_id", preferredDriverOptions),
+    createField("Pallet Quantity", "pallet_quantity", {
       type: "number",
       min: "0",
-      ...handlers,
     }),
-    createOrderEditField("Loose Bags Quantity", "loose_bags_quantity", {
+    createField("Loose Bags Quantity", "loose_bags_quantity", {
       type: "number",
       min: "0",
-      ...handlers,
     }),
-    createOrderEditField("Start Time", "start_time", { type: "time", ...handlers }),
-    createOrderEditField("End Time", "end_time", { type: "time", ...handlers }),
-    createOrderEditField("Note", "note", { multiline: true, wide: true, ...handlers }),
+    createField("Start Time", "start_time", { type: "time" }),
+    createField("End Time", "end_time", { type: "time" }),
+    createField("Note", "note", { multiline: true, wide: true }),
   );
+
+  return formGrid;
+}
+
+function createOrderEditForm(order, handlers) {
+  const form = document.createElement("form");
+  form.className = "order-form";
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    handlers.onSaveOrderEdit(order.order_id);
+  });
+
+  const formGrid = createOrderFormGrid(state.orderEditForm, {
+    handlers,
+    mode: "edit",
+  });
 
   const error = document.createElement("p");
   error.className = "board-error";
@@ -448,6 +509,188 @@ function createOrderEditForm(order, handlers) {
   saveButton.disabled = state.isSaving;
 
   actions.append(cancelButton, saveButton);
-  form.append(formGrid, error, actions);
+  form.append(
+    formGrid,
+    createProductLineEditor({
+      formState: state.orderEditForm,
+      onAddProductLine: handlers.onAddProductLine,
+      onRemoveProductLine: handlers.onRemoveProductLine,
+      onUpdateProductLine: handlers.onUpdateProductLine,
+    }),
+    error,
+    actions,
+  );
   return form;
+}
+
+function createProductDetailPanel(order) {
+  const panel = document.createElement("section");
+  panel.className = "product-detail-panel";
+
+  const heading = document.createElement("h3");
+  heading.textContent = "Product Detail";
+  panel.append(heading);
+
+  const productLines = order.product_lines || [];
+  if (productLines.length === 0) {
+    const emptyState = document.createElement("p");
+    emptyState.className = "empty-trip";
+    emptyState.textContent = "No product details recorded.";
+    panel.append(emptyState);
+    return panel;
+  }
+
+  const list = document.createElement("div");
+  list.className = "product-detail-list";
+  productLines.forEach((line, index) => {
+    const item = document.createElement("p");
+    item.className = "product-detail-row";
+    item.textContent = formatProductDetailLine(line, index + 1);
+    list.append(item);
+  });
+  panel.append(list);
+  return panel;
+}
+
+function createProductLineEditor({
+  formState,
+  onAddProductLine,
+  onRemoveProductLine,
+  onUpdateProductLine,
+}) {
+  const section = document.createElement("section");
+  section.className = "product-line-editor";
+
+  const heading = document.createElement("div");
+  heading.className = "product-line-heading";
+
+  const title = document.createElement("h3");
+  title.textContent = "Product Details";
+
+  const addButton = document.createElement("button");
+  addButton.type = "button";
+  addButton.className = "button-secondary";
+  addButton.textContent = "Add Product Line";
+  addButton.disabled = state.isSaving;
+  addButton.addEventListener("click", onAddProductLine);
+  heading.append(title, addButton);
+
+  const helper = document.createElement("p");
+  helper.className = "compact-note";
+  helper.textContent = "Each Order can use Pallets or Bags, never both. Product lines must match that load unit.";
+
+  section.append(heading, helper);
+
+  const productLines = formState.product_lines || [];
+  if (productLines.length === 0) {
+    const emptyState = document.createElement("p");
+    emptyState.className = "empty-trip";
+    emptyState.textContent = "No product details recorded.";
+    section.append(emptyState);
+    return section;
+  }
+
+  const list = document.createElement("div");
+  list.className = "product-line-list";
+  productLines.forEach((line, index) => {
+    const row = document.createElement("div");
+    row.className = "product-line-row";
+
+    const productName = createProductLineInput("Product Name", "product_name", line, index, {
+      onUpdateProductLine,
+      required: true,
+    });
+    const quantity = createProductLineInput("Quantity", "quantity", line, index, {
+      min: "1",
+      onUpdateProductLine,
+      required: true,
+      type: "number",
+    });
+    const unit = createProductLineUnitSelect(line, index, onUpdateProductLine);
+
+    const removeButton = document.createElement("button");
+    removeButton.type = "button";
+    removeButton.className = "button-secondary";
+    removeButton.textContent = "Remove";
+    removeButton.disabled = state.isSaving;
+    removeButton.addEventListener("click", () => onRemoveProductLine(index));
+
+    row.append(productName, quantity, unit, removeButton);
+    list.append(row);
+  });
+  section.append(list);
+  return section;
+}
+
+function createProductLineInput(label, field, line, index, options) {
+  const wrapper = document.createElement("label");
+  wrapper.className = "form-field";
+  wrapper.textContent = label;
+
+  const input = document.createElement("input");
+  input.name = `product_line_${index}_${field}`;
+  input.type = options.type || "text";
+  input.value = line[field] ?? "";
+  input.disabled = state.isSaving;
+  if (options.required) {
+    input.required = true;
+  }
+  if (options.min !== undefined) {
+    input.min = options.min;
+  }
+  input.addEventListener("input", () => {
+    options.onUpdateProductLine(index, field, input.value);
+  });
+  wrapper.append(input);
+  return wrapper;
+}
+
+function createProductLineUnitSelect(line, index, onUpdateProductLine) {
+  const wrapper = document.createElement("label");
+  wrapper.className = "form-field";
+  wrapper.textContent = "Unit";
+
+  const select = document.createElement("select");
+  select.name = `product_line_${index}_unit`;
+  select.disabled = state.isSaving;
+  [
+    { value: "PALLETS", label: "Pallets" },
+    { value: "BAGS", label: "Bags" },
+  ].forEach((option) => {
+    select.append(createOption(option.value, option.label, line.unit === option.value));
+  });
+  select.addEventListener("change", () => {
+    onUpdateProductLine(index, "unit", select.value);
+  });
+  wrapper.append(select);
+  return wrapper;
+}
+
+function isOppositeQuantityFieldDisabled(formState, field) {
+  if (field === "pallet_quantity") {
+    return Number(formState.loose_bags_quantity || 0) > 0;
+  }
+  if (field === "loose_bags_quantity") {
+    return Number(formState.pallet_quantity || 0) > 0;
+  }
+  return false;
+}
+
+function syncLoadQuantityInputs(form, formState) {
+  if (!form) {
+    return;
+  }
+
+  const palletInput = form.querySelector('[name="pallet_quantity"]');
+  const bagInput = form.querySelector('[name="loose_bags_quantity"]');
+  if (!palletInput || !bagInput) {
+    return;
+  }
+
+  palletInput.value = formState.pallet_quantity ?? palletInput.value;
+  bagInput.value = formState.loose_bags_quantity ?? bagInput.value;
+  palletInput.disabled =
+    state.isSaving || isOppositeQuantityFieldDisabled(formState, "pallet_quantity");
+  bagInput.disabled =
+    state.isSaving || isOppositeQuantityFieldDisabled(formState, "loose_bags_quantity");
 }

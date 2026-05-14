@@ -272,6 +272,10 @@ class ManualDispatchAuthRouteTest(unittest.TestCase):
         self.repository = SQLiteManualDispatchRepository(self.db_path)
         self.service = ManualDispatchService(self.repository)
         self.previous_reset_code = os.environ.get("MANUAL_DISPATCH_ADMIN_RESET_CODE")
+        self.previous_allow_registration = os.environ.get(
+            "MANUAL_DISPATCH_ALLOW_REGISTRATION"
+        )
+        os.environ.pop("MANUAL_DISPATCH_ALLOW_REGISTRATION", None)
         self.api_module = importlib.import_module("backend.api.manual_dispatch")
         self.original_service = self.api_module.service
         self.api_module.service = self.service
@@ -290,6 +294,12 @@ class ManualDispatchAuthRouteTest(unittest.TestCase):
             os.environ.pop("MANUAL_DISPATCH_ADMIN_RESET_CODE", None)
         else:
             os.environ["MANUAL_DISPATCH_ADMIN_RESET_CODE"] = self.previous_reset_code
+        if self.previous_allow_registration is None:
+            os.environ.pop("MANUAL_DISPATCH_ALLOW_REGISTRATION", None)
+        else:
+            os.environ[
+                "MANUAL_DISPATCH_ALLOW_REGISTRATION"
+            ] = self.previous_allow_registration
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_register_and_login_routes_return_identity_only(self):
@@ -311,6 +321,24 @@ class ManualDispatchAuthRouteTest(unittest.TestCase):
         self.assertEqual("Mandy", login_response.json()["account_name"])
         self.assertNotIn("password_hash", login_response.json())
         self.assertNotIn("password_salt", login_response.json())
+
+    def test_register_route_can_be_disabled_by_environment(self):
+        os.environ["MANUAL_DISPATCH_ALLOW_REGISTRATION"] = "false"
+
+        response = self.client.post(
+            "/api/manual-dispatch/auth/register",
+            json={
+                "account_name": "Mandy",
+                "password": "secret123",
+                "confirm_password": "secret123",
+            },
+        )
+
+        self.assertEqual(403, response.status_code)
+        self.assertEqual(
+            "Registration is disabled. Please contact an administrator.",
+            response.json()["detail"],
+        )
 
     def test_login_route_rejects_wrong_password(self):
         self.client.post(

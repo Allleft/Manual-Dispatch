@@ -12,6 +12,12 @@ export function createVehicleActions({
       return;
     }
 
+    if (!state.driverSummaryDeliveryDate) {
+      showError("Please select a Delivery Date before choosing a vehicle.");
+      renderBoard();
+      return;
+    }
+
     state.isSaving = true;
     clearError();
     renderBoard();
@@ -19,6 +25,7 @@ export function createVehicleActions({
     try {
       await apiAssignDriverVehicle({
         dispatch_date: state.dispatchDate,
+        delivery_date: state.driverSummaryDeliveryDate,
         driver_id: driverId,
         vehicle_id: vehicleId || null,
       });

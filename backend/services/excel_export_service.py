@@ -55,8 +55,8 @@ def _build_export_rows(board_data, dispatch_date):
     orders_by_id = {order.order_id: order for order in board_data.orders}
     drivers_by_id = {driver.driver_id: driver for driver in board_data.drivers}
     vehicles_by_id = {vehicle.vehicle_id: vehicle for vehicle in board_data.vehicles}
-    driver_vehicle_by_driver = {
-        assignment.driver_id: assignment
+    driver_vehicle_by_driver_and_delivery = {
+        (assignment.driver_id, assignment.delivery_date): assignment
         for assignment in board_data.driver_vehicle_assignments
         if assignment.dispatch_date == dispatch_date
     }
@@ -71,7 +71,9 @@ def _build_export_rows(board_data, dispatch_date):
         if not order or not driver:
             continue
 
-        vehicle_assignment = driver_vehicle_by_driver.get(driver.driver_id)
+        vehicle_assignment = driver_vehicle_by_driver_and_delivery.get(
+            (driver.driver_id, order.delivery_date),
+        )
         vehicle = (
             vehicles_by_id.get(vehicle_assignment.vehicle_id)
             if vehicle_assignment

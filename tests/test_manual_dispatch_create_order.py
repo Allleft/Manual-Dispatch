@@ -75,6 +75,15 @@ class ManualDispatchCreateOrderTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.service.create_order(self._request(loose_bags_quantity=-1))
 
+    def test_mixed_pallet_and_bag_quantities_are_rejected(self):
+        with self.assertRaisesRegex(
+            ValueError,
+            "Order must use either Pallets or Bags, not both",
+        ):
+            self.service.create_order(
+                self._request(pallet_quantity=2, loose_bags_quantity=1)
+            )
+
     def test_missing_suburb_is_rejected(self):
         with self.assertRaises(ValueError):
             self.service.create_order(self._request(suburb=""))
@@ -121,7 +130,7 @@ class ManualDispatchCreateOrderTest(unittest.TestCase):
             "urgency": "",
             "preferred_driver_id": "",
             "pallet_quantity": 2,
-            "loose_bags_quantity": 1,
+            "loose_bags_quantity": 0,
             "start_time": "09:00",
             "end_time": "13:00",
             "note": "Created from Add Order flow",

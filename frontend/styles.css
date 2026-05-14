@@ -226,9 +226,28 @@ h1 {
   gap: 0.65rem;
 }
 
+.driver-summary-date-controls label {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.driver-summary-date-controls input {
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0 0.75rem;
+  color: var(--ink);
+  background: var(--field);
+}
+
 .task-filter-bar {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(160px, 220px) auto;
+  grid-template-columns: minmax(220px, 1fr) minmax(160px, 220px) minmax(160px, 220px) auto auto;
   align-items: end;
   gap: 0.75rem;
   margin-bottom: 1rem;
@@ -689,6 +708,13 @@ select:disabled {
   font-size: 0.9rem;
 }
 
+.assigned-delivery-date {
+  margin-bottom: 0.15rem;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
 .final-summary-grid {
   display: grid;
   gap: 1rem;
@@ -815,6 +841,10 @@ select:disabled {
 .final-trip-table td {
   color: var(--ink);
   font-size: 0.9rem;
+}
+
+.final-summary-product-details {
+  white-space: pre-line;
 }
 
 .final-history-panel {
@@ -1054,6 +1084,53 @@ select:disabled {
   gap: 1rem;
 }
 
+.product-detail-panel,
+.product-line-editor {
+  display: grid;
+  gap: 0.8rem;
+  border: 1px solid rgba(39, 93, 69, 0.14);
+  border-radius: var(--radius-md);
+  padding: 0.9rem;
+  background: #f8fbf6;
+}
+
+.product-detail-panel h3,
+.product-line-editor h3 {
+  margin-bottom: 0;
+  color: var(--accent-strong);
+}
+
+.product-detail-list,
+.product-line-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.product-detail-row {
+  margin-bottom: 0;
+  border-radius: var(--radius-sm);
+  padding: 0.72rem 0.8rem;
+  color: var(--ink);
+  background: var(--panel);
+  font-weight: 800;
+  white-space: pre-wrap;
+}
+
+.product-line-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.product-line-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(110px, 0.4fr) minmax(130px, 0.4fr) auto;
+  align-items: end;
+  gap: 0.65rem;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1082,6 +1159,13 @@ select:disabled {
 .form-field textarea {
   min-height: 96px;
   resize: vertical;
+}
+
+.order-readonly-form input:disabled,
+.order-readonly-form select:disabled,
+.order-readonly-form textarea:disabled {
+  cursor: default;
+  opacity: 1;
 }
 
 .form-actions {
@@ -1203,6 +1287,10 @@ select:disabled {
   }
 
   .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .product-line-row {
     grid-template-columns: 1fr;
   }
 

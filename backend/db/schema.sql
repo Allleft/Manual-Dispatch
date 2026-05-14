@@ -20,6 +20,20 @@ CREATE TABLE IF NOT EXISTS manual_orders (
     status TEXT NOT NULL DEFAULT 'ACTIVE'
 );
 
+CREATE TABLE IF NOT EXISTS order_product_lines (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id TEXT NOT NULL,
+    line_no INTEGER NOT NULL,
+    product_name TEXT NOT NULL,
+    quantity INTEGER NOT NULL,
+    unit TEXT NOT NULL,
+    UNIQUE(order_id, line_no),
+    CHECK(quantity > 0),
+    CHECK(unit IN ('PALLETS', 'BAGS')),
+    FOREIGN KEY(order_id) REFERENCES manual_orders(order_id)
+        ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS manual_drivers (
     driver_id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -62,11 +76,12 @@ CREATE TABLE IF NOT EXISTS manual_dispatch_assignments (
 
 CREATE TABLE IF NOT EXISTS manual_driver_vehicle_assignments (
     dispatch_date TEXT NOT NULL,
+    delivery_date TEXT NOT NULL,
     driver_id TEXT NOT NULL,
     vehicle_id TEXT NOT NULL,
     created_at TEXT,
     updated_at TEXT,
-    PRIMARY KEY(dispatch_date, driver_id),
+    PRIMARY KEY(dispatch_date, delivery_date, driver_id),
     FOREIGN KEY(driver_id) REFERENCES manual_drivers(driver_id),
     FOREIGN KEY(vehicle_id) REFERENCES manual_vehicles(vehicle_id)
 );
@@ -83,6 +98,7 @@ CREATE TABLE IF NOT EXISTS operator_accounts (
 CREATE TABLE IF NOT EXISTS final_trip_summaries (
     summary_id TEXT PRIMARY KEY,
     dispatch_date TEXT NOT NULL,
+    delivery_date TEXT NOT NULL,
     driver_id TEXT NOT NULL,
     driver_name_snapshot TEXT NOT NULL,
     vehicle_id TEXT,
@@ -110,6 +126,8 @@ CREATE TABLE IF NOT EXISTS final_trip_summary_rows (
     suburb_snapshot TEXT,
     delivery_address_snapshot TEXT,
     product_snapshot TEXT,
+    product_details_snapshot TEXT NOT NULL DEFAULT '[]',
+    estimated_distance_km_from_warehouse_snapshot REAL,
     pallet_quantity_snapshot INTEGER NOT NULL DEFAULT 0,
     loose_bags_quantity_snapshot INTEGER NOT NULL DEFAULT 0,
     note_snapshot TEXT,

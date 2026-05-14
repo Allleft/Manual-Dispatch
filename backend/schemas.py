@@ -1,5 +1,12 @@
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from typing import List, Optional
+
+
+@dataclass
+class ProductDetailLine:
+    product_name: str
+    quantity: int
+    unit: str
 
 
 @dataclass
@@ -21,6 +28,8 @@ class Order:
     end_time: Optional[str]
     note: Optional[str]
     status: str = "ACTIVE"
+    product_lines: List[ProductDetailLine] = field(default_factory=list)
+    estimated_distance_km_from_warehouse: Optional[float] = None
 
 
 @dataclass
@@ -64,6 +73,7 @@ class ManualDispatchAssignment:
 @dataclass
 class ManualDriverVehicleAssignment:
     dispatch_date: str
+    delivery_date: str
     driver_id: str
     vehicle_id: str
 
@@ -99,12 +109,14 @@ class AssignDriverVehicleRequest:
     dispatch_date: str
     driver_id: str
     vehicle_id: Optional[str] = None
+    delivery_date: Optional[str] = None
 
 
 @dataclass
 class ManualDriverVehicleClearResponse:
     dispatch_date: str
     driver_id: str
+    delivery_date: Optional[str] = None
     vehicle_id: Optional[str] = None
     cleared: bool = True
 
@@ -125,6 +137,8 @@ class FinalTripSummaryOrderSnapshot:
     pallet_quantity_snapshot: int
     loose_bags_quantity_snapshot: int
     note_snapshot: Optional[str]
+    product_lines_snapshot: List[ProductDetailLine] = field(default_factory=list)
+    estimated_distance_km_from_warehouse_snapshot: Optional[float] = None
 
 
 @dataclass
@@ -137,6 +151,7 @@ class FinalTripSummaryTrip:
 class FinalTripSummary:
     summary_id: str
     dispatch_date: str
+    delivery_date: str
     driver_id: str
     driver_name_snapshot: str
     vehicle_id: Optional[str]
@@ -162,6 +177,7 @@ class SaveFinalTripSummaryRequest:
     total_loose_bags: int
     generated_at: Optional[str]
     trips: List[dict]
+    delivery_date: Optional[str] = None
     saved_by_account_name: Optional[str] = None
     saved_by_account_id: Optional[int] = None
 
@@ -220,6 +236,7 @@ class CreateOrderRequest:
     start_time: Optional[str] = None
     end_time: Optional[str] = None
     note: Optional[str] = None
+    product_lines: Optional[List[dict]] = None
 
 
 @dataclass
@@ -230,6 +247,7 @@ class UpdateOrderRequest:
     delivery_address: Optional[str] = None
     suburb: Optional[str] = None
     postcode: Optional[str] = None
+    delivery_date: Optional[str] = None
     zone: Optional[str] = None
     urgency: Optional[str] = None
     preferred_driver_id: Optional[str] = None
@@ -238,6 +256,7 @@ class UpdateOrderRequest:
     start_time: Optional[str] = None
     end_time: Optional[str] = None
     note: Optional[str] = None
+    product_lines: Optional[List[dict]] = None
 
 
 @dataclass

@@ -9,6 +9,7 @@ import {
   findDriverById,
   getAssignedOrdersForDriver,
   getAssignmentsForDriver,
+  getFinalSummaryKey,
   getOrderByTaskId,
   getSelectedVehicleForDriver,
   getTaskKey,
@@ -36,6 +37,65 @@ async function downloadExcelResponse(response, fallbackFilename) {
   URL.revokeObjectURL(downloadUrl);
 }
 
+function normalizeSuburbName(suburb) {
+  return String(suburb || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLocaleLowerCase();
+}
+
+function normalizeStartTime(startTime) {
+  const text = String(startTime || "").trim();
+  if (!text) {
+    return "";
+  }
+  const parts = text.split(":");
+  if (parts.length < 2) {
+    return text;
+  }
+  return `${String(parts[0]).padStart(2, "0")}:${String(parts[1]).padStart(2, "0")}`;
+}
+
+function sortFinalSummaryOrders(orders) {
+  return [...orders].sort((first, second) => {
+    const firstDistance = first.estimated_distance_km_from_warehouse_snapshot ??
+      first.estimated_distance_km_from_warehouse;
+    const secondDistance = second.estimated_distance_km_from_warehouse_snapshot ??
+      second.estimated_distance_km_from_warehouse;
+    const firstKnown = firstDistance !== null && firstDistance !== undefined && firstDistance !== "";
+    const secondKnown = secondDistance !== null && secondDistance !== undefined && secondDistance !== "";
+    if (firstKnown !== secondKnown) {
+      return firstKnown ? -1 : 1;
+    }
+    if (firstKnown && Number(firstDistance) !== Number(secondDistance)) {
+      return Number(firstDistance) - Number(secondDistance);
+    }
+
+    const suburbCompare = normalizeSuburbName(first.suburb || first.suburb_snapshot)
+      .localeCompare(normalizeSuburbName(second.suburb || second.suburb_snapshot));
+    if (suburbCompare !== 0) {
+      return suburbCompare;
+    }
+
+    const firstStart = normalizeStartTime(first.start_time || first.start_time_snapshot);
+    const secondStart = normalizeStartTime(second.start_time || second.start_time_snapshot);
+    if (Boolean(firstStart) !== Boolean(secondStart)) {
+      return firstStart ? -1 : 1;
+    }
+    if (firstStart && secondStart && firstStart !== secondStart) {
+      return firstStart.localeCompare(secondStart);
+    }
+
+    const invoiceCompare = String(first.invoice_number || first.invoice_number_snapshot || "")
+      .localeCompare(String(second.invoice_number || second.invoice_number_snapshot || ""));
+    if (invoiceCompare !== 0) {
+      return invoiceCompare;
+    }
+    return String(first.order_id || first.order_id_snapshot || first.task_id || "")
+      .localeCompare(String(second.order_id || second.order_id_snapshot || second.task_id || ""));
+  });
+}
+
 export function createFinalSummaryActions({
   clearError,
   loadBoard,
@@ -49,6 +109,7 @@ export function createFinalSummaryActions({
     return {
       summary_id: summary.summary_id || "",
       dispatch_date: summary.dispatch_date || state.dispatchDate,
+      delivery_date: summary.delivery_date || state.driverSummaryDeliveryDate || summary.dispatch_date || state.dispatchDate,
       driver_id: summary.driver_id || "",
       driver_name: summary.driver_name || summary.driver_name_snapshot || "",
       driver_name_snapshot: summary.driver_name_snapshot || summary.driver_name || "",
@@ -78,6 +139,18 @@ export function createFinalSummaryActions({
             suburb: order.suburb || order.suburb_snapshot || "",
             delivery_address: order.delivery_address || order.delivery_address_snapshot || "",
             product: order.product || order.product_snapshot || "",
+            estimated_distance_km_from_warehouse:
+              order.estimated_distance_km_from_warehouse ??
+              order.estimated_distance_km_from_warehouse_snapshot ??
+              null,
+            estimated_distance_km_from_warehouse_snapshot:
+              order.estimated_distance_km_from_warehouse_snapshot ??
+              order.estimated_distance_km_from_warehouse ??
+              null,
+            product_lines_snapshot:
+              order.product_lines_snapshot ||
+              order.product_lines ||
+              [],
             pallet_quantity: Number(
               order.pallet_quantity ?? order.pallet_quantity_snapshot ?? 0,
             ),
@@ -85,14 +158,15 @@ export function createFinalSummaryActions({
               order.loose_bags_quantity ?? order.loose_bags_quantity_snapshot ?? 0,
             ),
             note: order.note || order.note_snapshot || "",
+            start_time: order.start_time || order.start_time_snapshot || "",
           })),
         }))
         .filter((trip) => trip.orders.length > 0),
     };
   }
 
-  async function exportFinalSummariesExcel(dispatchDate) {
-    const response = await apiExportFinalSummariesExcel(dispatchDate);
+  async function exportFinalSummariesExcel(dispatchDate, deliveryDate) {
+    const response = await apiExportFinalSummariesExcel(dispatchDate, deliveryDate);
     if (!response.ok) {
       let message = `Export failed with status ${response.status}`;
       try {
@@ -108,6 +182,10 @@ export function createFinalSummaryActions({
   }
 
   function buildFinalTripSummarySnapshot(driverId) {
+    if (!state.driverSummaryDeliveryDate) {
+      throw new Error("Please select a Delivery Date before generating Final Trip Summary.");
+    }
+
     const driver = findDriverById(driverId);
     if (!driver) {
       throw new Error(`Driver does not exist: ${driverId}`);
@@ -134,24 +212,39 @@ export function createFinalSummaryActions({
               suburb_snapshot: order.suburb || "",
               delivery_address_snapshot: order.delivery_address || "",
               product_snapshot: "",
+              product_lines_snapshot: (order.product_lines || []).map((line) => ({
+                product_name: line.product_name || "",
+                quantity: Number(line.quantity || 0),
+                unit: line.unit || "",
+              })),
               pallet_quantity_snapshot: getDisplayPalletQuantity(order),
               loose_bags_quantity_snapshot: getLooseBagsQuantity(order),
               note_snapshot: order.note || "",
+              estimated_distance_km_from_warehouse_snapshot:
+                order.estimated_distance_km_from_warehouse ?? null,
+              estimated_distance_km_from_warehouse:
+                order.estimated_distance_km_from_warehouse ?? null,
               company_name: order.company_name || "",
               suburb: order.suburb || "",
               invoice_number: order.invoice_number || "",
               delivery_address: order.delivery_address || "",
+              start_time: order.start_time || "",
               pallet_quantity: getDisplayPalletQuantity(order),
               loose_bags_quantity: getLooseBagsQuantity(order),
               note: order.note || "",
               product: "",
+              product_lines: (order.product_lines || []).map((line) => ({
+                product_name: line.product_name || "",
+                quantity: Number(line.quantity || 0),
+                unit: line.unit || "",
+              })),
             };
           })
           .filter(Boolean);
 
         return {
           trip_no: tripNo,
-          orders: tripOrders,
+          orders: sortFinalSummaryOrders(tripOrders),
         };
       })
       .filter((trip) => trip.orders.length > 0);
@@ -161,6 +254,7 @@ export function createFinalSummaryActions({
     return {
       generated_at: new Date().toISOString(),
       dispatch_date: state.dispatchDate,
+      delivery_date: state.driverSummaryDeliveryDate,
       driver_id: driver.driver_id,
       driver_name: driver.name,
       driver_name_snapshot: driver.name,
@@ -181,7 +275,14 @@ export function createFinalSummaryActions({
       return;
     }
 
-    if (state.finalTripSummaries[driverId]) {
+    if (!state.driverSummaryDeliveryDate) {
+      showError("Please select a Delivery Date before generating Final Trip Summary.");
+      renderBoard();
+      return;
+    }
+
+    const summaryKey = getFinalSummaryKey(driverId);
+    if (state.finalTripSummaries[summaryKey]) {
       showError("Final Trip Summary for this driver is already generated and locked.");
       renderBoard();
       return;
@@ -209,7 +310,7 @@ export function createFinalSummaryActions({
       return;
     }
 
-    state.finalTripSummaries[driverId] = snapshot;
+    state.finalTripSummaries[summaryKey] = snapshot;
     state.finalSummaryGlobalSaveError = "";
     state.finalSummaryGlobalSaveSuccess = "";
     snapshot.trips.forEach((trip) => {
@@ -246,6 +347,7 @@ export function createFinalSummaryActions({
     const normalized = normalizeFinalSummary(summary);
     return {
       dispatch_date: normalized.dispatch_date,
+      delivery_date: normalized.delivery_date,
       driver_id: normalized.driver_id,
       driver_name_snapshot: normalized.driver_name_snapshot || normalized.driver_name,
       vehicle_id: normalized.vehicle_id || null,
@@ -266,6 +368,12 @@ export function createFinalSummaryActions({
           suburb_snapshot: order.suburb,
           delivery_address_snapshot: order.delivery_address,
           product_snapshot: order.product,
+          product_lines_snapshot: order.product_lines_snapshot || order.product_lines || [],
+          estimated_distance_km_from_warehouse_snapshot:
+            order.estimated_distance_km_from_warehouse_snapshot ??
+            order.estimated_distance_km_from_warehouse ??
+            null,
+          start_time: order.start_time || "",
           pallet_quantity_snapshot: order.pallet_quantity,
           loose_bags_quantity_snapshot: order.loose_bags_quantity,
           note_snapshot: order.note,
@@ -277,6 +385,10 @@ export function createFinalSummaryActions({
   function getUnsavedFinalSummaries() {
     return Object.values(state.finalTripSummaries)
       .map(normalizeFinalSummary)
+      .filter((summary) =>
+        summary.dispatch_date === state.dispatchDate &&
+        summary.delivery_date === state.driverSummaryDeliveryDate,
+      )
       .filter((summary) => !summary.summary_id);
   }
 
@@ -290,10 +402,18 @@ export function createFinalSummaryActions({
 
     for (const [dispatchDate, dateSummaries] of summariesByDate.entries()) {
       const savedSummaries = await apiListFinalSummaries(dispatchDate);
-      const savedDriverIds = new Set((savedSummaries || []).map((summary) => summary.driver_id));
-      const duplicate = dateSummaries.find((summary) => savedDriverIds.has(summary.driver_id));
+      const savedKeys = new Set(
+        (savedSummaries || []).map((summary) =>
+          getFinalSummaryKey(summary.driver_id, summary.delivery_date || summary.dispatch_date),
+        ),
+      );
+      const duplicate = dateSummaries.find((summary) =>
+        savedKeys.has(getFinalSummaryKey(summary.driver_id, summary.delivery_date)),
+      );
       if (duplicate) {
-        throw new Error("Final Summary for this driver and dispatch date has already been saved.");
+        throw new Error(
+          "Final Summary for this driver, dispatch date, and delivery date has already been saved.",
+        );
       }
     }
   }
@@ -310,6 +430,13 @@ export function createFinalSummaryActions({
     if (!state.isLoggedIn || !state.accountName) {
       state.finalSummaryGlobalSaveError =
         "Please log in before saving and exporting Final Trip Summary.";
+      renderFinalTripSummaries();
+      return;
+    }
+
+    if (!state.driverSummaryDeliveryDate) {
+      state.finalSummaryGlobalSaveError =
+        "Please select a Delivery Date before generating Final Trip Summary.";
       renderFinalTripSummaries();
       return;
     }
@@ -333,11 +460,11 @@ export function createFinalSummaryActions({
         const savedSummary = normalizeFinalSummary(
           await apiSaveFinalSummary(getFinalSummarySavePayload(summary)),
         );
-        state.finalTripSummaries[savedSummary.driver_id] = savedSummary;
+        state.finalTripSummaries[getFinalSummaryKey(savedSummary.driver_id, savedSummary.delivery_date)] = savedSummary;
         savedSummaries.push(savedSummary);
       }
 
-      await exportFinalSummariesExcel(state.dispatchDate);
+      await exportFinalSummariesExcel(state.dispatchDate, state.driverSummaryDeliveryDate);
 
       state.finalSummaryGlobalSaveSuccess = `Final Trip Summary saved and exported by ${state.accountName}.`;
       state.historyLoaded = false;

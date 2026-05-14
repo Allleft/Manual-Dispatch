@@ -46,3 +46,12 @@ class ManualDispatchApiContractTest(unittest.TestCase):
         }
 
         self.assertFalse(expected_routes - actual_routes)
+
+    def test_health_route_remains_available(self):
+        actual_routes = {
+            (method, route.path)
+            for route in app.routes
+            for method in getattr(route, "methods", set())
+        }
+
+        self.assertIn(("GET", "/health"), actual_routes)

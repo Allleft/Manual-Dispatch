@@ -8,6 +8,7 @@ export const AUTH_ACCOUNT_ID_SESSION_KEY = "manualDispatchAccountId";
 
 export const state = {
   dispatchDate: DEFAULT_DISPATCH_DATE,
+  driverSummaryDeliveryDate: DEFAULT_DISPATCH_DATE,
   accountName: "",
   accountId: "",
   isLoggedIn: false,
@@ -28,6 +29,7 @@ export const state = {
   pendingSelections: {},
   taskPoolSearch: "",
   urgencyFilter: "All",
+  taskPoolDeliveryDateFilter: "",
   finalTripSummaries: {},
   generatedTaskKeys: new Set(),
   isSavingFinalSummaries: false,
@@ -52,6 +54,7 @@ export const state = {
   vehicleSpecificationForm: null,
   vehicleSpecificationEditingId: "",
   activeOrderDetailId: "",
+  isProductDetailOpen: false,
   isAddOrderOpen: false,
   addOrderError: "",
   addOrderForm: {},

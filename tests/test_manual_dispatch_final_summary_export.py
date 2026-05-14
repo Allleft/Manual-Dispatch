@@ -66,8 +66,9 @@ class ManualDispatchFinalSummaryExportTest(unittest.TestCase):
         workbook = self._load_export_workbook()
         values = self._flat_values(workbook)
 
-        self.assertIn("Date", values)
+        self.assertIn("Dispatch Date", values)
         self.assertIn(self.dispatch_date, values)
+        self.assertIn("Delivery Date", values)
         self.assertIn("Driver", values)
         self.assertIn("Snapshot Driver", values)
         self.assertIn("Rego #", values)
@@ -79,9 +80,10 @@ class ManualDispatchFinalSummaryExportTest(unittest.TestCase):
         self.assertIn("No.", values)
         self.assertIn("Customer Name", values)
         self.assertIn("Suburb", values)
+        self.assertIn("Estimated Distance From Warehouse (km)", values)
         self.assertIn("Invoice #", values)
-        self.assertIn("Product", values)
-        self.assertIn("Pallets", values)
+        self.assertIn("Product Details", values)
+        self.assertIn("Load", values)
 
     def test_export_skips_empty_trips(self):
         self._assign_order("ORD-001", "D001", "trip1")
@@ -189,6 +191,7 @@ class ManualDispatchFinalSummaryExportTest(unittest.TestCase):
     def _summary_request(self, driver_name="John", vehicle_rego="XYZ888", trips=None):
         return SaveFinalTripSummaryRequest(
             dispatch_date=self.dispatch_date,
+            delivery_date=self.dispatch_date,
             driver_id="D001",
             driver_name_snapshot=driver_name,
             vehicle_id="V002",
@@ -294,6 +297,7 @@ class ManualDispatchFinalSummaryExportRouteTest(unittest.TestCase):
         order = self.repository.get_order("ORD-001")
         return SaveFinalTripSummaryRequest(
             dispatch_date=self.dispatch_date,
+            delivery_date=self.dispatch_date,
             driver_id="D001",
             driver_name_snapshot="John",
             vehicle_id=None,

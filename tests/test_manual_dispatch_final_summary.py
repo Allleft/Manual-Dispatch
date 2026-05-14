@@ -12,8 +12,10 @@ from backend.repositories.sqlite_manual_dispatch_repository import (
 from backend.schemas import (
     AssignDriverVehicleRequest,
     AssignTaskRequest,
+    CreateOrderRequest,
     RegisterOperatorAccountRequest,
     SaveFinalTripSummaryRequest,
+    UpdateOrderRequest,
 )
 from backend.services.manual_dispatch_service import ManualDispatchService
 
@@ -65,6 +67,7 @@ class ManualDispatchFinalSummaryTest(unittest.TestCase):
         summary = self.service.save_final_trip_summary(self._summary_request())
 
         self.assertTrue(summary.summary_id.startswith("FTS-"))
+        self.assertEqual(self.dispatch_date, summary.delivery_date)
         self.assertEqual("John", summary.driver_name_snapshot)
         self.assertEqual("Mandy", summary.saved_by_account_name)
         self.assertEqual("XYZ888", summary.vehicle_rego_snapshot)
@@ -121,19 +124,33 @@ class ManualDispatchFinalSummaryTest(unittest.TestCase):
         self._assign_order("ORD-001", "D001", "trip1")
         self.service.save_final_trip_summary(self._summary_request())
 
+        future_order = self.service.create_order(
+            CreateOrderRequest(
+                company_name="Future Summary Customer",
+                suburb="Richmond",
+                delivery_date="2026-05-06",
+                pallet_quantity=1,
+            )
+        )
         self.service.save_final_trip_summary(
             SaveFinalTripSummaryRequest(
                 dispatch_date="2026-05-06",
+                delivery_date="2026-05-06",
                 driver_id="D002",
                 driver_name_snapshot="Tony",
                 vehicle_id=None,
                 vehicle_rego_snapshot="No vehicle selected",
-                total_pallets=0,
-                total_loose_bags=12,
+                total_pallets=1,
+                total_loose_bags=0,
                 generated_at="2026-05-06T00:00:00Z",
                 saved_by_account_name=self.account.account_name,
                 saved_by_account_id=self.account.account_id,
-                trips=[self._trip_payload("trip1", [self._order_payload("ORD-002")])],
+                trips=[
+                    self._trip_payload(
+                        "trip1",
+                        [self._order_payload(future_order.order_id)],
+                    )
+                ],
             )
         )
 
@@ -154,18 +171,110 @@ class ManualDispatchFinalSummaryTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self._assign_order("ORD-001", "D001", "trip1")
 
-    def test_duplicate_final_summary_for_same_driver_and_date_is_rejected(self):
+    def test_duplicate_final_summary_for_same_driver_dispatch_and_delivery_date_is_rejected(self):
         self._assign_order("ORD-001", "D001", "trip1")
         self.service.save_final_trip_summary(self._summary_request())
 
         with self.assertRaisesRegex(
             ValueError,
-            "Final Summary for this driver and dispatch date has already been saved.",
+            "Final Summary for this driver, dispatch date, and delivery date has already been saved.",
         ):
             self.service.save_final_trip_summary(self._summary_request())
 
         summaries = self.service.list_final_trip_summaries(self.dispatch_date)
         self.assertEqual(1, len(summaries))
+
+    def test_same_driver_and_dispatch_date_can_save_different_delivery_dates(self):
+        self._assign_order("ORD-001", "D001", "trip1")
+        self.service.save_final_trip_summary(self._summary_request())
+        future_order = self.service.create_order(
+            CreateOrderRequest(
+                company_name="Different Delivery Date Customer",
+                suburb="Geelong",
+                delivery_date="2026-05-06",
+                pallet_quantity=2,
+            )
+        )
+
+        second = self.service.save_final_trip_summary(
+            self._summary_request(
+                delivery_date="2026-05-06",
+                trips=[
+                    self._trip_payload(
+                        "trip1",
+                        [self._order_payload(future_order.order_id)],
+                    )
+                ],
+            )
+        )
+
+        summaries = self.service.list_final_trip_summaries(self.dispatch_date)
+
+        self.assertEqual("2026-05-06", second.delivery_date)
+        self.assertEqual(2, len(summaries))
+
+    def test_final_summary_rejects_rows_from_another_delivery_date(self):
+        future_order = self.service.create_order(
+            CreateOrderRequest(
+                company_name="Wrong Date Customer",
+                suburb="Ballarat",
+                delivery_date="2026-05-06",
+                pallet_quantity=1,
+            )
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "Final Summary rows must match the selected delivery date",
+        ):
+            self.service.save_final_trip_summary(
+                self._summary_request(
+                    trips=[
+                        self._trip_payload(
+                            "trip1",
+                            [self._order_payload(future_order.order_id)],
+                        )
+                    ],
+                )
+            )
+
+    def test_final_summary_uses_assigned_order_after_delivery_date_edit(self):
+        self._assign_order("ORD-001", "D001", "trip1")
+        self.service.update_order(
+            "ORD-001",
+            UpdateOrderRequest(
+                invoice_number="INV-1001",
+                company_name="Demo Customer A",
+                phone="0400 000 001",
+                delivery_address="1 Demo Street",
+                suburb="Dandenong",
+                postcode="3175",
+                delivery_date="2026-05-06",
+                zone="South East",
+                urgency="Urgent",
+                preferred_driver_id="D001",
+                pallet_quantity=2,
+                loose_bags_quantity=0,
+                start_time="08:00",
+                end_time="12:00",
+                note="Call before delivery",
+            ),
+        )
+
+        summary = self.service.save_final_trip_summary(
+            self._summary_request(
+                delivery_date="2026-05-06",
+                trips=[
+                    self._trip_payload(
+                        "trip1",
+                        [self._order_payload("ORD-001")],
+                    )
+                ],
+            )
+        )
+
+        self.assertEqual("2026-05-06", summary.delivery_date)
+        self.assertEqual("ORD-001", summary.trips[0].orders[0].task_id)
 
     def test_saved_snapshot_does_not_change_after_live_data_edits(self):
         self._assign_order("ORD-001", "D001", "trip1")
@@ -255,6 +364,7 @@ class ManualDispatchFinalSummaryTest(unittest.TestCase):
         self._assign_order("ORD-001", "D001", "trip1")
         summary = {
             "dispatch_date": self.dispatch_date,
+            "delivery_date": self.dispatch_date,
             "driver_id": "D001",
             "driver_name_snapshot": "John",
             "vehicle_id": None,
@@ -305,18 +415,20 @@ class ManualDispatchFinalSummaryTest(unittest.TestCase):
             )
         )
 
-    def _assign_vehicle(self, driver_id, vehicle_id):
+    def _assign_vehicle(self, driver_id, vehicle_id, delivery_date=None):
         return self.service.assign_vehicle_to_driver(
             AssignDriverVehicleRequest(
                 dispatch_date=self.dispatch_date,
+                delivery_date=delivery_date or self.dispatch_date,
                 driver_id=driver_id,
                 vehicle_id=vehicle_id,
             )
         )
 
-    def _summary_request(self, trips=None):
+    def _summary_request(self, trips=None, delivery_date=None):
         return SaveFinalTripSummaryRequest(
             dispatch_date=self.dispatch_date,
+            delivery_date=delivery_date or self.dispatch_date,
             driver_id="D001",
             driver_name_snapshot="John",
             vehicle_id="V002",
@@ -399,6 +511,7 @@ class ManualDispatchFinalSummaryRouteTest(unittest.TestCase):
         self.assertEqual(200, response.status_code)
         saved_payload = response.json()
         self.assertTrue(saved_payload["summary_id"].startswith("FTS-"))
+        self.assertEqual(self.dispatch_date, saved_payload["delivery_date"])
         self.assertEqual("Mandy", saved_payload["saved_by_account_name"])
 
         history_response = self.client.get(
@@ -443,7 +556,7 @@ class ManualDispatchFinalSummaryRouteTest(unittest.TestCase):
         self.assertEqual(200, first_response.status_code)
         self.assertEqual(400, second_response.status_code)
         self.assertIn(
-            "Final Summary for this driver and dispatch date has already been saved.",
+            "Final Summary for this driver, dispatch date, and delivery date has already been saved.",
             second_response.json()["detail"],
         )
 
@@ -474,6 +587,7 @@ class ManualDispatchFinalSummaryRouteTest(unittest.TestCase):
         order = self.repository.get_order("ORD-001")
         return {
             "dispatch_date": self.dispatch_date,
+            "delivery_date": self.dispatch_date,
             "driver_id": "D001",
             "driver_name_snapshot": "John",
             "vehicle_id": None,

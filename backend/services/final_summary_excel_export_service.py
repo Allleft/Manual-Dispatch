@@ -2,21 +2,34 @@ from io import BytesIO
 import re
 
 from openpyxl import Workbook
-from openpyxl.styles import Font
+from openpyxl.styles import Alignment, Font
 
 
-FINAL_SUMMARY_HEADERS = ["No.", "Customer Name", "Suburb", "Invoice #", "Product", "Pallets"]
+FINAL_SUMMARY_HEADERS = [
+    "No.",
+    "Customer Name",
+    "Suburb",
+    "Estimated Distance From Warehouse (km)",
+    "Invoice #",
+    "Product Details",
+    "Load",
+]
 INVALID_SHEET_CHARACTERS = re.compile(r"[\[\]\*:/\\?]")
 
 
-def build_final_summary_excel(final_summaries, dispatch_date):
+def build_final_summary_excel(final_summaries, dispatch_date, delivery_date=None):
     """Build an Excel workbook from saved Final Trip Summary snapshots."""
     workbook = Workbook()
 
     if not final_summaries:
         worksheet = workbook.active
         worksheet.title = "Final Summaries"
-        worksheet["A1"] = f"No saved Final Trip Summaries for {dispatch_date}"
+        empty_scope = (
+            f"{dispatch_date} / {delivery_date}"
+            if delivery_date
+            else dispatch_date
+        )
+        worksheet["A1"] = f"No saved Final Trip Summaries for {empty_scope}"
         worksheet["A1"].font = Font(bold=True)
         worksheet.column_dimensions["A"].width = 48
         return _save_workbook(workbook)
@@ -34,7 +47,8 @@ def build_final_summary_excel(final_summaries, dispatch_date):
 
 def _write_summary_sheet(worksheet, summary):
     meta_rows = [
-        ("Date", summary.dispatch_date),
+        ("Dispatch Date", summary.dispatch_date),
+        ("Delivery Date", summary.delivery_date),
         ("Driver", summary.driver_name_snapshot),
         ("Rego #", summary.vehicle_rego_snapshot or "No vehicle selected"),
         ("Saved By", summary.saved_by_account_name or "Unknown"),
@@ -66,12 +80,15 @@ def _write_summary_sheet(worksheet, summary):
                 row_number,
                 order.company_name_snapshot or "",
                 order.suburb_snapshot or "",
+                _format_estimated_distance(order),
                 order.invoice_number_snapshot or "",
-                order.product_snapshot or "",
-                order.pallet_quantity_snapshot,
+                _format_product_details(order),
+                _format_load_quantity(order),
             ]
             for column_index, value in enumerate(values, start=1):
-                worksheet.cell(row=row_index, column=column_index, value=value)
+                cell = worksheet.cell(row=row_index, column=column_index, value=value)
+                if column_index == 6:
+                    cell.alignment = Alignment(wrap_text=True, vertical="top")
             row_index += 1
             row_number += 1
 
@@ -99,6 +116,43 @@ def _safe_sheet_title(summary, used_titles):
 
 def _trip_label(trip_no):
     return "Trip 1" if trip_no == "trip1" else "Trip 2"
+
+
+def _format_product_details(order):
+    product_lines = getattr(order, "product_lines_snapshot", None) or []
+    if not product_lines:
+        return "No product details recorded."
+    return "\n".join(
+        f"{index}. {line.product_name} - {line.quantity} {_pluralized_unit(line.unit, line.quantity)}"
+        for index, line in enumerate(product_lines, start=1)
+    )
+
+
+def _format_load_quantity(order):
+    pallets = int(getattr(order, "pallet_quantity_snapshot", 0) or 0)
+    loose_bags = int(getattr(order, "loose_bags_quantity_snapshot", 0) or 0)
+    if pallets > 0:
+        return f"{pallets} {_pluralized_unit('PALLETS', pallets)}"
+    if loose_bags > 0:
+        return f"{loose_bags} {_pluralized_unit('BAGS', loose_bags)}"
+    return "-"
+
+
+def _format_estimated_distance(order):
+    distance = getattr(
+        order,
+        "estimated_distance_km_from_warehouse_snapshot",
+        None,
+    )
+    if distance in ("", None):
+        return "Unknown"
+    return float(distance)
+
+
+def _pluralized_unit(unit, quantity):
+    normalized = str(unit or "").upper()
+    singular = "Pallet" if normalized == "PALLETS" else "Bag"
+    return singular if quantity == 1 else f"{singular}s"
 
 
 def _apply_column_widths(worksheet):

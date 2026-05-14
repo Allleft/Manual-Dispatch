@@ -36,28 +36,43 @@ class AssignmentService:
 
     def assign_vehicle_to_driver(self, request):
         dispatch_date = clean_required_text(request.dispatch_date, "dispatch_date")
+        delivery_date = clean_required_text(
+            getattr(request, "delivery_date", None) or dispatch_date,
+            "delivery_date",
+        )
         driver_id = clean_required_text(request.driver_id, "driver_id")
         vehicle_id = clean_optional_text(getattr(request, "vehicle_id", None))
 
         self.validator.validate_driver_exists(driver_id)
 
         if not vehicle_id:
-            return self.clear_driver_vehicle_assignment(dispatch_date, driver_id)
+            return self.clear_driver_vehicle_assignment(
+                dispatch_date,
+                driver_id,
+                delivery_date,
+            )
 
         self.validator.validate_vehicle_exists(vehicle_id)
 
         return self.repository.upsert_driver_vehicle_assignment(
             dispatch_date=dispatch_date,
+            delivery_date=delivery_date,
             driver_id=driver_id,
             vehicle_id=vehicle_id,
         )
 
-    def clear_driver_vehicle_assignment(self, dispatch_date, driver_id):
+    def clear_driver_vehicle_assignment(self, dispatch_date, driver_id, delivery_date=None):
         dispatch_date = clean_required_text(dispatch_date, "dispatch_date")
+        delivery_date = clean_required_text(delivery_date or dispatch_date, "delivery_date")
         driver_id = clean_required_text(driver_id, "driver_id")
         self.validator.validate_driver_exists(driver_id)
-        self.repository.remove_driver_vehicle_assignment(dispatch_date, driver_id)
+        self.repository.remove_driver_vehicle_assignment(
+            dispatch_date,
+            driver_id,
+            delivery_date,
+        )
         return ManualDriverVehicleClearResponse(
             dispatch_date=dispatch_date,
+            delivery_date=delivery_date,
             driver_id=driver_id,
         )

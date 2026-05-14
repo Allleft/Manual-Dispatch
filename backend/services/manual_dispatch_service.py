@@ -61,10 +61,11 @@ class ManualDispatchService:
     def assign_vehicle_to_driver(self, request):
         return self.assignment_service.assign_vehicle_to_driver(request)
 
-    def clear_driver_vehicle_assignment(self, dispatch_date, driver_id):
+    def clear_driver_vehicle_assignment(self, dispatch_date, driver_id, delivery_date=None):
         return self.assignment_service.clear_driver_vehicle_assignment(
             dispatch_date,
             driver_id,
+            delivery_date,
         )
 
     def create_order(self, request):
@@ -97,8 +98,11 @@ class ManualDispatchService:
     def save_final_trip_summary(self, request):
         return self.final_summary_service.save_final_trip_summary(request)
 
-    def list_final_trip_summaries(self, dispatch_date):
-        return self.final_summary_service.list_final_trip_summaries(dispatch_date)
+    def list_final_trip_summaries(self, dispatch_date, delivery_date=None):
+        return self.final_summary_service.list_final_trip_summaries(
+            dispatch_date,
+            delivery_date,
+        )
 
     def list_final_summary_dates(self):
         return self.final_summary_service.list_final_summary_dates()

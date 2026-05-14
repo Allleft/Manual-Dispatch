@@ -7,6 +7,7 @@ from backend.schemas import (
     ManualDriverVehicleAssignment,
     Order,
     OperatorAccountRecord,
+    ProductDetailLine,
     Vehicle,
 )
 
@@ -208,11 +209,12 @@ class InMemoryManualDispatchRepository:
             if assignment.dispatch_date == dispatch_date
         ]
 
-    def list_final_trip_summaries(self, dispatch_date):
+    def list_final_trip_summaries(self, dispatch_date, delivery_date=None):
         return [
             summary
             for summary in self.final_trip_summaries
             if summary.dispatch_date == dispatch_date
+            and (not delivery_date or summary.delivery_date == delivery_date)
         ]
 
     def list_final_summary_dates(self):
@@ -225,10 +227,11 @@ class InMemoryManualDispatchRepository:
             reverse=True,
         )
 
-    def has_saved_final_trip_summary(self, dispatch_date, driver_id):
+    def has_saved_final_trip_summary(self, dispatch_date, driver_id, delivery_date=None):
         return any(
             summary.dispatch_date == dispatch_date
             and summary.driver_id == driver_id
+            and (not delivery_date or summary.delivery_date == delivery_date)
             and summary.status == "SAVED"
             for summary in self.final_trip_summaries
         )
@@ -445,12 +448,13 @@ class InMemoryManualDispatchRepository:
         ]
         return len(self.assignments) != before_count
 
-    def upsert_driver_vehicle_assignment(self, dispatch_date, driver_id, vehicle_id):
+    def upsert_driver_vehicle_assignment(self, dispatch_date, delivery_date, driver_id, vehicle_id):
         existing = next(
             (
                 assignment
                 for assignment in self.driver_vehicle_assignments
                 if assignment.dispatch_date == dispatch_date
+                and assignment.delivery_date == delivery_date
                 and assignment.driver_id == driver_id
             ),
             None,
@@ -461,13 +465,14 @@ class InMemoryManualDispatchRepository:
 
         assignment = ManualDriverVehicleAssignment(
             dispatch_date=dispatch_date,
+            delivery_date=delivery_date,
             driver_id=driver_id,
             vehicle_id=vehicle_id,
         )
         self.driver_vehicle_assignments.append(assignment)
         return assignment
 
-    def remove_driver_vehicle_assignment(self, dispatch_date, driver_id):
+    def remove_driver_vehicle_assignment(self, dispatch_date, driver_id, delivery_date=None):
         before_count = len(self.driver_vehicle_assignments)
         self.driver_vehicle_assignments = [
             assignment
@@ -475,16 +480,17 @@ class InMemoryManualDispatchRepository:
             if not (
                 assignment.dispatch_date == dispatch_date
                 and assignment.driver_id == driver_id
+                and (not delivery_date or assignment.delivery_date == delivery_date)
             )
         ]
         return len(self.driver_vehicle_assignments) != before_count
 
     def save_final_trip_summary(self, summary, rows):
         if self.has_saved_final_trip_summary(
-            summary["dispatch_date"], summary["driver_id"]
+            summary["dispatch_date"], summary["driver_id"], summary.get("delivery_date")
         ):
             raise ValueError(
-                "Final Summary for this driver and dispatch date has already been saved."
+                "Final Summary for this driver, dispatch date, and delivery date has already been saved."
             )
 
         summary_id = self._create_final_summary_id()
@@ -510,6 +516,17 @@ class InMemoryManualDispatchRepository:
                         pallet_quantity_snapshot=row["pallet_quantity_snapshot"],
                         loose_bags_quantity_snapshot=row["loose_bags_quantity_snapshot"],
                         note_snapshot=row.get("note_snapshot"),
+                        product_lines_snapshot=[
+                            ProductDetailLine(
+                                product_name=line.get("product_name") or "",
+                                quantity=int(line.get("quantity") or 0),
+                                unit=line.get("unit") or "",
+                            )
+                            for line in (row.get("product_lines_snapshot") or [])
+                        ],
+                        estimated_distance_km_from_warehouse_snapshot=row.get(
+                            "estimated_distance_km_from_warehouse_snapshot"
+                        ),
                     )
                 )
             if trip_orders:
@@ -519,6 +536,7 @@ class InMemoryManualDispatchRepository:
         final_summary = FinalTripSummary(
             summary_id=summary_id,
             dispatch_date=summary["dispatch_date"],
+            delivery_date=summary.get("delivery_date") or summary["dispatch_date"],
             driver_id=summary["driver_id"],
             driver_name_snapshot=summary["driver_name_snapshot"],
             vehicle_id=summary.get("vehicle_id"),

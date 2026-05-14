@@ -5,6 +5,7 @@ import {
   getAssignedOrdersForDriver,
   getAssignmentsForDriverTrip,
   getDriverExceptions,
+  getFinalSummaryKey,
   getOrderByTaskId,
   getSelectedVehicleForDriver,
   isVehicleSelectedByAnotherDriver,
@@ -15,16 +16,18 @@ import {
   createOption,
 } from "../utils/dom-utils.js";
 import {
-  getDisplayPalletQuantity,
-  getLooseBagsQuantity,
+  formatOrderLoadQuantity,
 } from "../utils/format-utils.js";
 
 export function renderDriverSummary({
+  onDeliveryDateChange,
   onVehicleChange,
   onGenerateDriverSummary,
   onOpenOrderDetail,
   onUnassign,
 }) {
+  renderDriverSummaryDeliveryDateControl({ onDeliveryDateChange });
+
   const driverSummaryList = document.querySelector("#driver-summary-list");
   driverSummaryList.innerHTML = "";
 
@@ -64,7 +67,7 @@ export function renderDriverSummary({
     }
 
     const assignedOrders = getAssignedOrdersForDriver(driver.driver_id);
-    const finalSummary = state.finalTripSummaries[driver.driver_id];
+    const finalSummary = state.finalTripSummaries[getFinalSummaryKey(driver.driver_id)];
     const hasLockedFinalSummary = Boolean(finalSummary);
     const hasUnsavedLockedFinalSummary = Boolean(finalSummary && !finalSummary.summary_id);
     const driverTotals = calculateDriverTotals(driver.driver_id);
@@ -83,7 +86,7 @@ export function renderDriverSummary({
 
     const vehicleSelect = document.createElement("select");
     vehicleSelect.disabled = state.isSaving || state.isLoading;
-    vehicleSelect.append(createOption("", "Select vehicle", !selectedVehicle));
+    vehicleSelect.append(createOption("", "Select Vehicle", !selectedVehicle));
     state.vehicles.forEach((vehicle) => {
       vehicleSelect.append(
         createOption(
@@ -164,7 +167,7 @@ export function renderDriverSummary({
       emptyState.className = "empty-trip editable-empty-state";
       emptyState.textContent = hasUnsavedLockedFinalSummary
         ? "No editable tasks. Locked Final Trip Summary is shown below."
-        : "No editable tasks assigned to this driver.";
+        : "No assigned orders for this delivery date.";
       trips.append(emptyState);
     } else {
       ["trip1", "trip2"].forEach((tripNo) => {
@@ -186,6 +189,19 @@ export function renderDriverSummary({
   });
 }
 
+function renderDriverSummaryDeliveryDateControl({ onDeliveryDateChange }) {
+  const deliveryDateInput = document.querySelector("#driver-summary-delivery-date");
+  if (!deliveryDateInput) {
+    return;
+  }
+
+  deliveryDateInput.value = state.driverSummaryDeliveryDate || "";
+  deliveryDateInput.disabled = state.isLoading || state.isSaving;
+  deliveryDateInput.onchange = () => {
+    onDeliveryDateChange(deliveryDateInput.value);
+  };
+}
+
 function createTripGroup(driverId, tripNo, title, handlers) {
   const group = document.createElement("section");
   group.className = "trip-group";
@@ -198,9 +214,7 @@ function createTripGroup(driverId, tripNo, title, handlers) {
   tripSummary.className = "trip-summary";
   tripSummary.textContent = `Pallets: ${tripTotals.pallets} | Loose bags: ${tripTotals.looseBags}`;
 
-  const assignedTasks = state.assignments.filter(
-    (assignment) => assignment.driver_id === driverId && assignment.trip_no === tripNo,
-  );
+  const assignedTasks = getAssignmentsForDriverTrip(driverId, tripNo);
 
   const taskList = document.createElement("div");
   taskList.className = "assigned-task-list";
@@ -233,7 +247,7 @@ function createAssignedTask(assignment, order, { onOpenOrderDetail, onUnassign }
   row.setAttribute("title", "View order details");
   row.setAttribute(
     "aria-label",
-    `View details for ${order.invoice_number || order.order_id}, ${order.suburb}, Pallet ${getDisplayPalletQuantity(order)}`,
+    `View details for ${order.invoice_number || order.order_id}, ${order.suburb}, ${formatOrderLoadQuantity(order)}`,
   );
   row.addEventListener("click", () => onOpenOrderDetail(order.order_id));
   row.addEventListener("keydown", (event) => {
@@ -251,9 +265,13 @@ function createAssignedTask(assignment, order, { onOpenOrderDetail, onUnassign }
 
   const pallet = document.createElement("p");
   pallet.className = "assigned-pallet";
-  pallet.textContent = `Pallet: ${getDisplayPalletQuantity(order)} | Loose bags: ${getLooseBagsQuantity(order)}`;
+  pallet.textContent = `Load: ${formatOrderLoadQuantity(order)}`;
 
-  details.append(suburb, pallet);
+  const deliveryDate = document.createElement("p");
+  deliveryDate.className = "assigned-delivery-date";
+  deliveryDate.textContent = `Delivery Date: ${order.delivery_date || "-"}`;
+
+  details.append(suburb, deliveryDate, pallet);
 
   const unassignButton = document.createElement("button");
   unassignButton.type = "button";

@@ -42,7 +42,7 @@ Active refactor branch: `refactor/manual-dispatch-structure`.
 - `frontend/js/actions/auth-actions.js`: Login, register, logout, reset-password, and account session coordination.
 - `frontend/js/actions/order-actions.js`: Add Order, Order Detail, Edit Order, and Cancel Order actions.
 - `frontend/js/actions/assignment-actions.js`: Pending driver/trip selection, assign, unassign, and pending-selection cleanup actions.
-- `frontend/js/actions/vehicle-actions.js`: Driver + Dispatch Date vehicle selection actions.
+- `frontend/js/actions/vehicle-actions.js`: Driver + Dispatch Date + Delivery Date vehicle selection actions.
 - `frontend/js/actions/final-summary-actions.js`: Final Trip Summary generation, Save and Export, workbook download, and history loading actions.
 - `frontend/js/actions/specification-actions.js`: Driver & Vehicle Specification modal actions, availability toggles, save/delete behavior, and deferred board refresh on close.
 - `frontend/styles.css`: Board, modal, and Final Trip Summary styling.

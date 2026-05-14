@@ -4,7 +4,11 @@ import {
   createDetailField,
   createOption,
 } from "../utils/dom-utils.js";
-import { formatOptional } from "../utils/format-utils.js";
+import {
+  formatOptional,
+  formatOrderLoadQuantity,
+  formatProductDetailLine,
+} from "../utils/format-utils.js";
 
 export function renderFinalTripSummaries({
   getUnsavedFinalSummaries,
@@ -28,12 +32,17 @@ export function renderFinalTripSummaries({
   }
 
   finalSummaryList.innerHTML = "";
-  const summaries = Object.values(state.finalTripSummaries).map(normalizeFinalSummary);
+  const summaries = Object.values(state.finalTripSummaries)
+    .map(normalizeFinalSummary)
+    .filter((summary) =>
+      summary.dispatch_date === state.dispatchDate &&
+      summary.delivery_date === state.driverSummaryDeliveryDate,
+    );
 
   if (summaries.length === 0) {
     const emptyState = document.createElement("p");
     emptyState.className = "empty-board";
-    emptyState.textContent = "No generated Final Trip Summary previews in this session.";
+    emptyState.textContent = "No generated Final Trip Summary previews for this delivery date.";
     finalSummaryList.append(emptyState);
   } else {
     summaries
@@ -202,7 +211,8 @@ function createFinalTripSummaryCard(summary, options = {}) {
   const meta = document.createElement("dl");
   meta.className = "final-summary-meta";
   meta.append(
-    createDetailField("Date", summary.dispatch_date),
+    createDetailField("Dispatch Date", summary.dispatch_date),
+    createDetailField("Delivery Date", summary.delivery_date),
     createDetailField("Driver", summary.driver_name),
     createDetailField("Rego #", summary.vehicle_rego),
     createDetailField(
@@ -233,7 +243,15 @@ function createFinalTripSummaryCard(summary, options = {}) {
 
     const thead = document.createElement("thead");
     const headerRow = document.createElement("tr");
-    ["No.", "Customer Name", "Suburb", "Invoice #", "Product", "Pallets"].forEach((label) => {
+    [
+      "No.",
+      "Customer Name",
+      "Suburb",
+      "Estimated Distance From Warehouse (km)",
+      "Invoice #",
+      "Product Details",
+      "Load",
+    ].forEach((label) => {
       const th = document.createElement("th");
       th.scope = "col";
       th.textContent = label;
@@ -248,12 +266,16 @@ function createFinalTripSummaryCard(summary, options = {}) {
         rowNumber,
         formatOptional(order.company_name, ""),
         formatOptional(order.suburb, ""),
+        formatEstimatedDistance(order),
         formatOptional(order.invoice_number, ""),
-        formatOptional(order.product, ""),
-        order.pallet_quantity,
-      ].forEach((value) => {
+        formatProductDetails(order),
+        formatOrderLoadQuantity(order),
+      ].forEach((value, columnIndex) => {
         const td = document.createElement("td");
         td.textContent = value;
+        if (columnIndex === 5) {
+          td.className = "final-summary-product-details";
+        }
         row.append(td);
       });
       tbody.append(row);
@@ -267,4 +289,25 @@ function createFinalTripSummaryCard(summary, options = {}) {
 
   card.append(header, meta, trips);
   return card;
+}
+
+function formatProductDetails(order) {
+  const productLines = order.product_lines_snapshot || order.product_lines || [];
+  if (!productLines.length) {
+    return "No product details recorded.";
+  }
+  return productLines
+    .map((line, index) => formatProductDetailLine(line, index + 1))
+    .join("\n");
+}
+
+function formatEstimatedDistance(order) {
+  const distance =
+    order.estimated_distance_km_from_warehouse_snapshot ??
+    order.estimated_distance_km_from_warehouse ??
+    null;
+  if (distance === null || distance === undefined || distance === "") {
+    return "Unknown";
+  }
+  return `${Number(distance).toFixed(1)} km`;
 }
