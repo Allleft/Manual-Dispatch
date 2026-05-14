@@ -31,7 +31,7 @@ Before updating:
 - Confirm current branch and commit.
 - Confirm the app is working before update.
 - Confirm no one is actively dispatching.
-- Create a SQLite backup.
+- Create a WAL-safe SQLite backup.
 - Record the backup filename.
 - Confirm enough disk space.
 
@@ -42,6 +42,8 @@ git branch --show-current
 git log -1 --oneline
 ./tools/backup_sqlite_db.sh
 ```
+
+The backup script prefers SQLite's `sqlite3` CLI `.backup` command. If `sqlite3` is unavailable, it falls back to file copy and warns when WAL sidecar files are present. For the safest fallback backup, stop the app before running the script.
 
 ## E. Docker / NAS Update Steps
 
@@ -77,6 +79,7 @@ After updating, verify:
 - History loads.
 - Existing data still exists.
 - Backup script still works.
+- A backup restore has been tested on staging or a separate database copy.
 
 Example checks:
 
@@ -84,6 +87,8 @@ Example checks:
 curl http://127.0.0.1:8130/health
 ./tools/backup_sqlite_db.sh
 ```
+
+Do not validate a restore against the active production database while users are dispatching.
 
 ## G. Rollback Procedure
 
@@ -108,6 +113,8 @@ Restore only when needed:
 ```sh
 ./tools/restore_sqlite_db.sh ./backups/manual_dispatch_YYYYMMDD_HHMMSS.sqlite3
 ```
+
+Before relying on a backup for production rollback, test it on a staging DB or separate copy whenever possible.
 
 ## H. Database Migration Warning
 

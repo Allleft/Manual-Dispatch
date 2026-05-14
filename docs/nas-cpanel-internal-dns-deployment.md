@@ -133,6 +133,10 @@ Backups are stored under:
 backups/
 ```
 
+The backup script is WAL-safe when the `sqlite3` CLI is available. It uses SQLite's `.backup` command, which is preferred for live SQLite databases.
+
+If `sqlite3` is not available, the script falls back to file copy. When WAL sidecar files are present, it copies the main database plus `-wal` and `-shm` files and prints a warning. For the safest fallback file-copy backup, stop the app first.
+
 Consider copying backups to another NAS folder or an external backup target. Do not commit backup files to Git.
 
 Stop the app before restoring a database:
@@ -140,6 +144,8 @@ Stop the app before restoring a database:
 ```sh
 ./tools/restore_sqlite_db.sh ./backups/manual_dispatch_YYYYMMDD_HHMMSS.sqlite3
 ```
+
+After creating a backup, periodically test restore on a staging database or separate copy. Do not test restores against the active production SQLite file while office users are dispatching.
 
 ## Security Notes
 
