@@ -6,6 +6,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_DB_PATH = PROJECT_ROOT / "data" / "manual_dispatch.sqlite3"
 SCHEMA_PATH = Path(__file__).with_name("schema.sql")
+SEED_DEMO_DATA_ENV = "MANUAL_DISPATCH_SEED_DEMO_DATA"
 
 
 def get_database_path(db_path=None):
@@ -23,9 +24,11 @@ def connect(db_path=None):
     database_path = get_database_path(db_path)
     database_path.parent.mkdir(parents=True, exist_ok=True)
 
-    connection = sqlite3.connect(database_path)
+    connection = sqlite3.connect(database_path, timeout=5.0)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
+    connection.execute("PRAGMA journal_mode = WAL")
+    connection.execute("PRAGMA busy_timeout = 5000")
     return connection
 
 
@@ -35,7 +38,8 @@ def initialize_database(db_path=None):
         schema_statements, seed_statements = _split_schema_and_seed(schema)
         connection.executescript(schema_statements)
         _ensure_manual_dispatch_columns(connection)
-        connection.executescript(seed_statements)
+        if _is_env_flag_enabled(SEED_DEMO_DATA_ENV, default=True):
+            connection.executescript(seed_statements)
         connection.commit()
 
 
@@ -44,6 +48,19 @@ def _split_schema_and_seed(schema):
     if seed_start == -1:
         return schema, ""
     return schema[:seed_start], schema[seed_start:]
+
+
+def _is_env_flag_enabled(name, default=False):
+    raw_value = os.environ.get(name)
+    if raw_value is None:
+        return default
+
+    normalized = raw_value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    return default
 
 
 def _ensure_manual_dispatch_columns(connection):

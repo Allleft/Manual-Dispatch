@@ -29,6 +29,7 @@ Implemented capabilities now include:
 - Distance dataset provenance, QA validation, and explicit non-optimization wording.
 - Phase 19 release-candidate QA validating the full manual dispatch workflow before office trial use.
 - Phase 20 office-trial startup, SQLite backup/restore guidance, runtime configuration examples, and staff operating checklists.
+- Deployment-preparation branch support for NAS/internal-domain office hosting with Docker Compose, `/health`, and Linux backup/restore scripts.
 
 Phase 20 does not add automatic assignment or optimization. It focuses on local deployment safety, backup/recovery, office-trial documentation, and small targeted fixes only if deployment QA finds a real bug.
 
@@ -221,6 +222,31 @@ Local environment notes:
 - Backup files under `backups/` are generated locally and ignored by Git.
 - The local database path is `data/manual_dispatch.sqlite3`.
 - `.env` can set `MANUAL_DISPATCH_DB_PATH`, `MANUAL_DISPATCH_HOST`, and `MANUAL_DISPATCH_PORT` for local startup scripts.
+
+## NAS / Internal Office Deployment
+
+Deployment preparation for NAS/internal-domain office use lives on `deployment/nas-internal-office-release`.
+
+Key deployment docs:
+
+- [NAS and internal DNS deployment](docs/nas-cpanel-internal-dns-deployment.md)
+- [NAS release update checklist](docs/nas-release-update-checklist.md)
+- [NAS deployment validation checklist](docs/nas-deployment-validation-checklist.md)
+
+Quick Docker Compose flow:
+
+```powershell
+Copy-Item .env.nas.example .env
+docker compose up -d --build
+```
+
+Open:
+
+```text
+http://NAS_IP:8130/frontend/
+```
+
+The NAS deployment keeps the frontend and API same-origin through FastAPI, stores SQLite on the NAS local volume, and does not expose the app to the public internet by default.
 
 ## Validation / Tests
 

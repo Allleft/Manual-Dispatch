@@ -32,3 +32,8 @@ app.mount("/frontend", NoStoreStaticFiles(directory=FRONTEND_DIR, html=True), na
 @app.get("/", include_in_schema=False)
 def redirect_to_frontend():
     return RedirectResponse(url="/frontend/")
+
+
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}

@@ -1,3 +1,5 @@
+import os
+
 from fastapi import APIRouter, Body, HTTPException
 from fastapi.responses import Response
 
@@ -26,6 +28,8 @@ from backend.services.manual_dispatch_service import ManualDispatchService
 
 router = APIRouter(prefix="/api/manual-dispatch", tags=["manual-dispatch"])
 service = ManualDispatchService(SQLiteManualDispatchRepository())
+ALLOW_REGISTRATION_ENV = "MANUAL_DISPATCH_ALLOW_REGISTRATION"
+REGISTRATION_DISABLED_MESSAGE = "Registration is disabled. Please contact an administrator."
 
 
 @router.get("/board")
@@ -54,6 +58,9 @@ def export_excel(dispatch_date: str):
 
 @router.post("/auth/register")
 def register_operator_account(request: RegisterOperatorAccountRequest):
+    if not _is_env_flag_enabled(ALLOW_REGISTRATION_ENV, default=True):
+        raise HTTPException(status_code=403, detail=REGISTRATION_DISABLED_MESSAGE)
+
     try:
         return to_dict(service.register_operator_account(request))
     except ValueError as error:
@@ -259,3 +266,16 @@ def _to_http_exception(error):
     message = str(error)
     status_code = 404 if "does not exist" in message else 400
     return HTTPException(status_code=status_code, detail=message)
+
+
+def _is_env_flag_enabled(name, default=False):
+    raw_value = os.environ.get(name)
+    if raw_value is None:
+        return default
+
+    normalized = raw_value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    return default

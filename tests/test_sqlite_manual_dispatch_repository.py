@@ -1,3 +1,4 @@
+import os
 import sqlite3
 import shutil
 import unittest
@@ -7,6 +8,7 @@ from pathlib import Path
 from backend.repositories.sqlite_manual_dispatch_repository import (
     SQLiteManualDispatchRepository,
 )
+from backend.db.connection import connect
 from backend.schemas import (
     AssignDriverVehicleRequest,
     AssignTaskRequest,
@@ -45,6 +47,16 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
         self.assertIn("manual_driver_vehicle_assignments", tables)
         self.assertIn("order_product_lines", tables)
 
+    def test_connection_uses_wal_and_busy_timeout_for_office_deployment(self):
+        with connect(self.db_path) as connection:
+            journal_mode = connection.execute("PRAGMA journal_mode").fetchone()[0]
+            busy_timeout = connection.execute("PRAGMA busy_timeout").fetchone()[0]
+            foreign_keys = connection.execute("PRAGMA foreign_keys").fetchone()[0]
+
+        self.assertEqual("wal", journal_mode.lower())
+        self.assertEqual(5000, busy_timeout)
+        self.assertEqual(1, foreign_keys)
+
     def test_seed_data_loads_orders_drivers_and_vehicles(self):
         board = self.service.get_board("2026-05-05")
 
@@ -66,6 +78,23 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
             ["ABC123", "XYZ888", "MCC001"],
             [vehicle.rego for vehicle in board.vehicles],
         )
+
+    def test_seed_data_can_be_disabled_by_environment(self):
+        previous_value = os.environ.get("MANUAL_DISPATCH_SEED_DEMO_DATA")
+        os.environ["MANUAL_DISPATCH_SEED_DEMO_DATA"] = "false"
+        try:
+            db_path = self.temp_dir / "manual_dispatch_no_seed.sqlite3"
+            service = ManualDispatchService(SQLiteManualDispatchRepository(db_path))
+            board = service.get_board("2026-05-05")
+        finally:
+            if previous_value is None:
+                os.environ.pop("MANUAL_DISPATCH_SEED_DEMO_DATA", None)
+            else:
+                os.environ["MANUAL_DISPATCH_SEED_DEMO_DATA"] = previous_value
+
+        self.assertEqual([], board.orders)
+        self.assertEqual([], board.drivers)
+        self.assertEqual([], board.vehicles)
 
     def test_board_keeps_task_pool_orders_global_across_delivery_dates(self):
         created = self.service.create_order(
