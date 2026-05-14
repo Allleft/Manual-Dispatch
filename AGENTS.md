@@ -84,40 +84,92 @@ Future task types may include:
 - John's `trip1` and `trip2` should use the same selected vehicle by default.
 
 ## 8. Git Workflow
+- `main` is the stable release branch and should be the normal base for new work.
 - Never work directly on `main` unless explicitly instructed.
-- Use feature branches.
-- Recommended branch name for this project: `feature/manual-dispatch-board`.
+- Use short-lived feature, fix, chore, docs, or deployment branches.
 - Run `git status` before committing.
 - Commit only files related to the current task.
 - Do not commit local runtime data, cache files, generated database files, or temporary scripts.
 
-## Active Development Branch Policy
+## Branch, Release, and NAS Deployment Policy
 
-The comprehensive structure refactor was developed on:
+### Stable Branch
 
-`refactor/manual-dispatch-structure`
+- `main` represents reviewed, tested, deployable code.
+- `main` should be the normal base for new feature branches.
+- Do not commit directly to `main` unless explicitly instructed.
+- Changes should normally enter `main` through a pull request.
 
-After the refactor has been reviewed and the project returns to normal feature development, all future code changes should be made on:
+### Feature Branches
 
-`feature/manual-dispatch-board`
+- New work should start from the latest `main`.
+- Use branch names like:
+  - `feature/<short-description>`
+  - `fix/<short-description>`
+  - `chore/<short-description>`
+  - `docs/<short-description>`
+  - `deployment/<short-description>` only for deployment-specific preparation.
+- Avoid continuing ordinary feature work on old long-running branches.
 
-Do not continue ordinary feature work on `refactor/manual-dispatch-structure`.
+### Existing Long-Running Branches
 
-Before making any code change, confirm the current branch with:
+- `deployment/nas-internal-office-release` was used to prepare the NAS/internal office deployment.
+- After `deployment/nas-internal-office-release` is merged to `main`, do not keep adding ordinary feature work to it.
+- Future deployment fixes should normally start from `main` using a new `chore/` or `deployment/` branch.
+- Treat `feature/manual-dispatch-board` as a historical/legacy development branch after `main` has absorbed the current stable work.
+- Do not use `feature/manual-dispatch-board` as the default base for new work unless explicitly requested.
 
-```bash
-git branch --show-current
-```
+### Release Tags
 
-If the current task is normal feature development, bug fixing, UI adjustment, testing, or documentation related to the Manual Dispatch Board, switch to:
+- Stable office deployments should be tagged from `main`.
+- Use tags like:
+  - `release-office-v1`
+  - `release-office-v1.1`
+  - `release-office-v1.2`
+- Always record the exact deployed commit.
 
-```bash
-git checkout feature/manual-dispatch-board
-```
+### NAS Deployment Source
 
-Only use `refactor/manual-dispatch-structure` for reviewing, comparing, or finalizing the completed structure refactor.
+- After the NAS deployment PR is merged, the NAS should normally deploy from `main` or from a release tag.
+- Before updating NAS production:
+  - confirm no one is actively dispatching
+  - run a WAL-safe SQLite backup
+  - record the current deployed commit
+  - pull the intended branch or tag
+  - rebuild/restart Docker
+  - validate `/health` and the core workflow
+- Do not deploy random feature branches to NAS production unless explicitly approved.
 
-Do not push future normal code changes to `main` unless explicitly instructed.
+### SQLite and Runtime Data Safety
+
+- Never commit:
+  - `data/*.sqlite`
+  - `data/*.sqlite3`
+  - `*.sqlite-wal`
+  - `*.sqlite-shm`
+  - `backups/`
+  - `.env`
+  - local runtime files
+- SQLite must remain on NAS local storage.
+- Do not directly share/open the SQLite file from client computers.
+- Keep one app instance by default because SQLite is the database.
+- Do not add multiple Docker replicas/workers for the SQLite deployment unless the database architecture changes.
+
+### Pull Request Requirements
+
+Every PR should include:
+
+- Summary
+- Files changed
+- Business behavior impact
+- Deployment impact
+- Tests run
+- Risks / rollback notes
+
+### Business Logic Protection
+
+- The Manual Dispatch Board remains a manual office workflow.
+- Do not add auto-dispatch, route optimization, ETA, geocoding, Google Maps, CP-SAT, automatic driver selection, automatic vehicle selection, automatic trip planning, capacity blocking, or zone blocking unless explicitly requested.
 
 ## Future Feature Architecture Policy
 
