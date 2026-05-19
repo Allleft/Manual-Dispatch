@@ -9,6 +9,7 @@ from backend.schemas import (
     CreateDriverRequest,
     CreateOrderRequest,
     CreateVehicleRequest,
+    EnsureOpShopPickupTasksRequest,
     LoginOperatorAccountRequest,
     RegisterOperatorAccountRequest,
     ResetOperatorPasswordRequest,
@@ -128,6 +129,14 @@ def update_order(order_id: str, request: UpdateOrderRequest):
 def cancel_order(order_id: str):
     try:
         return to_dict(service.cancel_order(order_id))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.post("/opshop-pickups/generate")
+def generate_opshop_pickups(request: EnsureOpShopPickupTasksRequest):
+    try:
+        return to_dict(service.ensure_opshop_pickup_tasks_for_window(request))
     except ValueError as error:
         raise _to_http_exception(error) from error
 

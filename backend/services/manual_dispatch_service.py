@@ -7,6 +7,7 @@ from backend.services.manual_dispatch.board_service import BoardService
 from backend.services.manual_dispatch.final_summary_service import FinalSummaryService
 from backend.services.manual_dispatch.id_generation import ManualDispatchIdGenerator
 from backend.services.manual_dispatch.order_service import OrderService
+from backend.services.manual_dispatch.opshop_pickup_service import OpShopPickupService
 from backend.services.manual_dispatch.specification_service import SpecificationService
 from backend.services.manual_dispatch.validation import ManualDispatchValidator
 
@@ -26,6 +27,7 @@ class ManualDispatchService:
             self.board_service,
         )
         self.order_service = OrderService(self.repository, self.id_generator)
+        self.opshop_pickup_service = OpShopPickupService(self.repository)
         self.specification_service = SpecificationService(
             self.repository,
             self.validator,
@@ -76,6 +78,9 @@ class ManualDispatchService:
 
     def cancel_order(self, order_id):
         return self.order_service.cancel_order(order_id)
+
+    def ensure_opshop_pickup_tasks_for_window(self, request):
+        return self.opshop_pickup_service.ensure_opshop_pickup_tasks_for_window(request)
 
     def create_driver(self, request):
         return self.specification_service.create_driver(request)

@@ -346,6 +346,26 @@ class InMemoryManualDispatchRepository:
             key=lambda task: task.pickup_task_id,
         )
 
+    def list_opshop_pickup_tasks_for_window(self, start_date, end_date):
+        return sorted(
+            [
+                task
+                for task in self.opshop_pickup_tasks
+                if start_date <= task.pickup_date <= end_date
+            ],
+            key=lambda task: (task.pickup_date, task.pickup_task_id),
+        )
+
+    def find_opshop_pickup_task_by_schedule_and_date(self, schedule_id, pickup_date):
+        return next(
+            (
+                task
+                for task in self.opshop_pickup_tasks
+                if task.schedule_id == schedule_id and task.pickup_date == pickup_date
+            ),
+            None,
+        )
+
     def get_opshop_pickup_task(self, pickup_task_id):
         return next(
             (
@@ -355,6 +375,12 @@ class InMemoryManualDispatchRepository:
             ),
             None,
         )
+
+    def insert_opshop_pickup_task(self, task):
+        if self.get_opshop_pickup_task(task.pickup_task_id):
+            raise ValueError(f"OP SHOP pickup task already exists: {task.pickup_task_id}")
+        self.opshop_pickup_tasks.append(task)
+        return task
 
     def upsert_opshop_pickup_task(self, task):
         for index, existing in enumerate(self.opshop_pickup_tasks):

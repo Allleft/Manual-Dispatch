@@ -448,6 +448,33 @@ class SQLiteManualDispatchRepository:
             ).fetchall()
         return [self._row_to_opshop_pickup_task(row) for row in rows]
 
+    def list_opshop_pickup_tasks_for_window(self, start_date, end_date):
+        with connect(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT *
+                FROM opshop_pickup_tasks
+                WHERE pickup_date BETWEEN ? AND ?
+                ORDER BY pickup_date, pickup_task_id
+                """,
+                (start_date, end_date),
+            ).fetchall()
+        return [self._row_to_opshop_pickup_task(row) for row in rows]
+
+    def find_opshop_pickup_task_by_schedule_and_date(self, schedule_id, pickup_date):
+        with connect(self.db_path) as connection:
+            row = connection.execute(
+                """
+                SELECT *
+                FROM opshop_pickup_tasks
+                WHERE schedule_id = ? AND pickup_date = ?
+                ORDER BY pickup_task_id
+                LIMIT 1
+                """,
+                (schedule_id, pickup_date),
+            ).fetchone()
+        return self._row_to_opshop_pickup_task(row) if row else None
+
     def get_opshop_pickup_task(self, pickup_task_id):
         with connect(self.db_path) as connection:
             row = connection.execute(
@@ -459,6 +486,45 @@ class SQLiteManualDispatchRepository:
                 (pickup_task_id,),
             ).fetchone()
         return self._row_to_opshop_pickup_task(row) if row else None
+
+    def insert_opshop_pickup_task(self, task):
+        with connect(self.db_path) as connection:
+            connection.execute(
+                """
+                INSERT INTO opshop_pickup_tasks (
+                    pickup_task_id,
+                    schedule_id,
+                    opshop_id,
+                    pickup_date,
+                    task_type,
+                    generated_from,
+                    status,
+                    dispatch_date,
+                    driver_id,
+                    trip_no,
+                    notes,
+                    created_at,
+                    updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    task.pickup_task_id,
+                    task.schedule_id,
+                    task.opshop_id,
+                    task.pickup_date,
+                    task.task_type,
+                    task.generated_from,
+                    task.status,
+                    task.dispatch_date,
+                    task.driver_id,
+                    task.trip_no,
+                    task.notes,
+                    task.created_at,
+                    task.updated_at,
+                ),
+            )
+            connection.commit()
+        return self.get_opshop_pickup_task(task.pickup_task_id)
 
     def upsert_opshop_pickup_task(self, task):
         with connect(self.db_path) as connection:

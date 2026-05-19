@@ -1,5 +1,5 @@
 from dataclasses import asdict, dataclass, field
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 
 @dataclass
@@ -132,6 +132,26 @@ class OpShopPickupTask:
     notes: Optional[str]
     created_at: str
     updated_at: str
+
+
+@dataclass
+class EnsureOpShopPickupTasksRequest:
+    start_date: str
+    days: int = 14
+
+
+@dataclass
+class EnsureOpShopPickupTasksResult:
+    window_start: str
+    window_end: str
+    days: int
+    schedules_checked: int
+    tasks_created: int
+    tasks_existing: int
+    schedules_skipped: int
+    skip_reasons: Dict[str, int] = field(default_factory=dict)
+    warnings: Dict[str, int] = field(default_factory=dict)
+    created_tasks: List[OpShopPickupTask] = field(default_factory=list)
 
 
 @dataclass
