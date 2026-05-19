@@ -108,6 +108,59 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("function formatEstimatedDistance(order)", final_summary_renderer)
         self.assertIn("function sortFinalSummaryOrders(orders)", final_summary_actions)
 
+    def test_phase5_opshop_pickups_render_above_delivery_orders(self):
+        task_pool_renderer = (
+            FRONTEND_ROOT / "js" / "render" / "task-pool-renderer.js"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("OP SHOP PICKUP", task_pool_renderer)
+        self.assertIn("DELIVERY ORDERS", task_pool_renderer)
+        self.assertLess(
+            task_pool_renderer.index("OP SHOP PICKUP"),
+            task_pool_renderer.index("DELIVERY ORDERS"),
+        )
+        self.assertIn("No OP SHOP PICKUP tasks for the next 14 days.", task_pool_renderer)
+        self.assertIn("opshop-pickup-card", task_pool_renderer)
+        self.assertIn("pickup.opshop_name", task_pool_renderer)
+        self.assertIn("pickup.suburb", task_pool_renderer)
+        self.assertIn("pickup.pickup_date", task_pool_renderer)
+        self.assertIn("pickup.run_type", task_pool_renderer)
+        self.assertIn("pickup.pickup_frequency", task_pool_renderer)
+        self.assertNotIn('textContent = "Details"', task_pool_renderer)
+        self.assertNotIn("onAssign(pickup", task_pool_renderer)
+        self.assertNotIn("driver-${pickup", task_pool_renderer)
+
+    def test_phase5_opshop_pickup_detail_modal_is_read_only(self):
+        app_js = (FRONTEND_ROOT / "app.js").read_text(encoding="utf-8")
+        modal_renderer = (
+            FRONTEND_ROOT / "js" / "render" / "opshop-pickup-modal-renderer.js"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("opshopPickups: payload.opshop_pickups || []", app_js)
+        self.assertIn("state.opshopPickups = board.opshopPickups", app_js)
+        self.assertIn("onOpenOpShopPickupDetail: openOpShopPickupDetail", app_js)
+        self.assertIn("renderOpShopPickupDetailPopup", app_js)
+        for label in [
+            "Address / Access",
+            "Street Address",
+            "Access Type",
+            "Key Required",
+            "Trailer Restriction",
+            "Contact",
+            "Primary Contact",
+            "Primary Phone",
+            "Secondary Contact",
+            "Secondary Phone",
+            "Call Before Arrival",
+            "Call Timing",
+            "Notes",
+            "Status Notes",
+            "Task Notes",
+        ]:
+            self.assertIn(label, modal_renderer)
+        self.assertNotIn("api", modal_renderer.lower())
+        self.assertNotIn("fetch(", modal_renderer)
+
     def test_product_line_typing_updates_state_without_popup_rerender(self):
         order_actions = (
             FRONTEND_ROOT / "js" / "actions" / "order-actions.js"

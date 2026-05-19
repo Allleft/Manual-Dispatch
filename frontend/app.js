@@ -26,6 +26,7 @@ import {
   renderTaskPoolFilters as renderTaskPoolFiltersView,
 } from "./js/render/task-pool-renderer.js";
 import { renderDriverSummary as renderDriverSummaryView } from "./js/render/trip-summary-renderer.js";
+import { renderOpShopPickupDetailPopup as renderOpShopPickupDetailPopupView } from "./js/render/opshop-pickup-modal-renderer.js";
 
 function normalizeBoardResponse(payload) {
   return {
@@ -34,6 +35,7 @@ function normalizeBoardResponse(payload) {
     drivers: payload.drivers || [],
     vehicles: payload.vehicles || [],
     assignments: payload.assignments || [],
+    opshopPickups: payload.opshop_pickups || [],
     driverVehicleAssignments: (payload.driver_vehicle_assignments || []).map((assignment) => ({
       ...assignment,
       delivery_date: assignment.delivery_date || assignment.dispatch_date || payload.dispatch_date || state.dispatchDate,
@@ -51,6 +53,7 @@ function applyBoardResponse(payload) {
   state.drivers = board.drivers;
   state.vehicles = board.vehicles;
   state.assignments = board.assignments;
+  state.opshopPickups = board.opshopPickups;
   state.driverVehicleAssignments = board.driverVehicleAssignments;
   assignmentActions.cleanupPendingSelections();
 }
@@ -226,11 +229,29 @@ function renderTaskPoolFilters() {
 function renderTaskPool() {
   renderTaskPoolView({
     getPendingSelection: assignmentActions.getPendingSelection,
+    onOpenOpShopPickupDetail: openOpShopPickupDetail,
     onOpenOrderDetail: orderActions.openOrderDetail,
     onPendingSelectionChange: assignmentActions.updatePendingSelection,
     onAssign: assignmentActions.handleAssign,
   });
 }
+
+function openOpShopPickupDetail(pickupTaskId) {
+  state.activeOpShopPickupDetailId = pickupTaskId;
+  renderOpShopPickupDetailPopup();
+}
+
+function closeOpShopPickupDetail() {
+  state.activeOpShopPickupDetailId = "";
+  renderOpShopPickupDetailPopup();
+}
+
+function renderOpShopPickupDetailPopup() {
+  renderOpShopPickupDetailPopupView({
+    onCloseOpShopPickupDetail: closeOpShopPickupDetail,
+  });
+}
+
 function renderDriverSummary() {
   renderDriverSummaryView({
     onDeliveryDateChange: (deliveryDate) => {
@@ -738,6 +759,7 @@ function renderBoard() {
   renderDriverSummary();
   renderFinalTripSummaries();
   renderOrderDetailPopup();
+  renderOpShopPickupDetailPopup();
   renderAddOrderPopup();
   renderSpecificationModal();
   renderAuthGate();

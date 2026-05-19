@@ -70,6 +70,10 @@ export function getOrderByTaskId(taskId) {
   return state.orders.find((order) => order.order_id === taskId);
 }
 
+export function getOpShopPickupByTaskId(taskId) {
+  return state.opshopPickups.find((pickup) => pickup.pickup_task_id === taskId);
+}
+
 export function findDriverById(driverId) {
   return state.drivers.find((driver) => driver.driver_id === driverId);
 }
