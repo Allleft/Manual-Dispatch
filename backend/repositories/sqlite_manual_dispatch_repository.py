@@ -10,6 +10,9 @@ from backend.schemas import (
     ManualDispatchAssignment,
     ManualDriverVehicleAssignment,
     Order,
+    OpShopLocation,
+    OpShopPickupSchedule,
+    OpShopPickupTask,
     OperatorAccountRecord,
     ProductDetailLine,
     Vehicle,
@@ -256,6 +259,258 @@ class SQLiteManualDispatchRepository:
                 (account_id,),
             ).fetchone()
         return self._row_to_operator_account(row) if row else None
+
+    def list_opshop_locations(self):
+        with connect(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT *
+                FROM opshop_locations
+                ORDER BY opshop_id
+                """
+            ).fetchall()
+        return [self._row_to_opshop_location(row) for row in rows]
+
+    def get_opshop_location(self, opshop_id):
+        with connect(self.db_path) as connection:
+            row = connection.execute(
+                """
+                SELECT *
+                FROM opshop_locations
+                WHERE opshop_id = ?
+                """,
+                (opshop_id,),
+            ).fetchone()
+        return self._row_to_opshop_location(row) if row else None
+
+    def upsert_opshop_location(self, location):
+        with connect(self.db_path) as connection:
+            connection.execute(
+                """
+                INSERT INTO opshop_locations (
+                    opshop_id,
+                    name,
+                    suburb,
+                    street_address,
+                    area_region,
+                    primary_contact,
+                    primary_phone,
+                    secondary_contact,
+                    secondary_phone,
+                    access_type,
+                    key_required,
+                    trailer_restriction,
+                    status_notes,
+                    is_active,
+                    created_at,
+                    updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(opshop_id)
+                DO UPDATE SET
+                    name = excluded.name,
+                    suburb = excluded.suburb,
+                    street_address = excluded.street_address,
+                    area_region = excluded.area_region,
+                    primary_contact = excluded.primary_contact,
+                    primary_phone = excluded.primary_phone,
+                    secondary_contact = excluded.secondary_contact,
+                    secondary_phone = excluded.secondary_phone,
+                    access_type = excluded.access_type,
+                    key_required = excluded.key_required,
+                    trailer_restriction = excluded.trailer_restriction,
+                    status_notes = excluded.status_notes,
+                    is_active = excluded.is_active,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    location.opshop_id,
+                    location.name,
+                    location.suburb,
+                    location.street_address,
+                    location.area_region,
+                    location.primary_contact,
+                    location.primary_phone,
+                    location.secondary_contact,
+                    location.secondary_phone,
+                    location.access_type,
+                    int(location.key_required),
+                    location.trailer_restriction,
+                    location.status_notes,
+                    int(location.is_active),
+                    location.created_at,
+                    location.updated_at,
+                ),
+            )
+            connection.commit()
+        return self.get_opshop_location(location.opshop_id)
+
+    def list_opshop_pickup_schedules(self):
+        with connect(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT *
+                FROM opshop_pickup_schedules
+                ORDER BY schedule_id
+                """
+            ).fetchall()
+        return [self._row_to_opshop_pickup_schedule(row) for row in rows]
+
+    def list_active_opshop_pickup_schedules(self):
+        with connect(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT *
+                FROM opshop_pickup_schedules
+                WHERE active_flag = 1 AND status = 'Active'
+                ORDER BY schedule_id
+                """
+            ).fetchall()
+        return [self._row_to_opshop_pickup_schedule(row) for row in rows]
+
+    def get_opshop_pickup_schedule(self, schedule_id):
+        with connect(self.db_path) as connection:
+            row = connection.execute(
+                """
+                SELECT *
+                FROM opshop_pickup_schedules
+                WHERE schedule_id = ?
+                """,
+                (schedule_id,),
+            ).fetchone()
+        return self._row_to_opshop_pickup_schedule(row) if row else None
+
+    def upsert_opshop_pickup_schedule(self, schedule):
+        with connect(self.db_path) as connection:
+            connection.execute(
+                """
+                INSERT INTO opshop_pickup_schedules (
+                    schedule_id,
+                    opshop_id,
+                    run_day,
+                    run_type,
+                    pickup_frequency,
+                    time_window,
+                    call_before_arrival,
+                    call_timing,
+                    status,
+                    active_flag,
+                    fortnight_group,
+                    review_required,
+                    review_reason,
+                    created_at,
+                    updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(schedule_id)
+                DO UPDATE SET
+                    opshop_id = excluded.opshop_id,
+                    run_day = excluded.run_day,
+                    run_type = excluded.run_type,
+                    pickup_frequency = excluded.pickup_frequency,
+                    time_window = excluded.time_window,
+                    call_before_arrival = excluded.call_before_arrival,
+                    call_timing = excluded.call_timing,
+                    status = excluded.status,
+                    active_flag = excluded.active_flag,
+                    fortnight_group = excluded.fortnight_group,
+                    review_required = excluded.review_required,
+                    review_reason = excluded.review_reason,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    schedule.schedule_id,
+                    schedule.opshop_id,
+                    schedule.run_day,
+                    schedule.run_type,
+                    schedule.pickup_frequency,
+                    schedule.time_window,
+                    int(schedule.call_before_arrival),
+                    schedule.call_timing,
+                    schedule.status,
+                    int(schedule.active_flag),
+                    schedule.fortnight_group,
+                    int(schedule.review_required),
+                    schedule.review_reason,
+                    schedule.created_at,
+                    schedule.updated_at,
+                ),
+            )
+            connection.commit()
+        return self.get_opshop_pickup_schedule(schedule.schedule_id)
+
+    def list_opshop_pickup_tasks(self):
+        with connect(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT *
+                FROM opshop_pickup_tasks
+                ORDER BY pickup_task_id
+                """
+            ).fetchall()
+        return [self._row_to_opshop_pickup_task(row) for row in rows]
+
+    def get_opshop_pickup_task(self, pickup_task_id):
+        with connect(self.db_path) as connection:
+            row = connection.execute(
+                """
+                SELECT *
+                FROM opshop_pickup_tasks
+                WHERE pickup_task_id = ?
+                """,
+                (pickup_task_id,),
+            ).fetchone()
+        return self._row_to_opshop_pickup_task(row) if row else None
+
+    def upsert_opshop_pickup_task(self, task):
+        with connect(self.db_path) as connection:
+            connection.execute(
+                """
+                INSERT INTO opshop_pickup_tasks (
+                    pickup_task_id,
+                    schedule_id,
+                    opshop_id,
+                    pickup_date,
+                    task_type,
+                    generated_from,
+                    status,
+                    dispatch_date,
+                    driver_id,
+                    trip_no,
+                    notes,
+                    created_at,
+                    updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(pickup_task_id)
+                DO UPDATE SET
+                    schedule_id = excluded.schedule_id,
+                    opshop_id = excluded.opshop_id,
+                    pickup_date = excluded.pickup_date,
+                    task_type = excluded.task_type,
+                    generated_from = excluded.generated_from,
+                    status = excluded.status,
+                    dispatch_date = excluded.dispatch_date,
+                    driver_id = excluded.driver_id,
+                    trip_no = excluded.trip_no,
+                    notes = excluded.notes,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    task.pickup_task_id,
+                    task.schedule_id,
+                    task.opshop_id,
+                    task.pickup_date,
+                    task.task_type,
+                    task.generated_from,
+                    task.status,
+                    task.dispatch_date,
+                    task.driver_id,
+                    task.trip_no,
+                    task.notes,
+                    task.created_at,
+                    task.updated_at,
+                ),
+            )
+            connection.commit()
+        return self.get_opshop_pickup_task(task.pickup_task_id)
 
     def get_task(self, task_type, task_id):
         if task_type == "ORDER":
@@ -1104,6 +1359,62 @@ class SQLiteManualDispatchRepository:
             account_name=row["account_name"],
             password_hash=row["password_hash"],
             password_salt=row["password_salt"],
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
+
+    def _row_to_opshop_location(self, row):
+        return OpShopLocation(
+            opshop_id=row["opshop_id"],
+            name=row["name"],
+            suburb=row["suburb"],
+            street_address=row["street_address"],
+            area_region=row["area_region"],
+            primary_contact=row["primary_contact"],
+            primary_phone=row["primary_phone"],
+            secondary_contact=row["secondary_contact"],
+            secondary_phone=row["secondary_phone"],
+            access_type=row["access_type"],
+            key_required=bool(row["key_required"]),
+            trailer_restriction=row["trailer_restriction"],
+            status_notes=row["status_notes"],
+            is_active=bool(row["is_active"]),
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
+
+    def _row_to_opshop_pickup_schedule(self, row):
+        return OpShopPickupSchedule(
+            schedule_id=row["schedule_id"],
+            opshop_id=row["opshop_id"],
+            run_day=row["run_day"],
+            run_type=row["run_type"],
+            pickup_frequency=row["pickup_frequency"],
+            time_window=row["time_window"],
+            call_before_arrival=bool(row["call_before_arrival"]),
+            call_timing=row["call_timing"],
+            status=row["status"],
+            active_flag=bool(row["active_flag"]),
+            fortnight_group=row["fortnight_group"],
+            review_required=bool(row["review_required"]),
+            review_reason=row["review_reason"],
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
+
+    def _row_to_opshop_pickup_task(self, row):
+        return OpShopPickupTask(
+            pickup_task_id=row["pickup_task_id"],
+            schedule_id=row["schedule_id"],
+            opshop_id=row["opshop_id"],
+            pickup_date=row["pickup_date"],
+            task_type=row["task_type"],
+            generated_from=row["generated_from"],
+            status=row["status"],
+            dispatch_date=row["dispatch_date"],
+            driver_id=row["driver_id"],
+            trip_no=row["trip_no"],
+            notes=row["notes"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
         )

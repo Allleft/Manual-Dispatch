@@ -86,6 +86,81 @@ CREATE TABLE IF NOT EXISTS manual_driver_vehicle_assignments (
     FOREIGN KEY(vehicle_id) REFERENCES manual_vehicles(vehicle_id)
 );
 
+CREATE TABLE IF NOT EXISTS opshop_locations (
+    opshop_id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    suburb TEXT,
+    street_address TEXT,
+    area_region TEXT,
+    primary_contact TEXT,
+    primary_phone TEXT,
+    secondary_contact TEXT,
+    secondary_phone TEXT,
+    access_type TEXT,
+    key_required INTEGER NOT NULL DEFAULT 0,
+    trailer_restriction TEXT,
+    status_notes TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_opshop_locations_dedupe_key
+ON opshop_locations (
+    lower(trim(name)),
+    lower(trim(COALESCE(suburb, ''))),
+    lower(trim(COALESCE(street_address, '')))
+);
+
+CREATE TABLE IF NOT EXISTS opshop_pickup_schedules (
+    schedule_id TEXT PRIMARY KEY,
+    opshop_id TEXT NOT NULL,
+    run_day TEXT,
+    run_type TEXT NOT NULL,
+    pickup_frequency TEXT,
+    time_window TEXT,
+    call_before_arrival INTEGER NOT NULL DEFAULT 0,
+    call_timing TEXT,
+    status TEXT NOT NULL DEFAULT 'Active',
+    active_flag INTEGER NOT NULL DEFAULT 1,
+    fortnight_group TEXT,
+    review_required INTEGER NOT NULL DEFAULT 0,
+    review_reason TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    CHECK(run_type IN ('STANDARD', 'REGULAR', 'ON_CALL')),
+    CHECK(
+        run_day IS NULL
+        OR run_day IN ('MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY')
+    ),
+    CHECK(run_day IS NOT NULL OR run_type = 'ON_CALL' OR review_required = 1),
+    CHECK(fortnight_group IS NULL OR fortnight_group IN ('A', 'B')),
+    FOREIGN KEY(opshop_id) REFERENCES opshop_locations(opshop_id)
+);
+
+CREATE TABLE IF NOT EXISTS opshop_pickup_tasks (
+    pickup_task_id TEXT PRIMARY KEY,
+    schedule_id TEXT,
+    opshop_id TEXT NOT NULL,
+    pickup_date TEXT NOT NULL,
+    task_type TEXT NOT NULL DEFAULT 'OPSHOP_PICKUP',
+    generated_from TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'ACTIVE',
+    dispatch_date TEXT,
+    driver_id TEXT,
+    trip_no TEXT,
+    notes TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    CHECK(task_type = 'OPSHOP_PICKUP'),
+    CHECK(generated_from IN ('STANDARD', 'REGULAR', 'ON_CALL', 'MANUAL')),
+    CHECK(status IN ('ACTIVE', 'ASSIGNED', 'CANCELLED', 'COMPLETED')),
+    CHECK(trip_no IS NULL OR trip_no IN ('trip1', 'trip2')),
+    FOREIGN KEY(schedule_id) REFERENCES opshop_pickup_schedules(schedule_id),
+    FOREIGN KEY(opshop_id) REFERENCES opshop_locations(opshop_id),
+    FOREIGN KEY(driver_id) REFERENCES manual_drivers(driver_id)
+);
+
 CREATE TABLE IF NOT EXISTS operator_accounts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     account_name TEXT NOT NULL COLLATE NOCASE UNIQUE,

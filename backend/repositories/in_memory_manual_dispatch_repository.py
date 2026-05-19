@@ -6,6 +6,9 @@ from backend.schemas import (
     ManualDispatchAssignment,
     ManualDriverVehicleAssignment,
     Order,
+    OpShopLocation,
+    OpShopPickupSchedule,
+    OpShopPickupTask,
     OperatorAccountRecord,
     ProductDetailLine,
     Vehicle,
@@ -149,6 +152,9 @@ class InMemoryManualDispatchRepository:
         self.driver_vehicle_assignments = []
         self.final_trip_summaries = []
         self.operator_accounts = []
+        self.opshop_locations = []
+        self.opshop_pickup_schedules = []
+        self.opshop_pickup_tasks = []
         self._next_assignment_number = 1
         self._next_final_summary_number = 1
         self._next_final_summary_row_number = 1
@@ -281,6 +287,82 @@ class InMemoryManualDispatchRepository:
             ),
             None,
         )
+
+    def list_opshop_locations(self):
+        return sorted(self.opshop_locations, key=lambda location: location.opshop_id)
+
+    def get_opshop_location(self, opshop_id):
+        return next(
+            (
+                location
+                for location in self.opshop_locations
+                if location.opshop_id == opshop_id
+            ),
+            None,
+        )
+
+    def upsert_opshop_location(self, location):
+        for index, existing in enumerate(self.opshop_locations):
+            if existing.opshop_id == location.opshop_id:
+                self.opshop_locations[index] = location
+                return location
+        self.opshop_locations.append(location)
+        return location
+
+    def list_opshop_pickup_schedules(self):
+        return sorted(
+            self.opshop_pickup_schedules,
+            key=lambda schedule: schedule.schedule_id,
+        )
+
+    def list_active_opshop_pickup_schedules(self):
+        return [
+            schedule
+            for schedule in self.list_opshop_pickup_schedules()
+            if schedule.active_flag and schedule.status == "Active"
+        ]
+
+    def get_opshop_pickup_schedule(self, schedule_id):
+        return next(
+            (
+                schedule
+                for schedule in self.opshop_pickup_schedules
+                if schedule.schedule_id == schedule_id
+            ),
+            None,
+        )
+
+    def upsert_opshop_pickup_schedule(self, schedule):
+        for index, existing in enumerate(self.opshop_pickup_schedules):
+            if existing.schedule_id == schedule.schedule_id:
+                self.opshop_pickup_schedules[index] = schedule
+                return schedule
+        self.opshop_pickup_schedules.append(schedule)
+        return schedule
+
+    def list_opshop_pickup_tasks(self):
+        return sorted(
+            self.opshop_pickup_tasks,
+            key=lambda task: task.pickup_task_id,
+        )
+
+    def get_opshop_pickup_task(self, pickup_task_id):
+        return next(
+            (
+                task
+                for task in self.opshop_pickup_tasks
+                if task.pickup_task_id == pickup_task_id
+            ),
+            None,
+        )
+
+    def upsert_opshop_pickup_task(self, task):
+        for index, existing in enumerate(self.opshop_pickup_tasks):
+            if existing.pickup_task_id == task.pickup_task_id:
+                self.opshop_pickup_tasks[index] = task
+                return task
+        self.opshop_pickup_tasks.append(task)
+        return task
 
     def get_task(self, task_type, task_id):
         if task_type == "ORDER":

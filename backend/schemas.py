@@ -79,6 +79,62 @@ class ManualDriverVehicleAssignment:
 
 
 @dataclass
+class OpShopLocation:
+    opshop_id: str
+    name: str
+    suburb: Optional[str]
+    street_address: Optional[str]
+    area_region: Optional[str]
+    primary_contact: Optional[str]
+    primary_phone: Optional[str]
+    secondary_contact: Optional[str]
+    secondary_phone: Optional[str]
+    access_type: Optional[str]
+    key_required: bool
+    trailer_restriction: Optional[str]
+    status_notes: Optional[str]
+    is_active: bool
+    created_at: str
+    updated_at: str
+
+
+@dataclass
+class OpShopPickupSchedule:
+    schedule_id: str
+    opshop_id: str
+    run_day: Optional[str]
+    run_type: str
+    pickup_frequency: Optional[str]
+    time_window: Optional[str]
+    call_before_arrival: bool
+    call_timing: Optional[str]
+    status: str
+    active_flag: bool
+    fortnight_group: Optional[str]
+    review_required: bool
+    review_reason: Optional[str]
+    created_at: str
+    updated_at: str
+
+
+@dataclass
+class OpShopPickupTask:
+    pickup_task_id: str
+    schedule_id: Optional[str]
+    opshop_id: str
+    pickup_date: str
+    task_type: str
+    generated_from: str
+    status: str
+    dispatch_date: Optional[str]
+    driver_id: Optional[str]
+    trip_no: Optional[str]
+    notes: Optional[str]
+    created_at: str
+    updated_at: str
+
+
+@dataclass
 class ManualDispatchBoardResponse:
     dispatch_date: str
     orders: List[Order]
