@@ -38,7 +38,9 @@ class OpShopBoardPayloadTest(unittest.TestCase):
         payload = to_dict(board)
 
         self.assertIn("opshop_pickups", payload)
+        self.assertIn("assigned_opshop_pickups", payload)
         self.assertEqual([], payload["opshop_pickups"])
+        self.assertEqual([], payload["assigned_opshop_pickups"])
         for key in [
             "dispatch_date",
             "orders",

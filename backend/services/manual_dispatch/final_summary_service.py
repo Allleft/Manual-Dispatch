@@ -116,6 +116,8 @@ class FinalSummaryService:
                     "task_id",
                 )
                 self.validator.validate_task_type(task_type)
+                if task_type != "ORDER":
+                    raise ValueError("Final Trip Summary currently supports ORDER tasks only")
                 task = self.repository.get_task(task_type, task_id)
                 if not task:
                     raise ValueError(f"Task does not exist: {task_type} {task_id}")

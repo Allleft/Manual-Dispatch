@@ -69,7 +69,7 @@ export function renderTaskPool({
   onOpenOpShopPickupDetail,
   onOpenOrderDetail,
   onPendingSelectionChange,
-  onAssign,
+  onAssignTask,
 }) {
   const taskPoolList = document.querySelector("#task-pool-list");
   taskPoolList.innerHTML = "";
@@ -95,7 +95,10 @@ export function renderTaskPool({
 
   taskPoolList.append(
     createOpShopPickupSection({
+      getPendingSelection,
+      onAssignTask,
       onOpenOpShopPickupDetail,
+      onPendingSelectionChange,
       pickups: state.opshopPickups,
     }),
   );
@@ -104,7 +107,7 @@ export function renderTaskPool({
     createDeliveryOrderSection({
       filteredOrders,
       getPendingSelection,
-      onAssign,
+      onAssignTask,
       onOpenOrderDetail,
       onPendingSelectionChange,
       unassignedOrders,
@@ -127,7 +130,13 @@ function createTaskPoolSection({ className, titleText }) {
   return section;
 }
 
-function createOpShopPickupSection({ pickups, onOpenOpShopPickupDetail }) {
+function createOpShopPickupSection({
+  getPendingSelection,
+  onAssignTask,
+  onOpenOpShopPickupDetail,
+  onPendingSelectionChange,
+  pickups,
+}) {
   const section = createTaskPoolSection({
     className: "task-pool-section-opshop",
     titleText: "OP SHOP PICKUP",
@@ -143,7 +152,14 @@ function createOpShopPickupSection({ pickups, onOpenOpShopPickupDetail }) {
     list.append(emptyState);
   } else {
     pickups.forEach((pickup) => {
-      list.append(createOpShopPickupCard(pickup, { onOpenOpShopPickupDetail }));
+      list.append(
+        createOpShopPickupCard(pickup, {
+          getPendingSelection,
+          onAssignTask,
+          onOpenOpShopPickupDetail,
+          onPendingSelectionChange,
+        }),
+      );
     });
   }
 
@@ -154,7 +170,7 @@ function createOpShopPickupSection({ pickups, onOpenOpShopPickupDetail }) {
 function createDeliveryOrderSection({
   filteredOrders,
   getPendingSelection,
-  onAssign,
+  onAssignTask,
   onOpenOrderDetail,
   onPendingSelectionChange,
   unassignedOrders,
@@ -188,7 +204,7 @@ function createDeliveryOrderSection({
   filteredOrders.forEach((order) => {
     list.append(createDeliveryOrderCard(order, {
       getPendingSelection,
-      onAssign,
+      onAssignTask,
       onOpenOrderDetail,
       onPendingSelectionChange,
     }));
@@ -198,7 +214,12 @@ function createDeliveryOrderSection({
   return section;
 }
 
-function createOpShopPickupCard(pickup, { onOpenOpShopPickupDetail }) {
+function createOpShopPickupCard(pickup, {
+  getPendingSelection,
+  onAssignTask,
+  onOpenOpShopPickupDetail,
+  onPendingSelectionChange,
+}) {
   const card = document.createElement("article");
   card.className = "order-card order-card-compact opshop-pickup-card";
   card.tabIndex = 0;
@@ -249,17 +270,25 @@ function createOpShopPickupCard(pickup, { onOpenOpShopPickupDetail }) {
   note.textContent = `Note: ${truncateText(pickup.status_notes || pickup.task_notes || "None")}`;
 
   content.append(kicker, name, suburb, meta, note);
-  card.append(content);
+  const controls = createAssignmentControls({
+    getPendingSelection,
+    onAssignTask,
+    onPendingSelectionChange,
+    taskId: pickup.pickup_task_id,
+    taskLabel: "OP SHOP PICKUP",
+    taskType: "OPSHOP_PICKUP",
+  });
+
+  card.append(content, controls);
   return card;
 }
 
 function createDeliveryOrderCard(order, {
   getPendingSelection,
-  onAssign,
+  onAssignTask,
   onOpenOrderDetail,
   onPendingSelectionChange,
 }) {
-  const selection = getPendingSelection(order.order_id);
   const card = document.createElement("article");
   card.className = "order-card order-card-compact";
   card.tabIndex = 0;
@@ -303,6 +332,29 @@ function createDeliveryOrderCard(order, {
 
   content.append(invoice, company, suburb, meta, note);
 
+  const controls = createAssignmentControls({
+    getPendingSelection,
+    onAssignTask,
+    onPendingSelectionChange,
+    taskId: order.order_id,
+    taskLabel: "Order",
+    taskType: "ORDER",
+  });
+
+  card.append(content, controls);
+  return card;
+}
+
+function createAssignmentControls({
+  getPendingSelection,
+  onAssignTask,
+  onPendingSelectionChange,
+  taskId,
+  taskLabel,
+  taskType,
+}) {
+  const selection = getPendingSelection(taskType, taskId);
+  const controlIdSuffix = `${taskType.toLowerCase()}-${taskId}`;
   const controls = document.createElement("div");
   controls.className = "order-controls compact-order-controls";
   controls.addEventListener("click", (event) => event.stopPropagation());
@@ -310,10 +362,10 @@ function createDeliveryOrderCard(order, {
 
   const driverLabel = document.createElement("label");
   driverLabel.textContent = "Driver";
-  driverLabel.setAttribute("for", `driver-${order.order_id}`);
+  driverLabel.setAttribute("for", `driver-${controlIdSuffix}`);
 
   const driverSelect = document.createElement("select");
-  driverSelect.id = `driver-${order.order_id}`;
+  driverSelect.id = `driver-${controlIdSuffix}`;
   driverSelect.disabled = state.isSaving || state.isLoading;
   driverSelect.append(createOption("", "Select driver", selection.driver_id === ""));
   state.drivers.forEach((driver) => {
@@ -322,10 +374,10 @@ function createDeliveryOrderCard(order, {
 
   const tripLabel = document.createElement("label");
   tripLabel.textContent = "Trip";
-  tripLabel.setAttribute("for", `trip-${order.order_id}`);
+  tripLabel.setAttribute("for", `trip-${controlIdSuffix}`);
 
   const tripSelect = document.createElement("select");
-  tripSelect.id = `trip-${order.order_id}`;
+  tripSelect.id = `trip-${controlIdSuffix}`;
   tripSelect.disabled = state.isSaving || state.isLoading;
   tripSelect.append(createOption("trip1", "trip1", selection.trip_no !== "trip2"));
   tripSelect.append(createOption("trip2", "trip2", selection.trip_no === "trip2"));
@@ -335,27 +387,26 @@ function createDeliveryOrderCard(order, {
   assignButton.disabled = !selection.driver_id || state.isSaving || state.isLoading;
   assignButton.textContent = state.isSaving ? "Saving..." : "Assign";
   assignButton.title = selection.driver_id
-    ? "Assign this Order to the selected Driver and Trip"
+    ? `Assign this ${taskLabel} to the selected Driver and Trip`
     : "Select a driver to enable Assign";
 
   driverSelect.addEventListener("change", () => {
-    onPendingSelectionChange(order.order_id, { driver_id: driverSelect.value });
+    onPendingSelectionChange(taskType, taskId, { driver_id: driverSelect.value });
     assignButton.disabled = driverSelect.value === "" || state.isSaving || state.isLoading;
     assignButton.title = driverSelect.value
-      ? "Assign this Order to the selected Driver and Trip"
+      ? `Assign this ${taskLabel} to the selected Driver and Trip`
       : "Select a driver to enable Assign";
   });
 
   tripSelect.addEventListener("change", () => {
-    onPendingSelectionChange(order.order_id, { trip_no: tripSelect.value || "trip1" });
+    onPendingSelectionChange(taskType, taskId, { trip_no: tripSelect.value || "trip1" });
   });
 
   assignButton.addEventListener("click", (event) => {
     event.stopPropagation();
-    onAssign(order.order_id);
+    onAssignTask(taskType, taskId);
   });
 
   controls.append(driverLabel, driverSelect, tripLabel, tripSelect, assignButton);
-  card.append(content, controls);
-  return card;
+  return controls;
 }

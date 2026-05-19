@@ -131,8 +131,6 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn('card.addEventListener("click"', task_pool_renderer)
         self.assertIn('event.key === "Enter" || event.key === " "', task_pool_renderer)
         self.assertNotIn('textContent = "Details"', task_pool_renderer)
-        self.assertNotIn("onAssign(pickup", task_pool_renderer)
-        self.assertNotIn("driver-${pickup", task_pool_renderer)
 
     def test_phase5_opshop_pickup_detail_modal_is_read_only(self):
         app_js = (FRONTEND_ROOT / "app.js").read_text(encoding="utf-8")
@@ -141,7 +139,9 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         ).read_text(encoding="utf-8")
 
         self.assertIn("opshopPickups: payload.opshop_pickups || []", app_js)
+        self.assertIn("assignedOpShopPickups: payload.assigned_opshop_pickups || []", app_js)
         self.assertIn("state.opshopPickups = board.opshopPickups", app_js)
+        self.assertIn("state.assignedOpShopPickups = board.assignedOpShopPickups", app_js)
         self.assertIn("onOpenOpShopPickupDetail: openOpShopPickupDetail", app_js)
         self.assertIn("renderOpShopPickupDetailPopup", app_js)
         self.assertIn('closeButton.textContent = "Close"', modal_renderer)
@@ -168,6 +168,38 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
             self.assertIn(label, modal_renderer)
         self.assertNotIn("api", modal_renderer.lower())
         self.assertNotIn("fetch(", modal_renderer)
+
+    def test_phase7_opshop_assignment_frontend_contract(self):
+        app_js = (FRONTEND_ROOT / "app.js").read_text(encoding="utf-8")
+        assignment_actions = (
+            FRONTEND_ROOT / "js" / "actions" / "assignment-actions.js"
+        ).read_text(encoding="utf-8")
+        task_pool_renderer = (
+            FRONTEND_ROOT / "js" / "render" / "task-pool-renderer.js"
+        ).read_text(encoding="utf-8")
+        trip_summary_renderer = (
+            FRONTEND_ROOT / "js" / "render" / "trip-summary-renderer.js"
+        ).read_text(encoding="utf-8")
+        final_summary_renderer = (
+            FRONTEND_ROOT / "js" / "render" / "final-summary-renderer.js"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("handleAssignTask", assignment_actions)
+        self.assertIn("getTaskKey(taskType, taskId)", assignment_actions)
+        self.assertIn("task_type: taskType", assignment_actions)
+        self.assertIn('taskType: "OPSHOP_PICKUP"', task_pool_renderer)
+        self.assertIn("onAssignTask(taskType, taskId)", task_pool_renderer)
+        self.assertIn('driverSelect.id = `driver-${controlIdSuffix}`', task_pool_renderer)
+        self.assertIn('tripSelect.id = `trip-${controlIdSuffix}`', task_pool_renderer)
+        self.assertIn("controls.addEventListener(\"click\", (event) => event.stopPropagation())", task_pool_renderer)
+        self.assertIn("controls.addEventListener(\"keydown\", (event) => event.stopPropagation())", task_pool_renderer)
+        self.assertIn("onAssignTask: assignmentActions.handleAssignTask", app_js)
+        self.assertIn("assigned-opshop-task", trip_summary_renderer)
+        self.assertIn("getAssignedOpShopPickupsForDriver", trip_summary_renderer)
+        self.assertIn("onOpenOpShopPickupDetail(pickup.pickup_task_id)", trip_summary_renderer)
+        self.assertIn("onUnassign(assignment.task_type, assignment.task_id)", trip_summary_renderer)
+        self.assertIn("not included in Final Trip Summary or Excel export", trip_summary_renderer)
+        self.assertNotIn("OP SHOP PICKUP", final_summary_renderer)
 
     def test_product_line_typing_updates_state_without_popup_rerender(self):
         order_actions = (

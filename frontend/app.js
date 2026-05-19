@@ -36,6 +36,7 @@ function normalizeBoardResponse(payload) {
     vehicles: payload.vehicles || [],
     assignments: payload.assignments || [],
     opshopPickups: payload.opshop_pickups || [],
+    assignedOpShopPickups: payload.assigned_opshop_pickups || [],
     driverVehicleAssignments: (payload.driver_vehicle_assignments || []).map((assignment) => ({
       ...assignment,
       delivery_date: assignment.delivery_date || assignment.dispatch_date || payload.dispatch_date || state.dispatchDate,
@@ -54,6 +55,7 @@ function applyBoardResponse(payload) {
   state.vehicles = board.vehicles;
   state.assignments = board.assignments;
   state.opshopPickups = board.opshopPickups;
+  state.assignedOpShopPickups = board.assignedOpShopPickups;
   state.driverVehicleAssignments = board.driverVehicleAssignments;
   assignmentActions.cleanupPendingSelections();
 }
@@ -232,7 +234,7 @@ function renderTaskPool() {
     onOpenOpShopPickupDetail: openOpShopPickupDetail,
     onOpenOrderDetail: orderActions.openOrderDetail,
     onPendingSelectionChange: assignmentActions.updatePendingSelection,
-    onAssign: assignmentActions.handleAssign,
+    onAssignTask: assignmentActions.handleAssignTask,
   });
 }
 
@@ -263,6 +265,7 @@ function renderDriverSummary() {
     },
     onVehicleChange: vehicleActions.handleVehicleChange,
     onGenerateDriverSummary: finalSummaryActions.handleGenerateDriverSummary,
+    onOpenOpShopPickupDetail: openOpShopPickupDetail,
     onOpenOrderDetail: orderActions.openOrderDetail,
     onUnassign: assignmentActions.handleUnassign,
   });
@@ -783,6 +786,7 @@ const orderActions = createOrderActions({
 
 const assignmentActions = createAssignmentActions({
   clearError,
+  closeOpShopPickupDetail,
   closeOrderDetail: orderActions.closeOrderDetail,
   loadBoard,
   renderBoard,

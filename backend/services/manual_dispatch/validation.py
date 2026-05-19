@@ -1,7 +1,7 @@
 from backend.services.manual_dispatch.normalization import clean_required_text
 
 
-SUPPORTED_TASK_TYPES = {"ORDER"}
+SUPPORTED_TASK_TYPES = {"ORDER", "OPSHOP_PICKUP"}
 SUPPORTED_TRIPS = {"trip1", "trip2"}
 
 

@@ -197,6 +197,7 @@ class ManualDispatchBoardResponse:
     assignments: List[ManualDispatchAssignment]
     driver_vehicle_assignments: List[ManualDriverVehicleAssignment]
     opshop_pickups: List[OpShopPickupBoardItem] = field(default_factory=list)
+    assigned_opshop_pickups: List[OpShopPickupBoardItem] = field(default_factory=list)
 
 
 @dataclass

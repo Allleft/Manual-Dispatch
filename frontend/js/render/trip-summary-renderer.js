@@ -2,11 +2,12 @@ import { state } from "../state/app-state.js";
 import {
   calculateDriverTotals,
   calculateTripTotals,
+  getAssignedOpShopPickupsForDriver,
   getAssignedOrdersForDriver,
+  getAssignedTaskForAssignment,
   getAssignmentsForDriverTrip,
   getDriverExceptions,
   getFinalSummaryKey,
-  getOrderByTaskId,
   getSelectedVehicleForDriver,
   isVehicleSelectedByAnotherDriver,
 } from "../state/selectors.js";
@@ -16,6 +17,7 @@ import {
   createOption,
 } from "../utils/dom-utils.js";
 import {
+  formatOptional,
   formatOrderLoadQuantity,
 } from "../utils/format-utils.js";
 
@@ -23,6 +25,7 @@ export function renderDriverSummary({
   onDeliveryDateChange,
   onVehicleChange,
   onGenerateDriverSummary,
+  onOpenOpShopPickupDetail,
   onOpenOrderDetail,
   onUnassign,
 }) {
@@ -67,6 +70,8 @@ export function renderDriverSummary({
     }
 
     const assignedOrders = getAssignedOrdersForDriver(driver.driver_id);
+    const assignedOpShopPickups = getAssignedOpShopPickupsForDriver(driver.driver_id);
+    const hasAssignedTasks = assignedOrders.length > 0 || assignedOpShopPickups.length > 0;
     const finalSummary = state.finalTripSummaries[getFinalSummaryKey(driver.driver_id)];
     const hasLockedFinalSummary = Boolean(finalSummary);
     const hasUnsavedLockedFinalSummary = Boolean(finalSummary && !finalSummary.summary_id);
@@ -156,13 +161,20 @@ export function renderDriverSummary({
     if (assignedOrders.length > 0 && !hasLockedFinalSummary) {
       header.append(generateButton);
     }
+    if (assignedOpShopPickups.length > 0) {
+      const opShopExportHint = document.createElement("p");
+      opShopExportHint.className = "vehicle-hint";
+      opShopExportHint.textContent =
+        "OP SHOP PICKUP tasks are shown in Driver Summary but are not included in Final Trip Summary or Excel export.";
+      header.append(opShopExportHint);
+    }
     if (finalLockHint.textContent) {
       header.append(finalLockHint);
     }
 
     const trips = document.createElement("div");
     trips.className = "trip-columns";
-    if (assignedOrders.length === 0) {
+    if (!hasAssignedTasks) {
       const emptyState = document.createElement("p");
       emptyState.className = "empty-trip editable-empty-state";
       emptyState.textContent = hasUnsavedLockedFinalSummary
@@ -177,7 +189,7 @@ export function renderDriverSummary({
               driver.driver_id,
               tripNo,
               tripNo === "trip1" ? "Trip 1" : "Trip 2",
-              { onOpenOrderDetail, onUnassign },
+              { onOpenOpShopPickupDetail, onOpenOrderDetail, onUnassign },
             ),
           );
         }
@@ -226,12 +238,16 @@ function createTripGroup(driverId, tripNo, title, handlers) {
     taskList.append(emptyState);
   } else {
     assignedTasks.forEach((assignment) => {
-      const order = getOrderByTaskId(assignment.task_id);
-      if (!order) {
+      const assignedTask = getAssignedTaskForAssignment(assignment);
+      if (!assignedTask) {
         return;
       }
 
-      taskList.append(createAssignedTask(assignment, order, handlers));
+      if (assignedTask.taskType === "OPSHOP_PICKUP") {
+        taskList.append(createAssignedOpShopPickupTask(assignment, assignedTask.task, handlers));
+        return;
+      }
+      taskList.append(createAssignedTask(assignment, assignedTask.task, handlers));
     });
   }
 
@@ -272,6 +288,67 @@ function createAssignedTask(assignment, order, { onOpenOrderDetail, onUnassign }
   deliveryDate.textContent = `Delivery Date: ${order.delivery_date || "-"}`;
 
   details.append(suburb, deliveryDate, pallet);
+
+  const unassignButton = document.createElement("button");
+  unassignButton.type = "button";
+  unassignButton.className = "button-secondary";
+  unassignButton.disabled = state.isSaving || state.isLoading;
+  unassignButton.textContent = state.isSaving ? "Saving..." : "Unassign";
+  unassignButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    onUnassign(assignment.task_type, assignment.task_id);
+  });
+
+  row.append(details, unassignButton);
+  return row;
+}
+
+function createAssignedOpShopPickupTask(
+  assignment,
+  pickup,
+  { onOpenOpShopPickupDetail, onUnassign },
+) {
+  const row = document.createElement("article");
+  row.className = "assigned-task assigned-opshop-task";
+  row.tabIndex = 0;
+  row.setAttribute("role", "button");
+  row.setAttribute("title", "View OP SHOP PICKUP details");
+  row.setAttribute(
+    "aria-label",
+    `View OP SHOP PICKUP details for ${pickup.opshop_name || pickup.pickup_task_id}`,
+  );
+  row.addEventListener("click", () => onOpenOpShopPickupDetail(pickup.pickup_task_id));
+  row.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      onOpenOpShopPickupDetail(pickup.pickup_task_id);
+    }
+  });
+
+  const details = document.createElement("div");
+
+  const badgeRow = document.createElement("div");
+  badgeRow.className = "hint-badge-row";
+  badgeRow.append(createBadge("OP SHOP PICKUP", "good"));
+
+  const name = document.createElement("p");
+  name.className = "assigned-suburb";
+  name.textContent = formatOptional(pickup.opshop_name);
+
+  const meta = document.createElement("p");
+  meta.className = "assigned-delivery-date";
+  meta.textContent = [
+    `Pickup Date: ${formatOptional(pickup.pickup_date)}`,
+    `Suburb: ${formatOptional(pickup.suburb)}`,
+    `Run: ${formatOptional(pickup.run_type)}`,
+    `Frequency: ${formatOptional(pickup.pickup_frequency)}`,
+  ].join(" | ");
+
+  const phone = document.createElement("p");
+  phone.className = "assigned-pallet";
+  phone.textContent = `Phone: ${formatOptional(pickup.primary_phone)}`;
+
+  details.append(badgeRow, name, meta, phone);
 
   const unassignButton = document.createElement("button");
   unassignButton.type = "button";

@@ -2,42 +2,47 @@ import {
   apiAssignTask,
   apiUnassignTask,
 } from "../api/manual-dispatch-api.js";
+import { getTaskKey } from "../state/selectors.js";
 
 export function createAssignmentActions({
   clearError,
+  closeOpShopPickupDetail,
   closeOrderDetail,
   loadBoard,
   renderBoard,
   showError,
   state,
 }) {
-  function getPendingSelection(orderId) {
-    if (!state.pendingSelections[orderId]) {
-      state.pendingSelections[orderId] = { driver_id: "", trip_no: "trip1" };
+  function getPendingSelection(taskType, taskId) {
+    const key = getTaskKey(taskType, taskId);
+    if (!state.pendingSelections[key]) {
+      state.pendingSelections[key] = { driver_id: "", trip_no: "trip1" };
     }
-    return state.pendingSelections[orderId];
+    return state.pendingSelections[key];
   }
 
-  function updatePendingSelection(orderId, updates) {
-    const current = getPendingSelection(orderId);
-    state.pendingSelections[orderId] = {
+  function updatePendingSelection(taskType, taskId, updates) {
+    const key = getTaskKey(taskType, taskId);
+    const current = getPendingSelection(taskType, taskId);
+    state.pendingSelections[key] = {
       ...current,
       ...updates,
     };
   }
 
   function cleanupPendingSelections() {
-    const orderIds = new Set(state.orders.map((order) => order.order_id));
-    const assignedOrderIds = new Set(
-      state.assignments
-        .filter((assignment) => assignment.task_type === "ORDER")
-        .map((assignment) => assignment.task_id),
+    const taskKeys = new Set([
+      ...state.orders.map((order) => getTaskKey("ORDER", order.order_id)),
+      ...state.opshopPickups.map((pickup) => getTaskKey("OPSHOP_PICKUP", pickup.pickup_task_id)),
+    ]);
+    const assignedTaskKeys = new Set(
+      state.assignments.map((assignment) => getTaskKey(assignment.task_type, assignment.task_id)),
     );
     const driverIds = new Set(state.drivers.map((driver) => driver.driver_id));
 
-    Object.entries(state.pendingSelections).forEach(([orderId, selection]) => {
-      if (!orderIds.has(orderId) || assignedOrderIds.has(orderId)) {
-        delete state.pendingSelections[orderId];
+    Object.entries(state.pendingSelections).forEach(([taskKey, selection]) => {
+      if (!taskKeys.has(taskKey) || assignedTaskKeys.has(taskKey)) {
+        delete state.pendingSelections[taskKey];
         return;
       }
 
@@ -52,7 +57,11 @@ export function createAssignmentActions({
   }
 
   async function handleAssign(orderId) {
-    const selection = getPendingSelection(orderId);
+    return handleAssignTask("ORDER", orderId);
+  }
+
+  async function handleAssignTask(taskType, taskId) {
+    const selection = getPendingSelection(taskType, taskId);
     if (!selection.driver_id || state.isSaving) {
       return;
     }
@@ -64,13 +73,18 @@ export function createAssignmentActions({
     try {
       await apiAssignTask({
         dispatch_date: state.dispatchDate,
-        task_type: "ORDER",
-        task_id: orderId,
+        task_type: taskType,
+        task_id: taskId,
         driver_id: selection.driver_id,
         trip_no: selection.trip_no || "trip1",
       });
-      delete state.pendingSelections[orderId];
-      closeOrderDetail();
+      delete state.pendingSelections[getTaskKey(taskType, taskId)];
+      if (taskType === "ORDER") {
+        closeOrderDetail();
+      }
+      if (taskType === "OPSHOP_PICKUP" && closeOpShopPickupDetail) {
+        closeOpShopPickupDetail();
+      }
       await loadBoard(state.dispatchDate);
     } catch (error) {
       state.isSaving = false;
@@ -94,7 +108,7 @@ export function createAssignmentActions({
         task_type: taskType,
         task_id: taskId,
       });
-      updatePendingSelection(taskId, { driver_id: "", trip_no: "trip1" });
+      updatePendingSelection(taskType, taskId, { driver_id: "", trip_no: "trip1" });
       await loadBoard(state.dispatchDate);
     } catch (error) {
       state.isSaving = false;
@@ -107,6 +121,7 @@ export function createAssignmentActions({
     cleanupPendingSelections,
     getPendingSelection,
     handleAssign,
+    handleAssignTask,
     handleUnassign,
     updatePendingSelection,
   };

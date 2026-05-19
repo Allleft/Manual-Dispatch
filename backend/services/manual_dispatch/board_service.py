@@ -39,6 +39,9 @@ class BoardService:
                 opshop_generation.window_start,
                 opshop_generation.window_end,
             ),
+            assigned_opshop_pickups=self.repository.list_assigned_opshop_pickup_board_items(
+                dispatch_date
+            ),
         )
 
     def get_specifications(self):

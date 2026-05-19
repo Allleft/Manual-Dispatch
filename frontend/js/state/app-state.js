@@ -27,6 +27,7 @@ export const state = {
   assignments: [],
   driverVehicleAssignments: [],
   opshopPickups: [],
+  assignedOpShopPickups: [],
   pendingSelections: {},
   taskPoolSearch: "",
   urgencyFilter: "All",

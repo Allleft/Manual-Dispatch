@@ -17,13 +17,21 @@ class AssignmentService:
         self.validator.validate_driver_exists(request.driver_id)
         self.validator.validate_trip_no(request.trip_no)
 
-        return self.repository.upsert_assignment(
+        assignment = self.repository.upsert_assignment(
             dispatch_date=request.dispatch_date,
             task_type=request.task_type,
             task_id=request.task_id,
             driver_id=request.driver_id,
             trip_no=request.trip_no,
         )
+        if request.task_type == "OPSHOP_PICKUP":
+            self.repository.update_opshop_pickup_task_assignment_status(
+                request.task_id,
+                status="ASSIGNED",
+                driver_id=request.driver_id,
+                trip_no=request.trip_no,
+            )
+        return assignment
 
     def unassign_task(self, request):
         self.validator.validate_task_type(request.task_type)
@@ -32,6 +40,13 @@ class AssignmentService:
             task_type=request.task_type,
             task_id=request.task_id,
         )
+        if request.task_type == "OPSHOP_PICKUP":
+            self.repository.update_opshop_pickup_task_assignment_status(
+                request.task_id,
+                status="ACTIVE",
+                driver_id=None,
+                trip_no=None,
+            )
         return self.board_service.get_board(request.dispatch_date)
 
     def assign_vehicle_to_driver(self, request):

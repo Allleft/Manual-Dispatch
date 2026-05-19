@@ -111,12 +111,23 @@ class SQLiteManualDispatchRepository:
                 FROM manual_dispatch_assignments
                 WHERE dispatch_date = ?
                     AND (
-                        task_type <> 'ORDER'
-                        OR EXISTS (
-                            SELECT 1
-                            FROM manual_orders
-                            WHERE manual_orders.order_id = manual_dispatch_assignments.task_id
-                                AND manual_orders.status = 'ACTIVE'
+                        (
+                            task_type = 'ORDER'
+                            AND EXISTS (
+                                SELECT 1
+                                FROM manual_orders
+                                WHERE manual_orders.order_id = manual_dispatch_assignments.task_id
+                                    AND manual_orders.status = 'ACTIVE'
+                            )
+                        )
+                        OR (
+                            task_type = 'OPSHOP_PICKUP'
+                            AND EXISTS (
+                                SELECT 1
+                                FROM opshop_pickup_tasks
+                                WHERE opshop_pickup_tasks.pickup_task_id = manual_dispatch_assignments.task_id
+                                    AND opshop_pickup_tasks.status = 'ASSIGNED'
+                            )
                         )
                     )
                 ORDER BY assignment_id
@@ -124,6 +135,62 @@ class SQLiteManualDispatchRepository:
                 (dispatch_date,),
             ).fetchall()
         return [self._row_to_assignment(row) for row in rows]
+
+    def list_assigned_opshop_pickup_board_items(self, dispatch_date):
+        with connect(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    task.pickup_task_id,
+                    task.task_type,
+                    task.schedule_id,
+                    task.opshop_id,
+                    task.pickup_date,
+                    assignment.dispatch_date AS dispatch_date,
+                    task.status,
+                    task.generated_from,
+                    task.notes AS task_notes,
+                    assignment.driver_id AS driver_id,
+                    assignment.trip_no AS trip_no,
+                    location.name AS opshop_name,
+                    location.suburb,
+                    location.street_address,
+                    location.area_region,
+                    location.primary_contact,
+                    location.primary_phone,
+                    location.secondary_contact,
+                    location.secondary_phone,
+                    location.access_type,
+                    location.key_required,
+                    location.trailer_restriction,
+                    location.status_notes,
+                    schedule.run_day,
+                    schedule.run_type,
+                    schedule.pickup_frequency,
+                    schedule.time_window,
+                    schedule.call_before_arrival,
+                    schedule.call_timing
+                FROM manual_dispatch_assignments assignment
+                JOIN opshop_pickup_tasks task
+                    ON task.pickup_task_id = assignment.task_id
+                LEFT JOIN opshop_locations location
+                    ON location.opshop_id = task.opshop_id
+                LEFT JOIN opshop_pickup_schedules schedule
+                    ON schedule.schedule_id = task.schedule_id
+                WHERE assignment.dispatch_date = ?
+                    AND assignment.task_type = 'OPSHOP_PICKUP'
+                    AND task.status = 'ASSIGNED'
+                ORDER BY
+                    assignment.driver_id,
+                    assignment.trip_no,
+                    task.pickup_date,
+                    COALESCE(location.suburb, ''),
+                    COALESCE(location.name, ''),
+                    task.pickup_task_id
+                """,
+                (dispatch_date,),
+            ).fetchall()
+        return [self._row_to_opshop_pickup_board_item(row) for row in rows]
 
     def list_driver_vehicle_assignments(self, dispatch_date):
         with connect(self.db_path) as connection:
@@ -630,10 +697,35 @@ class SQLiteManualDispatchRepository:
             connection.commit()
         return self.get_opshop_pickup_task(task.pickup_task_id)
 
+    def update_opshop_pickup_task_assignment_status(
+        self,
+        pickup_task_id,
+        status,
+        driver_id=None,
+        trip_no=None,
+    ):
+        with connect(self.db_path) as connection:
+            connection.execute(
+                """
+                UPDATE opshop_pickup_tasks
+                SET status = ?,
+                    driver_id = ?,
+                    trip_no = ?,
+                    updated_at = ?
+                WHERE pickup_task_id = ?
+                """,
+                (status, driver_id, trip_no, self._timestamp(), pickup_task_id),
+            )
+            connection.commit()
+        return self.get_opshop_pickup_task(pickup_task_id)
+
     def get_task(self, task_type, task_id):
         if task_type == "ORDER":
             order = self.get_order(task_id)
             return order if order and order.status == "ACTIVE" else None
+        if task_type == "OPSHOP_PICKUP":
+            task = self.get_opshop_pickup_task(task_id)
+            return task if task and task.status == "ACTIVE" else None
         return None
 
     def create_order(self, order):

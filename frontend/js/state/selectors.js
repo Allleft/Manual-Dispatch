@@ -71,7 +71,10 @@ export function getOrderByTaskId(taskId) {
 }
 
 export function getOpShopPickupByTaskId(taskId) {
-  return state.opshopPickups.find((pickup) => pickup.pickup_task_id === taskId);
+  return (
+    state.opshopPickups.find((pickup) => pickup.pickup_task_id === taskId) ||
+    state.assignedOpShopPickups.find((pickup) => pickup.pickup_task_id === taskId)
+  );
 }
 
 export function findDriverById(driverId) {
@@ -125,6 +128,25 @@ export function getAssignedOrdersForTrip(driverId, tripNo) {
   return getAssignmentsForDriverTrip(driverId, tripNo)
     .map((assignment) => getOrderByTaskId(assignment.task_id))
     .filter(Boolean);
+}
+
+export function getAssignedOpShopPickupsForDriver(driverId) {
+  return getAssignmentsForDriver(driverId)
+    .filter((assignment) => assignment.task_type === "OPSHOP_PICKUP")
+    .map((assignment) => getOpShopPickupByTaskId(assignment.task_id))
+    .filter(Boolean);
+}
+
+export function getAssignedTaskForAssignment(assignment) {
+  if (assignment.task_type === "ORDER") {
+    const order = getOrderByTaskId(assignment.task_id);
+    return order ? { assignment, task: order, taskType: "ORDER" } : null;
+  }
+  if (assignment.task_type === "OPSHOP_PICKUP") {
+    const pickup = getOpShopPickupByTaskId(assignment.task_id);
+    return pickup ? { assignment, task: pickup, taskType: "OPSHOP_PICKUP" } : null;
+  }
+  return null;
 }
 
 export function getAssignmentsForDriver(driverId) {
@@ -204,6 +226,10 @@ export function getFinalSummaryKey(driverId, deliveryDate = state.driverSummaryD
 function assignmentMatchesDriverSummaryDeliveryDate(assignment) {
   if (!state.driverSummaryDeliveryDate) {
     return false;
+  }
+
+  if (assignment.task_type === "OPSHOP_PICKUP") {
+    return Boolean(getOpShopPickupByTaskId(assignment.task_id));
   }
 
   const order = getOrderByTaskId(assignment.task_id);
