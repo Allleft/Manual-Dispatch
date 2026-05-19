@@ -6,6 +6,7 @@ from backend.schemas import (
     ManualDispatchAssignment,
     ManualDriverVehicleAssignment,
     Order,
+    OpShopPickupBoardItem,
     OpShopLocation,
     OpShopPickupSchedule,
     OpShopPickupTask,
@@ -356,6 +357,27 @@ class InMemoryManualDispatchRepository:
             key=lambda task: (task.pickup_date, task.pickup_task_id),
         )
 
+    def list_opshop_pickup_board_items_for_window(self, start_date, end_date):
+        items = []
+        for task in self.opshop_pickup_tasks:
+            if task.status != "ACTIVE":
+                continue
+            if not (start_date <= task.pickup_date <= end_date):
+                continue
+            schedule = self.get_opshop_pickup_schedule(task.schedule_id)
+            location = self.get_opshop_location(task.opshop_id)
+            items.append(self._opshop_pickup_board_item(task, schedule, location))
+
+        return sorted(
+            items,
+            key=lambda item: (
+                item.pickup_date,
+                item.suburb or "",
+                item.opshop_name or "",
+                item.pickup_task_id,
+            ),
+        )
+
     def find_opshop_pickup_task_by_schedule_and_date(self, schedule_id, pickup_date):
         return next(
             (
@@ -395,6 +417,40 @@ class InMemoryManualDispatchRepository:
             order = self.get_order(task_id)
             return order if order and order.status == "ACTIVE" else None
         return None
+
+    def _opshop_pickup_board_item(self, task, schedule, location):
+        return OpShopPickupBoardItem(
+            pickup_task_id=task.pickup_task_id,
+            task_type=task.task_type,
+            schedule_id=task.schedule_id,
+            opshop_id=task.opshop_id,
+            opshop_name=location.name if location else "",
+            suburb=location.suburb if location else None,
+            street_address=location.street_address if location else None,
+            area_region=location.area_region if location else None,
+            pickup_date=task.pickup_date,
+            dispatch_date=task.dispatch_date,
+            run_day=schedule.run_day if schedule else None,
+            run_type=schedule.run_type if schedule else None,
+            pickup_frequency=schedule.pickup_frequency if schedule else None,
+            time_window=schedule.time_window if schedule else None,
+            call_before_arrival=schedule.call_before_arrival if schedule else False,
+            call_timing=schedule.call_timing if schedule else None,
+            primary_contact=location.primary_contact if location else None,
+            primary_phone=location.primary_phone if location else None,
+            secondary_contact=location.secondary_contact if location else None,
+            secondary_phone=location.secondary_phone if location else None,
+            access_type=location.access_type if location else None,
+            key_required=location.key_required if location else False,
+            trailer_restriction=location.trailer_restriction if location else None,
+            status=task.status,
+            generated_from=task.generated_from,
+            status_notes=location.status_notes if location else None,
+            task_notes=task.notes,
+            driver_id=task.driver_id,
+            trip_no=task.trip_no,
+            is_assigned=bool(task.driver_id or task.trip_no),
+        )
 
     def create_order(self, order):
         if self.get_order(order.order_id):

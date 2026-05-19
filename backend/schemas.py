@@ -155,6 +155,40 @@ class EnsureOpShopPickupTasksResult:
 
 
 @dataclass
+class OpShopPickupBoardItem:
+    pickup_task_id: str
+    task_type: str
+    schedule_id: Optional[str]
+    opshop_id: str
+    opshop_name: str
+    suburb: Optional[str]
+    street_address: Optional[str]
+    area_region: Optional[str]
+    pickup_date: str
+    dispatch_date: Optional[str]
+    run_day: Optional[str]
+    run_type: Optional[str]
+    pickup_frequency: Optional[str]
+    time_window: Optional[str]
+    call_before_arrival: bool
+    call_timing: Optional[str]
+    primary_contact: Optional[str]
+    primary_phone: Optional[str]
+    secondary_contact: Optional[str]
+    secondary_phone: Optional[str]
+    access_type: Optional[str]
+    key_required: bool
+    trailer_restriction: Optional[str]
+    status: str
+    generated_from: str
+    status_notes: Optional[str]
+    task_notes: Optional[str]
+    driver_id: Optional[str]
+    trip_no: Optional[str]
+    is_assigned: bool
+
+
+@dataclass
 class ManualDispatchBoardResponse:
     dispatch_date: str
     orders: List[Order]
@@ -162,6 +196,7 @@ class ManualDispatchBoardResponse:
     vehicles: List[Vehicle]
     assignments: List[ManualDispatchAssignment]
     driver_vehicle_assignments: List[ManualDriverVehicleAssignment]
+    opshop_pickups: List[OpShopPickupBoardItem] = field(default_factory=list)
 
 
 @dataclass

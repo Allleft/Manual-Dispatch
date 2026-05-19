@@ -11,6 +11,7 @@ from backend.schemas import (
     ManualDriverVehicleAssignment,
     Order,
     OpShopLocation,
+    OpShopPickupBoardItem,
     OpShopPickupSchedule,
     OpShopPickupTask,
     OperatorAccountRecord,
@@ -460,6 +461,57 @@ class SQLiteManualDispatchRepository:
                 (start_date, end_date),
             ).fetchall()
         return [self._row_to_opshop_pickup_task(row) for row in rows]
+
+    def list_opshop_pickup_board_items_for_window(self, start_date, end_date):
+        with connect(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    task.pickup_task_id,
+                    task.task_type,
+                    task.schedule_id,
+                    task.opshop_id,
+                    task.pickup_date,
+                    task.dispatch_date,
+                    task.status,
+                    task.generated_from,
+                    task.notes AS task_notes,
+                    task.driver_id,
+                    task.trip_no,
+                    location.name AS opshop_name,
+                    location.suburb,
+                    location.street_address,
+                    location.area_region,
+                    location.primary_contact,
+                    location.primary_phone,
+                    location.secondary_contact,
+                    location.secondary_phone,
+                    location.access_type,
+                    location.key_required,
+                    location.trailer_restriction,
+                    location.status_notes,
+                    schedule.run_day,
+                    schedule.run_type,
+                    schedule.pickup_frequency,
+                    schedule.time_window,
+                    schedule.call_before_arrival,
+                    schedule.call_timing
+                FROM opshop_pickup_tasks task
+                LEFT JOIN opshop_locations location
+                    ON location.opshop_id = task.opshop_id
+                LEFT JOIN opshop_pickup_schedules schedule
+                    ON schedule.schedule_id = task.schedule_id
+                WHERE task.pickup_date BETWEEN ? AND ?
+                    AND task.status = 'ACTIVE'
+                ORDER BY
+                    task.pickup_date,
+                    COALESCE(location.suburb, ''),
+                    COALESCE(location.name, ''),
+                    task.pickup_task_id
+                """,
+                (start_date, end_date),
+            ).fetchall()
+        return [self._row_to_opshop_pickup_board_item(row) for row in rows]
 
     def find_opshop_pickup_task_by_schedule_and_date(self, schedule_id, pickup_date):
         with connect(self.db_path) as connection:
@@ -1483,6 +1535,40 @@ class SQLiteManualDispatchRepository:
             notes=row["notes"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
+        )
+
+    def _row_to_opshop_pickup_board_item(self, row):
+        return OpShopPickupBoardItem(
+            pickup_task_id=row["pickup_task_id"],
+            task_type=row["task_type"],
+            schedule_id=row["schedule_id"],
+            opshop_id=row["opshop_id"],
+            opshop_name=row["opshop_name"] or "",
+            suburb=row["suburb"],
+            street_address=row["street_address"],
+            area_region=row["area_region"],
+            pickup_date=row["pickup_date"],
+            dispatch_date=row["dispatch_date"],
+            run_day=row["run_day"],
+            run_type=row["run_type"],
+            pickup_frequency=row["pickup_frequency"],
+            time_window=row["time_window"],
+            call_before_arrival=bool(row["call_before_arrival"]),
+            call_timing=row["call_timing"],
+            primary_contact=row["primary_contact"],
+            primary_phone=row["primary_phone"],
+            secondary_contact=row["secondary_contact"],
+            secondary_phone=row["secondary_phone"],
+            access_type=row["access_type"],
+            key_required=bool(row["key_required"]),
+            trailer_restriction=row["trailer_restriction"],
+            status=row["status"],
+            generated_from=row["generated_from"],
+            status_notes=row["status_notes"],
+            task_notes=row["task_notes"],
+            driver_id=row["driver_id"],
+            trip_no=row["trip_no"],
+            is_assigned=bool(row["driver_id"] or row["trip_no"]),
         )
 
     def _timestamp(self):

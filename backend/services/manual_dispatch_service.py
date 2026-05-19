@@ -17,7 +17,11 @@ class ManualDispatchService:
 
     def __init__(self, repository=None):
         self.repository = repository or InMemoryManualDispatchRepository()
-        self.board_service = BoardService(self.repository)
+        self.opshop_pickup_service = OpShopPickupService(self.repository)
+        self.board_service = BoardService(
+            self.repository,
+            self.opshop_pickup_service,
+        )
         self.validator = ManualDispatchValidator(self.repository)
         self.id_generator = ManualDispatchIdGenerator(self.repository)
         self.auth_service = OperatorAuthService(self.repository)
@@ -27,7 +31,6 @@ class ManualDispatchService:
             self.board_service,
         )
         self.order_service = OrderService(self.repository, self.id_generator)
-        self.opshop_pickup_service = OpShopPickupService(self.repository)
         self.specification_service = SpecificationService(
             self.repository,
             self.validator,
