@@ -66,7 +66,7 @@ export function renderTaskPoolFilters({
 
 export function renderTaskPool({
   getPendingSelection,
-  onOpenOpShopPickupDetail,
+  onOpenOpShopPickupList,
   onOpenOrderDetail,
   onPendingSelectionChange,
   onAssignTask,
@@ -95,11 +95,8 @@ export function renderTaskPool({
 
   taskPoolList.append(
     createOpShopPickupSection({
-      getPendingSelection,
-      onAssignTask,
-      onOpenOpShopPickupDetail,
-      onPendingSelectionChange,
-      pickups: state.opshopPickups,
+      onOpenOpShopPickupList,
+      pickups: state.scheduledOpShopPickups,
     }),
   );
 
@@ -131,11 +128,8 @@ function createTaskPoolSection({ className, titleText }) {
 }
 
 function createOpShopPickupSection({
-  getPendingSelection,
-  onAssignTask,
-  onOpenOpShopPickupDetail,
-  onPendingSelectionChange,
   pickups,
+  onOpenOpShopPickupList,
 }) {
   const section = createTaskPoolSection({
     className: "task-pool-section-opshop",
@@ -143,25 +137,9 @@ function createOpShopPickupSection({
   });
 
   const list = document.createElement("div");
-  list.className = "task-pool-section-grid";
+  list.className = "task-pool-section-grid opshop-summary-grid";
 
-  if (pickups.length === 0) {
-    const emptyState = document.createElement("p");
-    emptyState.className = "empty-board";
-    emptyState.textContent = "No OP SHOP PICKUP tasks for the next 14 days.";
-    list.append(emptyState);
-  } else {
-    pickups.forEach((pickup) => {
-      list.append(
-        createOpShopPickupCard(pickup, {
-          getPendingSelection,
-          onAssignTask,
-          onOpenOpShopPickupDetail,
-          onPendingSelectionChange,
-        }),
-      );
-    });
-  }
+  list.append(createOpShopPickupListSummaryCard(pickups, onOpenOpShopPickupList));
 
   section.append(list);
   return section;
@@ -214,73 +192,74 @@ function createDeliveryOrderSection({
   return section;
 }
 
-function createOpShopPickupCard(pickup, {
-  getPendingSelection,
-  onAssignTask,
-  onOpenOpShopPickupDetail,
-  onPendingSelectionChange,
-}) {
+function createOpShopPickupListSummaryCard(pickups, onOpenOpShopPickupList) {
   const card = document.createElement("article");
-  card.className = "order-card order-card-compact opshop-pickup-card";
-  card.tabIndex = 0;
-  card.setAttribute("role", "button");
-  card.setAttribute("aria-label", `View OP SHOP PICKUP details for ${pickup.opshop_name || pickup.pickup_task_id}`);
-  card.addEventListener("click", () => onOpenOpShopPickupDetail(pickup.pickup_task_id));
-  card.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      onOpenOpShopPickupDetail(pickup.pickup_task_id);
-    }
-  });
+  card.className = "order-card opshop-pickup-list-summary-card";
 
   const content = document.createElement("div");
-  content.className = "compact-order-main opshop-pickup-main";
+  content.className = "opshop-pickup-list-summary-main";
 
   const kicker = document.createElement("p");
   kicker.className = "compact-invoice";
-  kicker.textContent = "OP SHOP PICKUP";
+  kicker.textContent = "Scheduled Standard / Regular";
 
-  const name = document.createElement("p");
-  name.className = "compact-company opshop-pickup-name";
-  name.textContent = formatOptional(pickup.opshop_name);
+  const title = document.createElement("h3");
+  title.className = "compact-suburb";
+  title.textContent = "Regular / Standard OP SHOP Pickup List";
 
-  const suburb = document.createElement("h3");
-  suburb.className = "compact-suburb";
-  suburb.textContent = formatOptional(pickup.suburb);
+  const summary = document.createElement("p");
+  summary.className = "compact-note opshop-pickup-note";
+  summary.textContent =
+    pickups.length === 0
+      ? "No OP SHOP PICKUP tasks for the next 14 days."
+      : `${pickups.length} scheduled pickups in the 14-day window.`;
 
   const meta = document.createElement("div");
   meta.className = "compact-meta opshop-pickup-meta";
   meta.append(
-    createBadge(`Pickup Date: ${formatOptional(pickup.pickup_date)}`),
-    createBadge(formatOptional(pickup.run_type, "UNKNOWN"), "good"),
-    createBadge(`Frequency: ${formatOptional(pickup.pickup_frequency)}`),
+    createBadge(`Count: ${pickups.length}`, "good"),
+    createBadge(`Window: ${getWindowLabel()}`),
+    createBadge("ACTIVE / ASSIGNED"),
   );
-  if (pickup.time_window) {
-    meta.append(createBadge(`Time: ${pickup.time_window}`));
-  }
-  if (pickup.call_before_arrival) {
-    meta.append(createBadge("Call before arrival", "warning"));
-  }
-  if (pickup.primary_phone) {
-    meta.append(createBadge(`Phone: ${pickup.primary_phone}`));
-  }
 
-  const note = document.createElement("p");
-  note.className = "compact-note opshop-pickup-note";
-  note.textContent = `Note: ${truncateText(pickup.status_notes || pickup.task_notes || "None")}`;
+  const openButton = document.createElement("button");
+  openButton.type = "button";
+  openButton.textContent = "Open List";
+  openButton.addEventListener("click", onOpenOpShopPickupList);
 
-  content.append(kicker, name, suburb, meta, note);
-  const controls = createAssignmentControls({
-    getPendingSelection,
-    onAssignTask,
-    onPendingSelectionChange,
-    taskId: pickup.pickup_task_id,
-    taskLabel: "OP SHOP PICKUP",
-    taskType: "OPSHOP_PICKUP",
-  });
-
-  card.append(content, controls);
+  content.append(kicker, title, summary, meta, openButton);
+  card.append(content);
   return card;
+}
+
+function getWindowLabel() {
+  const start = parseLocalDate(state.dispatchDate);
+  const end = addDays(start, 13);
+  if (!start || !end) {
+    return "next 14 days";
+  }
+  return `${formatDateShort(start)} to ${formatDateShort(end)}`;
+}
+
+function parseLocalDate(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ""));
+  if (!match) {
+    return null;
+  }
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+}
+
+function addDays(date, days) {
+  if (!date) {
+    return null;
+  }
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function formatDateShort(date) {
+  return `${date.getDate()}/${date.getMonth() + 1}`;
 }
 
 function createDeliveryOrderCard(order, {

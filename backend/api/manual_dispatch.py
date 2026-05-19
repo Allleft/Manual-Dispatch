@@ -8,6 +8,7 @@ from backend.schemas import (
     AssignTaskRequest,
     CreateDriverRequest,
     CreateOrderRequest,
+    CreateOpShopPickupTaskRequest,
     CreateVehicleRequest,
     EnsureOpShopPickupTasksRequest,
     LoginOperatorAccountRequest,
@@ -16,6 +17,7 @@ from backend.schemas import (
     SaveFinalTripSummaryRequest,
     UnassignTaskRequest,
     UpdateDriverRequest,
+    UpdateOpShopPickupTaskRequest,
     UpdateOrderRequest,
     UpdateVehicleRequest,
     to_dict,
@@ -137,6 +139,41 @@ def cancel_order(order_id: str):
 def generate_opshop_pickups(request: EnsureOpShopPickupTasksRequest):
     try:
         return to_dict(service.ensure_opshop_pickup_tasks_for_window(request))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.get("/opshop-pickup-schedules")
+def list_opshop_pickup_schedules(run_type: str = "scheduled"):
+    try:
+        return [
+            to_dict(candidate)
+            for candidate in service.list_opshop_pickup_schedule_candidates(run_type)
+        ]
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.post("/opshop-pickups")
+def create_opshop_pickup(request: CreateOpShopPickupTaskRequest):
+    try:
+        return to_dict(service.create_opshop_pickup_task(request))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.patch("/opshop-pickups/{pickup_task_id}")
+def update_opshop_pickup(pickup_task_id: str, request: UpdateOpShopPickupTaskRequest):
+    try:
+        return to_dict(service.update_opshop_pickup_task(pickup_task_id, request))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.delete("/opshop-pickups/{pickup_task_id}")
+def delete_opshop_pickup(pickup_task_id: str):
+    try:
+        return to_dict(service.delete_opshop_pickup_task(pickup_task_id))
     except ValueError as error:
         raise _to_http_exception(error) from error
 

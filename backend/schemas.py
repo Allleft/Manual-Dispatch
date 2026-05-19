@@ -189,6 +189,32 @@ class OpShopPickupBoardItem:
 
 
 @dataclass
+class OpShopPickupScheduleCandidate:
+    schedule_id: str
+    opshop_id: str
+    opshop_name: str
+    suburb: Optional[str]
+    run_day: Optional[str]
+    run_type: str
+    pickup_frequency: Optional[str]
+    time_window: Optional[str]
+    primary_phone: Optional[str]
+
+
+@dataclass
+class CreateOpShopPickupTaskRequest:
+    schedule_id: Optional[str] = None
+    pickup_date: Optional[str] = None
+    notes: Optional[str] = None
+
+
+@dataclass
+class UpdateOpShopPickupTaskRequest:
+    pickup_date: Optional[str] = None
+    notes: Optional[str] = None
+
+
+@dataclass
 class ManualDispatchBoardResponse:
     dispatch_date: str
     orders: List[Order]
@@ -198,6 +224,7 @@ class ManualDispatchBoardResponse:
     driver_vehicle_assignments: List[ManualDriverVehicleAssignment]
     opshop_pickups: List[OpShopPickupBoardItem] = field(default_factory=list)
     assigned_opshop_pickups: List[OpShopPickupBoardItem] = field(default_factory=list)
+    scheduled_opshop_pickups: List[OpShopPickupBoardItem] = field(default_factory=list)
 
 
 @dataclass

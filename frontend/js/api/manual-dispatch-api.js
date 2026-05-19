@@ -152,6 +152,36 @@ export async function apiCancelOrder(orderId) {
 }
 
 
+export async function apiListOpShopPickupSchedules() {
+  return requestJson("/api/manual-dispatch/opshop-pickup-schedules", {
+    query: { run_type: "scheduled" },
+  });
+}
+
+
+export async function apiCreateOpShopPickup(payload) {
+  return requestJson("/api/manual-dispatch/opshop-pickups", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+
+export async function apiUpdateOpShopPickup(pickupTaskId, payload) {
+  return requestJson(`/api/manual-dispatch/opshop-pickups/${encodeURIComponent(pickupTaskId)}`, {
+    method: "PATCH",
+    body: payload,
+  });
+}
+
+
+export async function apiDeleteOpShopPickup(pickupTaskId) {
+  return requestJson(`/api/manual-dispatch/opshop-pickups/${encodeURIComponent(pickupTaskId)}`, {
+    method: "DELETE",
+  });
+}
+
+
 export async function apiSaveFinalSummary(payload) {
   return requestJson("/api/manual-dispatch/final-summaries", {
     method: "POST",

@@ -85,6 +85,21 @@ class ManualDispatchService:
     def ensure_opshop_pickup_tasks_for_window(self, request):
         return self.opshop_pickup_service.ensure_opshop_pickup_tasks_for_window(request)
 
+    def list_opshop_pickup_schedule_candidates(self, run_type="scheduled"):
+        return self.opshop_pickup_service.list_opshop_pickup_schedule_candidates(run_type)
+
+    def create_opshop_pickup_task(self, request):
+        return self.opshop_pickup_service.create_opshop_pickup_task(request)
+
+    def update_opshop_pickup_task(self, pickup_task_id, request):
+        return self.opshop_pickup_service.update_opshop_pickup_task(
+            pickup_task_id,
+            request,
+        )
+
+    def delete_opshop_pickup_task(self, pickup_task_id):
+        return self.opshop_pickup_service.delete_opshop_pickup_task(pickup_task_id)
+
     def create_driver(self, request):
         return self.specification_service.create_driver(request)
 

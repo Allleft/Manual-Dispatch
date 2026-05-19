@@ -9,6 +9,7 @@ from backend.schemas import (
     OpShopPickupBoardItem,
     OpShopLocation,
     OpShopPickupSchedule,
+    OpShopPickupScheduleCandidate,
     OpShopPickupTask,
     OperatorAccountRecord,
     ProductDetailLine,
@@ -357,6 +358,39 @@ class InMemoryManualDispatchRepository:
             if schedule.active_flag and schedule.status == "Active"
         ]
 
+    def list_scheduled_opshop_pickup_schedule_candidates(self):
+        candidates = []
+        for schedule in self.list_opshop_pickup_schedules():
+            if not (
+                schedule.active_flag
+                and schedule.status == "Active"
+                and schedule.run_type in {"STANDARD", "REGULAR"}
+            ):
+                continue
+            location = self.get_opshop_location(schedule.opshop_id)
+            candidates.append(
+                OpShopPickupScheduleCandidate(
+                    schedule_id=schedule.schedule_id,
+                    opshop_id=schedule.opshop_id,
+                    opshop_name=location.name if location else "",
+                    suburb=location.suburb if location else None,
+                    run_day=schedule.run_day,
+                    run_type=schedule.run_type,
+                    pickup_frequency=schedule.pickup_frequency,
+                    time_window=schedule.time_window,
+                    primary_phone=location.primary_phone if location else None,
+                )
+            )
+        return sorted(
+            candidates,
+            key=lambda candidate: (
+                candidate.opshop_name or "",
+                candidate.suburb or "",
+                candidate.run_day or "",
+                candidate.schedule_id,
+            ),
+        )
+
     def get_opshop_pickup_schedule(self, schedule_id):
         return next(
             (
@@ -399,6 +433,29 @@ class InMemoryManualDispatchRepository:
             if not (start_date <= task.pickup_date <= end_date):
                 continue
             schedule = self.get_opshop_pickup_schedule(task.schedule_id)
+            location = self.get_opshop_location(task.opshop_id)
+            items.append(self._opshop_pickup_board_item(task, schedule, location))
+
+        return sorted(
+            items,
+            key=lambda item: (
+                item.pickup_date,
+                item.suburb or "",
+                item.opshop_name or "",
+                item.pickup_task_id,
+            ),
+        )
+
+    def list_scheduled_opshop_pickup_board_items_for_window(self, start_date, end_date):
+        items = []
+        for task in self.opshop_pickup_tasks:
+            if task.status not in {"ACTIVE", "ASSIGNED"}:
+                continue
+            if not (start_date <= task.pickup_date <= end_date):
+                continue
+            schedule = self.get_opshop_pickup_schedule(task.schedule_id)
+            if not schedule or schedule.run_type not in {"STANDARD", "REGULAR"}:
+                continue
             location = self.get_opshop_location(task.opshop_id)
             items.append(self._opshop_pickup_board_item(task, schedule, location))
 

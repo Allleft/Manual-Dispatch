@@ -120,16 +120,12 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
             task_pool_renderer.index("DELIVERY ORDERS"),
         )
         self.assertIn("No OP SHOP PICKUP tasks for the next 14 days.", task_pool_renderer)
-        self.assertIn("opshop-pickup-card", task_pool_renderer)
-        self.assertIn("pickup.opshop_name", task_pool_renderer)
-        self.assertIn("pickup.suburb", task_pool_renderer)
-        self.assertIn("pickup.pickup_date", task_pool_renderer)
-        self.assertIn("pickup.run_type", task_pool_renderer)
-        self.assertIn("pickup.pickup_frequency", task_pool_renderer)
-        self.assertIn('card.tabIndex = 0', task_pool_renderer)
-        self.assertIn('card.setAttribute("role", "button")', task_pool_renderer)
-        self.assertIn('card.addEventListener("click"', task_pool_renderer)
-        self.assertIn('event.key === "Enter" || event.key === " "', task_pool_renderer)
+        self.assertIn("Regular / Standard OP SHOP Pickup List", task_pool_renderer)
+        self.assertIn("opshop-pickup-list-summary-card", task_pool_renderer)
+        self.assertIn("Open List", task_pool_renderer)
+        self.assertIn("state.scheduledOpShopPickups", task_pool_renderer)
+        self.assertNotIn("function createOpShopPickupCard", task_pool_renderer)
+        self.assertNotIn('taskType: "OPSHOP_PICKUP"', task_pool_renderer)
         self.assertNotIn('textContent = "Details"', task_pool_renderer)
 
     def test_phase5_opshop_pickup_detail_modal_is_read_only(self):
@@ -140,8 +136,10 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
 
         self.assertIn("opshopPickups: payload.opshop_pickups || []", app_js)
         self.assertIn("assignedOpShopPickups: payload.assigned_opshop_pickups || []", app_js)
+        self.assertIn("scheduledOpShopPickups: payload.scheduled_opshop_pickups || []", app_js)
         self.assertIn("state.opshopPickups = board.opshopPickups", app_js)
         self.assertIn("state.assignedOpShopPickups = board.assignedOpShopPickups", app_js)
+        self.assertIn("state.scheduledOpShopPickups = board.scheduledOpShopPickups", app_js)
         self.assertIn("onOpenOpShopPickupDetail: openOpShopPickupDetail", app_js)
         self.assertIn("renderOpShopPickupDetailPopup", app_js)
         self.assertIn('closeButton.textContent = "Close"', modal_renderer)
@@ -187,19 +185,66 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("handleAssignTask", assignment_actions)
         self.assertIn("getTaskKey(taskType, taskId)", assignment_actions)
         self.assertIn("task_type: taskType", assignment_actions)
-        self.assertIn('taskType: "OPSHOP_PICKUP"', task_pool_renderer)
-        self.assertIn("onAssignTask(taskType, taskId)", task_pool_renderer)
-        self.assertIn('driverSelect.id = `driver-${controlIdSuffix}`', task_pool_renderer)
-        self.assertIn('tripSelect.id = `trip-${controlIdSuffix}`', task_pool_renderer)
-        self.assertIn("controls.addEventListener(\"click\", (event) => event.stopPropagation())", task_pool_renderer)
-        self.assertIn("controls.addEventListener(\"keydown\", (event) => event.stopPropagation())", task_pool_renderer)
-        self.assertIn("onAssignTask: assignmentActions.handleAssignTask", app_js)
+        self.assertIn("handleAssignTask(\"ORDER\"", assignment_actions)
+        self.assertNotIn('taskType: "OPSHOP_PICKUP"', task_pool_renderer)
         self.assertIn("assigned-opshop-task", trip_summary_renderer)
         self.assertIn("getAssignedOpShopPickupsForDriver", trip_summary_renderer)
         self.assertIn("onOpenOpShopPickupDetail(pickup.pickup_task_id)", trip_summary_renderer)
         self.assertIn("onUnassign(assignment.task_type, assignment.task_id)", trip_summary_renderer)
         self.assertIn("not included in Final Trip Summary or Excel export", trip_summary_renderer)
         self.assertNotIn("OP SHOP PICKUP", final_summary_renderer)
+
+    def test_phase8_opshop_pickup_list_frontend_contract(self):
+        app_js = (FRONTEND_ROOT / "app.js").read_text(encoding="utf-8")
+        api_module = (
+            FRONTEND_ROOT / "js" / "api" / "manual-dispatch-api.js"
+        ).read_text(encoding="utf-8")
+        actions = (
+            FRONTEND_ROOT / "js" / "actions" / "opshop-pickup-actions.js"
+        ).read_text(encoding="utf-8")
+        task_pool_renderer = (
+            FRONTEND_ROOT / "js" / "render" / "task-pool-renderer.js"
+        ).read_text(encoding="utf-8")
+        modal_renderer = (
+            FRONTEND_ROOT / "js" / "render" / "opshop-pickup-list-modal-renderer.js"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("apiListOpShopPickupSchedules", api_module)
+        self.assertIn("apiCreateOpShopPickup", api_module)
+        self.assertIn("apiUpdateOpShopPickup", api_module)
+        self.assertIn("apiDeleteOpShopPickup", api_module)
+        self.assertIn("createOpShopPickupActions", actions)
+        self.assertIn("openOpShopPickupList", actions)
+        self.assertIn("handleCreatePickupTask", actions)
+        self.assertIn("handleUpdatePickupTask", actions)
+        self.assertIn("handleDeletePickupTask", actions)
+        self.assertIn("onOpenOpShopPickupList", task_pool_renderer)
+        self.assertIn("Regular / Standard OP SHOP Pickup List", task_pool_renderer)
+        self.assertIn("Count:", task_pool_renderer)
+        self.assertIn("Window:", task_pool_renderer)
+        self.assertIn("Open List", task_pool_renderer)
+        self.assertIn("renderOpShopPickupListModal", app_js)
+        self.assertIn("onOpenOpShopPickupList: opShopPickupActions.openOpShopPickupList", app_js)
+
+        self.assertIn("groupPickupsByDate", modal_renderer)
+        self.assertIn("formatDateHeading", modal_renderer)
+        self.assertIn("Monday", modal_renderer)
+        self.assertIn("opshop-date-group", modal_renderer)
+        self.assertIn("opshop-list-item", modal_renderer)
+        self.assertIn("onOpenDetail(pickup.pickup_task_id)", modal_renderer)
+        self.assertIn("event.stopPropagation()", modal_renderer)
+        self.assertIn("Schedule", modal_renderer)
+        self.assertIn("Pickup Date", modal_renderer)
+        self.assertIn("Notes", modal_renderer)
+        self.assertIn("Delete Pickup Task", modal_renderer)
+        self.assertIn("Assigned pickups can update notes only", modal_renderer)
+        self.assertNotIn("createElement(\"table\")", modal_renderer)
+        self.assertNotIn('textContent = "Assign"', modal_renderer)
+        self.assertNotIn('textContent = "Unassign"', modal_renderer)
+        self.assertNotIn("driverSelect", modal_renderer)
+        self.assertNotIn("tripSelect", modal_renderer)
+        self.assertNotIn("fetch(", actions)
+        self.assertNotIn("fetch(", modal_renderer)
 
     def test_product_line_typing_updates_state_without_popup_rerender(self):
         order_actions = (

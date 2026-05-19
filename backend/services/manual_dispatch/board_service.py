@@ -17,6 +17,9 @@ class BoardService:
         )
 
     def get_board(self, dispatch_date):
+        scheduled_generation = self.opshop_pickup_service.ensure_opshop_pickup_tasks_for_inclusive_window(
+            EnsureOpShopPickupTasksRequest(start_date=dispatch_date, days=14)
+        )
         opshop_generation = self.opshop_pickup_service.ensure_opshop_pickup_tasks_for_window(
             EnsureOpShopPickupTasksRequest(start_date=dispatch_date, days=14)
         )
@@ -41,6 +44,10 @@ class BoardService:
             ),
             assigned_opshop_pickups=self.repository.list_assigned_opshop_pickup_board_items(
                 dispatch_date
+            ),
+            scheduled_opshop_pickups=self.repository.list_scheduled_opshop_pickup_board_items_for_window(
+                scheduled_generation.window_start,
+                scheduled_generation.window_end,
             ),
         )
 

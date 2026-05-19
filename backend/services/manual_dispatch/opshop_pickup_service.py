@@ -1,12 +1,15 @@
 import hashlib
 import re
 from dataclasses import dataclass
+from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
 
 from backend.schemas import (
+    CreateOpShopPickupTaskRequest,
     EnsureOpShopPickupTasksRequest,
     EnsureOpShopPickupTasksResult,
     OpShopPickupTask,
+    UpdateOpShopPickupTaskRequest,
 )
 
 
@@ -59,6 +62,103 @@ class OpShopPickupService:
         self.repository = repository
 
     def ensure_opshop_pickup_tasks_for_window(self, request):
+        return self._ensure_opshop_pickup_tasks_for_window(
+            request,
+            include_start_date=False,
+        )
+
+    def ensure_opshop_pickup_tasks_for_inclusive_window(self, request):
+        return self._ensure_opshop_pickup_tasks_for_window(
+            request,
+            include_start_date=True,
+        )
+
+    def list_opshop_pickup_schedule_candidates(self, run_type="scheduled"):
+        if (run_type or "scheduled").strip().lower() != "scheduled":
+            raise ValueError("Only scheduled OP SHOP pickup schedules are supported")
+        return self.repository.list_scheduled_opshop_pickup_schedule_candidates()
+
+    def create_opshop_pickup_task(self, request):
+        request = request or CreateOpShopPickupTaskRequest()
+        schedule_id = _clean_text(request.schedule_id)
+        pickup_date = _parse_iso_date(request.pickup_date, "pickup_date").isoformat()
+        schedule = self._get_schedulable_schedule(schedule_id)
+
+        if self.repository.find_opshop_pickup_task_by_schedule_and_date(
+            schedule.schedule_id,
+            pickup_date,
+        ):
+            raise ValueError("OP SHOP pickup task already exists for this schedule and date")
+
+        timestamp = _timestamp()
+        task = OpShopPickupTask(
+            pickup_task_id=_generated_task_id(schedule.schedule_id, pickup_date),
+            schedule_id=schedule.schedule_id,
+            opshop_id=schedule.opshop_id,
+            pickup_date=pickup_date,
+            task_type="OPSHOP_PICKUP",
+            generated_from="MANUAL",
+            status="ACTIVE",
+            dispatch_date=pickup_date,
+            driver_id=None,
+            trip_no=None,
+            notes=request.notes,
+            created_at=timestamp,
+            updated_at=timestamp,
+        )
+        return self.repository.insert_opshop_pickup_task(task)
+
+    def update_opshop_pickup_task(self, pickup_task_id, request):
+        request = request or UpdateOpShopPickupTaskRequest()
+        task = self.repository.get_opshop_pickup_task(pickup_task_id)
+        if not task:
+            raise ValueError("OP SHOP pickup task does not exist")
+        if task.status in {"CANCELLED", "COMPLETED"}:
+            raise ValueError("Cancelled or completed OP SHOP pickup tasks cannot be edited")
+
+        next_pickup_date = task.pickup_date
+        if request.pickup_date:
+            next_pickup_date = _parse_iso_date(request.pickup_date, "pickup_date").isoformat()
+
+        if task.status == "ASSIGNED" and next_pickup_date != task.pickup_date:
+            raise ValueError("Assigned OP SHOP pickup tasks cannot change pickup date")
+
+        if task.status == "ACTIVE" and next_pickup_date != task.pickup_date:
+            existing = self.repository.find_opshop_pickup_task_by_schedule_and_date(
+                task.schedule_id,
+                next_pickup_date,
+            )
+            if existing and existing.pickup_task_id != task.pickup_task_id:
+                raise ValueError("OP SHOP pickup task already exists for this schedule and date")
+
+        updated = replace(
+            task,
+            pickup_date=next_pickup_date,
+            dispatch_date=next_pickup_date,
+            notes=request.notes,
+            updated_at=_timestamp(),
+        )
+        return self.repository.upsert_opshop_pickup_task(updated)
+
+    def delete_opshop_pickup_task(self, pickup_task_id):
+        task = self.repository.get_opshop_pickup_task(pickup_task_id)
+        if not task:
+            raise ValueError("OP SHOP pickup task does not exist")
+        if task.status == "ASSIGNED":
+            raise ValueError("Unassign OP SHOP pickup before deleting it")
+        if task.status != "ACTIVE":
+            raise ValueError("Only active OP SHOP pickup tasks can be deleted")
+
+        cancelled = replace(
+            task,
+            status="CANCELLED",
+            driver_id=None,
+            trip_no=None,
+            updated_at=_timestamp(),
+        )
+        return self.repository.upsert_opshop_pickup_task(cancelled)
+
+    def _ensure_opshop_pickup_tasks_for_window(self, request, include_start_date):
         start = _parse_iso_date(request.start_date, "start_date")
         days = int(request.days or 14)
         if days < 1:
@@ -66,8 +166,12 @@ class OpShopPickupService:
         if days > MAX_GENERATION_DAYS:
             raise ValueError(f"days must be {MAX_GENERATION_DAYS} or less")
 
-        window_start = start + timedelta(days=1)
-        window_end = start + timedelta(days=days)
+        window_start = start if include_start_date else start + timedelta(days=1)
+        window_end = (
+            start + timedelta(days=days - 1)
+            if include_start_date
+            else start + timedelta(days=days)
+        )
         schedules = self.repository.list_opshop_pickup_schedules()
         skip_reasons = {}
         warnings = {}
@@ -147,6 +251,18 @@ class OpShopPickupService:
             created_tasks=created_tasks,
         )
 
+    def _get_schedulable_schedule(self, schedule_id):
+        if not schedule_id:
+            raise ValueError("schedule_id is required")
+        schedule = self.repository.get_opshop_pickup_schedule(schedule_id)
+        if not schedule:
+            raise ValueError("OP SHOP pickup schedule does not exist")
+        if not _is_active_schedule(schedule):
+            raise ValueError("OP SHOP pickup schedule is not active")
+        if schedule.run_type not in {"STANDARD", "REGULAR"}:
+            raise ValueError("Only STANDARD or REGULAR OP SHOP pickup schedules are supported")
+        return schedule
+
     def _resolve_generation_weekdays(self, schedule, frequency, warnings):
         if frequency.explicit_weekdays:
             if schedule.run_day and schedule.run_day not in frequency.explicit_weekdays:
@@ -215,6 +331,10 @@ def _parse_iso_date(value, field_name):
         return date.fromisoformat(value)
     except (TypeError, ValueError) as error:
         raise ValueError(f"{field_name} must be YYYY-MM-DD") from error
+
+
+def _clean_text(value):
+    return str(value or "").strip()
 
 
 def _is_active_schedule(schedule):

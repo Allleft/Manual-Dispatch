@@ -6,6 +6,7 @@ import { createAssignmentActions } from "./js/actions/assignment-actions.js";
 import { createAuthActions } from "./js/actions/auth-actions.js";
 import { createFinalSummaryActions } from "./js/actions/final-summary-actions.js";
 import { createOrderActions } from "./js/actions/order-actions.js";
+import { createOpShopPickupActions } from "./js/actions/opshop-pickup-actions.js";
 import { createSpecificationActions } from "./js/actions/specification-actions.js";
 import { createVehicleActions } from "./js/actions/vehicle-actions.js";
 import { DEFAULT_DISPATCH_DATE, state } from "./js/state/app-state.js";
@@ -27,6 +28,7 @@ import {
 } from "./js/render/task-pool-renderer.js";
 import { renderDriverSummary as renderDriverSummaryView } from "./js/render/trip-summary-renderer.js";
 import { renderOpShopPickupDetailPopup as renderOpShopPickupDetailPopupView } from "./js/render/opshop-pickup-modal-renderer.js";
+import { renderOpShopPickupListModal as renderOpShopPickupListModalView } from "./js/render/opshop-pickup-list-modal-renderer.js";
 
 function normalizeBoardResponse(payload) {
   return {
@@ -37,6 +39,7 @@ function normalizeBoardResponse(payload) {
     assignments: payload.assignments || [],
     opshopPickups: payload.opshop_pickups || [],
     assignedOpShopPickups: payload.assigned_opshop_pickups || [],
+    scheduledOpShopPickups: payload.scheduled_opshop_pickups || [],
     driverVehicleAssignments: (payload.driver_vehicle_assignments || []).map((assignment) => ({
       ...assignment,
       delivery_date: assignment.delivery_date || assignment.dispatch_date || payload.dispatch_date || state.dispatchDate,
@@ -56,6 +59,7 @@ function applyBoardResponse(payload) {
   state.assignments = board.assignments;
   state.opshopPickups = board.opshopPickups;
   state.assignedOpShopPickups = board.assignedOpShopPickups;
+  state.scheduledOpShopPickups = board.scheduledOpShopPickups;
   state.driverVehicleAssignments = board.driverVehicleAssignments;
   assignmentActions.cleanupPendingSelections();
 }
@@ -231,10 +235,25 @@ function renderTaskPoolFilters() {
 function renderTaskPool() {
   renderTaskPoolView({
     getPendingSelection: assignmentActions.getPendingSelection,
-    onOpenOpShopPickupDetail: openOpShopPickupDetail,
+    onOpenOpShopPickupList: opShopPickupActions.openOpShopPickupList,
     onOpenOrderDetail: orderActions.openOrderDetail,
     onPendingSelectionChange: assignmentActions.updatePendingSelection,
     onAssignTask: assignmentActions.handleAssignTask,
+  });
+}
+
+function renderOpShopPickupListModal() {
+  renderOpShopPickupListModalView({
+    onCancelForm: opShopPickupActions.cancelPickupTaskForm,
+    onCloseList: opShopPickupActions.closeOpShopPickupList,
+    onConfirmDelete: opShopPickupActions.handleDeletePickupTask,
+    onCreatePickup: opShopPickupActions.handleCreatePickupTask,
+    onOpenDetail: openOpShopPickupDetail,
+    onStartAdd: opShopPickupActions.startAddPickupTask,
+    onStartDelete: opShopPickupActions.startDeletePickupTask,
+    onStartEdit: opShopPickupActions.startEditPickupTask,
+    onUpdateForm: opShopPickupActions.updatePickupTaskForm,
+    onUpdatePickup: opShopPickupActions.handleUpdatePickupTask,
   });
 }
 
@@ -762,8 +781,9 @@ function renderBoard() {
   renderDriverSummary();
   renderFinalTripSummaries();
   renderOrderDetailPopup();
-  renderOpShopPickupDetailPopup();
   renderAddOrderPopup();
+  renderOpShopPickupListModal();
+  renderOpShopPickupDetailPopup();
   renderSpecificationModal();
   renderAuthGate();
 }
@@ -791,6 +811,12 @@ const assignmentActions = createAssignmentActions({
   loadBoard,
   renderBoard,
   showError,
+  state,
+});
+
+const opShopPickupActions = createOpShopPickupActions({
+  loadBoard,
+  renderBoard,
   state,
 });
 

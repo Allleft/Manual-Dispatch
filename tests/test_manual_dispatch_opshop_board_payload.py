@@ -39,8 +39,10 @@ class OpShopBoardPayloadTest(unittest.TestCase):
 
         self.assertIn("opshop_pickups", payload)
         self.assertIn("assigned_opshop_pickups", payload)
+        self.assertIn("scheduled_opshop_pickups", payload)
         self.assertEqual([], payload["opshop_pickups"])
         self.assertEqual([], payload["assigned_opshop_pickups"])
+        self.assertEqual([], payload["scheduled_opshop_pickups"])
         for key in [
             "dispatch_date",
             "orders",
@@ -58,10 +60,14 @@ class OpShopBoardPayloadTest(unittest.TestCase):
 
         board = self.service.get_board("2026-05-18")
 
-        self.assertEqual(["2026-05-25", "2026-06-01"], self._pickup_dates())
+        self.assertEqual(["2026-05-18", "2026-05-25", "2026-06-01"], self._pickup_dates())
         self.assertEqual(
             ["2026-05-25", "2026-06-01"],
             [item.pickup_date for item in board.opshop_pickups],
+        )
+        self.assertEqual(
+            ["2026-05-18", "2026-05-25"],
+            [item.pickup_date for item in board.scheduled_opshop_pickups],
         )
         self.assertNotIn("2026-05-18", [item.pickup_date for item in board.opshop_pickups])
 
@@ -73,6 +79,7 @@ class OpShopBoardPayloadTest(unittest.TestCase):
         board = self.service.get_board("2026-05-18")
 
         self.assertEqual([], board.opshop_pickups)
+        self.assertEqual([], board.scheduled_opshop_pickups)
 
     def test_board_returns_joined_location_schedule_and_task_fields(self):
         self.repository.upsert_opshop_pickup_schedule(
@@ -107,6 +114,10 @@ class OpShopBoardPayloadTest(unittest.TestCase):
         self.assertEqual("STANDARD", item.generated_from)
         self.assertEqual("ACTIVE", item.status)
         self.assertFalse(item.is_assigned)
+        self.assertEqual(
+            ["2026-05-19", "2026-05-26"],
+            [item.pickup_date for item in board.scheduled_opshop_pickups],
+        )
 
     def test_board_excludes_cancelled_and_completed_pickup_tasks(self):
         self.repository.upsert_opshop_pickup_task(
@@ -122,6 +133,42 @@ class OpShopBoardPayloadTest(unittest.TestCase):
         board = self.service.get_board("2026-05-18")
 
         self.assertEqual(["TASK-ACTIVE"], [item.pickup_task_id for item in board.opshop_pickups])
+        self.assertEqual([], board.scheduled_opshop_pickups)
+
+    def test_scheduled_opshop_pickups_include_active_and_assigned_standard_regular_only(self):
+        self.repository.upsert_opshop_pickup_schedule(
+            self._schedule("SCHED-STANDARD", run_day="SATURDAY", run_type="STANDARD")
+        )
+        self.repository.upsert_opshop_pickup_schedule(
+            self._schedule("SCHED-REGULAR", run_day="SATURDAY", run_type="REGULAR")
+        )
+        self.repository.upsert_opshop_pickup_schedule(
+            self._schedule("SCHED-ONCALL", run_type="ON_CALL")
+        )
+        self.repository.upsert_opshop_pickup_task(
+            self._task("TASK-ACTIVE", "SCHED-STANDARD", pickup_date="2026-05-18", status="ACTIVE")
+        )
+        self.repository.upsert_opshop_pickup_task(
+            self._task("TASK-ASSIGNED", "SCHED-REGULAR", pickup_date="2026-05-19", status="ASSIGNED")
+        )
+        self.repository.upsert_opshop_pickup_task(
+            self._task("TASK-ONCALL", "SCHED-ONCALL", pickup_date="2026-05-20", status="ACTIVE")
+        )
+        self.repository.upsert_opshop_pickup_task(
+            self._task("TASK-CANCELLED", "SCHED-STANDARD", pickup_date="2026-05-21", status="CANCELLED")
+        )
+        self.repository.upsert_opshop_pickup_task(
+            self._task("TASK-COMPLETED", "SCHED-STANDARD", pickup_date="2026-05-22", status="COMPLETED")
+        )
+
+        board = self.service.get_board("2026-05-18")
+
+        self.assertEqual(
+            ["TASK-ACTIVE", "TASK-ASSIGNED"],
+            [item.pickup_task_id for item in board.scheduled_opshop_pickups],
+        )
+        self.assertEqual("ASSIGNED", board.scheduled_opshop_pickups[1].status)
+        self.assertTrue(board.scheduled_opshop_pickups[1].is_assigned)
 
     def test_board_does_not_generate_on_call_or_review_required_schedules(self):
         self.repository.upsert_opshop_pickup_schedule(
@@ -151,7 +198,7 @@ class OpShopBoardPayloadTest(unittest.TestCase):
 
         self.assertEqual(2, len(first.opshop_pickups))
         self.assertEqual(2, len(second.opshop_pickups))
-        self.assertEqual(2, len(self.repository.list_opshop_pickup_tasks()))
+        self.assertEqual(3, len(self.repository.list_opshop_pickup_tasks()))
 
     def _pickup_dates(self):
         return [
@@ -210,18 +257,18 @@ class OpShopBoardPayloadTest(unittest.TestCase):
             updated_at="2026-05-19T00:00:00+00:00",
         )
 
-    def _task(self, pickup_task_id, pickup_date, status="ACTIVE"):
+    def _task(self, pickup_task_id, schedule_id=None, pickup_date="2026-05-20", status="ACTIVE"):
         return OpShopPickupTask(
             pickup_task_id=pickup_task_id,
-            schedule_id=None,
+            schedule_id=schedule_id,
             opshop_id="OPSHOP-001",
             pickup_date=pickup_date,
             task_type="OPSHOP_PICKUP",
             generated_from="MANUAL",
             status=status,
             dispatch_date=pickup_date,
-            driver_id=None,
-            trip_no=None,
+            driver_id="D001" if status == "ASSIGNED" else None,
+            trip_no="trip1" if status == "ASSIGNED" else None,
             notes="Manual fixture",
             created_at="2026-05-19T00:00:00+00:00",
             updated_at="2026-05-19T00:00:00+00:00",

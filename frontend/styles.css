@@ -359,6 +359,114 @@ h1 {
   overflow-wrap: anywhere;
 }
 
+.opshop-summary-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.opshop-pickup-list-summary-card {
+  max-width: none;
+}
+
+.opshop-pickup-list-summary-main {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.opshop-pickup-list-modal {
+  width: min(1100px, 100%);
+}
+
+.opshop-pickup-list-backdrop {
+  z-index: 25;
+}
+
+#opshop-pickup-detail-root .detail-backdrop {
+  z-index: 35;
+}
+
+.opshop-list-summary,
+.opshop-date-card-list,
+.opshop-date-group-list,
+.opshop-list-form {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.opshop-list-summary {
+  grid-template-columns: repeat(3, max-content);
+  align-items: center;
+}
+
+.opshop-list-form,
+.opshop-delete-confirmation {
+  border: 1px solid rgba(39, 93, 69, 0.16);
+  border-radius: var(--radius-md);
+  padding: 0.9rem;
+  background: rgba(223, 238, 229, 0.28);
+}
+
+.opshop-list-form {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.opshop-list-form .detail-actions,
+.opshop-list-form .hint-row {
+  grid-column: 1 / -1;
+}
+
+.opshop-date-group {
+  display: grid;
+  gap: 0.65rem;
+  border-top: 1px solid rgba(39, 93, 69, 0.14);
+  padding-top: 0.85rem;
+}
+
+.opshop-date-group h3 {
+  margin-bottom: 0;
+  color: var(--accent-strong);
+}
+
+.opshop-list-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.8rem;
+  align-items: start;
+  border: 1px solid rgba(39, 93, 69, 0.16);
+  border-radius: var(--radius-md);
+  padding: 0.85rem;
+  background: var(--panel);
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
+}
+
+.opshop-list-item:hover,
+.opshop-list-item:focus-visible {
+  border-color: rgba(23, 63, 48, 0.58);
+  box-shadow: 0 14px 32px rgba(23, 63, 48, 0.14);
+  transform: translateY(-1px);
+}
+
+.opshop-list-item-body {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.opshop-list-item-body h4 {
+  margin-bottom: 0;
+  color: var(--accent-strong);
+  font-size: 1rem;
+}
+
+.opshop-list-item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  justify-content: flex-end;
+}
+
 .driver-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
