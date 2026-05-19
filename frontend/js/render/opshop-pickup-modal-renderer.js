@@ -11,6 +11,7 @@ export function renderOpShopPickupDetailPopup({ onCloseOpShopPickupDetail }) {
     document.body.append(root);
   }
 
+  clearEscapeHandler(root);
   root.innerHTML = "";
   if (!state.activeOpShopPickupDetailId) {
     return;
@@ -24,6 +25,7 @@ export function renderOpShopPickupDetailPopup({ onCloseOpShopPickupDetail }) {
 
   const backdrop = document.createElement("div");
   backdrop.className = "detail-backdrop";
+  backdrop.addEventListener("click", onCloseOpShopPickupDetail);
 
   const modal = document.createElement("article");
   modal.className = "order-detail-modal opshop-detail-modal";
@@ -31,6 +33,12 @@ export function renderOpShopPickupDetailPopup({ onCloseOpShopPickupDetail }) {
   modal.setAttribute("aria-modal", "true");
   modal.setAttribute("aria-labelledby", "opshop-pickup-detail-title");
   modal.addEventListener("click", (event) => event.stopPropagation());
+  root.opshopEscapeHandler = (event) => {
+    if (event.key === "Escape") {
+      onCloseOpShopPickupDetail();
+    }
+  };
+  document.addEventListener("keydown", root.opshopEscapeHandler);
 
   const header = document.createElement("div");
   header.className = "detail-header";
@@ -89,6 +97,13 @@ export function renderOpShopPickupDetailPopup({ onCloseOpShopPickupDetail }) {
 
   backdrop.append(modal);
   root.append(backdrop);
+}
+
+function clearEscapeHandler(root) {
+  if (root.opshopEscapeHandler) {
+    document.removeEventListener("keydown", root.opshopEscapeHandler);
+    root.opshopEscapeHandler = null;
+  }
 }
 
 function createDetailSection(titleText, fields) {

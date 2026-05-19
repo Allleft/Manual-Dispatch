@@ -339,13 +339,24 @@ h1 {
     linear-gradient(180deg, rgba(223, 238, 229, 0.55), rgba(255, 255, 255, 0.94));
 }
 
+.opshop-pickup-card:hover,
+.opshop-pickup-card:focus-visible {
+  border-color: rgba(23, 63, 48, 0.58);
+  box-shadow: 0 14px 32px rgba(23, 63, 48, 0.16);
+}
+
 .opshop-pickup-main {
   grid-column: 1 / -1;
+  overflow: hidden;
 }
 
 .opshop-pickup-name {
   color: var(--accent-strong);
   font-size: 0.9rem;
+}
+
+.opshop-pickup-note {
+  overflow-wrap: anywhere;
 }
 
 .driver-grid {

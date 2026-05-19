@@ -126,6 +126,10 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("pickup.pickup_date", task_pool_renderer)
         self.assertIn("pickup.run_type", task_pool_renderer)
         self.assertIn("pickup.pickup_frequency", task_pool_renderer)
+        self.assertIn('card.tabIndex = 0', task_pool_renderer)
+        self.assertIn('card.setAttribute("role", "button")', task_pool_renderer)
+        self.assertIn('card.addEventListener("click"', task_pool_renderer)
+        self.assertIn('event.key === "Enter" || event.key === " "', task_pool_renderer)
         self.assertNotIn('textContent = "Details"', task_pool_renderer)
         self.assertNotIn("onAssign(pickup", task_pool_renderer)
         self.assertNotIn("driver-${pickup", task_pool_renderer)
@@ -140,6 +144,10 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("state.opshopPickups = board.opshopPickups", app_js)
         self.assertIn("onOpenOpShopPickupDetail: openOpShopPickupDetail", app_js)
         self.assertIn("renderOpShopPickupDetailPopup", app_js)
+        self.assertIn('closeButton.textContent = "Close"', modal_renderer)
+        self.assertIn('backdrop.addEventListener("click", onCloseOpShopPickupDetail)', modal_renderer)
+        self.assertIn('event.key === "Escape"', modal_renderer)
+        self.assertIn('modal.addEventListener("click", (event) => event.stopPropagation())', modal_renderer)
         for label in [
             "Address / Access",
             "Street Address",
