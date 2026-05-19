@@ -1,0 +1,57 @@
+name: Manual Dispatch CI
+
+on:
+  push:
+    branches:
+      - main
+      - feature/opshop-pickup
+  pull_request:
+    branches:
+      - main
+      - feature/opshop-pickup
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Python tests and frontend syntax checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      MANUAL_DISPATCH_DB_PATH: data/manual_dispatch_ci.sqlite3
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install httpx
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Compile Python files
+        run: python -m compileall backend tests tools
+
+      - name: Run Python unit tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Check frontend entry script syntax
+        run: node --check frontend/app.js
+
+      - name: Check all frontend JavaScript syntax
+        run: find frontend -type f -name "*.js" -print0 | xargs -0 -n 1 node --check
+
+      - name: Check whitespace errors
+        run: git diff --check
