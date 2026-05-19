@@ -27,6 +27,9 @@ from backend.repositories.sqlite_manual_dispatch_repository import (  # noqa: E4
     SQLiteManualDispatchRepository,
 )
 from backend.schemas import OpShopLocation, OpShopPickupSchedule  # noqa: E402
+from backend.services.manual_dispatch.opshop_pickup_service import (  # noqa: E402
+    classify_pickup_frequency,
+)
 
 
 DEFAULT_DB_PATH = PROJECT_ROOT / "data" / "manual_dispatch.sqlite3"
@@ -66,16 +69,6 @@ RUN_TYPE_MAP = {
     "on call": "ON_CALL",
     "on_call": "ON_CALL",
 }
-KNOWN_PICKUP_FREQUENCIES = {
-    "weekly",
-    "fortnight",
-    "fortnightly",
-    "monthly",
-    "on call",
-    "on_call",
-}
-
-
 @dataclass
 class ImportSummary:
     rows_read: int = 0
@@ -307,16 +300,19 @@ def prepare_import_rows(rows):
 def review_reasons_for(run_type, run_type_unknown, run_day, pickup_frequency):
     reasons = []
     normalized_frequency = normalize_key(pickup_frequency)
+    frequency = classify_pickup_frequency(pickup_frequency)
     if run_type_unknown:
         reasons.append("Unknown run_type")
     if run_type in {"STANDARD", "REGULAR"} and not run_day:
         reasons.append("Missing run_day for STANDARD/REGULAR schedule")
-    if not normalized_frequency or normalized_frequency not in KNOWN_PICKUP_FREQUENCIES:
+    if run_type == "ON_CALL" and normalized_frequency in {"on call", "on_call"}:
+        return reasons
+    if frequency.frequency_type == "UNKNOWN":
         reasons.append("Blank or unknown pickup_frequency")
-    if run_type == "REGULAR" and normalized_frequency in {"fortnight", "fortnightly"}:
-        reasons.append("Fortnightly REGULAR schedule missing fortnight_group")
-    if run_type == "REGULAR" and normalized_frequency == "monthly":
-        reasons.append("Monthly REGULAR schedule requires review")
+    if run_type in {"STANDARD", "REGULAR"} and frequency.frequency_type == "FORTNIGHTLY":
+        reasons.append("Fortnightly schedule missing fortnight_group")
+    if frequency.frequency_type == "MONTHLY":
+        reasons.append("Monthly schedule requires review")
     return reasons
 
 

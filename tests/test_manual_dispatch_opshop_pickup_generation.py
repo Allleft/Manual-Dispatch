@@ -31,7 +31,10 @@ class OpShopPickupGenerationTest(unittest.TestCase):
         result = self._generate()
 
         self.assertEqual(2, result.tasks_created)
-        self.assertEqual(["2026-05-18", "2026-05-25"], self._pickup_dates())
+        self.assertEqual("2026-05-19", result.window_start)
+        self.assertEqual("2026-06-01", result.window_end)
+        self.assertEqual(14, result.days)
+        self.assertEqual(["2026-05-25", "2026-06-01"], self._pickup_dates())
 
     def test_standard_weekly_with_explicit_weekday_uses_frequency_day(self):
         self._add_schedule(
@@ -88,7 +91,7 @@ class OpShopPickupGenerationTest(unittest.TestCase):
 
         result = self._generate()
 
-        self.assertEqual(["2026-05-18"], self._pickup_dates())
+        self.assertEqual(["2026-06-01"], self._pickup_dates())
         self.assertEqual(1, result.skip_reasons["FORTNIGHT_GROUP_MISMATCH"])
 
     def test_standard_fortnightly_group_b_generates_in_next_week(self):
@@ -173,7 +176,7 @@ class OpShopPickupGenerationTest(unittest.TestCase):
 
         self._generate()
 
-        self.assertEqual(["2026-05-18", "2026-05-25"], self._pickup_dates())
+        self.assertEqual(["2026-05-25", "2026-06-01"], self._pickup_dates())
 
     def test_regular_monthly_does_not_generate(self):
         self._add_schedule("SCHED-001", run_day="THURSDAY", run_type="REGULAR", frequency="Monthly")
@@ -253,7 +256,7 @@ class OpShopPickupGenerationTest(unittest.TestCase):
             self._task(
                 "EXISTING-CANCELLED",
                 "SCHED-001",
-                pickup_date="2026-05-18",
+                pickup_date="2026-05-25",
                 status="CANCELLED",
             )
         )
@@ -262,10 +265,10 @@ class OpShopPickupGenerationTest(unittest.TestCase):
 
         self.assertEqual(1, result.tasks_created)
         self.assertEqual(1, result.tasks_existing)
-        self.assertEqual(["2026-05-18", "2026-05-25"], self._pickup_dates())
+        self.assertEqual(["2026-05-25", "2026-06-01"], self._pickup_dates())
 
     def test_generated_task_fields_are_order_independent(self):
-        self._add_schedule("SCHED-001", run_day="MONDAY", run_type="STANDARD", frequency="Weekly")
+        self._add_schedule("SCHED-001", run_day="TUESDAY", run_type="STANDARD", frequency="Weekly")
 
         self._generate(days=1)
         task = self.repository.list_opshop_pickup_tasks()[0]
@@ -294,17 +297,19 @@ class OpShopPickupGenerationTest(unittest.TestCase):
                 EnsureOpShopPickupTasksRequest(start_date="2026-05-18", days=14)
             )
             tasks = repository.list_opshop_pickup_tasks_for_window(
-                "2026-05-18",
-                "2026-05-31",
+                "2026-05-19",
+                "2026-06-01",
             )
 
             self.assertEqual(2, result.tasks_created)
+            self.assertEqual("2026-05-19", result.window_start)
+            self.assertEqual("2026-06-01", result.window_end)
             self.assertEqual(2, len(tasks))
             self.assertEqual(
                 "SCHED-001",
                 repository.find_opshop_pickup_task_by_schedule_and_date(
                     "SCHED-001",
-                    "2026-05-18",
+                    "2026-05-25",
                 ).schedule_id,
             )
         finally:

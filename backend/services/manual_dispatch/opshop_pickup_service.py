@@ -66,7 +66,8 @@ class OpShopPickupService:
         if days > MAX_GENERATION_DAYS:
             raise ValueError(f"days must be {MAX_GENERATION_DAYS} or less")
 
-        end = start + timedelta(days=days - 1)
+        window_start = start + timedelta(days=1)
+        window_end = start + timedelta(days=days)
         schedules = self.repository.list_opshop_pickup_schedules()
         skip_reasons = {}
         warnings = {}
@@ -110,7 +111,7 @@ class OpShopPickupService:
                 _increment(skip_reasons, "FORTNIGHT_GROUP_MISSING")
                 continue
 
-            for target_date in _date_range(start, end):
+            for target_date in _date_range(window_start, window_end):
                 weekday_name = _weekday_name(target_date)
                 if weekday_name not in weekdays:
                     continue
@@ -134,8 +135,8 @@ class OpShopPickupService:
                 created_tasks.append(self.repository.insert_opshop_pickup_task(task))
 
         return EnsureOpShopPickupTasksResult(
-            window_start=start.isoformat(),
-            window_end=end.isoformat(),
+            window_start=window_start.isoformat(),
+            window_end=window_end.isoformat(),
             days=days,
             schedules_checked=len(schedules),
             tasks_created=len(created_tasks),

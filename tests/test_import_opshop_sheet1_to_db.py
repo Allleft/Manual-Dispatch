@@ -153,6 +153,12 @@ class ImportOpShopSheet1ToDbTest(unittest.TestCase):
             [
                 self._row(
                     Run_Day="Monday",
+                    Run_Type="Standard",
+                    Pickup_Frequency="Fortnight",
+                    Time_Window="Early",
+                ),
+                self._row(
+                    Run_Day="Monday",
                     Run_Type="Regular",
                     Pickup_Frequency="Fortnightly",
                     Time_Window="Morning",
@@ -169,16 +175,48 @@ class ImportOpShopSheet1ToDbTest(unittest.TestCase):
         summary = import_sheet1_to_db(self.workbook_path, self.db_path)
         schedules = SQLiteManualDispatchRepository(self.db_path).list_opshop_pickup_schedules()
 
-        self.assertEqual(2, summary.review_required_count)
+        self.assertEqual(3, summary.review_required_count)
         self.assertTrue(all(schedule.review_required for schedule in schedules))
         self.assertIn(
-            "Fortnightly REGULAR schedule missing fortnight_group",
+            "Fortnightly schedule missing fortnight_group",
             summary.review_required_by_reason,
         )
         self.assertIn(
-            "Monthly REGULAR schedule requires review",
+            "Monthly schedule requires review",
             summary.review_required_by_reason,
         )
+
+    def test_weekly_like_and_multi_weekly_frequencies_are_not_review_required(self):
+        rows = [
+            self._row(Run_Type="Standard", Pickup_Frequency="2x Weekly"),
+            self._row(Run_Type="Standard", Pickup_Frequency="2 X WEEKLY (WED/FRI)"),
+            self._row(Run_Type="Standard", Pickup_Frequency="2x Weekly (Wed & Fri)"),
+            self._row(Run_Type="Regular", Pickup_Frequency="Weekly (Thursday only)"),
+            self._row(Run_Type="Regular", Pickup_Frequency="Weekly (Friday only)"),
+            self._row(Run_Type="Regular", Pickup_Frequency="Weekly (Tuesday & Thursday)"),
+            self._row(Run_Type="Regular", Pickup_Frequency="Twice weekly (Wed & Fri)"),
+            self._row(Run_Day="", Run_Type="On_Call", Pickup_Frequency="On Call"),
+        ]
+        for index, row in enumerate(rows):
+            row["Time_Window"] = f"Window {index}"
+        self._save_workbook(rows)
+
+        summary = import_sheet1_to_db(self.workbook_path, self.db_path)
+        schedules = SQLiteManualDispatchRepository(self.db_path).list_opshop_pickup_schedules()
+
+        self.assertEqual(8, summary.rows_imported)
+        self.assertEqual(0, summary.review_required_count)
+        self.assertTrue(all(not schedule.review_required for schedule in schedules))
+
+    def test_blank_frequency_is_review_required(self):
+        self._save_workbook([self._row(Pickup_Frequency="")])
+
+        summary = import_sheet1_to_db(self.workbook_path, self.db_path)
+        schedule = SQLiteManualDispatchRepository(self.db_path).list_opshop_pickup_schedules()[0]
+
+        self.assertEqual(1, summary.review_required_count)
+        self.assertTrue(schedule.review_required)
+        self.assertIn("Blank or unknown pickup_frequency", schedule.review_reason)
 
     def test_phone_numbers_are_preserved_as_text(self):
         self._save_workbook(
