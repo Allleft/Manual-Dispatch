@@ -267,6 +267,90 @@ When Final Trip Summary behavior changes, verify:
 - history loading
 - export uses saved snapshot data, not live mutable data
 
+## Testing and CI Policy
+
+### Local Validation Responsibilities
+
+- Before any commit, Codex must run the fastest relevant local tests for the files and behavior changed.
+- Before phase completion or push, Codex must run the full automated suite locally when possible:
+  - `python -m compileall backend tests tools`
+  - `python -m unittest discover -s tests -v`
+  - `node --check frontend/app.js`
+  - `Get-ChildItem frontend -Recurse -Filter *.js | ForEach-Object { node --check $_.FullName }`
+  - `git diff --check`
+- If the default `python` command is unavailable, use the project virtual environment Python path when present, for example `.\tmp\route-test-venv\Scripts\python.exe`.
+- Do not claim a test passed if it was not run.
+- If a command cannot be run, report the exact command, reason, and risk in the final response.
+
+### GitHub CI Coverage
+
+- GitHub CI must contain every automated check that can run without local-only files, private workbooks, runtime databases, or manual browser interaction.
+- The repository CI workflow must run on:
+  - pushes to `main`
+  - pushes to `feature/opshop-pickup`
+  - pull requests targeting `main`
+  - pull requests targeting `feature/opshop-pickup`
+  - manual `workflow_dispatch`
+- The baseline CI suite must include:
+  - Python dependency installation from the repository requirements files
+  - `python -m compileall backend tests tools`
+  - `python -m unittest discover -s tests -v`
+  - `node --check frontend/app.js`
+  - syntax checks for every `frontend/**/*.js` file
+  - `git diff --check`
+- Ubuntu CI is the baseline. Windows CI is preferred when practical to catch PowerShell and path issues.
+- Browser smoke tests should only be added to CI when they are deterministic and do not require private local data or manual interaction.
+
+### Local / Manual Validation
+
+- If a test is not suitable for CI, Codex must run it locally when relevant and report it in the final response.
+- Manual/browser smoke test reports must include:
+  - URL opened
+  - dispatch date tested
+  - feature path tested
+  - expected result
+  - whether browser console errors appeared
+- Runtime data validation must stay local unless a safe fixture is committed.
+- Examples of local-only validation include:
+  - using `C:\Users\Albert Fang\Downloads\opshop_final_rechecked_v2.xlsx`
+  - validating real `data/manual_dispatch.sqlite3`
+  - checking backup files
+  - browser smoke tests requiring local runtime state
+  - NAS or office-machine validation against real runtime data
+- Never commit local-only validation artifacts, including:
+  - `data/*.sqlite`
+  - `data/*.sqlite3`
+  - `*.sqlite-wal`
+  - `*.sqlite-shm`
+  - `backups/`
+  - `outputs/`
+  - `.env`
+  - `findings.md`
+  - `progress.md`
+  - `task_plan.md`
+  - real OP SHOP or customer workbooks unless they are intentionally anonymized test fixtures
+
+### OP SHOP Pickup Validation Guardrails
+
+- OP SHOP pickup phases must continue to protect:
+  - Delivery Order workflow remains unchanged unless explicitly requested
+  - Final Trip Summary and Excel export remain `ORDER`-only unless explicitly requested
+  - no route optimization, ETA, maps, CP-SAT, auto-dispatch, automatic driver selection, automatic vehicle selection, or automatic trip planning unless explicitly requested
+  - runtime SQLite files are never committed
+- OP SHOP validation that depends on real workbook data or real runtime SQLite data must be treated as local/manual validation and reported separately from CI.
+
+### Final Response Requirements
+
+After any phase or completed code change, the final response must include:
+
+- Summary
+- Files changed
+- Business behavior impact
+- Tests run
+- CI status if available
+- Manual smoke test result if applicable
+- Risks / rollback notes
+
 ## 9. GitHub Push Rules
 - After completing a task, commit and push to the current feature branch.
 - After every completed phase, commit and push the current feature branch to `https://github.com/Allleft/Manual-Dispatch.git` unless the user explicitly says not to push.
@@ -281,15 +365,9 @@ When Final Trip Summary behavior changes, verify:
 - Final report must include branch, commit hash, pushed status, files changed, and test results.
 
 ## 10. Testing Requirements
-Recommended checks:
-- `python -m unittest discover -s tests -v`
-- `node --check frontend/app.js`
-- `node --check frontend/overrides.js`
-
-Rules:
+- Follow the `Testing and CI Policy` above for local checks, CI coverage, and manual/browser validation.
 - Run relevant tests before and after functional changes.
-- If a file does not exist, report it clearly.
-- Do not claim a test passed if it was not run.
+- Use the full automated suite before phase completion or push whenever possible.
 - If tests fail, report the failing command, error summary, likely cause, files involved, and whether it appears pre-existing.
 
 ## 11. Validation Report Format
