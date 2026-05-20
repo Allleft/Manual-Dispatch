@@ -6,7 +6,6 @@ import {
 } from "../utils/dom-utils.js";
 import {
   formatOptional,
-  truncateText,
 } from "../utils/format-utils.js";
 
 export function renderOpShopPickupListModal({
@@ -53,12 +52,12 @@ export function renderOpShopPickupListModal({
       onCancelForm,
       onConfirmDelete,
       onCreatePickup,
+      onStartDelete,
       onUpdateForm,
       onUpdatePickup,
     }),
     createPickupGroups({
       onOpenDetail,
-      onStartDelete,
       onStartEdit,
       onUpdateAssignedDriver,
     }),
@@ -134,6 +133,7 @@ function createActiveForm({
   onCancelForm,
   onConfirmDelete,
   onCreatePickup,
+  onStartDelete,
   onUpdateForm,
   onUpdatePickup,
 }) {
@@ -141,7 +141,7 @@ function createActiveForm({
     return createAddForm({ onCancelForm, onCreatePickup, onUpdateForm });
   }
   if (state.opshopPickupFormMode === "edit") {
-    return createEditForm({ onCancelForm, onUpdateForm, onUpdatePickup });
+    return createEditForm({ onCancelForm, onStartDelete, onUpdateForm, onUpdatePickup });
   }
   if (state.opshopPickupFormMode === "delete") {
     return createDeleteConfirmation({ onCancelForm, onConfirmDelete });
@@ -179,9 +179,10 @@ function createAddForm({ onCancelForm, onCreatePickup, onUpdateForm }) {
   return form;
 }
 
-function createEditForm({ onCancelForm, onUpdateForm, onUpdatePickup }) {
+function createEditForm({ onCancelForm, onStartDelete, onUpdateForm, onUpdatePickup }) {
   const pickup = getOpShopPickupByTaskId(state.opshopPickupEditingTaskId);
   const isAssigned = pickup && pickup.status === "ASSIGNED";
+  const canDelete = Boolean(pickup && pickup.status === "ACTIVE" && !pickup.assigned_to_locked);
   const form = document.createElement("form");
   form.className = "opshop-list-form";
   form.addEventListener("submit", (event) => {
@@ -213,6 +214,19 @@ function createEditForm({ onCancelForm, onUpdateForm, onUpdatePickup }) {
       submitLabel: state.isOpShopPickupSaving ? "Saving..." : "Save Changes",
     }),
   );
+
+  if (canDelete) {
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "button-secondary";
+    deleteButton.textContent = "Delete Pickup Task";
+    deleteButton.disabled = state.isOpShopPickupSaving;
+    deleteButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      onStartDelete(pickup);
+    });
+    form.append(deleteButton);
+  }
 
   return form;
 }
@@ -349,7 +363,7 @@ function createFormActions({
   return actions;
 }
 
-function createPickupGroups({ onOpenDetail, onStartDelete, onStartEdit, onUpdateAssignedDriver }) {
+function createPickupGroups({ onOpenDetail, onStartEdit, onUpdateAssignedDriver }) {
   const container = document.createElement("div");
   container.className = "opshop-date-group-list";
 
@@ -382,7 +396,6 @@ function createPickupGroups({ onOpenDetail, onStartDelete, onStartEdit, onUpdate
     pickups.forEach((pickup) => {
       list.append(createPickupItem(pickup, {
         onOpenDetail,
-        onStartDelete,
         onStartEdit,
         onUpdateAssignedDriver,
       }));
@@ -397,7 +410,6 @@ function createPickupGroups({ onOpenDetail, onStartDelete, onStartEdit, onUpdate
 
 function createPickupItem(pickup, {
   onOpenDetail,
-  onStartDelete,
   onStartEdit,
   onUpdateAssignedDriver,
 }) {
@@ -420,32 +432,11 @@ function createPickupItem(pickup, {
   const title = document.createElement("h4");
   title.textContent = formatOptional(pickup.opshop_name);
 
-  const meta = document.createElement("div");
-  meta.className = "compact-meta";
-  meta.append(
-    createBadge(formatOptional(pickup.suburb)),
-    createBadge(`Pickup Date: ${formatOptional(pickup.pickup_date)}`),
-    createBadge(formatOptional(pickup.run_type, "UNKNOWN"), "good"),
-    createBadge(`Frequency: ${formatOptional(pickup.pickup_frequency)}`),
-    createBadge(`Status: ${formatOptional(pickup.status)}`),
-  );
-  if (pickup.time_window) {
-    meta.append(createBadge(`Time: ${pickup.time_window}`));
-  }
-  if (pickup.primary_phone) {
-    meta.append(createBadge(`Phone: ${pickup.primary_phone}`));
-  }
-  if (pickup.is_assigned || pickup.driver_id || pickup.trip_no) {
-    meta.append(createBadge(`Assigned: ${formatOptional(pickup.assigned_driver_name || pickup.driver_id)} / ${formatOptional(pickup.trip_no)}`, "warning"));
-  } else if (pickup.default_driver_name || pickup.default_driver_alias) {
-    meta.append(createBadge(`Default: ${formatOptional(pickup.default_driver_name || pickup.default_driver_alias)}`));
-  }
+  const subtitle = document.createElement("p");
+  subtitle.className = "opshop-list-item-subtitle";
+  subtitle.textContent = `${formatOptional(pickup.suburb)} - Pickup Date: ${formatOptional(pickup.pickup_date)}`;
 
-  const note = document.createElement("p");
-  note.className = "compact-note opshop-pickup-note";
-  note.textContent = `Note: ${truncateText(pickup.status_notes || pickup.task_notes || "None", 72)}`;
-
-  body.append(title, meta, note);
+  body.append(title, subtitle);
 
   const actions = document.createElement("div");
   actions.className = "opshop-list-item-actions";
@@ -454,28 +445,17 @@ function createPickupItem(pickup, {
 
   actions.append(createAssignedToSelect(pickup, onUpdateAssignedDriver));
 
-  const editButton = document.createElement("button");
-  editButton.type = "button";
-  editButton.className = "button-secondary";
-  editButton.textContent = "Edit";
-  editButton.disabled = state.isOpShopPickupSaving;
-  editButton.addEventListener("click", (event) => {
-    event.stopPropagation();
-    onStartEdit(pickup);
-  });
-  actions.append(editButton);
-
-  if (pickup.status === "ACTIVE") {
-    const deleteButton = document.createElement("button");
-    deleteButton.type = "button";
-    deleteButton.className = "button-secondary";
-    deleteButton.textContent = "Delete";
-    deleteButton.disabled = state.isOpShopPickupSaving;
-    deleteButton.addEventListener("click", (event) => {
+  if (!pickup.assigned_to_locked) {
+    const editButton = document.createElement("button");
+    editButton.type = "button";
+    editButton.className = "button-secondary";
+    editButton.textContent = "Edit";
+    editButton.disabled = state.isOpShopPickupSaving;
+    editButton.addEventListener("click", (event) => {
       event.stopPropagation();
-      onStartDelete(pickup);
+      onStartEdit(pickup);
     });
-    actions.append(deleteButton);
+    actions.append(editButton);
   }
 
   card.append(body, actions);

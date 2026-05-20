@@ -256,6 +256,10 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("Monday", modal_renderer)
         self.assertIn("opshop-date-group", modal_renderer)
         self.assertIn("opshop-list-item", modal_renderer)
+        list_item_renderer = modal_renderer.split("function createPickupItem", 1)[1].split(
+            "function createAssignedToSelect",
+            1,
+        )[0]
         self.assertIn("onOpenDetail(pickup.pickup_task_id)", modal_renderer)
         self.assertIn("event.stopPropagation()", modal_renderer)
         self.assertIn("Schedule", modal_renderer)
@@ -266,6 +270,16 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("Assigned to", modal_renderer)
         self.assertIn("Past pickup date", modal_renderer)
         self.assertIn("opshop-assigned-to-field", modal_renderer)
+        self.assertIn("opshop-list-item-subtitle", modal_renderer)
+        self.assertIn("if (!pickup.assigned_to_locked)", list_item_renderer)
+        self.assertIn('editButton.textContent = "Edit"', list_item_renderer)
+        self.assertNotIn("Frequency:", list_item_renderer)
+        self.assertNotIn("Status:", list_item_renderer)
+        self.assertNotIn("Time:", list_item_renderer)
+        self.assertNotIn("Phone:", list_item_renderer)
+        self.assertNotIn("compact-note", list_item_renderer)
+        self.assertNotIn("opshop-pickup-note", list_item_renderer)
+        self.assertNotIn('deleteButton.textContent = "Delete"', list_item_renderer)
         self.assertIn("state.drivers", modal_renderer)
         self.assertIn("pickup.default_driver_id", modal_renderer)
         self.assertIn("pickup.assigned_to_locked", modal_renderer)
