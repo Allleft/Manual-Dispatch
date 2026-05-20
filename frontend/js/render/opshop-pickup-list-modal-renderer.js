@@ -432,11 +432,19 @@ function createPickupItem(pickup, {
   const title = document.createElement("h4");
   title.textContent = formatOptional(pickup.opshop_name);
 
-  const subtitle = document.createElement("p");
-  subtitle.className = "opshop-list-item-subtitle";
-  subtitle.textContent = `${formatOptional(pickup.suburb)} - Pickup Date: ${formatOptional(pickup.pickup_date)}`;
+  const meta = document.createElement("div");
+  meta.className = "opshop-list-item-meta";
 
-  body.append(title, subtitle);
+  const suburb = document.createElement("span");
+  suburb.className = "opshop-list-item-suburb";
+  suburb.textContent = formatOptional(pickup.suburb);
+
+  const pickupDate = document.createElement("span");
+  pickupDate.className = "opshop-list-item-date";
+  pickupDate.textContent = `Pickup Date: ${formatOptional(pickup.pickup_date)}`;
+
+  meta.append(suburb, pickupDate);
+  body.append(title, meta);
 
   const actions = document.createElement("div");
   actions.className = "opshop-list-item-actions";
