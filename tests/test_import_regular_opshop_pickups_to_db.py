@@ -97,6 +97,62 @@ class ImportRegularOpShopPickupsToDbTest(unittest.TestCase):
         self.assertEqual(1, len(self.repository.list_opshop_locations()))
         self.assertEqual(2, len(self.repository.list_opshop_pickup_schedules()))
 
+    def test_multi_weekly_frequency_text_is_weekly_like_and_uses_sheet_weekday_only(self):
+        for frequency in ["2x Weekly", "2 x Weekly", "Twice weekly", "two times weekly"]:
+            with self.subTest(frequency=frequency):
+                shutil.rmtree(self.temp_dir, ignore_errors=True)
+                self.setUp()
+                self._save_workbook(
+                    {
+                        "THU": [
+                            self._row(
+                                Op_Shop_Name=f"Thursday {frequency}",
+                                Pickup_Frequency=frequency,
+                            )
+                        ],
+                    }
+                )
+
+                summary = import_regular_opshop_pickups_to_db(self.workbook_path, self.db_path)
+                schedules = self.repository.list_opshop_pickup_schedules()
+
+                self.assertEqual(1, summary.rows_imported)
+                self.assertEqual(1, summary.schedules_inserted)
+                self.assertEqual(1, len(schedules))
+                self.assertEqual("REGULAR", schedules[0].run_type)
+                self.assertEqual("THURSDAY", schedules[0].run_day)
+                self.assertEqual("Weekly", schedules[0].pickup_frequency)
+
+    def test_multi_weekly_frequency_variants_update_same_regular_schedule_key(self):
+        self._save_workbook(
+            {
+                "THU": [
+                    self._row(
+                        Op_Shop_Name="Northside Op Shop",
+                        Pickup_Frequency="2x Weekly",
+                    )
+                ],
+            }
+        )
+        first_summary = import_regular_opshop_pickups_to_db(self.workbook_path, self.db_path)
+
+        self._save_workbook(
+            {
+                "THU": [
+                    self._row(
+                        Op_Shop_Name="Northside Op Shop",
+                        Pickup_Frequency="Twice weekly",
+                    )
+                ],
+            }
+        )
+        second_summary = import_regular_opshop_pickups_to_db(self.workbook_path, self.db_path)
+
+        self.assertEqual(1, first_summary.schedules_inserted)
+        self.assertEqual(1, second_summary.schedules_updated)
+        self.assertEqual(0, second_summary.schedules_inserted)
+        self.assertEqual(1, len(self.repository.list_opshop_pickup_schedules()))
+
     def test_rerun_updates_existing_rows_without_duplicates_and_deactivates_missing_regular(self):
         self._save_workbook(
             {

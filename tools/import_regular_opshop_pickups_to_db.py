@@ -259,6 +259,9 @@ def prepare_regular_rows(rows, driver_lookup):
 
         location_key = location_dedupe_key(row)
         opshop_id = deterministic_id("OPSHOP", location_key)
+        pickup_frequency = normalize_regular_pickup_frequency(
+            row.get("Pickup_Frequency"),
+        )
         schedule = OpShopPickupSchedule(
             schedule_id=deterministic_id(
                 "OPSHOP-SCHEDULE",
@@ -267,7 +270,7 @@ def prepare_regular_rows(rows, driver_lookup):
                         opshop_id,
                         row["__run_day"],
                         "REGULAR",
-                        normalize_key(row.get("Pickup_Frequency")),
+                        normalize_key(pickup_frequency),
                         normalize_key(row.get("Time_Window")),
                     ]
                 ),
@@ -275,7 +278,7 @@ def prepare_regular_rows(rows, driver_lookup):
             opshop_id=opshop_id,
             run_day=row["__run_day"],
             run_type="REGULAR",
-            pickup_frequency=clean_text(row.get("Pickup_Frequency")),
+            pickup_frequency=pickup_frequency,
             time_window=clean_text(row.get("Time_Window")),
             call_before_arrival=normalize_bool(
                 row.get("Call_Before_Arrival"),
@@ -329,6 +332,21 @@ def resolve_driver_name(alias):
     if not normalized:
         return None
     return DRIVER_ALIAS_TO_NAME.get(normalized, alias)
+
+
+def normalize_regular_pickup_frequency(value):
+    """The Regular workbook sheet, not frequency text, controls pickup weekday."""
+    cleaned = clean_text(value)
+    normalized = normalize_key(cleaned)
+    compact = normalized.replace(" ", "")
+    if (
+        "2xweekly" in compact
+        or "2_x_weekly" in compact
+        or "twice weekly" in normalized
+        or "two times weekly" in normalized
+    ):
+        return "Weekly"
+    return cleaned
 
 
 def find_location_id_by_key(connection, dedupe_key):

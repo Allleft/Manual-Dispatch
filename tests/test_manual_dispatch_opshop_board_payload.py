@@ -97,18 +97,55 @@ class OpShopBoardPayloadTest(unittest.TestCase):
         self.assertEqual("2026-05-29", board.opshop_regular_list_window_end)
 
     def test_board_uses_schedule_run_day_only_and_does_not_expand_frequency_days(self):
+        for frequency in ["2x Weekly", "2 x Weekly", "Twice weekly", "two times weekly"]:
+            with self.subTest(frequency=frequency):
+                self.repository = InMemoryManualDispatchRepository()
+                self.repository.upsert_opshop_location(self._location())
+                self.service = ManualDispatchService(self.repository)
+                self.repository.upsert_opshop_pickup_schedule(
+                    self._schedule(
+                        "SCHED-001",
+                        run_day="THURSDAY",
+                        pickup_frequency=frequency,
+                    )
+                )
+
+                first = self.service.get_board("2026-05-18")
+                second = self.service.get_board("2026-05-18")
+
+                self.assertEqual(["2026-05-21"], self._pickup_dates())
+                self.assertEqual(
+                    ["2026-05-21"],
+                    [item.pickup_date for item in first.scheduled_opshop_pickups],
+                )
+                self.assertEqual(
+                    [item.pickup_task_id for item in first.scheduled_opshop_pickups],
+                    [item.pickup_task_id for item in second.scheduled_opshop_pickups],
+                )
+                self.assertEqual(1, len(second.scheduled_opshop_pickups))
+
+    def test_cancelled_regular_pickup_blocks_regeneration_for_same_schedule_date(self):
         self.repository.upsert_opshop_pickup_schedule(
             self._schedule(
                 "SCHED-001",
                 run_day="THURSDAY",
-                pickup_frequency="Twice weekly (Mon & Thu)",
+                pickup_frequency="2x Weekly",
+            )
+        )
+        cancelled_id = "OPSHOP-PICKUP-20260521-CANCELLED"
+        self.repository.upsert_opshop_pickup_task(
+            self._task(
+                cancelled_id,
+                schedule_id="SCHED-001",
+                pickup_date="2026-05-21",
+                status="CANCELLED",
             )
         )
 
         board = self.service.get_board("2026-05-18")
 
-        self.assertEqual(["2026-05-21"], self._pickup_dates())
-        self.assertEqual(["2026-05-21"], [item.pickup_date for item in board.scheduled_opshop_pickups])
+        self.assertEqual([cancelled_id], [task.pickup_task_id for task in self.repository.list_opshop_pickup_tasks()])
+        self.assertEqual([], board.scheduled_opshop_pickups)
 
     def test_board_excludes_pickups_outside_regular_week_window(self):
         self.repository.upsert_opshop_pickup_schedule(self._schedule("SCHED-001"))
