@@ -5,9 +5,10 @@ import {
   getAssignedOpShopPickupsForDriver,
   getAssignedOrdersForDriver,
   getAssignedTaskForAssignment,
-  getAssignmentsForDriverTrip,
+  getAssignmentsForDriver,
   getDriverExceptions,
   getFinalSummaryKey,
+  getOrderAssignmentsForDriverTrip,
   getSelectedVehicleForDriver,
   isVehicleSelectedByAnotherDriver,
 } from "../state/selectors.js";
@@ -183,7 +184,7 @@ export function renderDriverSummary({
       trips.append(emptyState);
     } else {
       ["trip1", "trip2"].forEach((tripNo) => {
-        if (getAssignmentsForDriverTrip(driver.driver_id, tripNo).length > 0) {
+        if (getOrderAssignmentsForDriverTrip(driver.driver_id, tripNo).length > 0) {
           trips.append(
             createTripGroup(
               driver.driver_id,
@@ -194,6 +195,14 @@ export function renderDriverSummary({
           );
         }
       });
+      if (assignedOpShopPickups.length > 0) {
+        trips.append(
+          createOpShopPickupGroup(driver.driver_id, assignedOpShopPickups, {
+            onOpenOpShopPickupDetail,
+            onUnassign,
+          }),
+        );
+      }
     }
 
     card.append(header, trips);
@@ -226,7 +235,7 @@ function createTripGroup(driverId, tripNo, title, handlers) {
   tripSummary.className = "trip-summary";
   tripSummary.textContent = `Pallets: ${tripTotals.pallets} | Loose bags: ${tripTotals.looseBags}`;
 
-  const assignedTasks = getAssignmentsForDriverTrip(driverId, tripNo);
+  const assignedTasks = getOrderAssignmentsForDriverTrip(driverId, tripNo);
 
   const taskList = document.createElement("div");
   taskList.className = "assigned-task-list";
@@ -243,15 +252,40 @@ function createTripGroup(driverId, tripNo, title, handlers) {
         return;
       }
 
-      if (assignedTask.taskType === "OPSHOP_PICKUP") {
-        taskList.append(createAssignedOpShopPickupTask(assignment, assignedTask.task, handlers));
-        return;
-      }
       taskList.append(createAssignedTask(assignment, assignedTask.task, handlers));
     });
   }
 
   group.append(heading, tripSummary, taskList);
+  return group;
+}
+
+function createOpShopPickupGroup(driverId, assignedOpShopPickups, handlers) {
+  const group = document.createElement("section");
+  group.className = "trip-group assigned-opshop-pickups-section";
+
+  const heading = document.createElement("h4");
+  heading.textContent = "OP SHOP PICKUPS";
+
+  const summary = document.createElement("p");
+  summary.className = "trip-summary";
+  summary.textContent = `Pickup tasks: ${assignedOpShopPickups.length}`;
+
+  const taskList = document.createElement("div");
+  taskList.className = "assigned-task-list";
+
+  getAssignmentsForDriver(driverId)
+    .filter((assignment) => assignment.task_type === "OPSHOP_PICKUP")
+    .forEach((assignment) => {
+      const pickup = assignedOpShopPickups.find(
+        (item) => item.pickup_task_id === assignment.task_id,
+      );
+      if (pickup) {
+        taskList.append(createAssignedOpShopPickupTask(assignment, pickup, handlers));
+      }
+    });
+
+  group.append(heading, summary, taskList);
   return group;
 }
 

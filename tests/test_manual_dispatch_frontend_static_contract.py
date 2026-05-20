@@ -180,6 +180,7 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         trip_summary_renderer = (
             FRONTEND_ROOT / "js" / "render" / "trip-summary-renderer.js"
         ).read_text(encoding="utf-8")
+        selectors = (FRONTEND_ROOT / "js" / "state" / "selectors.js").read_text(encoding="utf-8")
         final_summary_renderer = (
             FRONTEND_ROOT / "js" / "render" / "final-summary-renderer.js"
         ).read_text(encoding="utf-8")
@@ -191,6 +192,13 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertNotIn('taskType: "OPSHOP_PICKUP"', task_pool_renderer)
         self.assertIn("assigned-opshop-task", trip_summary_renderer)
         self.assertIn("getAssignedOpShopPickupsForDriver", trip_summary_renderer)
+        self.assertIn("pickup.pickup_date === state.driverSummaryDeliveryDate", selectors)
+        self.assertIn("getOrderAssignmentsForDriverTrip", selectors)
+        self.assertIn("createOpShopPickupGroup", trip_summary_renderer)
+        self.assertIn("OP SHOP PICKUPS", trip_summary_renderer)
+        self.assertIn("assigned-opshop-pickups-section", trip_summary_renderer)
+        self.assertIn('assignment.task_type === "ORDER"', selectors)
+        self.assertIn('assignment.task_type === "OPSHOP_PICKUP"', trip_summary_renderer)
         self.assertIn("onOpenOpShopPickupDetail(pickup.pickup_task_id)", trip_summary_renderer)
         self.assertIn("onUnassign(assignment.task_type, assignment.task_id)", trip_summary_renderer)
         self.assertIn("not included in Final Trip Summary or Excel export", trip_summary_renderer)

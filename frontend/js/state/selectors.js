@@ -131,6 +131,12 @@ export function getAssignedOrdersForTrip(driverId, tripNo) {
     .filter(Boolean);
 }
 
+export function getOrderAssignmentsForDriverTrip(driverId, tripNo) {
+  return getAssignmentsForDriverTrip(driverId, tripNo).filter(
+    (assignment) => assignment.task_type === "ORDER",
+  );
+}
+
 export function getAssignedOpShopPickupsForDriver(driverId) {
   return getAssignmentsForDriver(driverId)
     .filter((assignment) => assignment.task_type === "OPSHOP_PICKUP")
@@ -230,7 +236,8 @@ function assignmentMatchesDriverSummaryDeliveryDate(assignment) {
   }
 
   if (assignment.task_type === "OPSHOP_PICKUP") {
-    return Boolean(getOpShopPickupByTaskId(assignment.task_id));
+    const pickup = getOpShopPickupByTaskId(assignment.task_id);
+    return Boolean(pickup && pickup.pickup_date === state.driverSummaryDeliveryDate);
   }
 
   const order = getOrderByTaskId(assignment.task_id);
