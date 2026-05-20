@@ -271,19 +271,23 @@ When Final Trip Summary behavior changes, verify:
 
 ### Local Validation Responsibilities
 
-- Before any commit, Codex must run the fastest relevant local tests for the files and behavior changed.
-- Before phase completion or push, Codex must run the full automated suite locally when possible:
-  - `python -m compileall backend tests tools`
-  - `python -m unittest discover -s tests -v`
-  - `node --check frontend/app.js`
-  - `Get-ChildItem frontend -Recurse -Filter *.js | ForEach-Object { node --check $_.FullName }`
+- Codex should not run the full automated suite locally before every small commit when GitHub CI will run it after push.
+- For normal code changes, Codex should run only fast relevant local checks:
   - `git diff --check`
-- If the default `python` command is unavailable, use the project virtual environment Python path when present, for example `.\tmp\route-test-venv\Scripts\python.exe`.
+  - syntax checks for changed frontend JavaScript files
+  - Python compile checks for changed `backend/`, `tools/`, or `tests/` files
+  - the directly affected unittest module when obvious
+- For phase completion, Codex may rely on GitHub CI for the full automated suite unless the user explicitly asks for local full tests.
+- Codex should report GitHub CI status instead of pasting long local test logs.
+- If GitHub CI fails, Codex should inspect only the failed job and step logs, then fix the issue.
+- If the default `python` command is unavailable for relevant local checks, use the project virtual environment Python path when present, for example `.\tmp\route-test-venv\Scripts\python.exe`.
 - Do not claim a test passed if it was not run.
+- Do not claim CI passed until GitHub reports success.
 - If a command cannot be run, report the exact command, reason, and risk in the final response.
 
 ### GitHub CI Coverage
 
+- GitHub CI is responsible for the full automated suite after push.
 - GitHub CI must contain every automated check that can run without local-only files, private workbooks, runtime databases, or manual browser interaction.
 - The repository CI workflow must run on:
   - pushes to `main`
@@ -291,14 +295,14 @@ When Final Trip Summary behavior changes, verify:
   - pull requests targeting `main`
   - pull requests targeting `feature/opshop-pickup`
   - manual `workflow_dispatch`
-- The baseline CI suite must include:
+- The full CI suite must include:
   - Python dependency installation from the repository requirements files
   - `python -m compileall backend tests tools`
   - `python -m unittest discover -s tests -v`
   - `node --check frontend/app.js`
   - syntax checks for every `frontend/**/*.js` file
   - `git diff --check`
-- Ubuntu CI is the baseline. Windows CI is preferred when practical to catch PowerShell and path issues.
+- Ubuntu and Windows jobs should run to cover Linux CI behavior plus Windows/PowerShell path issues.
 - Browser smoke tests should only be added to CI when they are deterministic and do not require private local data or manual interaction.
 
 ### Local / Manual Validation
@@ -367,7 +371,7 @@ After any phase or completed code change, the final response must include:
 ## 10. Testing Requirements
 - Follow the `Testing and CI Policy` above for local checks, CI coverage, and manual/browser validation.
 - Run relevant tests before and after functional changes.
-- Use the full automated suite before phase completion or push whenever possible.
+- Prefer fast relevant local checks for normal commits, then rely on GitHub CI for the full automated suite after push unless the user explicitly asks for local full tests.
 - If tests fail, report the failing command, error summary, likely cause, files involved, and whether it appears pre-existing.
 
 ## 11. Validation Report Format
