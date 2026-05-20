@@ -361,9 +361,13 @@ h1 {
 
 .opshop-summary-grid {
   grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  width: 100%;
 }
 
-.opshop-pickup-list-summary-card {
+.opshop-summary-grid .opshop-pickup-list-summary-card {
+  grid-column: 1 / -1;
+  width: 100%;
   max-width: none;
 }
 

@@ -112,6 +112,7 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         task_pool_renderer = (
             FRONTEND_ROOT / "js" / "render" / "task-pool-renderer.js"
         ).read_text(encoding="utf-8")
+        styles = (FRONTEND_ROOT / "styles.css").read_text(encoding="utf-8")
 
         self.assertIn("OP SHOP PICKUP", task_pool_renderer)
         self.assertIn("DELIVERY ORDERS", task_pool_renderer)
@@ -122,6 +123,9 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("No OP SHOP PICKUP tasks for this Regular pickup week.", task_pool_renderer)
         self.assertIn("Regular OP SHOP Pickup List", task_pool_renderer)
         self.assertIn("opshop-pickup-list-summary-card", task_pool_renderer)
+        self.assertIn(".opshop-summary-grid .opshop-pickup-list-summary-card", styles)
+        self.assertIn("grid-column: 1 / -1", styles)
+        self.assertIn("max-width: none", styles)
         self.assertIn("Open List", task_pool_renderer)
         self.assertIn("state.scheduledOpShopPickups", task_pool_renderer)
         self.assertNotIn("function createOpShopPickupCard", task_pool_renderer)
