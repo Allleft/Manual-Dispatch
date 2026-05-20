@@ -115,6 +115,9 @@ class OpShopPickupSchedule:
     review_reason: Optional[str]
     created_at: str
     updated_at: str
+    default_driver_id: Optional[str] = None
+    default_driver_alias: Optional[str] = None
+    default_driver_name_snapshot: Optional[str] = None
 
 
 @dataclass
@@ -186,6 +189,12 @@ class OpShopPickupBoardItem:
     driver_id: Optional[str]
     trip_no: Optional[str]
     is_assigned: bool
+    default_driver_id: Optional[str] = None
+    default_driver_alias: Optional[str] = None
+    default_driver_name: Optional[str] = None
+    assigned_driver_id: Optional[str] = None
+    assigned_driver_name: Optional[str] = None
+    assigned_to_locked: bool = False
 
 
 @dataclass
@@ -199,6 +208,9 @@ class OpShopPickupScheduleCandidate:
     pickup_frequency: Optional[str]
     time_window: Optional[str]
     primary_phone: Optional[str]
+    default_driver_id: Optional[str] = None
+    default_driver_alias: Optional[str] = None
+    default_driver_name: Optional[str] = None
 
 
 @dataclass
@@ -215,6 +227,12 @@ class UpdateOpShopPickupTaskRequest:
 
 
 @dataclass
+class ApplyWeeklyOpShopPickupAssignmentsRequest:
+    dispatch_date: str
+    assignments: List[dict] = field(default_factory=list)
+
+
+@dataclass
 class ManualDispatchBoardResponse:
     dispatch_date: str
     orders: List[Order]
@@ -225,6 +243,8 @@ class ManualDispatchBoardResponse:
     opshop_pickups: List[OpShopPickupBoardItem] = field(default_factory=list)
     assigned_opshop_pickups: List[OpShopPickupBoardItem] = field(default_factory=list)
     scheduled_opshop_pickups: List[OpShopPickupBoardItem] = field(default_factory=list)
+    opshop_regular_list_window_start: Optional[str] = None
+    opshop_regular_list_window_end: Optional[str] = None
 
 
 @dataclass

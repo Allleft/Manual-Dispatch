@@ -12,6 +12,7 @@ from backend.repositories.sqlite_manual_dispatch_repository import (
 from backend.schemas import (
     AssignTaskRequest,
     OpShopLocation,
+    OpShopPickupSchedule,
     OpShopPickupTask,
     RegisterOperatorAccountRequest,
     SaveFinalTripSummaryRequest,
@@ -24,6 +25,7 @@ class ManualDispatchOpShopAssignmentTest(unittest.TestCase):
     def setUp(self):
         self.repository = InMemoryManualDispatchRepository()
         self.repository.upsert_opshop_location(self._location())
+        self.repository.upsert_opshop_pickup_schedule(self._schedule())
         self.service = ManualDispatchService(self.repository)
 
     def test_assign_active_opshop_pickup_creates_assignment_and_updates_task(self):
@@ -106,7 +108,8 @@ class ManualDispatchOpShopAssignmentTest(unittest.TestCase):
         self.assertIsNone(task.trip_no)
         self.assertEqual([], board.assignments)
         self.assertEqual([], board.assigned_opshop_pickups)
-        self.assertIn("TASK-001", [item.pickup_task_id for item in board.opshop_pickups])
+        self.assertEqual([], board.opshop_pickups)
+        self.assertIn("TASK-001", [item.pickup_task_id for item in board.scheduled_opshop_pickups])
 
     def test_delivery_order_assignment_still_works(self):
         assignment = self.service.assign_task(
@@ -185,16 +188,35 @@ class ManualDispatchOpShopAssignmentTest(unittest.TestCase):
     def _task(self, pickup_task_id, status="ACTIVE"):
         return OpShopPickupTask(
             pickup_task_id=pickup_task_id,
-            schedule_id=None,
+            schedule_id="SCHED-REGULAR",
             opshop_id="OPSHOP-001",
             pickup_date="2026-05-20",
             task_type="OPSHOP_PICKUP",
-            generated_from="STANDARD",
+            generated_from="REGULAR",
             status=status,
             dispatch_date="2026-05-20",
             driver_id="D001" if status == "ASSIGNED" else None,
             trip_no="trip1" if status == "ASSIGNED" else None,
             notes="Manual fixture",
+            created_at="2026-05-19T00:00:00+00:00",
+            updated_at="2026-05-19T00:00:00+00:00",
+        )
+
+    def _schedule(self):
+        return OpShopPickupSchedule(
+            schedule_id="SCHED-REGULAR",
+            opshop_id="OPSHOP-001",
+            run_day="WEDNESDAY",
+            run_type="REGULAR",
+            pickup_frequency="Weekly",
+            time_window="9-12",
+            call_before_arrival=False,
+            call_timing=None,
+            status="Active",
+            active_flag=True,
+            fortnight_group=None,
+            review_required=False,
+            review_reason=None,
             created_at="2026-05-19T00:00:00+00:00",
             updated_at="2026-05-19T00:00:00+00:00",
         )
@@ -209,6 +231,7 @@ class SQLiteManualDispatchOpShopAssignmentTest(unittest.TestCase):
         self.db_path = self.temp_dir / "manual_dispatch.sqlite3"
         self.repository = SQLiteManualDispatchRepository(self.db_path)
         self.repository.upsert_opshop_location(self._location())
+        self.repository.upsert_opshop_pickup_schedule(ManualDispatchOpShopAssignmentTest()._schedule())
         self.repository.upsert_opshop_pickup_task(self._task("TASK-001"))
         self.service = ManualDispatchService(self.repository)
 
@@ -249,7 +272,8 @@ class SQLiteManualDispatchOpShopAssignmentTest(unittest.TestCase):
         self.assertIsNone(unassigned_task.driver_id)
         self.assertIsNone(unassigned_task.trip_no)
         self.assertEqual([], unassigned_board.assigned_opshop_pickups)
-        self.assertIn("TASK-001", [item.pickup_task_id for item in unassigned_board.opshop_pickups])
+        self.assertEqual([], unassigned_board.opshop_pickups)
+        self.assertIn("TASK-001", [item.pickup_task_id for item in unassigned_board.scheduled_opshop_pickups])
 
     def _location(self):
         return OpShopLocation(
@@ -274,11 +298,11 @@ class SQLiteManualDispatchOpShopAssignmentTest(unittest.TestCase):
     def _task(self, pickup_task_id):
         return OpShopPickupTask(
             pickup_task_id=pickup_task_id,
-            schedule_id=None,
+            schedule_id="SCHED-REGULAR",
             opshop_id="OPSHOP-001",
             pickup_date="2026-05-20",
             task_type="OPSHOP_PICKUP",
-            generated_from="STANDARD",
+            generated_from="REGULAR",
             status="ACTIVE",
             dispatch_date="2026-05-20",
             driver_id=None,

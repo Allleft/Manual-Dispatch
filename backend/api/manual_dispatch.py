@@ -4,6 +4,7 @@ from fastapi import APIRouter, Body, HTTPException
 from fastapi.responses import Response
 
 from backend.schemas import (
+    ApplyWeeklyOpShopPickupAssignmentsRequest,
     AssignDriverVehicleRequest,
     AssignTaskRequest,
     CreateDriverRequest,
@@ -174,6 +175,14 @@ def update_opshop_pickup(pickup_task_id: str, request: UpdateOpShopPickupTaskReq
 def delete_opshop_pickup(pickup_task_id: str):
     try:
         return to_dict(service.delete_opshop_pickup_task(pickup_task_id))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.post("/opshop-pickups/weekly-assignments/apply")
+def apply_weekly_opshop_pickup_assignments(request: ApplyWeeklyOpShopPickupAssignmentsRequest):
+    try:
+        return to_dict(service.apply_weekly_opshop_pickup_assignments(request))
     except ValueError as error:
         raise _to_http_exception(error) from error
 

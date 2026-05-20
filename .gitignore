@@ -26,14 +26,21 @@ dist/
 build/
 .cache/
 coverage/
+outputs/
 
 # Logs and temporary files
 *.log
 *.tmp
 *.temp
 agent.md
+findings.md
+progress.md
+task_plan.md
 tmp/
 temp/
+
+# Local business workbooks
+backend/data/Opshop Pickup/*.xlsx
 
 # Local/generated databases
 *.db

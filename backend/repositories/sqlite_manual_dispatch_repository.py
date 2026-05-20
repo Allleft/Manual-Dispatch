@@ -170,7 +170,11 @@ class SQLiteManualDispatchRepository:
                     schedule.pickup_frequency,
                     schedule.time_window,
                     schedule.call_before_arrival,
-                    schedule.call_timing
+                    schedule.call_timing,
+                    schedule.default_driver_id,
+                    schedule.default_driver_alias,
+                    schedule.default_driver_name_snapshot AS default_driver_name,
+                    assigned_driver.name AS assigned_driver_name
                 FROM manual_dispatch_assignments assignment
                 JOIN opshop_pickup_tasks task
                     ON task.pickup_task_id = assignment.task_id
@@ -178,6 +182,8 @@ class SQLiteManualDispatchRepository:
                     ON location.opshop_id = task.opshop_id
                 LEFT JOIN opshop_pickup_schedules schedule
                     ON schedule.schedule_id = task.schedule_id
+                LEFT JOIN manual_drivers assigned_driver
+                    ON assigned_driver.driver_id = assignment.driver_id
                 WHERE assignment.dispatch_date = ?
                     AND assignment.task_type = 'OPSHOP_PICKUP'
                     AND task.status = 'ASSIGNED'
@@ -449,13 +455,16 @@ class SQLiteManualDispatchRepository:
                     schedule.run_type,
                     schedule.pickup_frequency,
                     schedule.time_window,
-                    location.primary_phone
+                    location.primary_phone,
+                    schedule.default_driver_id,
+                    schedule.default_driver_alias,
+                    schedule.default_driver_name_snapshot AS default_driver_name
                 FROM opshop_pickup_schedules schedule
                 LEFT JOIN opshop_locations location
                     ON location.opshop_id = schedule.opshop_id
                 WHERE schedule.active_flag = 1
                     AND schedule.status = 'Active'
-                    AND schedule.run_type IN ('STANDARD', 'REGULAR')
+                    AND schedule.run_type = 'REGULAR'
                 ORDER BY
                     COALESCE(location.name, ''),
                     COALESCE(location.suburb, ''),
@@ -495,9 +504,12 @@ class SQLiteManualDispatchRepository:
                     fortnight_group,
                     review_required,
                     review_reason,
+                    default_driver_id,
+                    default_driver_alias,
+                    default_driver_name_snapshot,
                     created_at,
                     updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(schedule_id)
                 DO UPDATE SET
                     opshop_id = excluded.opshop_id,
@@ -512,6 +524,9 @@ class SQLiteManualDispatchRepository:
                     fortnight_group = excluded.fortnight_group,
                     review_required = excluded.review_required,
                     review_reason = excluded.review_reason,
+                    default_driver_id = excluded.default_driver_id,
+                    default_driver_alias = excluded.default_driver_alias,
+                    default_driver_name_snapshot = excluded.default_driver_name_snapshot,
                     updated_at = excluded.updated_at
                 """,
                 (
@@ -528,6 +543,9 @@ class SQLiteManualDispatchRepository:
                     schedule.fortnight_group,
                     int(schedule.review_required),
                     schedule.review_reason,
+                    schedule.default_driver_id,
+                    schedule.default_driver_alias,
+                    schedule.default_driver_name_snapshot,
                     schedule.created_at,
                     schedule.updated_at,
                 ),
@@ -592,12 +610,18 @@ class SQLiteManualDispatchRepository:
                     schedule.pickup_frequency,
                     schedule.time_window,
                     schedule.call_before_arrival,
-                    schedule.call_timing
+                    schedule.call_timing,
+                    schedule.default_driver_id,
+                    schedule.default_driver_alias,
+                    schedule.default_driver_name_snapshot AS default_driver_name,
+                    assigned_driver.name AS assigned_driver_name
                 FROM opshop_pickup_tasks task
                 LEFT JOIN opshop_locations location
                     ON location.opshop_id = task.opshop_id
                 LEFT JOIN opshop_pickup_schedules schedule
                     ON schedule.schedule_id = task.schedule_id
+                LEFT JOIN manual_drivers assigned_driver
+                    ON assigned_driver.driver_id = task.driver_id
                 WHERE task.pickup_date BETWEEN ? AND ?
                     AND task.status = 'ACTIVE'
                 ORDER BY
@@ -643,15 +667,23 @@ class SQLiteManualDispatchRepository:
                     schedule.pickup_frequency,
                     schedule.time_window,
                     schedule.call_before_arrival,
-                    schedule.call_timing
+                    schedule.call_timing,
+                    schedule.default_driver_id,
+                    schedule.default_driver_alias,
+                    schedule.default_driver_name_snapshot AS default_driver_name,
+                    assigned_driver.name AS assigned_driver_name
                 FROM opshop_pickup_tasks task
                 LEFT JOIN opshop_locations location
                     ON location.opshop_id = task.opshop_id
                 LEFT JOIN opshop_pickup_schedules schedule
                     ON schedule.schedule_id = task.schedule_id
+                LEFT JOIN manual_drivers assigned_driver
+                    ON assigned_driver.driver_id = task.driver_id
                 WHERE task.pickup_date BETWEEN ? AND ?
                     AND task.status IN ('ACTIVE', 'ASSIGNED')
-                    AND schedule.run_type IN ('STANDARD', 'REGULAR')
+                    AND schedule.run_type = 'REGULAR'
+                    AND schedule.active_flag = 1
+                    AND schedule.status = 'Active'
                 ORDER BY
                     task.pickup_date,
                     COALESCE(location.suburb, ''),
@@ -1692,6 +1724,9 @@ class SQLiteManualDispatchRepository:
             review_reason=row["review_reason"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
+            default_driver_id=row["default_driver_id"],
+            default_driver_alias=row["default_driver_alias"],
+            default_driver_name_snapshot=row["default_driver_name_snapshot"],
         )
 
     def _row_to_opshop_pickup_schedule_candidate(self, row):
@@ -1705,6 +1740,9 @@ class SQLiteManualDispatchRepository:
             pickup_frequency=row["pickup_frequency"],
             time_window=row["time_window"],
             primary_phone=row["primary_phone"],
+            default_driver_id=row["default_driver_id"],
+            default_driver_alias=row["default_driver_alias"],
+            default_driver_name=row["default_driver_name"],
         )
 
     def _row_to_opshop_pickup_task(self, row):
@@ -1756,6 +1794,11 @@ class SQLiteManualDispatchRepository:
             driver_id=row["driver_id"],
             trip_no=row["trip_no"],
             is_assigned=bool(row["driver_id"] or row["trip_no"]),
+            default_driver_id=row["default_driver_id"],
+            default_driver_alias=row["default_driver_alias"],
+            default_driver_name=row["default_driver_name"],
+            assigned_driver_id=row["driver_id"],
+            assigned_driver_name=row["assigned_driver_name"],
         )
 
     def _timestamp(self):

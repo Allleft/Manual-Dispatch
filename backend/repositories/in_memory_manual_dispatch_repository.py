@@ -364,7 +364,7 @@ class InMemoryManualDispatchRepository:
             if not (
                 schedule.active_flag
                 and schedule.status == "Active"
-                and schedule.run_type in {"STANDARD", "REGULAR"}
+                and schedule.run_type == "REGULAR"
             ):
                 continue
             location = self.get_opshop_location(schedule.opshop_id)
@@ -379,6 +379,9 @@ class InMemoryManualDispatchRepository:
                     pickup_frequency=schedule.pickup_frequency,
                     time_window=schedule.time_window,
                     primary_phone=location.primary_phone if location else None,
+                    default_driver_id=schedule.default_driver_id,
+                    default_driver_alias=schedule.default_driver_alias,
+                    default_driver_name=schedule.default_driver_name_snapshot,
                 )
             )
         return sorted(
@@ -454,7 +457,9 @@ class InMemoryManualDispatchRepository:
             if not (start_date <= task.pickup_date <= end_date):
                 continue
             schedule = self.get_opshop_pickup_schedule(task.schedule_id)
-            if not schedule or schedule.run_type not in {"STANDARD", "REGULAR"}:
+            if not schedule or schedule.run_type != "REGULAR":
+                continue
+            if not schedule.active_flag or schedule.status != "Active":
                 continue
             location = self.get_opshop_location(task.opshop_id)
             items.append(self._opshop_pickup_board_item(task, schedule, location))
@@ -560,6 +565,11 @@ class InMemoryManualDispatchRepository:
             driver_id=task.driver_id,
             trip_no=task.trip_no,
             is_assigned=bool(task.driver_id or task.trip_no),
+            default_driver_id=schedule.default_driver_id if schedule else None,
+            default_driver_alias=schedule.default_driver_alias if schedule else None,
+            default_driver_name=schedule.default_driver_name_snapshot if schedule else None,
+            assigned_driver_id=task.driver_id,
+            assigned_driver_name=self.get_driver(task.driver_id).name if task.driver_id and self.get_driver(task.driver_id) else None,
         )
 
     def create_order(self, order):

@@ -1,4 +1,4 @@
-import importlib
+﻿import importlib
 import os
 import shutil
 import unittest
@@ -40,9 +40,13 @@ class OpShopBoardPayloadTest(unittest.TestCase):
         self.assertIn("opshop_pickups", payload)
         self.assertIn("assigned_opshop_pickups", payload)
         self.assertIn("scheduled_opshop_pickups", payload)
+        self.assertIn("opshop_regular_list_window_start", payload)
+        self.assertIn("opshop_regular_list_window_end", payload)
         self.assertEqual([], payload["opshop_pickups"])
         self.assertEqual([], payload["assigned_opshop_pickups"])
         self.assertEqual([], payload["scheduled_opshop_pickups"])
+        self.assertEqual("2026-05-18", payload["opshop_regular_list_window_start"])
+        self.assertEqual("2026-05-22", payload["opshop_regular_list_window_end"])
         for key in [
             "dispatch_date",
             "orders",
@@ -53,48 +57,85 @@ class OpShopBoardPayloadTest(unittest.TestCase):
         ]:
             self.assertIn(key, payload)
 
-    def test_board_load_auto_generates_after_14_day_opshop_window(self):
+    def test_board_load_auto_generates_regular_current_week_for_monday_dispatch(self):
         self.repository.upsert_opshop_pickup_schedule(
             self._schedule("SCHED-001", run_day="MONDAY", pickup_frequency="Weekly")
         )
 
         board = self.service.get_board("2026-05-18")
 
-        self.assertEqual(["2026-05-18", "2026-05-25", "2026-06-01"], self._pickup_dates())
+        self.assertEqual(["2026-05-18"], self._pickup_dates())
+        self.assertEqual([], board.opshop_pickups)
         self.assertEqual(
-            ["2026-05-25", "2026-06-01"],
-            [item.pickup_date for item in board.opshop_pickups],
-        )
-        self.assertEqual(
-            ["2026-05-18", "2026-05-25"],
+            ["2026-05-18"],
             [item.pickup_date for item in board.scheduled_opshop_pickups],
         )
-        self.assertNotIn("2026-05-18", [item.pickup_date for item in board.opshop_pickups])
+        self.assertEqual("2026-05-18", board.opshop_regular_list_window_start)
+        self.assertEqual("2026-05-22", board.opshop_regular_list_window_end)
 
-    def test_board_excludes_pickups_outside_window(self):
-        self.repository.upsert_opshop_pickup_task(
-            self._task("TASK-OUTSIDE", pickup_date="2026-06-02")
+    def test_board_load_for_thursday_uses_current_monday_to_friday_week(self):
+        self.repository.upsert_opshop_pickup_schedule(
+            self._schedule("SCHED-001", run_day="FRIDAY", pickup_frequency="Weekly")
         )
 
-        board = self.service.get_board("2026-05-18")
+        board = self.service.get_board("2026-05-21")
 
-        self.assertEqual([], board.opshop_pickups)
-        self.assertEqual([], board.scheduled_opshop_pickups)
+        self.assertEqual(["2026-05-22"], [item.pickup_date for item in board.scheduled_opshop_pickups])
+        self.assertEqual("2026-05-18", board.opshop_regular_list_window_start)
+        self.assertEqual("2026-05-22", board.opshop_regular_list_window_end)
 
-    def test_board_returns_joined_location_schedule_and_task_fields(self):
+    def test_board_load_for_friday_refreshes_to_next_week(self):
+        self.repository.upsert_opshop_pickup_schedule(
+            self._schedule("SCHED-001", run_day="MONDAY", pickup_frequency="Weekly")
+        )
+
+        board = self.service.get_board("2026-05-22")
+
+        self.assertEqual(["2026-05-25"], self._pickup_dates())
+        self.assertEqual(["2026-05-25"], [item.pickup_date for item in board.scheduled_opshop_pickups])
+        self.assertEqual("2026-05-25", board.opshop_regular_list_window_start)
+        self.assertEqual("2026-05-29", board.opshop_regular_list_window_end)
+
+    def test_board_uses_schedule_run_day_only_and_does_not_expand_frequency_days(self):
         self.repository.upsert_opshop_pickup_schedule(
             self._schedule(
                 "SCHED-001",
-                run_day="TUESDAY",
-                run_type="STANDARD",
-                pickup_frequency="Weekly",
-                time_window="9-12",
-                call_before_arrival=True,
+                run_day="THURSDAY",
+                pickup_frequency="Twice weekly (Mon & Thu)",
             )
         )
 
         board = self.service.get_board("2026-05-18")
-        item = board.opshop_pickups[0]
+
+        self.assertEqual(["2026-05-21"], self._pickup_dates())
+        self.assertEqual(["2026-05-21"], [item.pickup_date for item in board.scheduled_opshop_pickups])
+
+    def test_board_excludes_pickups_outside_regular_week_window(self):
+        self.repository.upsert_opshop_pickup_schedule(self._schedule("SCHED-001"))
+        self.repository.upsert_opshop_pickup_task(
+            self._task("TASK-OUTSIDE", pickup_date="2026-05-25")
+        )
+
+        board = self.service.get_board("2026-05-18")
+
+        self.assertNotIn("TASK-OUTSIDE", [item.pickup_task_id for item in board.scheduled_opshop_pickups])
+
+    def test_board_returns_joined_default_driver_location_schedule_and_task_fields(self):
+        self.repository.upsert_opshop_pickup_schedule(
+            self._schedule(
+                "SCHED-001",
+                run_day="TUESDAY",
+                pickup_frequency="Weekly",
+                time_window="9-12",
+                call_before_arrival=True,
+                default_driver_id="D001",
+                default_driver_alias="John G",
+                default_driver_name_snapshot="John Georgiadis",
+            )
+        )
+
+        board = self.service.get_board("2026-05-18")
+        item = board.scheduled_opshop_pickups[0]
 
         self.assertTrue(item.pickup_task_id.startswith("OPSHOP-PICKUP-20260519-"))
         self.assertEqual("OPSHOP_PICKUP", item.task_type)
@@ -105,60 +146,75 @@ class OpShopBoardPayloadTest(unittest.TestCase):
         self.assertEqual("1 Sydney Road", item.street_address)
         self.assertEqual("0400 000 001", item.primary_phone)
         self.assertEqual("TUESDAY", item.run_day)
-        self.assertEqual("STANDARD", item.run_type)
+        self.assertEqual("REGULAR", item.run_type)
         self.assertEqual("Weekly", item.pickup_frequency)
         self.assertEqual("9-12", item.time_window)
         self.assertTrue(item.call_before_arrival)
         self.assertEqual("2026-05-19", item.pickup_date)
         self.assertEqual("2026-05-19", item.dispatch_date)
-        self.assertEqual("STANDARD", item.generated_from)
+        self.assertEqual("REGULAR", item.generated_from)
         self.assertEqual("ACTIVE", item.status)
         self.assertFalse(item.is_assigned)
-        self.assertEqual(
-            ["2026-05-19", "2026-05-26"],
-            [item.pickup_date for item in board.scheduled_opshop_pickups],
+        self.assertEqual("D001", item.default_driver_id)
+        self.assertEqual("John G", item.default_driver_alias)
+        self.assertEqual("John Georgiadis", item.default_driver_name)
+        self.assertIsNone(item.assigned_driver_id)
+        self.assertIsNone(item.assigned_driver_name)
+
+    def test_board_marks_past_pickups_locked_for_assigned_to_dropdown(self):
+        self.repository.upsert_opshop_pickup_schedule(
+            self._schedule("SCHED-001", run_day="MONDAY")
         )
 
-    def test_board_excludes_cancelled_and_completed_pickup_tasks(self):
-        self.repository.upsert_opshop_pickup_task(
-            self._task("TASK-ACTIVE", pickup_date="2026-05-20", status="ACTIVE")
+        board = self.service.get_board("2026-05-21")
+
+        self.assertEqual("2026-05-18", board.scheduled_opshop_pickups[0].pickup_date)
+        self.assertTrue(board.scheduled_opshop_pickups[0].assigned_to_locked)
+
+    def test_board_excludes_cancelled_completed_and_inactive_schedule_pickup_tasks(self):
+        self.repository.upsert_opshop_pickup_schedule(self._schedule("SCHED-001"))
+        self.repository.upsert_opshop_pickup_schedule(
+            self._schedule("SCHED-INACTIVE", active_flag=False, status="On_Hold")
         )
         self.repository.upsert_opshop_pickup_task(
-            self._task("TASK-CANCELLED", pickup_date="2026-05-21", status="CANCELLED")
+            self._task("TASK-ACTIVE", pickup_date="2026-05-18", status="ACTIVE")
         )
         self.repository.upsert_opshop_pickup_task(
-            self._task("TASK-COMPLETED", pickup_date="2026-05-22", status="COMPLETED")
+            self._task("TASK-CANCELLED", pickup_date="2026-05-19", status="CANCELLED")
+        )
+        self.repository.upsert_opshop_pickup_task(
+            self._task("TASK-COMPLETED", pickup_date="2026-05-20", status="COMPLETED")
+        )
+        self.repository.upsert_opshop_pickup_task(
+            self._task("TASK-INACTIVE-SCHEDULE", "SCHED-INACTIVE", pickup_date="2026-05-18", status="ACTIVE")
         )
 
         board = self.service.get_board("2026-05-18")
 
-        self.assertEqual(["TASK-ACTIVE"], [item.pickup_task_id for item in board.opshop_pickups])
-        self.assertEqual([], board.scheduled_opshop_pickups)
+        self.assertEqual(["TASK-ACTIVE"], [item.pickup_task_id for item in board.scheduled_opshop_pickups])
+        self.assertEqual([], board.opshop_pickups)
 
-    def test_scheduled_opshop_pickups_include_active_and_assigned_standard_regular_only(self):
+    def test_scheduled_opshop_pickups_include_active_and_assigned_regular_only(self):
         self.repository.upsert_opshop_pickup_schedule(
-            self._schedule("SCHED-STANDARD", run_day="SATURDAY", run_type="STANDARD")
+            self._schedule("SCHED-STANDARD", run_type="STANDARD")
         )
         self.repository.upsert_opshop_pickup_schedule(
-            self._schedule("SCHED-REGULAR", run_day="SATURDAY", run_type="REGULAR")
+            self._schedule("SCHED-REGULAR", run_type="REGULAR")
         )
         self.repository.upsert_opshop_pickup_schedule(
             self._schedule("SCHED-ONCALL", run_type="ON_CALL")
         )
         self.repository.upsert_opshop_pickup_task(
-            self._task("TASK-ACTIVE", "SCHED-STANDARD", pickup_date="2026-05-18", status="ACTIVE")
+            self._task("TASK-STANDARD", "SCHED-STANDARD", pickup_date="2026-05-18", status="ACTIVE")
+        )
+        self.repository.upsert_opshop_pickup_task(
+            self._task("TASK-ACTIVE", "SCHED-REGULAR", pickup_date="2026-05-18", status="ACTIVE")
         )
         self.repository.upsert_opshop_pickup_task(
             self._task("TASK-ASSIGNED", "SCHED-REGULAR", pickup_date="2026-05-19", status="ASSIGNED")
         )
         self.repository.upsert_opshop_pickup_task(
             self._task("TASK-ONCALL", "SCHED-ONCALL", pickup_date="2026-05-20", status="ACTIVE")
-        )
-        self.repository.upsert_opshop_pickup_task(
-            self._task("TASK-CANCELLED", "SCHED-STANDARD", pickup_date="2026-05-21", status="CANCELLED")
-        )
-        self.repository.upsert_opshop_pickup_task(
-            self._task("TASK-COMPLETED", "SCHED-STANDARD", pickup_date="2026-05-22", status="COMPLETED")
         )
 
         board = self.service.get_board("2026-05-18")
@@ -177,7 +233,7 @@ class OpShopBoardPayloadTest(unittest.TestCase):
         self.repository.upsert_opshop_pickup_schedule(
             self._schedule(
                 "SCHED-REVIEW",
-                run_type="STANDARD",
+                run_type="REGULAR",
                 pickup_frequency="Weekly",
                 review_required=True,
             )
@@ -185,7 +241,7 @@ class OpShopBoardPayloadTest(unittest.TestCase):
 
         board = self.service.get_board("2026-05-18")
 
-        self.assertEqual([], board.opshop_pickups)
+        self.assertEqual([], board.scheduled_opshop_pickups)
         self.assertEqual([], self.repository.list_opshop_pickup_tasks())
 
     def test_repeated_board_load_does_not_duplicate_opshop_pickups(self):
@@ -196,9 +252,9 @@ class OpShopBoardPayloadTest(unittest.TestCase):
         first = self.service.get_board("2026-05-18")
         second = self.service.get_board("2026-05-18")
 
-        self.assertEqual(2, len(first.opshop_pickups))
-        self.assertEqual(2, len(second.opshop_pickups))
-        self.assertEqual(3, len(self.repository.list_opshop_pickup_tasks()))
+        self.assertEqual(1, len(first.scheduled_opshop_pickups))
+        self.assertEqual(1, len(second.scheduled_opshop_pickups))
+        self.assertEqual(1, len(self.repository.list_opshop_pickup_tasks()))
 
     def _pickup_dates(self):
         return [
@@ -233,11 +289,16 @@ class OpShopBoardPayloadTest(unittest.TestCase):
         self,
         schedule_id,
         run_day="MONDAY",
-        run_type="STANDARD",
+        run_type="REGULAR",
         pickup_frequency="Weekly",
         time_window="9-12",
         call_before_arrival=False,
         review_required=False,
+        active_flag=True,
+        status="Active",
+        default_driver_id=None,
+        default_driver_alias=None,
+        default_driver_name_snapshot=None,
     ):
         return OpShopPickupSchedule(
             schedule_id=schedule_id,
@@ -248,19 +309,22 @@ class OpShopBoardPayloadTest(unittest.TestCase):
             time_window=time_window,
             call_before_arrival=call_before_arrival,
             call_timing="30 minutes" if call_before_arrival else None,
-            status="Active",
-            active_flag=True,
+            status=status,
+            active_flag=active_flag,
             fortnight_group=None,
             review_required=review_required,
             review_reason="Needs review" if review_required else None,
             created_at="2026-05-19T00:00:00+00:00",
             updated_at="2026-05-19T00:00:00+00:00",
+            default_driver_id=default_driver_id,
+            default_driver_alias=default_driver_alias,
+            default_driver_name_snapshot=default_driver_name_snapshot,
         )
 
     def _task(self, pickup_task_id, schedule_id=None, pickup_date="2026-05-20", status="ACTIVE"):
         return OpShopPickupTask(
             pickup_task_id=pickup_task_id,
-            schedule_id=schedule_id,
+            schedule_id=schedule_id or "SCHED-001",
             opshop_id="OPSHOP-001",
             pickup_date=pickup_date,
             task_type="OPSHOP_PICKUP",
@@ -287,43 +351,17 @@ class OpShopBoardPayloadRouteTest(unittest.TestCase):
         os.environ["MANUAL_DISPATCH_DB_PATH"] = str(self.db_path)
 
         self.repository = SQLiteManualDispatchRepository(self.db_path)
-        self.repository.upsert_opshop_location(
-            OpShopLocation(
-                opshop_id="OPSHOP-001",
-                name="Northside Op Shop",
-                suburb="Coburg",
-                street_address="1 Sydney Road",
-                area_region="North",
-                primary_contact="Mary",
-                primary_phone="0400 000 001",
-                secondary_contact="John",
-                secondary_phone="0400 000 002",
-                access_type="Rear dock",
-                key_required=True,
-                trailer_restriction="Small truck only",
-                status_notes="Ring first",
-                is_active=True,
-                created_at="2026-05-19T00:00:00+00:00",
-                updated_at="2026-05-19T00:00:00+00:00",
-            )
-        )
+        fixture = OpShopBoardPayloadTest()
+        self.repository.upsert_opshop_location(fixture._location())
         self.repository.upsert_opshop_pickup_schedule(
-            OpShopPickupSchedule(
-                schedule_id="SCHED-001",
-                opshop_id="OPSHOP-001",
+            fixture._schedule(
+                "SCHED-001",
                 run_day="MONDAY",
-                run_type="STANDARD",
+                run_type="REGULAR",
                 pickup_frequency="Weekly",
-                time_window="9-12",
-                call_before_arrival=False,
-                call_timing=None,
-                status="Active",
-                active_flag=True,
-                fortnight_group=None,
-                review_required=False,
-                review_reason=None,
-                created_at="2026-05-19T00:00:00+00:00",
-                updated_at="2026-05-19T00:00:00+00:00",
+                default_driver_id="D001",
+                default_driver_alias="John G",
+                default_driver_name_snapshot="John Georgiadis",
             )
         )
         self.service = ManualDispatchService(self.repository)
@@ -343,7 +381,7 @@ class OpShopBoardPayloadRouteTest(unittest.TestCase):
             os.environ["MANUAL_DISPATCH_DB_PATH"] = self.previous_db_path
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
-    def test_board_api_response_contains_opshop_pickups(self):
+    def test_board_api_response_contains_regular_scheduled_opshop_pickups(self):
         response = self.client.get(
             "/api/manual-dispatch/board",
             params={"dispatch_date": "2026-05-18"},
@@ -353,11 +391,15 @@ class OpShopBoardPayloadRouteTest(unittest.TestCase):
 
         self.assertEqual(200, response.status_code)
         self.assertIn("opshop_pickups", payload)
+        self.assertEqual([], payload["opshop_pickups"])
+        self.assertEqual("2026-05-18", payload["opshop_regular_list_window_start"])
+        self.assertEqual("2026-05-22", payload["opshop_regular_list_window_end"])
         self.assertEqual(
-            ["2026-05-25", "2026-06-01"],
-            [item["pickup_date"] for item in payload["opshop_pickups"]],
+            ["2026-05-18"],
+            [item["pickup_date"] for item in payload["scheduled_opshop_pickups"]],
         )
-        self.assertEqual("Northside Op Shop", payload["opshop_pickups"][0]["opshop_name"])
+        self.assertEqual("Northside Op Shop", payload["scheduled_opshop_pickups"][0]["opshop_name"])
+        self.assertEqual("D001", payload["scheduled_opshop_pickups"][0]["default_driver_id"])
 
 
 if __name__ == "__main__":

@@ -1,8 +1,4 @@
-from backend.schemas import (
-    EnsureOpShopPickupTasksRequest,
-    ManualDispatchBoardResponse,
-    ManualDispatchSpecificationResponse,
-)
+from backend.schemas import ManualDispatchBoardResponse, ManualDispatchSpecificationResponse
 from backend.services.manual_dispatch.opshop_pickup_service import OpShopPickupService
 from backend.services.manual_dispatch.suburb_distance_service import (
     get_estimated_distance_km,
@@ -17,17 +13,21 @@ class BoardService:
         )
 
     def get_board(self, dispatch_date):
-        scheduled_generation = self.opshop_pickup_service.ensure_opshop_pickup_tasks_for_inclusive_window(
-            EnsureOpShopPickupTasksRequest(start_date=dispatch_date, days=14)
-        )
-        opshop_generation = self.opshop_pickup_service.ensure_opshop_pickup_tasks_for_window(
-            EnsureOpShopPickupTasksRequest(start_date=dispatch_date, days=14)
+        scheduled_generation = self.opshop_pickup_service.ensure_regular_opshop_pickup_tasks_for_week(
+            dispatch_date
         )
         orders = self.repository.list_orders()
         for order in orders:
             order.estimated_distance_km_from_warehouse = get_estimated_distance_km(
                 order.suburb
             )
+
+        scheduled_pickups = self.repository.list_scheduled_opshop_pickup_board_items_for_window(
+            scheduled_generation.window_start,
+            scheduled_generation.window_end,
+        )
+        for pickup in scheduled_pickups:
+            pickup.assigned_to_locked = pickup.pickup_date < dispatch_date
 
         return ManualDispatchBoardResponse(
             dispatch_date=dispatch_date,
@@ -38,17 +38,13 @@ class BoardService:
             driver_vehicle_assignments=self.repository.list_driver_vehicle_assignments(
                 dispatch_date
             ),
-            opshop_pickups=self.repository.list_opshop_pickup_board_items_for_window(
-                opshop_generation.window_start,
-                opshop_generation.window_end,
-            ),
+            opshop_pickups=[],
             assigned_opshop_pickups=self.repository.list_assigned_opshop_pickup_board_items(
                 dispatch_date
             ),
-            scheduled_opshop_pickups=self.repository.list_scheduled_opshop_pickup_board_items_for_window(
-                scheduled_generation.window_start,
-                scheduled_generation.window_end,
-            ),
+            scheduled_opshop_pickups=scheduled_pickups,
+            opshop_regular_list_window_start=scheduled_generation.window_start,
+            opshop_regular_list_window_end=scheduled_generation.window_end,
         )
 
     def get_specifications(self):

@@ -129,6 +129,14 @@ def _ensure_manual_dispatch_columns(connection):
         "estimated_distance_km_from_warehouse_snapshot",
         "REAL",
     )
+    _ensure_column(connection, "opshop_pickup_schedules", "default_driver_id", "TEXT")
+    _ensure_column(connection, "opshop_pickup_schedules", "default_driver_alias", "TEXT")
+    _ensure_column(
+        connection,
+        "opshop_pickup_schedules",
+        "default_driver_name_snapshot",
+        "TEXT",
+    )
 
 
 def _ensure_column(connection, table_name, column_name, column_definition):

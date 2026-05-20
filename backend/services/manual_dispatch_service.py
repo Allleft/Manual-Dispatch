@@ -100,6 +100,10 @@ class ManualDispatchService:
     def delete_opshop_pickup_task(self, pickup_task_id):
         return self.opshop_pickup_service.delete_opshop_pickup_task(pickup_task_id)
 
+    def apply_weekly_opshop_pickup_assignments(self, request):
+        self.opshop_pickup_service.apply_weekly_assignments(request)
+        return self.board_service.get_board(request.dispatch_date)
+
     def create_driver(self, request):
         return self.specification_service.create_driver(request)
 

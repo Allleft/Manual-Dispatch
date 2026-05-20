@@ -13,6 +13,7 @@ from backend.repositories.sqlite_manual_dispatch_repository import (
 )
 from backend.schemas import (
     AssignTaskRequest,
+    ApplyWeeklyOpShopPickupAssignmentsRequest,
     CreateOpShopPickupTaskRequest,
     OpShopLocation,
     OpShopPickupSchedule,
@@ -41,10 +42,10 @@ class OpShopPickupListManagementTest(unittest.TestCase):
         )
         self.service = ManualDispatchService(self.repository)
 
-    def test_schedule_candidates_return_active_standard_and_regular_only(self):
+    def test_schedule_candidates_return_active_regular_only(self):
         candidates = self.service.list_opshop_pickup_schedule_candidates("scheduled")
 
-        self.assertEqual(["SCHED-REGULAR", "SCHED-STANDARD"], sorted(candidate.schedule_id for candidate in candidates))
+        self.assertEqual(["SCHED-REGULAR"], sorted(candidate.schedule_id for candidate in candidates))
         self.assertEqual("Northside Op Shop", candidates[0].opshop_name)
         self.assertEqual("Coburg", candidates[0].suburb)
         self.assertEqual("0400 000 001", candidates[0].primary_phone)
@@ -229,6 +230,97 @@ class OpShopPickupListManagementTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Unassign"):
             self.service.delete_opshop_pickup_task(task.pickup_task_id)
 
+    def test_apply_weekly_assignments_assigns_visible_regular_pickups_to_trip1(self):
+        task = self.service.create_opshop_pickup_task(
+            CreateOpShopPickupTaskRequest(
+                schedule_id="SCHED-REGULAR",
+                pickup_date="2026-05-18",
+            )
+        )
+
+        board = self.service.apply_weekly_opshop_pickup_assignments(
+            ApplyWeeklyOpShopPickupAssignmentsRequest(
+                dispatch_date="2026-05-18",
+                assignments=[
+                    {"pickup_task_id": task.pickup_task_id, "driver_id": "D001"},
+                ],
+            )
+        )
+        updated = self.repository.get_opshop_pickup_task(task.pickup_task_id)
+        assignment = self.repository.get_assignment(
+            "2026-05-18",
+            "OPSHOP_PICKUP",
+            task.pickup_task_id,
+        )
+
+        self.assertEqual("ASSIGNED", updated.status)
+        self.assertEqual("D001", updated.driver_id)
+        self.assertEqual("trip1", updated.trip_no)
+        self.assertEqual("OPSHOP_PICKUP", assignment.task_type)
+        self.assertEqual("trip1", assignment.trip_no)
+        self.assertIn(
+            task.pickup_task_id,
+            [item.pickup_task_id for item in board.assigned_opshop_pickups],
+        )
+
+    def test_apply_weekly_assignments_skips_locked_past_pickup_rows(self):
+        task = self.service.create_opshop_pickup_task(
+            CreateOpShopPickupTaskRequest(
+                schedule_id="SCHED-REGULAR",
+                pickup_date="2026-05-18",
+            )
+        )
+
+        self.service.apply_weekly_opshop_pickup_assignments(
+            ApplyWeeklyOpShopPickupAssignmentsRequest(
+                dispatch_date="2026-05-21",
+                assignments=[
+                    {"pickup_task_id": task.pickup_task_id, "driver_id": "D001"},
+                ],
+            )
+        )
+        updated = self.repository.get_opshop_pickup_task(task.pickup_task_id)
+
+        self.assertEqual("ACTIVE", updated.status)
+        self.assertIsNone(updated.driver_id)
+        self.assertIsNone(
+            self.repository.get_assignment(
+                "2026-05-21",
+                "OPSHOP_PICKUP",
+                task.pickup_task_id,
+            )
+        )
+
+    def test_apply_weekly_assignments_blank_driver_unassigns_visible_regular_pickup(self):
+        task = self.service.create_opshop_pickup_task(
+            CreateOpShopPickupTaskRequest(
+                schedule_id="SCHED-REGULAR",
+                pickup_date="2026-05-18",
+            )
+        )
+        self.service.apply_weekly_opshop_pickup_assignments(
+            ApplyWeeklyOpShopPickupAssignmentsRequest(
+                dispatch_date="2026-05-18",
+                assignments=[
+                    {"pickup_task_id": task.pickup_task_id, "driver_id": "D001"},
+                ],
+            )
+        )
+
+        self.service.apply_weekly_opshop_pickup_assignments(
+            ApplyWeeklyOpShopPickupAssignmentsRequest(
+                dispatch_date="2026-05-18",
+                assignments=[
+                    {"pickup_task_id": task.pickup_task_id, "driver_id": ""},
+                ],
+            )
+        )
+        updated = self.repository.get_opshop_pickup_task(task.pickup_task_id)
+
+        self.assertEqual("ACTIVE", updated.status)
+        self.assertIsNone(updated.driver_id)
+        self.assertIsNone(updated.trip_no)
+
     def _location(self):
         return OpShopLocation(
             opshop_id="OPSHOP-001",
@@ -286,6 +378,9 @@ class OpShopPickupListManagementRouteTest(unittest.TestCase):
             OpShopPickupListManagementTest()._schedule("SCHED-STANDARD")
         )
         self.repository.upsert_opshop_pickup_schedule(
+            OpShopPickupListManagementTest()._schedule("SCHED-REGULAR", run_type="REGULAR")
+        )
+        self.repository.upsert_opshop_pickup_schedule(
             OpShopPickupListManagementTest()._schedule("SCHED-ONCALL", run_type="ON_CALL")
         )
         self.service = ManualDispatchService(self.repository)
@@ -305,7 +400,7 @@ class OpShopPickupListManagementRouteTest(unittest.TestCase):
             os.environ["MANUAL_DISPATCH_DB_PATH"] = self.previous_db_path
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
-    def test_schedule_candidate_endpoint_returns_active_standard_regular_only(self):
+    def test_schedule_candidate_endpoint_returns_active_regular_only(self):
         response = self.client.get(
             "/api/manual-dispatch/opshop-pickup-schedules",
             params={"run_type": "scheduled"},
@@ -314,14 +409,14 @@ class OpShopPickupListManagementRouteTest(unittest.TestCase):
         payload = response.json()
 
         self.assertEqual(200, response.status_code)
-        self.assertEqual(["SCHED-STANDARD"], [item["schedule_id"] for item in payload])
+        self.assertEqual(["SCHED-REGULAR"], [item["schedule_id"] for item in payload])
         self.assertEqual("Northside Op Shop", payload[0]["opshop_name"])
 
     def test_create_update_and_delete_pickup_endpoints(self):
         create_response = self.client.post(
             "/api/manual-dispatch/opshop-pickups",
             json={
-                "schedule_id": "SCHED-STANDARD",
+                "schedule_id": "SCHED-REGULAR",
                 "pickup_date": "2026-05-18",
                 "notes": "Manual",
             },
@@ -340,6 +435,33 @@ class OpShopPickupListManagementRouteTest(unittest.TestCase):
         self.assertEqual("Updated", update_response.json()["notes"])
         self.assertEqual(200, delete_response.status_code)
         self.assertEqual("CANCELLED", delete_response.json()["status"])
+
+    def test_apply_weekly_assignments_endpoint_returns_updated_board(self):
+        create_response = self.client.post(
+            "/api/manual-dispatch/opshop-pickups",
+            json={
+                "schedule_id": "SCHED-REGULAR",
+                "pickup_date": "2026-05-18",
+                "notes": "Manual",
+            },
+        )
+        pickup_id = create_response.json()["pickup_task_id"]
+
+        apply_response = self.client.post(
+            "/api/manual-dispatch/opshop-pickups/weekly-assignments/apply",
+            json={
+                "dispatch_date": "2026-05-18",
+                "assignments": [
+                    {"pickup_task_id": pickup_id, "driver_id": "D001"},
+                ],
+            },
+        )
+        payload = apply_response.json()
+
+        self.assertEqual(200, apply_response.status_code)
+        self.assertEqual([pickup_id], [item["pickup_task_id"] for item in payload["assigned_opshop_pickups"]])
+        self.assertEqual("D001", payload["assigned_opshop_pickups"][0]["driver_id"])
+        self.assertEqual("trip1", payload["assigned_opshop_pickups"][0]["trip_no"])
 
 
 if __name__ == "__main__":

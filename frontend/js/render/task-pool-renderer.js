@@ -201,18 +201,18 @@ function createOpShopPickupListSummaryCard(pickups, onOpenOpShopPickupList) {
 
   const kicker = document.createElement("p");
   kicker.className = "compact-invoice";
-  kicker.textContent = "Scheduled Standard / Regular";
+  kicker.textContent = "Scheduled Regular";
 
   const title = document.createElement("h3");
   title.className = "compact-suburb";
-  title.textContent = "Regular / Standard OP SHOP Pickup List";
+  title.textContent = "Regular OP SHOP Pickup List";
 
   const summary = document.createElement("p");
   summary.className = "compact-note opshop-pickup-note";
   summary.textContent =
     pickups.length === 0
-      ? "No OP SHOP PICKUP tasks for the next 14 days."
-      : `${pickups.length} scheduled pickups in the 14-day window.`;
+      ? "No OP SHOP PICKUP tasks for this Regular pickup week."
+      : `${pickups.length} scheduled pickups in this Regular pickup week.`;
 
   const meta = document.createElement("div");
   meta.className = "compact-meta opshop-pickup-meta";
@@ -233,10 +233,10 @@ function createOpShopPickupListSummaryCard(pickups, onOpenOpShopPickupList) {
 }
 
 function getWindowLabel() {
-  const start = parseLocalDate(state.dispatchDate);
-  const end = addDays(start, 13);
+  const start = parseLocalDate(state.opshopRegularListWindowStart || state.dispatchDate);
+  const end = parseLocalDate(state.opshopRegularListWindowEnd || state.dispatchDate);
   if (!start || !end) {
-    return "next 14 days";
+    return "Regular pickup week";
   }
   return `${formatDateShort(start)} to ${formatDateShort(end)}`;
 }
@@ -247,15 +247,6 @@ function parseLocalDate(value) {
     return null;
   }
   return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-}
-
-function addDays(date, days) {
-  if (!date) {
-    return null;
-  }
-  const next = new Date(date);
-  next.setDate(next.getDate() + days);
-  return next;
 }
 
 function formatDateShort(date) {

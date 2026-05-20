@@ -40,6 +40,8 @@ function normalizeBoardResponse(payload) {
     opshopPickups: payload.opshop_pickups || [],
     assignedOpShopPickups: payload.assigned_opshop_pickups || [],
     scheduledOpShopPickups: payload.scheduled_opshop_pickups || [],
+    opshopRegularListWindowStart: payload.opshop_regular_list_window_start || "",
+    opshopRegularListWindowEnd: payload.opshop_regular_list_window_end || "",
     driverVehicleAssignments: (payload.driver_vehicle_assignments || []).map((assignment) => ({
       ...assignment,
       delivery_date: assignment.delivery_date || assignment.dispatch_date || payload.dispatch_date || state.dispatchDate,
@@ -60,6 +62,8 @@ function applyBoardResponse(payload) {
   state.opshopPickups = board.opshopPickups;
   state.assignedOpShopPickups = board.assignedOpShopPickups;
   state.scheduledOpShopPickups = board.scheduledOpShopPickups;
+  state.opshopRegularListWindowStart = board.opshopRegularListWindowStart;
+  state.opshopRegularListWindowEnd = board.opshopRegularListWindowEnd;
   state.driverVehicleAssignments = board.driverVehicleAssignments;
   assignmentActions.cleanupPendingSelections();
 }
@@ -252,6 +256,7 @@ function renderOpShopPickupListModal() {
     onStartAdd: opShopPickupActions.startAddPickupTask,
     onStartDelete: opShopPickupActions.startDeletePickupTask,
     onStartEdit: opShopPickupActions.startEditPickupTask,
+    onUpdateAssignedDriver: opShopPickupActions.updateAssignedDriverSelection,
     onUpdateForm: opShopPickupActions.updatePickupTaskForm,
     onUpdatePickup: opShopPickupActions.handleUpdatePickupTask,
   });

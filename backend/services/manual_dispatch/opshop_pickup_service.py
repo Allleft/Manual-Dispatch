@@ -5,6 +5,7 @@ from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
 
 from backend.schemas import (
+    ApplyWeeklyOpShopPickupAssignmentsRequest,
     CreateOpShopPickupTaskRequest,
     EnsureOpShopPickupTasksRequest,
     EnsureOpShopPickupTasksResult,
@@ -71,6 +72,62 @@ class OpShopPickupService:
         return self._ensure_opshop_pickup_tasks_for_window(
             request,
             include_start_date=True,
+        )
+
+    def regular_pickup_week_window(self, dispatch_date):
+        dispatch = _parse_iso_date(dispatch_date, "dispatch_date")
+        current_week_monday = dispatch - timedelta(days=dispatch.weekday())
+        if dispatch.weekday() >= 4:
+            current_week_monday += timedelta(days=7)
+        return current_week_monday, current_week_monday + timedelta(days=4)
+
+    def ensure_regular_opshop_pickup_tasks_for_week(self, dispatch_date):
+        window_start, window_end = self.regular_pickup_week_window(dispatch_date)
+        schedules = self.repository.list_opshop_pickup_schedules()
+        skip_reasons = {}
+        created_tasks = []
+        tasks_existing = 0
+
+        for schedule in schedules:
+            if not _is_active_schedule(schedule):
+                _increment(skip_reasons, "INACTIVE_OR_ON_HOLD")
+                continue
+            if schedule.review_required:
+                _increment(skip_reasons, "REVIEW_REQUIRED")
+                continue
+            if schedule.run_type != "REGULAR":
+                _increment(skip_reasons, "NON_REGULAR_NOT_IN_WEEKLY_LIST")
+                continue
+            if schedule.run_day not in WEEKDAY_BY_NAME:
+                _increment(skip_reasons, "UNKNOWN_RUN_DAY")
+                continue
+
+            for target_date in _date_range(window_start, window_end):
+                if _weekday_name(target_date) != schedule.run_day:
+                    continue
+                pickup_date = target_date.isoformat()
+                existing = self.repository.find_opshop_pickup_task_by_schedule_and_date(
+                    schedule.schedule_id,
+                    pickup_date,
+                )
+                if existing:
+                    tasks_existing += 1
+                    _increment(skip_reasons, "EXISTING_TASK")
+                    continue
+                task = self._build_generated_task(schedule, pickup_date)
+                created_tasks.append(self.repository.insert_opshop_pickup_task(task))
+
+        return EnsureOpShopPickupTasksResult(
+            window_start=window_start.isoformat(),
+            window_end=window_end.isoformat(),
+            days=5,
+            schedules_checked=len(schedules),
+            tasks_created=len(created_tasks),
+            tasks_existing=tasks_existing,
+            schedules_skipped=sum(skip_reasons.values()),
+            skip_reasons=skip_reasons,
+            warnings={},
+            created_tasks=created_tasks,
         )
 
     def list_opshop_pickup_schedule_candidates(self, run_type="scheduled"):
@@ -157,6 +214,57 @@ class OpShopPickupService:
             updated_at=_timestamp(),
         )
         return self.repository.upsert_opshop_pickup_task(cancelled)
+
+    def apply_weekly_assignments(self, request):
+        request = request or ApplyWeeklyOpShopPickupAssignmentsRequest(dispatch_date="")
+        dispatch = _parse_iso_date(request.dispatch_date, "dispatch_date")
+        window_start, window_end = self.regular_pickup_week_window(dispatch.isoformat())
+        driver_ids = set(self.repository.list_driver_ids())
+
+        for assignment in request.assignments or []:
+            pickup_task_id = _clean_text(assignment.get("pickup_task_id"))
+            driver_id = _clean_text(assignment.get("driver_id"))
+            task = self.repository.get_opshop_pickup_task(pickup_task_id)
+            if not task or task.status in {"CANCELLED", "COMPLETED"}:
+                continue
+            pickup_date = _parse_iso_date(task.pickup_date, "pickup_date")
+            if pickup_date < dispatch:
+                continue
+            if not (window_start <= pickup_date <= window_end):
+                continue
+            schedule = self.repository.get_opshop_pickup_schedule(task.schedule_id)
+            if not schedule or schedule.run_type != "REGULAR" or not _is_active_schedule(schedule):
+                continue
+
+            if not driver_id:
+                self.repository.remove_assignment(
+                    request.dispatch_date,
+                    "OPSHOP_PICKUP",
+                    pickup_task_id,
+                )
+                self.repository.update_opshop_pickup_task_assignment_status(
+                    pickup_task_id,
+                    "ACTIVE",
+                    None,
+                    None,
+                )
+                continue
+            if driver_id not in driver_ids:
+                continue
+
+            self.repository.upsert_assignment(
+                request.dispatch_date,
+                "OPSHOP_PICKUP",
+                pickup_task_id,
+                driver_id,
+                "trip1",
+            )
+            self.repository.update_opshop_pickup_task_assignment_status(
+                pickup_task_id,
+                "ASSIGNED",
+                driver_id,
+                "trip1",
+            )
 
     def _ensure_opshop_pickup_tasks_for_window(self, request, include_start_date):
         start = _parse_iso_date(request.start_date, "start_date")

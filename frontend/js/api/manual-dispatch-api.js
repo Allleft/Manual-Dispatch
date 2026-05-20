@@ -182,6 +182,14 @@ export async function apiDeleteOpShopPickup(pickupTaskId) {
 }
 
 
+export async function apiApplyWeeklyOpShopPickupAssignments(payload) {
+  return requestJson("/api/manual-dispatch/opshop-pickups/weekly-assignments/apply", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+
 export async function apiSaveFinalSummary(payload) {
   return requestJson("/api/manual-dispatch/final-summaries", {
     method: "POST",

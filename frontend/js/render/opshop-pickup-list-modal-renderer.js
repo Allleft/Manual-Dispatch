@@ -18,6 +18,7 @@ export function renderOpShopPickupListModal({
   onStartAdd,
   onStartDelete,
   onStartEdit,
+  onUpdateAssignedDriver,
   onUpdateForm,
   onUpdatePickup,
 }) {
@@ -59,6 +60,7 @@ export function renderOpShopPickupListModal({
       onOpenDetail,
       onStartDelete,
       onStartEdit,
+      onUpdateAssignedDriver,
     }),
   );
 
@@ -77,7 +79,7 @@ function createModalHeader({ onCloseList, onStartAdd }) {
 
   const title = document.createElement("h2");
   title.id = "opshop-pickup-list-title";
-  title.textContent = "Regular / Standard OP SHOP Pickup List";
+  title.textContent = "Regular OP SHOP Pickup List";
   titleWrap.append(kicker, title);
 
   const actions = document.createElement("div");
@@ -109,10 +111,12 @@ function createModalHeader({ onCloseList, onStartAdd }) {
 function createWindowSummary() {
   const summary = document.createElement("div");
   summary.className = "opshop-list-summary";
-  const { start, end } = getInclusiveWindow();
+  const start = parseLocalDate(state.opshopRegularListWindowStart || state.dispatchDate);
+  const end = parseLocalDate(state.opshopRegularListWindowEnd || state.dispatchDate);
   summary.append(
     createBadge(`${state.scheduledOpShopPickups.length} scheduled pickups`, "good"),
     createBadge(`Window: ${formatDateShort(start)} to ${formatDateShort(end)}`),
+    createBadge("Monday-Friday week"),
     createBadge("ACTIVE / ASSIGNED only"),
   );
   return summary;
@@ -345,7 +349,7 @@ function createFormActions({
   return actions;
 }
 
-function createPickupGroups({ onOpenDetail, onStartDelete, onStartEdit }) {
+function createPickupGroups({ onOpenDetail, onStartDelete, onStartEdit, onUpdateAssignedDriver }) {
   const container = document.createElement("div");
   container.className = "opshop-date-group-list";
 
@@ -360,7 +364,7 @@ function createPickupGroups({ onOpenDetail, onStartDelete, onStartEdit }) {
   if (state.scheduledOpShopPickups.length === 0) {
     const empty = document.createElement("p");
     empty.className = "empty-board";
-    empty.textContent = "No Regular / Standard OP SHOP pickups in this 14-day window.";
+    empty.textContent = "No Regular OP SHOP pickups in this week.";
     container.append(empty);
     return container;
   }
@@ -376,7 +380,12 @@ function createPickupGroups({ onOpenDetail, onStartDelete, onStartEdit }) {
     const list = document.createElement("div");
     list.className = "opshop-date-card-list";
     pickups.forEach((pickup) => {
-      list.append(createPickupItem(pickup, { onOpenDetail, onStartDelete, onStartEdit }));
+      list.append(createPickupItem(pickup, {
+        onOpenDetail,
+        onStartDelete,
+        onStartEdit,
+        onUpdateAssignedDriver,
+      }));
     });
 
     section.append(list);
@@ -386,7 +395,12 @@ function createPickupGroups({ onOpenDetail, onStartDelete, onStartEdit }) {
   return container;
 }
 
-function createPickupItem(pickup, { onOpenDetail, onStartDelete, onStartEdit }) {
+function createPickupItem(pickup, {
+  onOpenDetail,
+  onStartDelete,
+  onStartEdit,
+  onUpdateAssignedDriver,
+}) {
   const card = document.createElement("article");
   card.className = "opshop-list-item";
   card.tabIndex = 0;
@@ -422,7 +436,9 @@ function createPickupItem(pickup, { onOpenDetail, onStartDelete, onStartEdit }) 
     meta.append(createBadge(`Phone: ${pickup.primary_phone}`));
   }
   if (pickup.is_assigned || pickup.driver_id || pickup.trip_no) {
-    meta.append(createBadge(`Assigned: ${formatOptional(pickup.driver_id)} / ${formatOptional(pickup.trip_no)}`, "warning"));
+    meta.append(createBadge(`Assigned: ${formatOptional(pickup.assigned_driver_name || pickup.driver_id)} / ${formatOptional(pickup.trip_no)}`, "warning"));
+  } else if (pickup.default_driver_name || pickup.default_driver_alias) {
+    meta.append(createBadge(`Default: ${formatOptional(pickup.default_driver_name || pickup.default_driver_alias)}`));
   }
 
   const note = document.createElement("p");
@@ -435,6 +451,8 @@ function createPickupItem(pickup, { onOpenDetail, onStartDelete, onStartEdit }) 
   actions.className = "opshop-list-item-actions";
   actions.addEventListener("click", (event) => event.stopPropagation());
   actions.addEventListener("keydown", (event) => event.stopPropagation());
+
+  actions.append(createAssignedToSelect(pickup, onUpdateAssignedDriver));
 
   const editButton = document.createElement("button");
   editButton.type = "button";
@@ -464,6 +482,41 @@ function createPickupItem(pickup, { onOpenDetail, onStartDelete, onStartEdit }) 
   return card;
 }
 
+function createAssignedToSelect(pickup, onUpdateAssignedDriver) {
+  const wrapper = document.createElement("label");
+  wrapper.className = "opshop-assigned-to-field";
+  wrapper.textContent = "Assigned to";
+
+  const select = document.createElement("select");
+  const selectedDriverId =
+    state.opshopPickupAssignedDriverSelections[pickup.pickup_task_id] ||
+    pickup.assigned_driver_id ||
+    pickup.driver_id ||
+    pickup.default_driver_id ||
+    "";
+  select.disabled = Boolean(pickup.assigned_to_locked) || state.isOpShopPickupSaving;
+  select.append(createOption("", "Unassigned", !selectedDriverId));
+  state.drivers.forEach((driver) => {
+    select.append(createOption(driver.driver_id, driver.name, selectedDriverId === driver.driver_id));
+  });
+  select.value = selectedDriverId;
+  select.addEventListener("change", (event) => {
+    event.stopPropagation();
+    onUpdateAssignedDriver(pickup.pickup_task_id, select.value);
+  });
+  select.addEventListener("click", (event) => event.stopPropagation());
+  select.addEventListener("keydown", (event) => event.stopPropagation());
+
+  wrapper.append(select);
+  if (pickup.assigned_to_locked) {
+    const lock = document.createElement("span");
+    lock.className = "opshop-assigned-to-lock";
+    lock.textContent = "Past pickup date";
+    wrapper.append(lock);
+  }
+  return wrapper;
+}
+
 function groupPickupsByDate(pickups) {
   const groups = new Map();
   [...pickups]
@@ -480,12 +533,6 @@ function groupPickupsByDate(pickups) {
       groups.get(key).push(pickup);
     });
   return [...groups.entries()];
-}
-
-function getInclusiveWindow() {
-  const start = parseLocalDate(state.dispatchDate);
-  const end = addDays(start, 13);
-  return { start, end };
 }
 
 function formatDateHeading(value) {
@@ -509,15 +556,6 @@ function parseLocalDate(value) {
     return null;
   }
   return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-}
-
-function addDays(date, days) {
-  if (!date) {
-    return null;
-  }
-  const next = new Date(date);
-  next.setDate(next.getDate() + days);
-  return next;
 }
 
 const WEEKDAYS = [

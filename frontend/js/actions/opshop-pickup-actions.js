@@ -1,4 +1,5 @@
 import {
+  apiApplyWeeklyOpShopPickupAssignments,
   apiCreateOpShopPickup,
   apiDeleteOpShopPickup,
   apiListOpShopPickupSchedules,
@@ -16,11 +17,41 @@ export function createOpShopPickupActions({
     state.opshopPickupFormMode = "";
     state.opshopPickupEditingTaskId = "";
     state.opshopPickupForm = {};
+    initializeAssignedDriverSelections();
     renderBoard();
     await loadScheduleCandidates();
   }
 
-  function closeOpShopPickupList() {
+  async function closeOpShopPickupList() {
+    if (state.isOpShopPickupSaving) {
+      return;
+    }
+    state.isOpShopPickupSaving = true;
+    state.opshopPickupListError = "";
+    renderBoard();
+
+    try {
+      await apiApplyWeeklyOpShopPickupAssignments({
+        dispatch_date: state.dispatchDate,
+        assignments: state.scheduledOpShopPickups.map((pickup) => ({
+          pickup_task_id: pickup.pickup_task_id,
+          driver_id: state.opshopPickupAssignedDriverSelections[pickup.pickup_task_id] || "",
+        })),
+      });
+      state.isOpShopPickupListOpen = false;
+      state.opshopPickupFormMode = "";
+      state.opshopPickupEditingTaskId = "";
+      state.opshopPickupForm = {};
+      await loadBoard(state.dispatchDate, { force: true });
+    } catch (error) {
+      state.opshopPickupListError = `Unable to apply OP SHOP pickup assignments. ${error.message}`;
+    } finally {
+      state.isOpShopPickupSaving = false;
+      renderBoard();
+    }
+  }
+
+  function closeOpShopPickupListWithoutApply() {
     state.isOpShopPickupListOpen = false;
     state.opshopPickupListError = "";
     state.opshopPickupFormMode = "";
@@ -108,6 +139,7 @@ export function createOpShopPickupActions({
       state.opshopPickupFormMode = "";
       state.opshopPickupForm = {};
       await loadBoard(state.dispatchDate, { force: true });
+      initializeAssignedDriverSelections();
     } catch (error) {
       state.opshopPickupListError = `Unable to add OP SHOP pickup. ${error.message}`;
     } finally {
@@ -134,6 +166,7 @@ export function createOpShopPickupActions({
       state.opshopPickupEditingTaskId = "";
       state.opshopPickupForm = {};
       await loadBoard(state.dispatchDate, { force: true });
+      initializeAssignedDriverSelections();
     } catch (error) {
       state.opshopPickupListError = `Unable to update OP SHOP pickup. ${error.message}`;
     } finally {
@@ -157,6 +190,7 @@ export function createOpShopPickupActions({
       state.opshopPickupEditingTaskId = "";
       state.opshopPickupForm = {};
       await loadBoard(state.dispatchDate, { force: true });
+      initializeAssignedDriverSelections();
     } catch (error) {
       state.opshopPickupListError = `Unable to delete OP SHOP pickup. ${error.message}`;
     } finally {
@@ -165,9 +199,30 @@ export function createOpShopPickupActions({
     }
   }
 
+  function updateAssignedDriverSelection(pickupTaskId, driverId) {
+    state.opshopPickupAssignedDriverSelections = {
+      ...state.opshopPickupAssignedDriverSelections,
+      [pickupTaskId]: driverId,
+    };
+    renderBoard();
+  }
+
+  function initializeAssignedDriverSelections() {
+    const selections = {};
+    state.scheduledOpShopPickups.forEach((pickup) => {
+      selections[pickup.pickup_task_id] =
+        pickup.assigned_driver_id ||
+        pickup.driver_id ||
+        pickup.default_driver_id ||
+        "";
+    });
+    state.opshopPickupAssignedDriverSelections = selections;
+  }
+
   return {
     cancelPickupTaskForm,
     closeOpShopPickupList,
+    closeOpShopPickupListWithoutApply,
     handleCreatePickupTask,
     handleDeletePickupTask,
     handleUpdatePickupTask,
@@ -176,6 +231,7 @@ export function createOpShopPickupActions({
     startAddPickupTask,
     startDeletePickupTask,
     startEditPickupTask,
+    updateAssignedDriverSelection,
     updatePickupTaskForm,
   };
 }
