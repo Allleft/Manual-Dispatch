@@ -520,11 +520,7 @@ function createAssignedToSelect(pickup, onUpdateAssignedDriver) {
 function groupPickupsByDate(pickups) {
   const groups = new Map();
   [...pickups]
-    .sort((left, right) =>
-      `${left.pickup_date || ""}|${left.suburb || ""}|${left.opshop_name || ""}|${left.pickup_task_id || ""}`.localeCompare(
-        `${right.pickup_date || ""}|${right.suburb || ""}|${right.opshop_name || ""}|${right.pickup_task_id || ""}`,
-      ),
-    )
+    .sort((left, right) => compareText(left.pickup_date, right.pickup_date))
     .forEach((pickup) => {
       const key = pickup.pickup_date || "";
       if (!groups.has(key)) {
@@ -532,7 +528,55 @@ function groupPickupsByDate(pickups) {
       }
       groups.get(key).push(pickup);
     });
-  return [...groups.entries()];
+  return [...groups.entries()].map(([pickupDate, groupPickups]) => [
+    pickupDate,
+    [...groupPickups].sort(comparePickupsWithinDateGroup),
+  ]);
+}
+
+function comparePickupsWithinDateGroup(left, right) {
+  const leftDriverName = getAssignedDriverSortName(left);
+  const rightDriverName = getAssignedDriverSortName(right);
+
+  if (leftDriverName && !rightDriverName) {
+    return -1;
+  }
+  if (!leftDriverName && rightDriverName) {
+    return 1;
+  }
+
+  return (
+    compareText(leftDriverName, rightDriverName) ||
+    compareText(left.suburb, right.suburb) ||
+    compareText(left.opshop_name, right.opshop_name) ||
+    compareText(left.pickup_task_id, right.pickup_task_id)
+  );
+}
+
+function getAssignedDriverSortName(pickup) {
+  const selectedDriverId = state.opshopPickupAssignedDriverSelections[pickup.pickup_task_id];
+  if (selectedDriverId) {
+    return getDriverNameById(selectedDriverId) || selectedDriverId;
+  }
+  if (pickup.assigned_driver_name) {
+    return pickup.assigned_driver_name;
+  }
+  if (pickup.assigned_driver_id || pickup.driver_id) {
+    const driverId = pickup.assigned_driver_id || pickup.driver_id;
+    return getDriverNameById(driverId) || driverId;
+  }
+  return pickup.default_driver_name || pickup.default_driver_alias || "";
+}
+
+function getDriverNameById(driverId) {
+  const driver = state.drivers.find((item) => item.driver_id === driverId);
+  return driver ? driver.name : "";
+}
+
+function compareText(left, right) {
+  return String(left || "").localeCompare(String(right || ""), undefined, {
+    sensitivity: "base",
+  });
 }
 
 function formatDateHeading(value) {
