@@ -254,7 +254,7 @@ export function createOncallOpShopPickupActions({
     if (!candidate || !candidate.run_day || !(candidate.run_day in WEEKDAY_OFFSETS)) {
       return "";
     }
-    const monday = parseLocalDate(state.opshopRegularListWindowStart || state.dispatchDate);
+    const monday = getOncallTargetWeekMonday(state.dispatchDate);
     if (!monday) {
       return "";
     }
@@ -277,6 +277,19 @@ export function createOncallOpShopPickupActions({
     updateAssignedDriverSelection,
     updatePickupTaskForm,
   };
+}
+
+function getOncallTargetWeekMonday(dispatchDateValue) {
+  const dispatchDate = parseLocalDate(dispatchDateValue);
+  if (!dispatchDate) {
+    return null;
+  }
+  const monday = new Date(dispatchDate);
+  monday.setDate(dispatchDate.getDate() - ((dispatchDate.getDay() + 6) % 7));
+  if (dispatchDate.getDay() === 5 || dispatchDate.getDay() === 6 || dispatchDate.getDay() === 0) {
+    monday.setDate(monday.getDate() + 7);
+  }
+  return monday;
 }
 
 function parseLocalDate(value) {

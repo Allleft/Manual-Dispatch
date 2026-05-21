@@ -159,7 +159,7 @@ export function renderDriverSummary({
     if (exceptions.length > 0) {
       header.append(exceptionList);
     }
-    if (assignedOrders.length > 0 && !hasLockedFinalSummary) {
+    if (hasAssignedTasks && !hasLockedFinalSummary) {
       header.append(generateButton);
     }
     if (assignedOpShopPickups.length > 0) {

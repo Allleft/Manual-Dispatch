@@ -7,6 +7,7 @@ import {
 } from "../api/manual-dispatch-api.js";
 import {
   findDriverById,
+  getAssignedOpShopPickupsForDriver,
   getAssignedOrdersForDriver,
   getAssignmentsForDriver,
   getFinalSummaryKey,
@@ -289,8 +290,9 @@ export function createFinalSummaryActions({
     }
 
     const assignedOrders = getAssignedOrdersForDriver(driverId);
-    if (assignedOrders.length === 0) {
-      showError("Assign at least one Order before generating a Final Trip Summary.");
+    const assignedOpShopPickups = getAssignedOpShopPickupsForDriver(driverId);
+    if (assignedOrders.length === 0 && assignedOpShopPickups.length === 0) {
+      showError("Assign at least one Order or OP SHOP pickup before generating a Final Trip Summary.");
       renderBoard();
       return;
     }
@@ -300,12 +302,6 @@ export function createFinalSummaryActions({
       snapshot = buildFinalTripSummarySnapshot(driverId);
     } catch (error) {
       showError(`Unable to generate Final Trip Summary. ${error.message}`);
-      renderBoard();
-      return;
-    }
-
-    if (snapshot.trips.length === 0) {
-      showError("No Order tasks are available to include in the Final Trip Summary.");
       renderBoard();
       return;
     }

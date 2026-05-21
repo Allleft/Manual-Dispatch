@@ -302,23 +302,27 @@ class ManualDispatchFinalSummaryTest(unittest.TestCase):
         self.assertEqual("XYZ888", detail.vehicle_rego_snapshot)
         self.assertEqual("Demo Customer A", detail.trips[0].orders[0].company_name_snapshot)
 
-    def test_save_final_summary_rejects_empty_snapshot(self):
-        with self.assertRaises(ValueError):
-            self.service.save_final_trip_summary(
-                SaveFinalTripSummaryRequest(
-                    dispatch_date=self.dispatch_date,
-                    driver_id="D001",
-                    driver_name_snapshot="John",
-                    vehicle_id=None,
-                    vehicle_rego_snapshot=None,
-                    total_pallets=0,
-                    total_loose_bags=0,
-                    generated_at="2026-05-05T00:00:00Z",
-                    saved_by_account_name=self.account.account_name,
-                    saved_by_account_id=self.account.account_id,
-                    trips=[],
-                )
+    def test_save_final_summary_allows_empty_order_only_snapshot(self):
+        summary = self.service.save_final_trip_summary(
+            SaveFinalTripSummaryRequest(
+                dispatch_date=self.dispatch_date,
+                driver_id="D001",
+                driver_name_snapshot="John",
+                vehicle_id=None,
+                vehicle_rego_snapshot=None,
+                total_pallets=0,
+                total_loose_bags=0,
+                generated_at="2026-05-05T00:00:00Z",
+                saved_by_account_name=self.account.account_name,
+                saved_by_account_id=self.account.account_id,
+                trips=[],
             )
+        )
+
+        self.assertEqual([], summary.trips)
+        self.assertEqual(0, summary.total_pallets)
+        self.assertEqual(0, summary.total_loose_bags)
+        self.assertEqual("SAVED", summary.status)
 
     def test_save_final_summary_rejects_missing_saved_by_account_name(self):
         self._assign_order("ORD-001", "D001", "trip1")

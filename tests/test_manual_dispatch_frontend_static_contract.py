@@ -210,6 +210,8 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn(".assigned-opshop-name", styles)
         self.assertIn(".assigned-opshop-suburb", styles)
         self.assertIn("getAssignedOpShopPickupsForDriver", trip_summary_renderer)
+        self.assertIn("const hasAssignedTasks = assignedOrders.length > 0 || assignedOpShopPickups.length > 0", trip_summary_renderer)
+        self.assertIn("if (hasAssignedTasks && !hasLockedFinalSummary)", trip_summary_renderer)
         self.assertIn("pickup.pickup_date === state.driverSummaryDeliveryDate", selectors)
         self.assertIn("getOrderAssignmentsForDriverTrip", selectors)
         self.assertIn("createOpShopPickupGroup", trip_summary_renderer)
@@ -231,6 +233,13 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertNotIn("Phone:", assigned_opshop_renderer)
         self.assertNotIn("pickup.opshop_name)", assigned_opshop_renderer)
         self.assertNotIn("OP SHOP PICKUP", final_summary_renderer)
+
+        final_summary_actions = (
+            FRONTEND_ROOT / "js" / "actions" / "final-summary-actions.js"
+        ).read_text(encoding="utf-8")
+        self.assertIn("getAssignedOpShopPickupsForDriver", final_summary_actions)
+        self.assertIn("assignedOrders.length === 0 && assignedOpShopPickups.length === 0", final_summary_actions)
+        self.assertIn("Assign at least one Order or OP SHOP pickup", final_summary_actions)
 
     def test_phase8_opshop_pickup_list_frontend_contract(self):
         app_js = (FRONTEND_ROOT / "app.js").read_text(encoding="utf-8")
@@ -362,6 +371,8 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("updateAssignedDriverSelection", actions)
         self.assertIn("WEEKDAY_OFFSETS", actions)
         self.assertIn("candidate.run_day", actions)
+        self.assertIn("getOncallTargetWeekMonday(state.dispatchDate)", actions)
+        self.assertNotIn("state.opshopRegularListWindowStart", actions)
         self.assertIn("renderOncallOpShopPickupListModal", app_js)
         self.assertIn("createOncallOpShopPickupActions", app_js)
         self.assertIn("onOpenOncallOpShopPickupList: oncallOpShopPickupActions.openOncallOpShopPickupList", app_js)
@@ -394,6 +405,7 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertNotIn("tripSelect", modal_renderer)
         self.assertNotIn("Trip dropdown", modal_renderer)
         self.assertNotIn("OP SHOP PICKUP", final_summary_renderer)
+        self.assertIn("No Delivery Orders included. OP SHOP pickups are excluded from Final Trip Summary", final_summary_renderer)
         self.assertNotIn("fetch(", actions)
         self.assertNotIn("fetch(", modal_renderer)
 

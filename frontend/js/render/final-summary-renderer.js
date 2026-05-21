@@ -10,6 +10,9 @@ import {
   formatProductDetailLine,
 } from "../utils/format-utils.js";
 
+const EMPTY_ORDER_SUMMARY_MESSAGE =
+  "No Delivery Orders included. OP SHOP pickups are excluded from Final Trip Summary and available in OP SHOP Run Sheet export.";
+
 export function renderFinalTripSummaries({
   getUnsavedFinalSummaries,
   normalizeFinalSummary,
@@ -225,6 +228,14 @@ function createFinalTripSummaryCard(summary, options = {}) {
 
   const trips = document.createElement("div");
   trips.className = "final-summary-trips";
+
+  const hasDeliveryOrders = summary.trips.some((trip) => (trip.orders || []).length > 0);
+  if (!hasDeliveryOrders) {
+    const emptyNotice = document.createElement("p");
+    emptyNotice.className = "empty-trip final-summary-empty-orders";
+    emptyNotice.textContent = EMPTY_ORDER_SUMMARY_MESSAGE;
+    trips.append(emptyNotice);
+  }
 
   let rowNumber = 1;
   summary.trips.forEach((trip) => {

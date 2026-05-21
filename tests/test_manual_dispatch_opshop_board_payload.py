@@ -86,7 +86,7 @@ class OpShopBoardPayloadTest(unittest.TestCase):
         self.assertEqual("2026-05-18", board.opshop_regular_list_window_start)
         self.assertEqual("2026-05-22", board.opshop_regular_list_window_end)
 
-    def test_board_load_for_friday_refreshes_to_next_week(self):
+    def test_board_load_for_friday_includes_today_and_next_week_window(self):
         self.repository.upsert_opshop_pickup_schedule(
             self._schedule("SCHED-001", run_day="MONDAY", pickup_frequency="Weekly")
         )
@@ -95,8 +95,44 @@ class OpShopBoardPayloadTest(unittest.TestCase):
 
         self.assertEqual(["2026-05-25"], self._pickup_dates())
         self.assertEqual(["2026-05-25"], [item.pickup_date for item in board.scheduled_opshop_pickups])
-        self.assertEqual("2026-05-25", board.opshop_regular_list_window_start)
+        self.assertEqual("2026-05-22", board.opshop_regular_list_window_start)
         self.assertEqual("2026-05-29", board.opshop_regular_list_window_end)
+
+    def test_friday_regular_generation_creates_today_and_next_friday_pickups(self):
+        self.repository.upsert_opshop_pickup_schedule(
+            self._schedule("SCHED-001", run_day="FRIDAY", pickup_frequency="Weekly")
+        )
+
+        board = self.service.get_board("2026-05-22")
+
+        self.assertEqual(["2026-05-22", "2026-05-29"], self._pickup_dates())
+        self.assertEqual(
+            ["2026-05-22", "2026-05-29"],
+            [item.pickup_date for item in board.scheduled_opshop_pickups],
+        )
+        self.assertEqual("2026-05-22", board.opshop_regular_list_window_start)
+        self.assertEqual("2026-05-29", board.opshop_regular_list_window_end)
+
+    def test_weekend_dispatch_uses_next_monday_to_friday_regular_window(self):
+        self.repository.upsert_opshop_pickup_schedule(
+            self._schedule("SCHED-001", run_day="MONDAY", pickup_frequency="Weekly")
+        )
+
+        saturday = self.service.get_board("2026-05-23")
+        self.repository = InMemoryManualDispatchRepository()
+        self.repository.upsert_opshop_location(self._location())
+        self.service = ManualDispatchService(self.repository)
+        self.repository.upsert_opshop_pickup_schedule(
+            self._schedule("SCHED-001", run_day="MONDAY", pickup_frequency="Weekly")
+        )
+        sunday = self.service.get_board("2026-05-24")
+
+        self.assertEqual("2026-05-25", saturday.opshop_regular_list_window_start)
+        self.assertEqual("2026-05-29", saturday.opshop_regular_list_window_end)
+        self.assertEqual(["2026-05-25"], [item.pickup_date for item in saturday.scheduled_opshop_pickups])
+        self.assertEqual("2026-05-25", sunday.opshop_regular_list_window_start)
+        self.assertEqual("2026-05-29", sunday.opshop_regular_list_window_end)
+        self.assertEqual(["2026-05-25"], [item.pickup_date for item in sunday.scheduled_opshop_pickups])
 
     def test_board_uses_schedule_run_day_only_and_does_not_expand_frequency_days(self):
         for frequency in ["2x Weekly", "2 x Weekly", "Twice weekly", "two times weekly"]:

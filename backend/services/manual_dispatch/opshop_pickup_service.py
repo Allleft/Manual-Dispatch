@@ -78,9 +78,12 @@ class OpShopPickupService:
     def regular_pickup_week_window(self, dispatch_date):
         dispatch = _parse_iso_date(dispatch_date, "dispatch_date")
         current_week_monday = dispatch - timedelta(days=dispatch.weekday())
-        if dispatch.weekday() >= 4:
-            current_week_monday += timedelta(days=7)
-        return current_week_monday, current_week_monday + timedelta(days=4)
+        if dispatch.weekday() <= 3:
+            return current_week_monday, current_week_monday + timedelta(days=4)
+        if dispatch.weekday() == 4:
+            return dispatch, dispatch + timedelta(days=7)
+        next_week_monday = current_week_monday + timedelta(days=7)
+        return next_week_monday, next_week_monday + timedelta(days=4)
 
     def ensure_regular_opshop_pickup_tasks_for_week(self, dispatch_date):
         window_start, window_end = self.regular_pickup_week_window(dispatch_date)
@@ -121,7 +124,7 @@ class OpShopPickupService:
         return EnsureOpShopPickupTasksResult(
             window_start=window_start.isoformat(),
             window_end=window_end.isoformat(),
-            days=5,
+            days=(window_end - window_start).days + 1,
             schedules_checked=len(schedules),
             tasks_created=len(created_tasks),
             tasks_existing=tasks_existing,

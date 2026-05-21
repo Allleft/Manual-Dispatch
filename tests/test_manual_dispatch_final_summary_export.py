@@ -163,6 +163,18 @@ class ManualDispatchFinalSummaryExportTest(unittest.TestCase):
             worksheet["A1"].value,
         )
 
+    def test_export_handles_saved_summary_with_no_delivery_orders(self):
+        self.service.save_final_trip_summary(self._summary_request(trips=[]))
+
+        values = self._flat_values(self._load_export_workbook())
+
+        self.assertIn("Driver", values)
+        self.assertIn("John", values)
+        self.assertIn("Total Pallets", values)
+        self.assertIn("Total Loose Bags", values)
+        self.assertIn("No Delivery Orders included.", values)
+        self.assertNotIn("OPSHOP_PICKUP", values)
+
     def _load_export_workbook(self):
         workbook_bytes = build_final_summary_excel(
             self.service.list_final_trip_summaries(self.dispatch_date),

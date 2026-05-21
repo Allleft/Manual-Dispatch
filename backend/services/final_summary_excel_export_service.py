@@ -15,6 +15,7 @@ FINAL_SUMMARY_HEADERS = [
     "Load",
 ]
 INVALID_SHEET_CHARACTERS = re.compile(r"[\[\]\*:/\\?]")
+EMPTY_ORDER_SUMMARY_MESSAGE = "No Delivery Orders included."
 
 
 def build_final_summary_excel(final_summaries, dispatch_date, delivery_date=None):
@@ -63,9 +64,11 @@ def _write_summary_sheet(worksheet, summary):
     row_index = len(meta_rows) + 2
     row_number = 1
 
+    wrote_order_rows = False
     for trip in summary.trips:
         if not trip.orders:
             continue
+        wrote_order_rows = True
 
         worksheet.cell(row=row_index, column=1, value=_trip_label(trip.trip_no)).font = Font(bold=True)
         row_index += 1
@@ -93,6 +96,9 @@ def _write_summary_sheet(worksheet, summary):
             row_number += 1
 
         row_index += 1
+
+    if not wrote_order_rows:
+        worksheet.cell(row=row_index, column=1, value=EMPTY_ORDER_SUMMARY_MESSAGE).font = Font(bold=True)
 
     worksheet.freeze_panes = "A8"
     _apply_column_widths(worksheet)

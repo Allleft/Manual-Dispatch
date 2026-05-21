@@ -43,8 +43,6 @@ class FinalSummaryService:
             )
 
         rows = self._normalize_final_summary_rows(request.trips, delivery_date)
-        if not rows:
-            raise ValueError("At least one final summary row is required")
 
         summary = {
             "dispatch_date": dispatch_date,
