@@ -933,6 +933,14 @@ select:disabled {
   font-weight: 800;
 }
 
+.assigned-opshop-name {
+  margin-bottom: 0.25rem;
+  color: var(--ink);
+  font-size: 1rem;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
 .assigned-opshop-suburb {
   display: inline-block;
   margin-bottom: 0;
