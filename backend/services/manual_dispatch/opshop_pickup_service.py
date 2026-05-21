@@ -145,10 +145,24 @@ class OpShopPickupService:
         pickup_date = _parse_iso_date(request.pickup_date, "pickup_date").isoformat()
         schedule = self._get_schedulable_schedule(schedule_id)
 
-        if self.repository.find_opshop_pickup_task_by_schedule_and_date(
+        existing = self.repository.find_opshop_pickup_task_by_schedule_and_date(
             schedule.schedule_id,
             pickup_date,
-        ):
+        )
+        if existing and existing.status == "CANCELLED":
+            return self.repository.upsert_opshop_pickup_task(
+                replace(
+                    existing,
+                    status="ACTIVE",
+                    driver_id=None,
+                    trip_no=None,
+                    dispatch_date=pickup_date,
+                    notes=request.notes,
+                    generated_from="MANUAL",
+                    updated_at=_timestamp(),
+                )
+            )
+        if existing:
             raise ValueError("OP SHOP pickup task already exists for this schedule and date")
 
         timestamp = _timestamp()
@@ -175,10 +189,24 @@ class OpShopPickupService:
         pickup_date = _parse_iso_date(request.pickup_date, "pickup_date").isoformat()
         schedule = self._get_oncall_schedule(schedule_id)
 
-        if self.repository.find_opshop_pickup_task_by_schedule_and_date(
+        existing = self.repository.find_opshop_pickup_task_by_schedule_and_date(
             schedule.schedule_id,
             pickup_date,
-        ):
+        )
+        if existing and existing.status == "CANCELLED":
+            return self.repository.upsert_opshop_pickup_task(
+                replace(
+                    existing,
+                    status="ACTIVE",
+                    driver_id=None,
+                    trip_no=None,
+                    dispatch_date=pickup_date,
+                    notes=request.notes,
+                    generated_from="ON_CALL",
+                    updated_at=_timestamp(),
+                )
+            )
+        if existing:
             raise ValueError("OP SHOP pickup task already exists for this schedule and date")
 
         timestamp = _timestamp()
@@ -235,10 +263,10 @@ class OpShopPickupService:
         task = self.repository.get_opshop_pickup_task(pickup_task_id)
         if not task:
             raise ValueError("OP SHOP pickup task does not exist")
-        if task.status == "ASSIGNED":
-            raise ValueError("Unassign OP SHOP pickup before deleting it")
-        if task.status != "ACTIVE":
-            raise ValueError("Only active OP SHOP pickup tasks can be deleted")
+        if task.status not in {"ACTIVE", "ASSIGNED"}:
+            raise ValueError("Only active or assigned OP SHOP pickup tasks can be deleted")
+
+        self.repository.remove_assignments_for_task("OPSHOP_PICKUP", task.pickup_task_id)
 
         cancelled = replace(
             task,

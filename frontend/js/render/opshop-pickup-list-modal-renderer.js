@@ -182,7 +182,9 @@ function createAddForm({ onCancelForm, onCreatePickup, onUpdateForm }) {
 function createEditForm({ onCancelForm, onStartDelete, onUpdateForm, onUpdatePickup }) {
   const pickup = getOpShopPickupByTaskId(state.opshopPickupEditingTaskId);
   const isAssigned = pickup && pickup.status === "ASSIGNED";
-  const canDelete = Boolean(pickup && pickup.status === "ACTIVE" && !pickup.assigned_to_locked);
+  const canDelete = Boolean(
+    pickup && ["ACTIVE", "ASSIGNED"].includes(pickup.status) && !pickup.assigned_to_locked,
+  );
   const form = document.createElement("form");
   form.className = "opshop-list-form";
   form.addEventListener("submit", (event) => {
@@ -239,7 +241,7 @@ function createDeleteConfirmation({ onCancelForm, onConfirmDelete }) {
   const message = document.createElement("p");
   message.textContent = `Delete ${formatOptional(pickup && pickup.opshop_name)} on ${formatOptional(
     pickup && pickup.pickup_date,
-  )}? This marks the task as CANCELLED.`;
+  )}? This marks the task as CANCELLED and removes any OP SHOP assignment.`;
 
   const actions = document.createElement("div");
   actions.className = "detail-actions";

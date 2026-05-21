@@ -795,6 +795,18 @@ class InMemoryManualDispatchRepository:
         ]
         return len(self.assignments) != before_count
 
+    def remove_assignments_for_task(self, task_type, task_id):
+        before_count = len(self.assignments)
+        self.assignments = [
+            assignment
+            for assignment in self.assignments
+            if not (
+                assignment.task_type == task_type
+                and assignment.task_id == task_id
+            )
+        ]
+        return len(self.assignments) != before_count
+
     def upsert_driver_vehicle_assignment(self, dispatch_date, delivery_date, driver_id, vehicle_id):
         existing = next(
             (

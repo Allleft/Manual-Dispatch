@@ -1389,6 +1389,16 @@ class SQLiteManualDispatchRepository:
             trip_no=trip_no,
         )
 
+    def get_assignment(self, dispatch_date, task_type, task_id):
+        with connect(self.db_path) as connection:
+            row = self._fetch_assignment_row(
+                connection,
+                dispatch_date,
+                task_type,
+                task_id,
+            )
+        return self._row_to_assignment(row) if row else None
+
     def remove_assignment(self, dispatch_date, task_type, task_id):
         with connect(self.db_path) as connection:
             cursor = connection.execute(
@@ -1397,6 +1407,18 @@ class SQLiteManualDispatchRepository:
                 WHERE dispatch_date = ? AND task_type = ? AND task_id = ?
                 """,
                 (dispatch_date, task_type, task_id),
+            )
+            connection.commit()
+        return cursor.rowcount > 0
+
+    def remove_assignments_for_task(self, task_type, task_id):
+        with connect(self.db_path) as connection:
+            cursor = connection.execute(
+                """
+                DELETE FROM manual_dispatch_assignments
+                WHERE task_type = ? AND task_id = ?
+                """,
+                (task_type, task_id),
             )
             connection.commit()
         return cursor.rowcount > 0

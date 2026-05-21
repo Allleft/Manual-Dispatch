@@ -104,6 +104,31 @@ class OpShopPickupListManagementTest(unittest.TestCase):
                 )
             )
 
+    def test_create_duplicate_assigned_pickup_fails(self):
+        task = self.service.create_opshop_pickup_task(
+            CreateOpShopPickupTaskRequest(
+                schedule_id="SCHED-STANDARD",
+                pickup_date="2026-05-18",
+            )
+        )
+        self.service.assign_task(
+            AssignTaskRequest(
+                dispatch_date="2026-05-18",
+                task_type="OPSHOP_PICKUP",
+                task_id=task.pickup_task_id,
+                driver_id="D001",
+                trip_no="trip1",
+            )
+        )
+
+        with self.assertRaisesRegex(ValueError, "already exists"):
+            self.service.create_opshop_pickup_task(
+                CreateOpShopPickupTaskRequest(
+                    schedule_id="SCHED-STANDARD",
+                    pickup_date="2026-05-18",
+                )
+            )
+
     def test_create_oncall_pickup_from_oncall_template_succeeds_and_prevents_duplicates(self):
         task = self.service.create_oncall_opshop_pickup_task(
             CreateOpShopPickupTaskRequest(
@@ -152,6 +177,32 @@ class OpShopPickupListManagementTest(unittest.TestCase):
 
         self.assertEqual("ON_CALL", task.generated_from)
         self.assertEqual("2026-05-22", task.pickup_date)
+
+    def test_oncall_pickup_delete_then_recreate_restores_cancelled_task(self):
+        task = self.service.create_oncall_opshop_pickup_task(
+            CreateOpShopPickupTaskRequest(
+                schedule_id="SCHED-ONCALL",
+                pickup_date="2026-05-20",
+                notes="Original",
+            )
+        )
+        self.service.delete_opshop_pickup_task(task.pickup_task_id)
+
+        restored = self.service.create_oncall_opshop_pickup_task(
+            CreateOpShopPickupTaskRequest(
+                schedule_id="SCHED-ONCALL",
+                pickup_date="2026-05-20",
+                notes="Restored",
+            )
+        )
+
+        self.assertEqual(task.pickup_task_id, restored.pickup_task_id)
+        self.assertEqual("ACTIVE", restored.status)
+        self.assertEqual("ON_CALL", restored.generated_from)
+        self.assertEqual("2026-05-20", restored.dispatch_date)
+        self.assertEqual("Restored", restored.notes)
+        self.assertIsNone(restored.driver_id)
+        self.assertIsNone(restored.trip_no)
 
     def test_update_active_pickup_date_and_notes_succeeds(self):
         task = self.service.create_opshop_pickup_task(
@@ -267,7 +318,33 @@ class OpShopPickupListManagementTest(unittest.TestCase):
         )
         self.assertEqual("CANCELLED", self.repository.get_opshop_pickup_task(task.pickup_task_id).status)
 
-    def test_delete_assigned_pickup_fails(self):
+    def test_regular_pickup_delete_then_recreate_restores_cancelled_task(self):
+        task = self.service.create_opshop_pickup_task(
+            CreateOpShopPickupTaskRequest(
+                schedule_id="SCHED-STANDARD",
+                pickup_date="2026-05-18",
+                notes="Original",
+            )
+        )
+        self.service.delete_opshop_pickup_task(task.pickup_task_id)
+
+        restored = self.service.create_opshop_pickup_task(
+            CreateOpShopPickupTaskRequest(
+                schedule_id="SCHED-STANDARD",
+                pickup_date="2026-05-18",
+                notes="Restored",
+            )
+        )
+
+        self.assertEqual(task.pickup_task_id, restored.pickup_task_id)
+        self.assertEqual("ACTIVE", restored.status)
+        self.assertEqual("MANUAL", restored.generated_from)
+        self.assertEqual("2026-05-18", restored.dispatch_date)
+        self.assertEqual("Restored", restored.notes)
+        self.assertIsNone(restored.driver_id)
+        self.assertIsNone(restored.trip_no)
+
+    def test_delete_assigned_pickup_cancels_and_removes_assignment(self):
         task = self.service.create_opshop_pickup_task(
             CreateOpShopPickupTaskRequest(
                 schedule_id="SCHED-STANDARD",
@@ -276,7 +353,7 @@ class OpShopPickupListManagementTest(unittest.TestCase):
         )
         self.service.assign_task(
             AssignTaskRequest(
-                dispatch_date="2026-05-18",
+                dispatch_date="2026-05-17",
                 task_type="OPSHOP_PICKUP",
                 task_id=task.pickup_task_id,
                 driver_id="D001",
@@ -284,8 +361,18 @@ class OpShopPickupListManagementTest(unittest.TestCase):
             )
         )
 
-        with self.assertRaisesRegex(ValueError, "Unassign"):
-            self.service.delete_opshop_pickup_task(task.pickup_task_id)
+        cancelled = self.service.delete_opshop_pickup_task(task.pickup_task_id)
+
+        self.assertEqual("CANCELLED", cancelled.status)
+        self.assertIsNone(cancelled.driver_id)
+        self.assertIsNone(cancelled.trip_no)
+        self.assertIsNone(
+            self.repository.get_assignment(
+                "2026-05-17",
+                "OPSHOP_PICKUP",
+                task.pickup_task_id,
+            )
+        )
 
     def test_apply_weekly_assignments_assigns_visible_regular_pickups_to_trip1(self):
         task = self.service.create_opshop_pickup_task(
@@ -595,6 +682,41 @@ class OpShopPickupListManagementRouteTest(unittest.TestCase):
         self.assertEqual("Updated", update_response.json()["notes"])
         self.assertEqual(200, delete_response.status_code)
         self.assertEqual("CANCELLED", delete_response.json()["status"])
+
+    def test_delete_assigned_pickup_endpoint_cancels_and_removes_assignment(self):
+        create_response = self.client.post(
+            "/api/manual-dispatch/opshop-pickups",
+            json={
+                "schedule_id": "SCHED-REGULAR",
+                "pickup_date": "2026-05-18",
+            },
+        )
+        pickup_id = create_response.json()["pickup_task_id"]
+        assign_response = self.client.post(
+            "/api/manual-dispatch/assign",
+            json={
+                "dispatch_date": "2026-05-17",
+                "task_type": "OPSHOP_PICKUP",
+                "task_id": pickup_id,
+                "driver_id": "D001",
+                "trip_no": "trip1",
+            },
+        )
+
+        delete_response = self.client.delete(f"/api/manual-dispatch/opshop-pickups/{pickup_id}")
+
+        self.assertEqual(200, assign_response.status_code)
+        self.assertEqual(200, delete_response.status_code)
+        self.assertEqual("CANCELLED", delete_response.json()["status"])
+        self.assertIsNone(delete_response.json()["driver_id"])
+        self.assertIsNone(delete_response.json()["trip_no"])
+        self.assertIsNone(
+            self.repository.get_assignment(
+                "2026-05-17",
+                "OPSHOP_PICKUP",
+                pickup_id,
+            )
+        )
 
     def test_create_oncall_and_apply_oncall_assignments_endpoints(self):
         create_response = self.client.post(
