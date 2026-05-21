@@ -5,6 +5,7 @@ from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
 
 from backend.schemas import (
+    ApplyOncallOpShopPickupAssignmentsRequest,
     ApplyWeeklyOpShopPickupAssignmentsRequest,
     CreateOpShopPickupTaskRequest,
     EnsureOpShopPickupTasksRequest,
@@ -131,9 +132,12 @@ class OpShopPickupService:
         )
 
     def list_opshop_pickup_schedule_candidates(self, run_type="scheduled"):
-        if (run_type or "scheduled").strip().lower() != "scheduled":
-            raise ValueError("Only scheduled OP SHOP pickup schedules are supported")
-        return self.repository.list_scheduled_opshop_pickup_schedule_candidates()
+        normalized = (run_type or "scheduled").strip().lower()
+        if normalized in {"scheduled", "regular"}:
+            return self.repository.list_scheduled_opshop_pickup_schedule_candidates()
+        if normalized in {"oncall", "on_call"}:
+            return self.repository.list_oncall_opshop_pickup_schedule_candidates()
+        raise ValueError("Only scheduled or oncall OP SHOP pickup schedules are supported")
 
     def create_opshop_pickup_task(self, request):
         request = request or CreateOpShopPickupTaskRequest()
@@ -155,6 +159,36 @@ class OpShopPickupService:
             pickup_date=pickup_date,
             task_type="OPSHOP_PICKUP",
             generated_from="MANUAL",
+            status="ACTIVE",
+            dispatch_date=pickup_date,
+            driver_id=None,
+            trip_no=None,
+            notes=request.notes,
+            created_at=timestamp,
+            updated_at=timestamp,
+        )
+        return self.repository.insert_opshop_pickup_task(task)
+
+    def create_oncall_opshop_pickup_task(self, request):
+        request = request or CreateOpShopPickupTaskRequest()
+        schedule_id = _clean_text(request.schedule_id)
+        pickup_date = _parse_iso_date(request.pickup_date, "pickup_date").isoformat()
+        schedule = self._get_oncall_schedule(schedule_id)
+
+        if self.repository.find_opshop_pickup_task_by_schedule_and_date(
+            schedule.schedule_id,
+            pickup_date,
+        ):
+            raise ValueError("OP SHOP pickup task already exists for this schedule and date")
+
+        timestamp = _timestamp()
+        task = OpShopPickupTask(
+            pickup_task_id=_generated_task_id(schedule.schedule_id, pickup_date),
+            schedule_id=schedule.schedule_id,
+            opshop_id=schedule.opshop_id,
+            pickup_date=pickup_date,
+            task_type="OPSHOP_PICKUP",
+            generated_from="ON_CALL",
             status="ACTIVE",
             dispatch_date=pickup_date,
             driver_id=None,
@@ -234,6 +268,54 @@ class OpShopPickupService:
                 continue
             schedule = self.repository.get_opshop_pickup_schedule(task.schedule_id)
             if not schedule or schedule.run_type != "REGULAR" or not _is_active_schedule(schedule):
+                continue
+
+            if not driver_id:
+                self.repository.remove_assignment(
+                    request.dispatch_date,
+                    "OPSHOP_PICKUP",
+                    pickup_task_id,
+                )
+                self.repository.update_opshop_pickup_task_assignment_status(
+                    pickup_task_id,
+                    "ACTIVE",
+                    None,
+                    None,
+                )
+                continue
+            if driver_id not in driver_ids:
+                continue
+
+            self.repository.upsert_assignment(
+                request.dispatch_date,
+                "OPSHOP_PICKUP",
+                pickup_task_id,
+                driver_id,
+                "trip1",
+            )
+            self.repository.update_opshop_pickup_task_assignment_status(
+                pickup_task_id,
+                "ASSIGNED",
+                driver_id,
+                "trip1",
+            )
+
+    def apply_oncall_assignments(self, request):
+        request = request or ApplyOncallOpShopPickupAssignmentsRequest(dispatch_date="")
+        dispatch = _parse_iso_date(request.dispatch_date, "dispatch_date")
+        driver_ids = set(self.repository.list_driver_ids())
+
+        for assignment in request.assignments or []:
+            pickup_task_id = _clean_text(assignment.get("pickup_task_id"))
+            driver_id = _clean_text(assignment.get("driver_id"))
+            task = self.repository.get_opshop_pickup_task(pickup_task_id)
+            if not task or task.status in {"CANCELLED", "COMPLETED"}:
+                continue
+            pickup_date = _parse_iso_date(task.pickup_date, "pickup_date")
+            if pickup_date < dispatch:
+                continue
+            schedule = self.repository.get_opshop_pickup_schedule(task.schedule_id)
+            if not schedule or schedule.run_type != "ON_CALL" or not _is_active_schedule(schedule):
                 continue
 
             if not driver_id:
@@ -369,6 +451,18 @@ class OpShopPickupService:
             raise ValueError("OP SHOP pickup schedule is not active")
         if schedule.run_type not in {"STANDARD", "REGULAR"}:
             raise ValueError("Only STANDARD or REGULAR OP SHOP pickup schedules are supported")
+        return schedule
+
+    def _get_oncall_schedule(self, schedule_id):
+        if not schedule_id:
+            raise ValueError("schedule_id is required")
+        schedule = self.repository.get_opshop_pickup_schedule(schedule_id)
+        if not schedule:
+            raise ValueError("OP SHOP pickup schedule does not exist")
+        if not _is_active_schedule(schedule):
+            raise ValueError("OP SHOP pickup schedule is not active")
+        if schedule.run_type != "ON_CALL":
+            raise ValueError("Only ON_CALL OP SHOP pickup schedules are supported")
         return schedule
 
     def _resolve_generation_weekdays(self, schedule, frequency, warnings):

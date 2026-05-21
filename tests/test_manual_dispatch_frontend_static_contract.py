@@ -122,6 +122,9 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         )
         self.assertIn("No OP SHOP PICKUP tasks for this Regular pickup week.", task_pool_renderer)
         self.assertIn("Regular OP SHOP Pickup List", task_pool_renderer)
+        self.assertIn("Oncall OP SHOP Pickup List", task_pool_renderer)
+        self.assertIn("No Oncall OP SHOP pickups added.", task_pool_renderer)
+        self.assertIn("onOpenOncallOpShopPickupList", task_pool_renderer)
         self.assertIn("opshop-pickup-list-summary-card", task_pool_renderer)
         self.assertIn(".opshop-summary-grid .opshop-pickup-list-summary-card", styles)
         self.assertIn("grid-column: 1 / -1", styles)
@@ -141,11 +144,13 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("opshopPickups: payload.opshop_pickups || []", app_js)
         self.assertIn("assignedOpShopPickups: payload.assigned_opshop_pickups || []", app_js)
         self.assertIn("scheduledOpShopPickups: payload.scheduled_opshop_pickups || []", app_js)
+        self.assertIn("oncallOpShopPickups: payload.oncall_opshop_pickups || []", app_js)
         self.assertIn("opshopRegularListWindowStart: payload.opshop_regular_list_window_start || \"\"", app_js)
         self.assertIn("opshopRegularListWindowEnd: payload.opshop_regular_list_window_end || \"\"", app_js)
         self.assertIn("state.opshopPickups = board.opshopPickups", app_js)
         self.assertIn("state.assignedOpShopPickups = board.assignedOpShopPickups", app_js)
         self.assertIn("state.scheduledOpShopPickups = board.scheduledOpShopPickups", app_js)
+        self.assertIn("state.oncallOpShopPickups = board.oncallOpShopPickups", app_js)
         self.assertIn("onOpenOpShopPickupDetail: openOpShopPickupDetail", app_js)
         self.assertIn("renderOpShopPickupDetailPopup", app_js)
         self.assertIn('closeButton.textContent = "Close"', modal_renderer)
@@ -295,6 +300,70 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertNotIn("tripSelect", modal_renderer)
         self.assertNotIn("Trip", modal_renderer)
         self.assertNotIn("tripSelect", modal_renderer)
+        self.assertNotIn("fetch(", actions)
+        self.assertNotIn("fetch(", modal_renderer)
+
+    def test_oncall_opshop_pickup_frontend_contract(self):
+        app_js = (FRONTEND_ROOT / "app.js").read_text(encoding="utf-8")
+        api_module = (
+            FRONTEND_ROOT / "js" / "api" / "manual-dispatch-api.js"
+        ).read_text(encoding="utf-8")
+        actions = (
+            FRONTEND_ROOT / "js" / "actions" / "opshop-oncall-pickup-actions.js"
+        ).read_text(encoding="utf-8")
+        task_pool_renderer = (
+            FRONTEND_ROOT / "js" / "render" / "task-pool-renderer.js"
+        ).read_text(encoding="utf-8")
+        modal_renderer = (
+            FRONTEND_ROOT / "js" / "render" / "opshop-oncall-pickup-list-modal-renderer.js"
+        ).read_text(encoding="utf-8")
+        selectors = (FRONTEND_ROOT / "js" / "state" / "selectors.js").read_text(encoding="utf-8")
+        final_summary_renderer = (
+            FRONTEND_ROOT / "js" / "render" / "final-summary-renderer.js"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("apiListOncallOpShopPickupSchedules", api_module)
+        self.assertIn("apiCreateOncallOpShopPickup", api_module)
+        self.assertIn("apiApplyOncallOpShopPickupAssignments", api_module)
+        self.assertIn("/opshop-pickups/oncall", api_module)
+        self.assertIn("/opshop-pickups/oncall-assignments/apply", api_module)
+        self.assertIn("createOncallOpShopPickupActions", actions)
+        self.assertIn("openOncallOpShopPickupList", actions)
+        self.assertIn("apiApplyOncallOpShopPickupAssignments", actions)
+        self.assertIn("apiCreateOncallOpShopPickup", actions)
+        self.assertIn("updateAssignedDriverSelection", actions)
+        self.assertIn("WEEKDAY_OFFSETS", actions)
+        self.assertIn("candidate.run_day", actions)
+        self.assertIn("renderOncallOpShopPickupListModal", app_js)
+        self.assertIn("createOncallOpShopPickupActions", app_js)
+        self.assertIn("onOpenOncallOpShopPickupList: oncallOpShopPickupActions.openOncallOpShopPickupList", app_js)
+        self.assertIn("oncallOpShopPickups: payload.oncall_opshop_pickups || []", app_js)
+        self.assertIn("state.oncallOpShopPickups = board.oncallOpShopPickups", app_js)
+        self.assertIn("Oncall OP SHOP Pickup List", task_pool_renderer)
+        self.assertIn("Oncall OP SHOP Pickup List", modal_renderer)
+        self.assertIn("No Oncall OP SHOP pickups added.", modal_renderer)
+        self.assertIn("Template", modal_renderer)
+        self.assertIn("Pickup Date", modal_renderer)
+        self.assertIn("Assigned to", modal_renderer)
+        self.assertIn("Notes", modal_renderer)
+        self.assertIn("Select Oncall OP SHOP template", modal_renderer)
+        self.assertIn("candidate.run_day || \"Gavin\"", modal_renderer)
+        self.assertIn("onOpenDetail(pickup.pickup_task_id)", modal_renderer)
+        self.assertIn("Past pickup date", modal_renderer)
+        self.assertIn("if (!pickup.assigned_to_locked)", modal_renderer)
+        self.assertIn("opshop-list-item-suburb", modal_renderer)
+        self.assertIn("opshop-list-item-date", modal_renderer)
+        self.assertIn("state.oncallOpShopPickupAssignedDriverSelections[pickup.pickup_task_id]", modal_renderer)
+        self.assertIn("onCloseList: oncallOpShopPickupActions.closeOncallOpShopPickupList", app_js)
+        self.assertIn("oncallOpShopPickups", selectors)
+        self.assertIn("assigned-opshop-pickups-section", (
+            FRONTEND_ROOT / "js" / "render" / "trip-summary-renderer.js"
+        ).read_text(encoding="utf-8"))
+        self.assertNotIn('textContent = "Assign"', modal_renderer)
+        self.assertNotIn('textContent = "Unassign"', modal_renderer)
+        self.assertNotIn("tripSelect", modal_renderer)
+        self.assertNotIn("Trip dropdown", modal_renderer)
+        self.assertNotIn("OP SHOP PICKUP", final_summary_renderer)
         self.assertNotIn("fetch(", actions)
         self.assertNotIn("fetch(", modal_renderer)
 

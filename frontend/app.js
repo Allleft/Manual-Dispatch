@@ -6,6 +6,7 @@ import { createAssignmentActions } from "./js/actions/assignment-actions.js";
 import { createAuthActions } from "./js/actions/auth-actions.js";
 import { createFinalSummaryActions } from "./js/actions/final-summary-actions.js";
 import { createOrderActions } from "./js/actions/order-actions.js";
+import { createOncallOpShopPickupActions } from "./js/actions/opshop-oncall-pickup-actions.js";
 import { createOpShopPickupActions } from "./js/actions/opshop-pickup-actions.js";
 import { createSpecificationActions } from "./js/actions/specification-actions.js";
 import { createVehicleActions } from "./js/actions/vehicle-actions.js";
@@ -29,6 +30,7 @@ import {
 import { renderDriverSummary as renderDriverSummaryView } from "./js/render/trip-summary-renderer.js";
 import { renderOpShopPickupDetailPopup as renderOpShopPickupDetailPopupView } from "./js/render/opshop-pickup-modal-renderer.js";
 import { renderOpShopPickupListModal as renderOpShopPickupListModalView } from "./js/render/opshop-pickup-list-modal-renderer.js";
+import { renderOncallOpShopPickupListModal as renderOncallOpShopPickupListModalView } from "./js/render/opshop-oncall-pickup-list-modal-renderer.js";
 
 function normalizeBoardResponse(payload) {
   return {
@@ -40,6 +42,7 @@ function normalizeBoardResponse(payload) {
     opshopPickups: payload.opshop_pickups || [],
     assignedOpShopPickups: payload.assigned_opshop_pickups || [],
     scheduledOpShopPickups: payload.scheduled_opshop_pickups || [],
+    oncallOpShopPickups: payload.oncall_opshop_pickups || [],
     opshopRegularListWindowStart: payload.opshop_regular_list_window_start || "",
     opshopRegularListWindowEnd: payload.opshop_regular_list_window_end || "",
     driverVehicleAssignments: (payload.driver_vehicle_assignments || []).map((assignment) => ({
@@ -62,6 +65,7 @@ function applyBoardResponse(payload) {
   state.opshopPickups = board.opshopPickups;
   state.assignedOpShopPickups = board.assignedOpShopPickups;
   state.scheduledOpShopPickups = board.scheduledOpShopPickups;
+  state.oncallOpShopPickups = board.oncallOpShopPickups;
   state.opshopRegularListWindowStart = board.opshopRegularListWindowStart;
   state.opshopRegularListWindowEnd = board.opshopRegularListWindowEnd;
   state.driverVehicleAssignments = board.driverVehicleAssignments;
@@ -239,10 +243,27 @@ function renderTaskPoolFilters() {
 function renderTaskPool() {
   renderTaskPoolView({
     getPendingSelection: assignmentActions.getPendingSelection,
+    onOpenOncallOpShopPickupList: oncallOpShopPickupActions.openOncallOpShopPickupList,
     onOpenOpShopPickupList: opShopPickupActions.openOpShopPickupList,
     onOpenOrderDetail: orderActions.openOrderDetail,
     onPendingSelectionChange: assignmentActions.updatePendingSelection,
     onAssignTask: assignmentActions.handleAssignTask,
+  });
+}
+
+function renderOncallOpShopPickupListModal() {
+  renderOncallOpShopPickupListModalView({
+    onCancelForm: oncallOpShopPickupActions.cancelPickupTaskForm,
+    onCloseList: oncallOpShopPickupActions.closeOncallOpShopPickupList,
+    onConfirmDelete: oncallOpShopPickupActions.handleDeletePickupTask,
+    onCreatePickup: oncallOpShopPickupActions.handleCreatePickupTask,
+    onOpenDetail: openOpShopPickupDetail,
+    onStartAdd: oncallOpShopPickupActions.startAddPickupTask,
+    onStartDelete: oncallOpShopPickupActions.startDeletePickupTask,
+    onStartEdit: oncallOpShopPickupActions.startEditPickupTask,
+    onUpdateAssignedDriver: oncallOpShopPickupActions.updateAssignedDriverSelection,
+    onUpdateForm: oncallOpShopPickupActions.updatePickupTaskForm,
+    onUpdatePickup: oncallOpShopPickupActions.handleUpdatePickupTask,
   });
 }
 
@@ -788,6 +809,7 @@ function renderBoard() {
   renderOrderDetailPopup();
   renderAddOrderPopup();
   renderOpShopPickupListModal();
+  renderOncallOpShopPickupListModal();
   renderOpShopPickupDetailPopup();
   renderSpecificationModal();
   renderAuthGate();
@@ -820,6 +842,12 @@ const assignmentActions = createAssignmentActions({
 });
 
 const opShopPickupActions = createOpShopPickupActions({
+  loadBoard,
+  renderBoard,
+  state,
+});
+
+const oncallOpShopPickupActions = createOncallOpShopPickupActions({
   loadBoard,
   renderBoard,
   state,

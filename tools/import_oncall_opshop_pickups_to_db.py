@@ -1,0 +1,525 @@
+"""Import the Oncall OP SHOP Pickup workbook into SQLite source tables.
+
+This importer reads the MON/TUE/WED/THU/FRI/Gavin sheets from the Oncall
+OP SHOP workbook and updates locations plus ON_CALL pickup schedules only. It
+does not create pickup tasks; office staff create actual tasks from templates.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import os
+import sqlite3
+import sys
+from collections import Counter
+from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path
+
+from openpyxl import load_workbook
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from backend.repositories.sqlite_manual_dispatch_repository import (  # noqa: E402
+    SQLiteManualDispatchRepository,
+)
+from backend.schemas import OpShopLocation, OpShopPickupSchedule  # noqa: E402
+
+
+DEFAULT_DB_PATH = PROJECT_ROOT / "data" / "manual_dispatch.sqlite3"
+SHEET_RUN_DAYS = {
+    "MON": "MONDAY",
+    "TUE": "TUESDAY",
+    "WED": "WEDNESDAY",
+    "THU": "THURSDAY",
+    "FRI": "FRIDAY",
+    "Gavin": None,
+}
+REQUIRED_COLUMNS = [
+    "Op_Shop_Name",
+    "Run_Day",
+    "Run_Type",
+    "Active_Flag",
+    "Suburb",
+    "Street_Address",
+    "Area_Region",
+    "Primary_Contact",
+    "Primary_Phone",
+    "Secondary_Contact",
+    "Secondary_Phone",
+    "Pickup_Frequency",
+    "Time_Window",
+    "Call_Before_Arrival",
+    "Call_Timing",
+    "Access_Type",
+    "Key_Required",
+    "Trailer_Restriction",
+    "Status",
+    "Status_Start_Date",
+    "Status_Notes",
+    "Assigned to",
+]
+DRIVER_ALIAS_TO_NAME = {
+    "john g": "John Georgiadis",
+    "gavin": "Gavin Fynn",
+    "nonda": "Epaminondas Tsatsoulis",
+    "lee": "Guanlin Li",
+}
+
+
+@dataclass
+class OncallOpShopImportSummary:
+    rows_read: int = 0
+    rows_imported: int = 0
+    rows_skipped_inactive: int = 0
+    locations_inserted: int = 0
+    locations_updated: int = 0
+    schedules_inserted: int = 0
+    schedules_updated: int = 0
+    schedules_deactivated: int = 0
+    unresolved_assigned_to: dict[str, int] = field(default_factory=dict)
+    default_driver_mapping_counts: dict[str, int] = field(default_factory=dict)
+    backup_path: str | None = None
+
+
+@dataclass
+class PreparedOncallRow:
+    location_key: str
+    location: OpShopLocation
+    schedule: OpShopPickupSchedule
+    assigned_to_alias: str | None
+    resolved_driver_name: str | None
+
+
+def import_oncall_opshop_pickups_to_db(file_path, db_path=None):
+    workbook_path = Path(file_path)
+    target_db_path = resolve_db_path(db_path)
+    rows = read_oncall_workbook_rows(workbook_path)
+    backup_path = backup_database_if_exists(target_db_path)
+    repository = SQLiteManualDispatchRepository(target_db_path)
+    driver_lookup = build_driver_lookup(repository)
+    prepared_rows, skipped_count, unresolved, mapping_counts = prepare_oncall_rows(
+        rows,
+        driver_lookup,
+    )
+
+    summary = OncallOpShopImportSummary(
+        rows_read=len(rows),
+        rows_imported=len(prepared_rows),
+        rows_skipped_inactive=skipped_count,
+        unresolved_assigned_to=dict(unresolved),
+        default_driver_mapping_counts=dict(mapping_counts),
+        backup_path=str(backup_path) if backup_path else None,
+    )
+    imported_locations = set()
+    imported_schedule_ids = set()
+
+    with sqlite3.connect(target_db_path) as connection:
+        connection.row_factory = sqlite3.Row
+        for prepared in prepared_rows:
+            if prepared.location_key not in imported_locations:
+                existing_location_id = find_location_id_by_key(
+                    connection,
+                    prepared.location_key,
+                )
+                if existing_location_id:
+                    prepared.location.opshop_id = existing_location_id
+                    summary.locations_updated += 1
+                else:
+                    summary.locations_inserted += 1
+                repository.upsert_opshop_location(prepared.location)
+                imported_locations.add(prepared.location_key)
+
+            prepared.schedule.opshop_id = prepared.location.opshop_id
+            existing_schedule_id = find_schedule_id_by_key(
+                connection,
+                schedule_key(prepared.schedule),
+            )
+            if existing_schedule_id:
+                prepared.schedule.schedule_id = existing_schedule_id
+                summary.schedules_updated += 1
+            else:
+                summary.schedules_inserted += 1
+            repository.upsert_opshop_pickup_schedule(prepared.schedule)
+            imported_schedule_ids.add(prepared.schedule.schedule_id)
+
+        summary.schedules_deactivated = deactivate_missing_oncall_schedules(
+            connection,
+            imported_schedule_ids,
+        )
+
+    return summary
+
+
+def resolve_db_path(db_path=None):
+    if db_path:
+        return Path(db_path)
+    configured = os.environ.get("MANUAL_DISPATCH_DB_PATH")
+    if configured:
+        return Path(configured)
+    return DEFAULT_DB_PATH
+
+
+def backup_database_if_exists(db_path):
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return None
+
+    backup_dir = db_path.parent / "backups"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_path = backup_dir / f"manual_dispatch_before_oncall_opshop_import_{timestamp}.sqlite3"
+
+    source = sqlite3.connect(db_path)
+    try:
+        destination = sqlite3.connect(backup_path)
+        try:
+            source.backup(destination)
+        finally:
+            destination.close()
+    finally:
+        source.close()
+    return backup_path
+
+
+def read_oncall_workbook_rows(workbook_path):
+    workbook_path = Path(workbook_path)
+    if not workbook_path.exists():
+        raise FileNotFoundError(f"Workbook not found: {workbook_path}")
+
+    workbook = load_workbook(workbook_path, data_only=True, read_only=True)
+    missing_sheets = [sheet for sheet in SHEET_RUN_DAYS if sheet not in workbook.sheetnames]
+    if missing_sheets:
+        raise ValueError(f"Workbook is missing required sheets: {', '.join(missing_sheets)}")
+
+    rows = []
+    for sheet_name, run_day in SHEET_RUN_DAYS.items():
+        worksheet = workbook[sheet_name]
+        header_map = _find_header_map(worksheet)
+        for row in worksheet.iter_rows(min_row=header_map["__header_row"] + 1, values_only=False):
+            record = {
+                column: cell_text(row[header_map[column]])
+                for column in REQUIRED_COLUMNS
+            }
+            if any(record.values()):
+                record["__sheet_name"] = sheet_name
+                record["__run_day"] = run_day
+                rows.append(record)
+    return rows
+
+
+def _find_header_map(worksheet):
+    for row_number, row in enumerate(worksheet.iter_rows(values_only=False), start=1):
+        values = [cell_text(cell) for cell in row]
+        possible_map = {value: index for index, value in enumerate(values) if value}
+        if all(column in possible_map for column in REQUIRED_COLUMNS):
+            possible_map["__header_row"] = row_number
+            return possible_map
+    missing = ", ".join(REQUIRED_COLUMNS)
+    raise ValueError(f"{worksheet.title} is missing required columns: {missing}")
+
+
+def build_driver_lookup(repository):
+    lookup = {}
+    for driver in repository.list_specification_drivers():
+        lookup[normalize_key(driver.name)] = driver
+    return lookup
+
+
+def prepare_oncall_rows(rows, driver_lookup):
+    prepared_rows = []
+    skipped_count = 0
+    unresolved = Counter()
+    mapping_counts = Counter()
+    now = timestamp()
+
+    for row in rows:
+        status = clean_text(row.get("Status"))
+        active_flag = normalize_bool(
+            row.get("Active_Flag"),
+            default=normalize_key(status) == "active",
+        )
+        if normalize_key(status) == "on_hold" or active_flag is False:
+            skipped_count += 1
+            continue
+        if normalize_key(status) != "active":
+            skipped_count += 1
+            continue
+
+        assigned_to_alias = clean_text(row.get("Assigned to"))
+        resolved_name = resolve_driver_name(assigned_to_alias)
+        driver = driver_lookup.get(normalize_key(resolved_name)) if resolved_name else None
+        if assigned_to_alias and not driver:
+            unresolved[assigned_to_alias] += 1
+        if driver:
+            mapping_counts[driver.name] += 1
+
+        location_key = location_dedupe_key(row)
+        opshop_id = deterministic_id("OPSHOP", location_key)
+        pickup_frequency = clean_text(row.get("Pickup_Frequency")) or "On Call"
+        schedule = OpShopPickupSchedule(
+            schedule_id=deterministic_id(
+                "OPSHOP-SCHEDULE",
+                "|".join(
+                    [
+                        opshop_id,
+                        row["__run_day"] or "",
+                        "ON_CALL",
+                        normalize_key(pickup_frequency),
+                        normalize_key(row.get("Time_Window")),
+                    ]
+                ),
+            ),
+            opshop_id=opshop_id,
+            run_day=row["__run_day"],
+            run_type="ON_CALL",
+            pickup_frequency=pickup_frequency,
+            time_window=clean_text(row.get("Time_Window")),
+            call_before_arrival=normalize_bool(
+                row.get("Call_Before_Arrival"),
+                default=False,
+            ),
+            call_timing=clean_text(row.get("Call_Timing")),
+            status="Active",
+            active_flag=True,
+            fortnight_group=None,
+            review_required=False,
+            review_reason=None,
+            created_at=now,
+            updated_at=now,
+            default_driver_id=driver.driver_id if driver else None,
+            default_driver_alias=assigned_to_alias,
+            default_driver_name_snapshot=resolved_name,
+        )
+        location = OpShopLocation(
+            opshop_id=opshop_id,
+            name=clean_text(row.get("Op_Shop_Name")) or "Unknown OP SHOP",
+            suburb=clean_text(row.get("Suburb")),
+            street_address=clean_text(row.get("Street_Address")),
+            area_region=clean_text(row.get("Area_Region")),
+            primary_contact=clean_text(row.get("Primary_Contact")),
+            primary_phone=clean_text(row.get("Primary_Phone")),
+            secondary_contact=clean_text(row.get("Secondary_Contact")),
+            secondary_phone=clean_text(row.get("Secondary_Phone")),
+            access_type=clean_text(row.get("Access_Type")),
+            key_required=normalize_bool(row.get("Key_Required"), default=False),
+            trailer_restriction=clean_text(row.get("Trailer_Restriction")),
+            status_notes=clean_text(row.get("Status_Notes")),
+            is_active=True,
+            created_at=now,
+            updated_at=now,
+        )
+        prepared_rows.append(
+            PreparedOncallRow(
+                location_key=location_key,
+                location=location,
+                schedule=schedule,
+                assigned_to_alias=assigned_to_alias,
+                resolved_driver_name=resolved_name,
+            )
+        )
+
+    return prepared_rows, skipped_count, unresolved, mapping_counts
+
+
+def resolve_driver_name(alias):
+    normalized = normalize_key(alias)
+    if not normalized:
+        return None
+    return DRIVER_ALIAS_TO_NAME.get(normalized, alias)
+
+
+def find_location_id_by_key(connection, dedupe_key):
+    stable_opshop_id = deterministic_id("OPSHOP", dedupe_key)
+    row = connection.execute(
+        "SELECT opshop_id FROM opshop_locations WHERE opshop_id = ?",
+        (stable_opshop_id,),
+    ).fetchone()
+    if row:
+        return row["opshop_id"]
+
+    normalized_name, normalized_suburb, normalized_address = dedupe_key.split("|", 2)
+    row = connection.execute(
+        """
+        SELECT opshop_id
+        FROM opshop_locations
+        WHERE lower(trim(name)) = ?
+            AND lower(trim(COALESCE(suburb, ''))) = ?
+            AND lower(trim(COALESCE(street_address, ''))) = ?
+        """,
+        (normalized_name, normalized_suburb, normalized_address),
+    ).fetchone()
+    return row["opshop_id"] if row else None
+
+
+def find_schedule_id_by_key(connection, key):
+    stable_schedule_id = deterministic_id("OPSHOP-SCHEDULE", key)
+    row = connection.execute(
+        "SELECT schedule_id FROM opshop_pickup_schedules WHERE schedule_id = ?",
+        (stable_schedule_id,),
+    ).fetchone()
+    if row:
+        return row["schedule_id"]
+
+    opshop_id, run_day, run_type, pickup_frequency, time_window = key.split("|", 4)
+    row = connection.execute(
+        """
+        SELECT schedule_id
+        FROM opshop_pickup_schedules
+        WHERE opshop_id = ?
+            AND COALESCE(run_day, '') = ?
+            AND run_type = ?
+            AND lower(trim(COALESCE(pickup_frequency, ''))) = ?
+            AND lower(trim(COALESCE(time_window, ''))) = ?
+        """,
+        (opshop_id, run_day, run_type, pickup_frequency, time_window),
+    ).fetchone()
+    return row["schedule_id"] if row else None
+
+
+def deactivate_missing_oncall_schedules(connection, imported_schedule_ids):
+    """Treat the workbook as the complete active Oncall source list."""
+    timestamp_value = timestamp()
+    if imported_schedule_ids:
+        placeholders = ", ".join("?" for _ in imported_schedule_ids)
+        parameters = [
+            "On_Hold",
+            0,
+            timestamp_value,
+            *sorted(imported_schedule_ids),
+        ]
+        cursor = connection.execute(
+            f"""
+            UPDATE opshop_pickup_schedules
+            SET status = ?,
+                active_flag = ?,
+                updated_at = ?
+            WHERE run_type = 'ON_CALL'
+                AND active_flag = 1
+                AND schedule_id NOT IN ({placeholders})
+            """,
+            parameters,
+        )
+    else:
+        cursor = connection.execute(
+            """
+            UPDATE opshop_pickup_schedules
+            SET status = ?,
+                active_flag = ?,
+                updated_at = ?
+            WHERE run_type = 'ON_CALL'
+                AND active_flag = 1
+            """,
+            ("On_Hold", 0, timestamp_value),
+        )
+    return cursor.rowcount
+
+
+def schedule_key(schedule):
+    return "|".join(
+        [
+            schedule.opshop_id,
+            schedule.run_day or "",
+            schedule.run_type,
+            normalize_key(schedule.pickup_frequency),
+            normalize_key(schedule.time_window),
+        ]
+    )
+
+
+def location_dedupe_key(row):
+    return "|".join(
+        [
+            normalize_key(row.get("Op_Shop_Name")),
+            normalize_key(row.get("Suburb")),
+            normalize_key(row.get("Street_Address")),
+        ]
+    )
+
+
+def deterministic_id(prefix, key):
+    digest = hashlib.sha1(key.encode("utf-8")).hexdigest()[:16].upper()
+    return f"{prefix}-{digest}"
+
+
+def normalize_bool(value, default=False):
+    normalized = normalize_key(value)
+    if not normalized:
+        return default
+    if normalized in {"1", "yes", "y", "true"}:
+        return True
+    if normalized in {"0", "no", "n", "false"}:
+        return False
+    return default
+
+
+def cell_text(cell):
+    value = cell.value
+    if value is None:
+        return ""
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return " ".join(str(value).strip().split())
+
+
+def clean_text(value):
+    cleaned = " ".join(str(value or "").strip().split())
+    return cleaned or None
+
+
+def normalize_key(value):
+    return " ".join(str(value or "").strip().lower().replace("-", "_").split())
+
+
+def timestamp():
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+def print_summary(summary):
+    data = asdict(summary)
+    print(f"Rows read: {data['rows_read']}")
+    print(f"Rows imported: {data['rows_imported']}")
+    print(f"Rows skipped inactive/on-hold: {data['rows_skipped_inactive']}")
+    print(f"Locations inserted: {data['locations_inserted']}")
+    print(f"Locations updated: {data['locations_updated']}")
+    print(f"Schedules inserted: {data['schedules_inserted']}")
+    print(f"Schedules updated: {data['schedules_updated']}")
+    print(f"Schedules deactivated: {data['schedules_deactivated']}")
+    print("Default driver mapping counts:")
+    if data["default_driver_mapping_counts"]:
+        for driver_name, count in sorted(data["default_driver_mapping_counts"].items()):
+            print(f"  - {driver_name}: {count}")
+    else:
+        print("  - none")
+    print("Unresolved Assigned to aliases:")
+    if data["unresolved_assigned_to"]:
+        for alias, count in sorted(data["unresolved_assigned_to"].items()):
+            print(f"  - {alias}: {count}")
+    else:
+        print("  - none")
+    if data["backup_path"]:
+        print(f"Backup created: {data['backup_path']}")
+    else:
+        print("Backup created: no existing database")
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(
+        description="Import Oncall OP SHOP workbook into SQLite locations and schedules.",
+    )
+    parser.add_argument("--file", required=True, help="Path to Opshop oncall pickup.xlsx")
+    parser.add_argument("--db-path", help="Target SQLite database path")
+    args = parser.parse_args(argv)
+
+    summary = import_oncall_opshop_pickups_to_db(args.file, args.db_path)
+    print_summary(summary)
+
+
+if __name__ == "__main__":
+    main()

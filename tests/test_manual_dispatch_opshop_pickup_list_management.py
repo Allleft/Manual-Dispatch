@@ -13,6 +13,7 @@ from backend.repositories.sqlite_manual_dispatch_repository import (
 )
 from backend.schemas import (
     AssignTaskRequest,
+    ApplyOncallOpShopPickupAssignmentsRequest,
     ApplyWeeklyOpShopPickupAssignmentsRequest,
     CreateOpShopPickupTaskRequest,
     OpShopLocation,
@@ -49,6 +50,13 @@ class OpShopPickupListManagementTest(unittest.TestCase):
         self.assertEqual("Northside Op Shop", candidates[0].opshop_name)
         self.assertEqual("Coburg", candidates[0].suburb)
         self.assertEqual("0400 000 001", candidates[0].primary_phone)
+
+    def test_oncall_schedule_candidates_return_active_oncall_templates(self):
+        candidates = self.service.list_opshop_pickup_schedule_candidates("oncall")
+
+        self.assertEqual(["SCHED-ONCALL"], [candidate.schedule_id for candidate in candidates])
+        self.assertEqual("ON_CALL", candidates[0].run_type)
+        self.assertEqual("Northside Op Shop", candidates[0].opshop_name)
 
     def test_create_pickup_from_standard_and_regular_schedule_succeeds(self):
         standard = self.service.create_opshop_pickup_task(
@@ -95,6 +103,55 @@ class OpShopPickupListManagementTest(unittest.TestCase):
                     pickup_date="2026-05-18",
                 )
             )
+
+    def test_create_oncall_pickup_from_oncall_template_succeeds_and_prevents_duplicates(self):
+        task = self.service.create_oncall_opshop_pickup_task(
+            CreateOpShopPickupTaskRequest(
+                schedule_id="SCHED-ONCALL",
+                pickup_date="2026-05-20",
+                notes="Phone request",
+            )
+        )
+
+        self.assertEqual("ON_CALL", task.generated_from)
+        self.assertEqual("ACTIVE", task.status)
+        self.assertEqual("2026-05-20", task.dispatch_date)
+        self.assertIsNone(task.driver_id)
+        self.assertIsNone(task.trip_no)
+        self.assertEqual("Phone request", task.notes)
+        with self.assertRaisesRegex(ValueError, "already exists"):
+            self.service.create_oncall_opshop_pickup_task(
+                CreateOpShopPickupTaskRequest(
+                    schedule_id="SCHED-ONCALL",
+                    pickup_date="2026-05-20",
+                )
+            )
+        with self.assertRaisesRegex(ValueError, "Only ON_CALL"):
+            self.service.create_oncall_opshop_pickup_task(
+                CreateOpShopPickupTaskRequest(
+                    schedule_id="SCHED-REGULAR",
+                    pickup_date="2026-05-20",
+                )
+            )
+
+    def test_create_oncall_pickup_from_no_run_day_template_requires_pickup_date(self):
+        self.repository.upsert_opshop_pickup_schedule(
+            self._schedule("SCHED-GAVIN", run_day=None, run_type="ON_CALL")
+        )
+
+        with self.assertRaisesRegex(ValueError, "pickup_date is required"):
+            self.service.create_oncall_opshop_pickup_task(
+                CreateOpShopPickupTaskRequest(schedule_id="SCHED-GAVIN")
+            )
+        task = self.service.create_oncall_opshop_pickup_task(
+            CreateOpShopPickupTaskRequest(
+                schedule_id="SCHED-GAVIN",
+                pickup_date="2026-05-22",
+            )
+        )
+
+        self.assertEqual("ON_CALL", task.generated_from)
+        self.assertEqual("2026-05-22", task.pickup_date)
 
     def test_update_active_pickup_date_and_notes_succeeds(self):
         task = self.service.create_opshop_pickup_task(
@@ -321,6 +378,97 @@ class OpShopPickupListManagementTest(unittest.TestCase):
         self.assertIsNone(updated.driver_id)
         self.assertIsNone(updated.trip_no)
 
+    def test_apply_oncall_assignments_assigns_visible_oncall_pickups_to_trip1(self):
+        task = self.service.create_oncall_opshop_pickup_task(
+            CreateOpShopPickupTaskRequest(
+                schedule_id="SCHED-ONCALL",
+                pickup_date="2026-05-20",
+            )
+        )
+
+        board = self.service.apply_oncall_opshop_pickup_assignments(
+            ApplyOncallOpShopPickupAssignmentsRequest(
+                dispatch_date="2026-05-18",
+                assignments=[
+                    {"pickup_task_id": task.pickup_task_id, "driver_id": "D001"},
+                ],
+            )
+        )
+        updated = self.repository.get_opshop_pickup_task(task.pickup_task_id)
+        assignment = self.repository.get_assignment(
+            "2026-05-18",
+            "OPSHOP_PICKUP",
+            task.pickup_task_id,
+        )
+
+        self.assertEqual("ASSIGNED", updated.status)
+        self.assertEqual("D001", updated.driver_id)
+        self.assertEqual("trip1", updated.trip_no)
+        self.assertEqual("OPSHOP_PICKUP", assignment.task_type)
+        self.assertEqual("trip1", assignment.trip_no)
+        self.assertIn(
+            task.pickup_task_id,
+            [item.pickup_task_id for item in board.assigned_opshop_pickups],
+        )
+
+    def test_apply_oncall_assignments_skips_locked_past_pickup_rows(self):
+        task = self.service.create_oncall_opshop_pickup_task(
+            CreateOpShopPickupTaskRequest(
+                schedule_id="SCHED-ONCALL",
+                pickup_date="2026-05-18",
+            )
+        )
+
+        self.service.apply_oncall_opshop_pickup_assignments(
+            ApplyOncallOpShopPickupAssignmentsRequest(
+                dispatch_date="2026-05-21",
+                assignments=[
+                    {"pickup_task_id": task.pickup_task_id, "driver_id": "D001"},
+                ],
+            )
+        )
+        updated = self.repository.get_opshop_pickup_task(task.pickup_task_id)
+
+        self.assertEqual("ACTIVE", updated.status)
+        self.assertIsNone(updated.driver_id)
+        self.assertIsNone(
+            self.repository.get_assignment(
+                "2026-05-21",
+                "OPSHOP_PICKUP",
+                task.pickup_task_id,
+            )
+        )
+
+    def test_apply_oncall_assignments_blank_driver_unassigns_visible_oncall_pickup(self):
+        task = self.service.create_oncall_opshop_pickup_task(
+            CreateOpShopPickupTaskRequest(
+                schedule_id="SCHED-ONCALL",
+                pickup_date="2026-05-20",
+            )
+        )
+        self.service.apply_oncall_opshop_pickup_assignments(
+            ApplyOncallOpShopPickupAssignmentsRequest(
+                dispatch_date="2026-05-18",
+                assignments=[
+                    {"pickup_task_id": task.pickup_task_id, "driver_id": "D001"},
+                ],
+            )
+        )
+
+        self.service.apply_oncall_opshop_pickup_assignments(
+            ApplyOncallOpShopPickupAssignmentsRequest(
+                dispatch_date="2026-05-18",
+                assignments=[
+                    {"pickup_task_id": task.pickup_task_id, "driver_id": ""},
+                ],
+            )
+        )
+        updated = self.repository.get_opshop_pickup_task(task.pickup_task_id)
+
+        self.assertEqual("ACTIVE", updated.status)
+        self.assertIsNone(updated.driver_id)
+        self.assertIsNone(updated.trip_no)
+
     def _location(self):
         return OpShopLocation(
             opshop_id="OPSHOP-001",
@@ -341,11 +489,11 @@ class OpShopPickupListManagementTest(unittest.TestCase):
             updated_at="2026-05-19T00:00:00+00:00",
         )
 
-    def _schedule(self, schedule_id, run_type="STANDARD"):
+    def _schedule(self, schedule_id, run_type="STANDARD", run_day="MONDAY"):
         return OpShopPickupSchedule(
             schedule_id=schedule_id,
             opshop_id="OPSHOP-001",
-            run_day="MONDAY",
+            run_day=run_day,
             run_type=run_type,
             pickup_frequency="Weekly",
             time_window="9-12",
@@ -412,6 +560,18 @@ class OpShopPickupListManagementRouteTest(unittest.TestCase):
         self.assertEqual(["SCHED-REGULAR"], [item["schedule_id"] for item in payload])
         self.assertEqual("Northside Op Shop", payload[0]["opshop_name"])
 
+    def test_oncall_schedule_candidate_endpoint_returns_oncall_templates(self):
+        response = self.client.get(
+            "/api/manual-dispatch/opshop-pickup-schedules",
+            params={"run_type": "oncall"},
+        )
+
+        payload = response.json()
+
+        self.assertEqual(200, response.status_code)
+        self.assertEqual(["SCHED-ONCALL"], [item["schedule_id"] for item in payload])
+        self.assertEqual("ON_CALL", payload[0]["run_type"])
+
     def test_create_update_and_delete_pickup_endpoints(self):
         create_response = self.client.post(
             "/api/manual-dispatch/opshop-pickups",
@@ -435,6 +595,36 @@ class OpShopPickupListManagementRouteTest(unittest.TestCase):
         self.assertEqual("Updated", update_response.json()["notes"])
         self.assertEqual(200, delete_response.status_code)
         self.assertEqual("CANCELLED", delete_response.json()["status"])
+
+    def test_create_oncall_and_apply_oncall_assignments_endpoints(self):
+        create_response = self.client.post(
+            "/api/manual-dispatch/opshop-pickups/oncall",
+            json={
+                "schedule_id": "SCHED-ONCALL",
+                "pickup_date": "2026-05-20",
+                "assigned_driver_id": "D001",
+                "notes": "Phone request",
+            },
+        )
+        pickup_id = create_response.json()["pickup_task_id"]
+
+        apply_response = self.client.post(
+            "/api/manual-dispatch/opshop-pickups/oncall-assignments/apply",
+            json={
+                "dispatch_date": "2026-05-18",
+                "assignments": [
+                    {"pickup_task_id": pickup_id, "driver_id": "D001"},
+                ],
+            },
+        )
+        payload = apply_response.json()
+
+        self.assertEqual(200, create_response.status_code)
+        self.assertEqual("ON_CALL", create_response.json()["generated_from"])
+        self.assertEqual(200, apply_response.status_code)
+        self.assertEqual([pickup_id], [item["pickup_task_id"] for item in payload["assigned_opshop_pickups"]])
+        self.assertEqual("D001", payload["assigned_opshop_pickups"][0]["driver_id"])
+        self.assertEqual("trip1", payload["assigned_opshop_pickups"][0]["trip_no"])
 
     def test_apply_weekly_assignments_endpoint_returns_updated_board(self):
         create_response = self.client.post(

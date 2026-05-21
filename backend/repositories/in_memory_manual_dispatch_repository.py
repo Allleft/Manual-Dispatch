@@ -394,6 +394,42 @@ class InMemoryManualDispatchRepository:
             ),
         )
 
+    def list_oncall_opshop_pickup_schedule_candidates(self):
+        candidates = []
+        for schedule in self.list_opshop_pickup_schedules():
+            if not (
+                schedule.active_flag
+                and schedule.status == "Active"
+                and schedule.run_type == "ON_CALL"
+            ):
+                continue
+            location = self.get_opshop_location(schedule.opshop_id)
+            candidates.append(
+                OpShopPickupScheduleCandidate(
+                    schedule_id=schedule.schedule_id,
+                    opshop_id=schedule.opshop_id,
+                    opshop_name=location.name if location else "",
+                    suburb=location.suburb if location else None,
+                    run_day=schedule.run_day,
+                    run_type=schedule.run_type,
+                    pickup_frequency=schedule.pickup_frequency,
+                    time_window=schedule.time_window,
+                    primary_phone=location.primary_phone if location else None,
+                    default_driver_id=schedule.default_driver_id,
+                    default_driver_alias=schedule.default_driver_alias,
+                    default_driver_name=schedule.default_driver_name_snapshot,
+                )
+            )
+        return sorted(
+            candidates,
+            key=lambda candidate: (
+                candidate.run_day or "ZZZ",
+                candidate.opshop_name or "",
+                candidate.suburb or "",
+                candidate.schedule_id,
+            ),
+        )
+
     def get_opshop_pickup_schedule(self, schedule_id):
         return next(
             (
@@ -458,6 +494,33 @@ class InMemoryManualDispatchRepository:
                 continue
             schedule = self.get_opshop_pickup_schedule(task.schedule_id)
             if not schedule or schedule.run_type != "REGULAR":
+                continue
+            if not schedule.active_flag or schedule.status != "Active":
+                continue
+            location = self.get_opshop_location(task.opshop_id)
+            items.append(self._opshop_pickup_board_item(task, schedule, location))
+
+        return sorted(
+            items,
+            key=lambda item: (
+                item.pickup_date,
+                item.suburb or "",
+                item.opshop_name or "",
+                item.pickup_task_id,
+            ),
+        )
+
+    def list_oncall_opshop_pickup_board_items(self, dispatch_date):
+        items = []
+        for task in self.opshop_pickup_tasks:
+            if task.status not in {"ACTIVE", "ASSIGNED"}:
+                continue
+            if task.pickup_date < dispatch_date:
+                continue
+            if task.generated_from != "ON_CALL":
+                continue
+            schedule = self.get_opshop_pickup_schedule(task.schedule_id)
+            if not schedule or schedule.run_type != "ON_CALL":
                 continue
             if not schedule.active_flag or schedule.status != "Active":
                 continue

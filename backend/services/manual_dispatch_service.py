@@ -91,6 +91,9 @@ class ManualDispatchService:
     def create_opshop_pickup_task(self, request):
         return self.opshop_pickup_service.create_opshop_pickup_task(request)
 
+    def create_oncall_opshop_pickup_task(self, request):
+        return self.opshop_pickup_service.create_oncall_opshop_pickup_task(request)
+
     def update_opshop_pickup_task(self, pickup_task_id, request):
         return self.opshop_pickup_service.update_opshop_pickup_task(
             pickup_task_id,
@@ -102,6 +105,10 @@ class ManualDispatchService:
 
     def apply_weekly_opshop_pickup_assignments(self, request):
         self.opshop_pickup_service.apply_weekly_assignments(request)
+        return self.board_service.get_board(request.dispatch_date)
+
+    def apply_oncall_opshop_pickup_assignments(self, request):
+        self.opshop_pickup_service.apply_oncall_assignments(request)
         return self.board_service.get_board(request.dispatch_date)
 
     def create_driver(self, request):

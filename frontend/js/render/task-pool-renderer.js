@@ -66,6 +66,7 @@ export function renderTaskPoolFilters({
 
 export function renderTaskPool({
   getPendingSelection,
+  onOpenOncallOpShopPickupList,
   onOpenOpShopPickupList,
   onOpenOrderDetail,
   onPendingSelectionChange,
@@ -95,7 +96,9 @@ export function renderTaskPool({
 
   taskPoolList.append(
     createOpShopPickupSection({
+      onOpenOncallOpShopPickupList,
       onOpenOpShopPickupList,
+      oncallPickups: state.oncallOpShopPickups,
       pickups: state.scheduledOpShopPickups,
     }),
   );
@@ -128,6 +131,8 @@ function createTaskPoolSection({ className, titleText }) {
 }
 
 function createOpShopPickupSection({
+  oncallPickups,
+  onOpenOncallOpShopPickupList,
   pickups,
   onOpenOpShopPickupList,
 }) {
@@ -140,6 +145,7 @@ function createOpShopPickupSection({
   list.className = "task-pool-section-grid opshop-summary-grid";
 
   list.append(createOpShopPickupListSummaryCard(pickups, onOpenOpShopPickupList));
+  list.append(createOncallOpShopPickupListSummaryCard(oncallPickups, onOpenOncallOpShopPickupList));
 
   section.append(list);
   return section;
@@ -226,6 +232,46 @@ function createOpShopPickupListSummaryCard(pickups, onOpenOpShopPickupList) {
   openButton.type = "button";
   openButton.textContent = "Open List";
   openButton.addEventListener("click", onOpenOpShopPickupList);
+
+  content.append(kicker, title, summary, meta, openButton);
+  card.append(content);
+  return card;
+}
+
+function createOncallOpShopPickupListSummaryCard(pickups, onOpenOncallOpShopPickupList) {
+  const card = document.createElement("article");
+  card.className = "order-card opshop-pickup-list-summary-card opshop-oncall-list-summary-card";
+
+  const content = document.createElement("div");
+  content.className = "opshop-pickup-list-summary-main";
+
+  const kicker = document.createElement("p");
+  kicker.className = "compact-invoice";
+  kicker.textContent = "Oncall Requests";
+
+  const title = document.createElement("h3");
+  title.className = "compact-suburb";
+  title.textContent = "Oncall OP SHOP Pickup List";
+
+  const summary = document.createElement("p");
+  summary.className = "compact-note opshop-pickup-note";
+  summary.textContent =
+    pickups.length === 0
+      ? "No Oncall OP SHOP pickups added."
+      : `${pickups.length} Oncall pickups added.`;
+
+  const meta = document.createElement("div");
+  meta.className = "compact-meta opshop-pickup-meta";
+  meta.append(
+    createBadge(`Count: ${pickups.length}`, "good"),
+    createBadge("Created tasks only"),
+    createBadge("ACTIVE / ASSIGNED"),
+  );
+
+  const openButton = document.createElement("button");
+  openButton.type = "button";
+  openButton.textContent = "Open List";
+  openButton.addEventListener("click", onOpenOncallOpShopPickupList);
 
   content.append(kicker, title, summary, meta, openButton);
   card.append(content);

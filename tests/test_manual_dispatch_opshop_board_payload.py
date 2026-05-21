@@ -40,11 +40,13 @@ class OpShopBoardPayloadTest(unittest.TestCase):
         self.assertIn("opshop_pickups", payload)
         self.assertIn("assigned_opshop_pickups", payload)
         self.assertIn("scheduled_opshop_pickups", payload)
+        self.assertIn("oncall_opshop_pickups", payload)
         self.assertIn("opshop_regular_list_window_start", payload)
         self.assertIn("opshop_regular_list_window_end", payload)
         self.assertEqual([], payload["opshop_pickups"])
         self.assertEqual([], payload["assigned_opshop_pickups"])
         self.assertEqual([], payload["scheduled_opshop_pickups"])
+        self.assertEqual([], payload["oncall_opshop_pickups"])
         self.assertEqual("2026-05-18", payload["opshop_regular_list_window_start"])
         self.assertEqual("2026-05-22", payload["opshop_regular_list_window_end"])
         for key in [
@@ -281,6 +283,70 @@ class OpShopBoardPayloadTest(unittest.TestCase):
         self.assertEqual([], board.scheduled_opshop_pickups)
         self.assertEqual([], self.repository.list_opshop_pickup_tasks())
 
+    def test_oncall_opshop_pickups_empty_before_actual_tasks_are_created(self):
+        self.repository.upsert_opshop_pickup_schedule(
+            self._schedule("SCHED-ONCALL", run_type="ON_CALL")
+        )
+
+        board = self.service.get_board("2026-05-18")
+
+        self.assertEqual([], board.oncall_opshop_pickups)
+        self.assertEqual([], self.repository.list_opshop_pickup_tasks())
+
+    def test_oncall_opshop_pickups_show_created_active_and_assigned_oncall_tasks_only(self):
+        self.repository.upsert_opshop_pickup_schedule(
+            self._schedule("SCHED-ONCALL", run_type="ON_CALL")
+        )
+        self.repository.upsert_opshop_pickup_schedule(
+            self._schedule("SCHED-REGULAR", run_type="REGULAR")
+        )
+        self.repository.upsert_opshop_pickup_task(
+            self._task(
+                "TASK-ONCALL-ACTIVE",
+                "SCHED-ONCALL",
+                pickup_date="2026-05-20",
+                status="ACTIVE",
+                generated_from="ON_CALL",
+            )
+        )
+        self.repository.upsert_opshop_pickup_task(
+            self._task(
+                "TASK-ONCALL-ASSIGNED",
+                "SCHED-ONCALL",
+                pickup_date="2026-05-21",
+                status="ASSIGNED",
+                generated_from="ON_CALL",
+            )
+        )
+        self.repository.upsert_opshop_pickup_task(
+            self._task(
+                "TASK-ONCALL-CANCELLED",
+                "SCHED-ONCALL",
+                pickup_date="2026-05-22",
+                status="CANCELLED",
+                generated_from="ON_CALL",
+            )
+        )
+        self.repository.upsert_opshop_pickup_task(
+            self._task(
+                "TASK-REGULAR",
+                "SCHED-REGULAR",
+                pickup_date="2026-05-20",
+                status="ACTIVE",
+                generated_from="REGULAR",
+            )
+        )
+
+        board = self.service.get_board("2026-05-18")
+
+        self.assertEqual(
+            ["TASK-ONCALL-ACTIVE", "TASK-ONCALL-ASSIGNED"],
+            [item.pickup_task_id for item in board.oncall_opshop_pickups],
+        )
+        self.assertEqual("ON_CALL", board.oncall_opshop_pickups[0].run_type)
+        self.assertEqual("ASSIGNED", board.oncall_opshop_pickups[1].status)
+        self.assertTrue(board.oncall_opshop_pickups[1].is_assigned)
+
     def test_repeated_board_load_does_not_duplicate_opshop_pickups(self):
         self.repository.upsert_opshop_pickup_schedule(
             self._schedule("SCHED-001", run_day="MONDAY", pickup_frequency="Weekly")
@@ -358,14 +424,21 @@ class OpShopBoardPayloadTest(unittest.TestCase):
             default_driver_name_snapshot=default_driver_name_snapshot,
         )
 
-    def _task(self, pickup_task_id, schedule_id=None, pickup_date="2026-05-20", status="ACTIVE"):
+    def _task(
+        self,
+        pickup_task_id,
+        schedule_id=None,
+        pickup_date="2026-05-20",
+        status="ACTIVE",
+        generated_from="MANUAL",
+    ):
         return OpShopPickupTask(
             pickup_task_id=pickup_task_id,
             schedule_id=schedule_id or "SCHED-001",
             opshop_id="OPSHOP-001",
             pickup_date=pickup_date,
             task_type="OPSHOP_PICKUP",
-            generated_from="MANUAL",
+            generated_from=generated_from,
             status=status,
             dispatch_date=pickup_date,
             driver_id="D001" if status == "ASSIGNED" else None,
@@ -428,7 +501,9 @@ class OpShopBoardPayloadRouteTest(unittest.TestCase):
 
         self.assertEqual(200, response.status_code)
         self.assertIn("opshop_pickups", payload)
+        self.assertIn("oncall_opshop_pickups", payload)
         self.assertEqual([], payload["opshop_pickups"])
+        self.assertEqual([], payload["oncall_opshop_pickups"])
         self.assertEqual("2026-05-18", payload["opshop_regular_list_window_start"])
         self.assertEqual("2026-05-22", payload["opshop_regular_list_window_end"])
         self.assertEqual(

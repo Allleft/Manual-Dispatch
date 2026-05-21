@@ -28,6 +28,11 @@ class BoardService:
         )
         for pickup in scheduled_pickups:
             pickup.assigned_to_locked = pickup.pickup_date < dispatch_date
+        oncall_pickups = self.repository.list_oncall_opshop_pickup_board_items(
+            dispatch_date
+        )
+        for pickup in oncall_pickups:
+            pickup.assigned_to_locked = pickup.pickup_date < dispatch_date
 
         return ManualDispatchBoardResponse(
             dispatch_date=dispatch_date,
@@ -43,6 +48,7 @@ class BoardService:
                 dispatch_date
             ),
             scheduled_opshop_pickups=scheduled_pickups,
+            oncall_opshop_pickups=oncall_pickups,
             opshop_regular_list_window_start=scheduled_generation.window_start,
             opshop_regular_list_window_end=scheduled_generation.window_end,
         )

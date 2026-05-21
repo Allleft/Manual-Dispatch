@@ -4,6 +4,7 @@ from fastapi import APIRouter, Body, HTTPException
 from fastapi.responses import Response
 
 from backend.schemas import (
+    ApplyOncallOpShopPickupAssignmentsRequest,
     ApplyWeeklyOpShopPickupAssignmentsRequest,
     AssignDriverVehicleRequest,
     AssignTaskRequest,
@@ -163,6 +164,14 @@ def create_opshop_pickup(request: CreateOpShopPickupTaskRequest):
         raise _to_http_exception(error) from error
 
 
+@router.post("/opshop-pickups/oncall")
+def create_oncall_opshop_pickup(request: CreateOpShopPickupTaskRequest):
+    try:
+        return to_dict(service.create_oncall_opshop_pickup_task(request))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
 @router.patch("/opshop-pickups/{pickup_task_id}")
 def update_opshop_pickup(pickup_task_id: str, request: UpdateOpShopPickupTaskRequest):
     try:
@@ -183,6 +192,14 @@ def delete_opshop_pickup(pickup_task_id: str):
 def apply_weekly_opshop_pickup_assignments(request: ApplyWeeklyOpShopPickupAssignmentsRequest):
     try:
         return to_dict(service.apply_weekly_opshop_pickup_assignments(request))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.post("/opshop-pickups/oncall-assignments/apply")
+def apply_oncall_opshop_pickup_assignments(request: ApplyOncallOpShopPickupAssignmentsRequest):
+    try:
+        return to_dict(service.apply_oncall_opshop_pickup_assignments(request))
     except ValueError as error:
         raise _to_http_exception(error) from error
 

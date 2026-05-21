@@ -159,8 +159,23 @@ export async function apiListOpShopPickupSchedules() {
 }
 
 
+export async function apiListOncallOpShopPickupSchedules() {
+  return requestJson("/api/manual-dispatch/opshop-pickup-schedules", {
+    query: { run_type: "oncall" },
+  });
+}
+
+
 export async function apiCreateOpShopPickup(payload) {
   return requestJson("/api/manual-dispatch/opshop-pickups", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+
+export async function apiCreateOncallOpShopPickup(payload) {
+  return requestJson("/api/manual-dispatch/opshop-pickups/oncall", {
     method: "POST",
     body: payload,
   });
@@ -184,6 +199,14 @@ export async function apiDeleteOpShopPickup(pickupTaskId) {
 
 export async function apiApplyWeeklyOpShopPickupAssignments(payload) {
   return requestJson("/api/manual-dispatch/opshop-pickups/weekly-assignments/apply", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+
+export async function apiApplyOncallOpShopPickupAssignments(payload) {
+  return requestJson("/api/manual-dispatch/opshop-pickups/oncall-assignments/apply", {
     method: "POST",
     body: payload,
   });

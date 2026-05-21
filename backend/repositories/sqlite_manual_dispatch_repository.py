@@ -474,6 +474,38 @@ class SQLiteManualDispatchRepository:
             ).fetchall()
         return [self._row_to_opshop_pickup_schedule_candidate(row) for row in rows]
 
+    def list_oncall_opshop_pickup_schedule_candidates(self):
+        with connect(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    schedule.schedule_id,
+                    schedule.opshop_id,
+                    location.name AS opshop_name,
+                    location.suburb,
+                    schedule.run_day,
+                    schedule.run_type,
+                    schedule.pickup_frequency,
+                    schedule.time_window,
+                    location.primary_phone,
+                    schedule.default_driver_id,
+                    schedule.default_driver_alias,
+                    schedule.default_driver_name_snapshot AS default_driver_name
+                FROM opshop_pickup_schedules schedule
+                LEFT JOIN opshop_locations location
+                    ON location.opshop_id = schedule.opshop_id
+                WHERE schedule.active_flag = 1
+                    AND schedule.status = 'Active'
+                    AND schedule.run_type = 'ON_CALL'
+                ORDER BY
+                    COALESCE(schedule.run_day, 'ZZZ'),
+                    COALESCE(location.name, ''),
+                    COALESCE(location.suburb, ''),
+                    schedule.schedule_id
+                """
+            ).fetchall()
+        return [self._row_to_opshop_pickup_schedule_candidate(row) for row in rows]
+
     def get_opshop_pickup_schedule(self, schedule_id):
         with connect(self.db_path) as connection:
             row = connection.execute(
@@ -691,6 +723,67 @@ class SQLiteManualDispatchRepository:
                     task.pickup_task_id
                 """,
                 (start_date, end_date),
+            ).fetchall()
+        return [self._row_to_opshop_pickup_board_item(row) for row in rows]
+
+    def list_oncall_opshop_pickup_board_items(self, dispatch_date):
+        with connect(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    task.pickup_task_id,
+                    task.task_type,
+                    task.schedule_id,
+                    task.opshop_id,
+                    task.pickup_date,
+                    task.dispatch_date,
+                    task.status,
+                    task.generated_from,
+                    task.notes AS task_notes,
+                    task.driver_id,
+                    task.trip_no,
+                    location.name AS opshop_name,
+                    location.suburb,
+                    location.street_address,
+                    location.area_region,
+                    location.primary_contact,
+                    location.primary_phone,
+                    location.secondary_contact,
+                    location.secondary_phone,
+                    location.access_type,
+                    location.key_required,
+                    location.trailer_restriction,
+                    location.status_notes,
+                    schedule.run_day,
+                    schedule.run_type,
+                    schedule.pickup_frequency,
+                    schedule.time_window,
+                    schedule.call_before_arrival,
+                    schedule.call_timing,
+                    schedule.default_driver_id,
+                    schedule.default_driver_alias,
+                    schedule.default_driver_name_snapshot AS default_driver_name,
+                    assigned_driver.name AS assigned_driver_name
+                FROM opshop_pickup_tasks task
+                LEFT JOIN opshop_locations location
+                    ON location.opshop_id = task.opshop_id
+                LEFT JOIN opshop_pickup_schedules schedule
+                    ON schedule.schedule_id = task.schedule_id
+                LEFT JOIN manual_drivers assigned_driver
+                    ON assigned_driver.driver_id = task.driver_id
+                WHERE task.pickup_date >= ?
+                    AND task.status IN ('ACTIVE', 'ASSIGNED')
+                    AND task.generated_from = 'ON_CALL'
+                    AND schedule.run_type = 'ON_CALL'
+                    AND schedule.active_flag = 1
+                    AND schedule.status = 'Active'
+                ORDER BY
+                    task.pickup_date,
+                    COALESCE(location.suburb, ''),
+                    COALESCE(location.name, ''),
+                    task.pickup_task_id
+                """,
+                (dispatch_date,),
             ).fetchall()
         return [self._row_to_opshop_pickup_board_item(row) for row in rows]
 
