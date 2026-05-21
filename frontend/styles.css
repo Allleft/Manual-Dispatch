@@ -933,6 +933,21 @@ select:disabled {
   font-weight: 800;
 }
 
+.assigned-opshop-suburb {
+  display: inline-block;
+  margin-bottom: 0;
+  border: 1px solid rgba(39, 93, 69, 0.28);
+  border-radius: 999px;
+  padding: 0.2rem 0.7rem;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  font-size: 1.35rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  line-height: 1.15;
+  text-transform: uppercase;
+}
+
 .assigned-pallet {
   margin-bottom: 0;
   color: var(--muted);

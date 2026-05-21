@@ -190,9 +190,14 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
             FRONTEND_ROOT / "js" / "render" / "trip-summary-renderer.js"
         ).read_text(encoding="utf-8")
         selectors = (FRONTEND_ROOT / "js" / "state" / "selectors.js").read_text(encoding="utf-8")
+        styles = (FRONTEND_ROOT / "styles.css").read_text(encoding="utf-8")
         final_summary_renderer = (
             FRONTEND_ROOT / "js" / "render" / "final-summary-renderer.js"
         ).read_text(encoding="utf-8")
+        assigned_opshop_renderer = trip_summary_renderer.split(
+            "function createAssignedOpShopPickupTask",
+            1,
+        )[1]
 
         self.assertIn("handleAssignTask", assignment_actions)
         self.assertIn("getTaskKey(taskType, taskId)", assignment_actions)
@@ -200,6 +205,8 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("handleAssignTask(\"ORDER\"", assignment_actions)
         self.assertNotIn('taskType: "OPSHOP_PICKUP"', task_pool_renderer)
         self.assertIn("assigned-opshop-task", trip_summary_renderer)
+        self.assertIn("assigned-opshop-suburb", trip_summary_renderer)
+        self.assertIn(".assigned-opshop-suburb", styles)
         self.assertIn("getAssignedOpShopPickupsForDriver", trip_summary_renderer)
         self.assertIn("pickup.pickup_date === state.driverSummaryDeliveryDate", selectors)
         self.assertIn("getOrderAssignmentsForDriverTrip", selectors)
@@ -211,6 +218,12 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("onOpenOpShopPickupDetail(pickup.pickup_task_id)", trip_summary_renderer)
         self.assertIn("onUnassign(assignment.task_type, assignment.task_id)", trip_summary_renderer)
         self.assertIn("not included in Final Trip Summary or Excel export", trip_summary_renderer)
+        self.assertIn("suburb.textContent = formatOptional(pickup.suburb)", assigned_opshop_renderer)
+        self.assertNotIn("Pickup Date:", assigned_opshop_renderer)
+        self.assertNotIn("Run:", assigned_opshop_renderer)
+        self.assertNotIn("Frequency:", assigned_opshop_renderer)
+        self.assertNotIn("Phone:", assigned_opshop_renderer)
+        self.assertNotIn("pickup.opshop_name)", assigned_opshop_renderer)
         self.assertNotIn("OP SHOP PICKUP", final_summary_renderer)
 
     def test_phase8_opshop_pickup_list_frontend_contract(self):

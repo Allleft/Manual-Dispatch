@@ -365,24 +365,11 @@ function createAssignedOpShopPickupTask(
   badgeRow.className = "hint-badge-row";
   badgeRow.append(createBadge("OP SHOP PICKUP", "good"));
 
-  const name = document.createElement("p");
-  name.className = "assigned-suburb";
-  name.textContent = formatOptional(pickup.opshop_name);
+  const suburb = document.createElement("p");
+  suburb.className = "assigned-opshop-suburb";
+  suburb.textContent = formatOptional(pickup.suburb);
 
-  const meta = document.createElement("p");
-  meta.className = "assigned-delivery-date";
-  meta.textContent = [
-    `Pickup Date: ${formatOptional(pickup.pickup_date)}`,
-    `Suburb: ${formatOptional(pickup.suburb)}`,
-    `Run: ${formatOptional(pickup.run_type)}`,
-    `Frequency: ${formatOptional(pickup.pickup_frequency)}`,
-  ].join(" | ");
-
-  const phone = document.createElement("p");
-  phone.className = "assigned-pallet";
-  phone.textContent = `Phone: ${formatOptional(pickup.primary_phone)}`;
-
-  details.append(badgeRow, name, meta, phone);
+  details.append(badgeRow, suburb);
 
   const unassignButton = document.createElement("button");
   unassignButton.type = "button";
