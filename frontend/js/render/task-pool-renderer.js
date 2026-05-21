@@ -66,6 +66,7 @@ export function renderTaskPoolFilters({
 
 export function renderTaskPool({
   getPendingSelection,
+  onExportOpShopRunSheet,
   onOpenOncallOpShopPickupList,
   onOpenOpShopPickupList,
   onOpenOrderDetail,
@@ -96,6 +97,7 @@ export function renderTaskPool({
 
   taskPoolList.append(
     createOpShopPickupSection({
+      onExportOpShopRunSheet,
       onOpenOncallOpShopPickupList,
       onOpenOpShopPickupList,
       oncallPickups: state.oncallOpShopPickups,
@@ -131,6 +133,7 @@ function createTaskPoolSection({ className, titleText }) {
 }
 
 function createOpShopPickupSection({
+  onExportOpShopRunSheet,
   oncallPickups,
   onOpenOncallOpShopPickupList,
   pickups,
@@ -147,7 +150,16 @@ function createOpShopPickupSection({
   list.append(createOpShopPickupListSummaryCard(pickups, onOpenOpShopPickupList));
   list.append(createOncallOpShopPickupListSummaryCard(oncallPickups, onOpenOncallOpShopPickupList));
 
-  section.append(list);
+  const exportButton = document.createElement("button");
+  exportButton.type = "button";
+  exportButton.className = "button-secondary opshop-run-sheet-export-button";
+  exportButton.disabled = state.isLoading || state.isSaving || state.isOpShopRunSheetExporting;
+  exportButton.textContent = state.isOpShopRunSheetExporting
+    ? "Exporting OP SHOP Run Sheet..."
+    : "Export OP SHOP Run Sheet";
+  exportButton.addEventListener("click", onExportOpShopRunSheet);
+
+  section.append(list, exportButton);
   return section;
 }
 

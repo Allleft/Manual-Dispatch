@@ -30,6 +30,9 @@ from backend.repositories.sqlite_manual_dispatch_repository import (
 from backend.services.excel_export_service import build_manual_dispatch_excel
 from backend.services.final_summary_excel_export_service import build_final_summary_excel
 from backend.services.manual_dispatch_service import ManualDispatchService
+from backend.services.opshop_pickup_excel_export_service import (
+    build_opshop_pickup_run_sheet_excel,
+)
 
 router = APIRouter(prefix="/api/manual-dispatch", tags=["manual-dispatch"])
 service = ManualDispatchService(SQLiteManualDispatchRepository())
@@ -186,6 +189,20 @@ def delete_opshop_pickup(pickup_task_id: str):
         return to_dict(service.delete_opshop_pickup_task(pickup_task_id))
     except ValueError as error:
         raise _to_http_exception(error) from error
+
+
+@router.get("/opshop-pickups/export-excel")
+def export_opshop_pickups_excel(dispatch_date: str):
+    workbook_bytes = build_opshop_pickup_run_sheet_excel(
+        service.get_board(dispatch_date),
+        dispatch_date,
+    )
+    filename = f"opshop-pickup-run-sheet-{dispatch_date}.xlsx"
+    return Response(
+        content=workbook_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post("/opshop-pickups/weekly-assignments/apply")

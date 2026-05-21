@@ -213,6 +213,18 @@ export async function apiApplyOncallOpShopPickupAssignments(payload) {
 }
 
 
+export function getOpShopPickupRunSheetExcelExportUrl(dispatchDate) {
+  return getApiUrl("/api/manual-dispatch/opshop-pickups/export-excel", {
+    dispatch_date: dispatchDate,
+  });
+}
+
+
+export function apiExportOpShopPickupRunSheetExcel(dispatchDate) {
+  return fetch(getOpShopPickupRunSheetExcelExportUrl(dispatchDate));
+}
+
+
 export async function apiSaveFinalSummary(payload) {
   return requestJson("/api/manual-dispatch/final-summaries", {
     method: "POST",

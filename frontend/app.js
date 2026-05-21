@@ -243,6 +243,7 @@ function renderTaskPoolFilters() {
 function renderTaskPool() {
   renderTaskPoolView({
     getPendingSelection: assignmentActions.getPendingSelection,
+    onExportOpShopRunSheet: opShopPickupActions.exportOpShopRunSheet,
     onOpenOncallOpShopPickupList: oncallOpShopPickupActions.openOncallOpShopPickupList,
     onOpenOpShopPickupList: opShopPickupActions.openOpShopPickupList,
     onOpenOrderDetail: orderActions.openOrderDetail,
@@ -844,6 +845,7 @@ const assignmentActions = createAssignmentActions({
 const opShopPickupActions = createOpShopPickupActions({
   loadBoard,
   renderBoard,
+  showError,
   state,
 });
 

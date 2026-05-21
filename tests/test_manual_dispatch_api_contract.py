@@ -25,6 +25,7 @@ class ManualDispatchApiContractTest(unittest.TestCase):
             ("POST", "/api/manual-dispatch/orders"),
             ("PATCH", "/api/manual-dispatch/orders/{order_id}"),
             ("POST", "/api/manual-dispatch/orders/{order_id}/cancel"),
+            ("GET", "/api/manual-dispatch/opshop-pickups/export-excel"),
             ("POST", "/api/manual-dispatch/drivers"),
             ("PATCH", "/api/manual-dispatch/drivers/{driver_id}"),
             ("DELETE", "/api/manual-dispatch/drivers/{driver_id}"),

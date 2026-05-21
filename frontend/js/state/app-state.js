@@ -42,6 +42,7 @@ export const state = {
   isOncallOpShopPickupListLoading: false,
   isOpShopPickupSaving: false,
   isOncallOpShopPickupSaving: false,
+  isOpShopRunSheetExporting: false,
   opshopPickupListError: "",
   oncallOpShopPickupListError: "",
   opshopPickupFormMode: "",

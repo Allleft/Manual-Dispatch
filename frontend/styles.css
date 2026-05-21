@@ -371,6 +371,10 @@ h1 {
   max-width: none;
 }
 
+.opshop-run-sheet-export-button {
+  justify-self: start;
+}
+
 .opshop-pickup-list-summary-main {
   display: grid;
   gap: 0.7rem;
