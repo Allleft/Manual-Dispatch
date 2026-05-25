@@ -14,6 +14,22 @@ FINAL_SUMMARY_HEADERS = [
     "Product Details",
     "Load",
 ]
+OPSHOP_PICKUP_HEADERS = [
+    "No.",
+    "OP SHOP Name",
+    "Suburb",
+    "Address",
+    "Pickup Date",
+    "Run Type",
+    "Frequency",
+    "Time Window",
+    "Contact",
+    "Phone",
+    "Access",
+    "Key Required",
+    "Trailer Restriction",
+    "Notes",
+]
 INVALID_SHEET_CHARACTERS = re.compile(r"[\[\]\*:/\\?]")
 EMPTY_ORDER_SUMMARY_MESSAGE = "No Delivery Orders included."
 
@@ -99,6 +115,38 @@ def _write_summary_sheet(worksheet, summary):
 
     if not wrote_order_rows:
         worksheet.cell(row=row_index, column=1, value=EMPTY_ORDER_SUMMARY_MESSAGE).font = Font(bold=True)
+        row_index += 2
+
+    opshop_pickups = getattr(summary, "opshop_pickups", None) or []
+    if opshop_pickups:
+        worksheet.cell(row=row_index, column=1, value="OP SHOP PICKUPS").font = Font(bold=True)
+        row_index += 1
+        for column_index, header in enumerate(OPSHOP_PICKUP_HEADERS, start=1):
+            worksheet.cell(row=row_index, column=column_index, value=header).font = Font(bold=True)
+        row_index += 1
+
+        for row_number, pickup in enumerate(opshop_pickups, start=1):
+            values = [
+                row_number,
+                pickup.opshop_name_snapshot or "",
+                pickup.suburb_snapshot or "",
+                pickup.street_address_snapshot or "",
+                pickup.pickup_date_snapshot or "",
+                pickup.run_type_snapshot or "",
+                pickup.pickup_frequency_snapshot or "",
+                pickup.time_window_snapshot or "",
+                pickup.primary_contact_snapshot or "",
+                pickup.primary_phone_snapshot or "",
+                pickup.access_type_snapshot or "",
+                "Yes" if pickup.key_required_snapshot else "No",
+                pickup.trailer_restriction_snapshot or "",
+                pickup.notes_snapshot or "",
+            ]
+            for column_index, value in enumerate(values, start=1):
+                cell = worksheet.cell(row=row_index, column=column_index, value=value)
+                if column_index == 14:
+                    cell.alignment = Alignment(wrap_text=True, vertical="top")
+            row_index += 1
 
     worksheet.freeze_panes = "A8"
     _apply_column_widths(worksheet)

@@ -10,8 +10,7 @@ import {
   formatProductDetailLine,
 } from "../utils/format-utils.js";
 
-const EMPTY_ORDER_SUMMARY_MESSAGE =
-  "No Delivery Orders included. OP SHOP pickups are excluded from Final Trip Summary and available in OP SHOP Run Sheet export.";
+const EMPTY_ORDER_SUMMARY_MESSAGE = "No Delivery Orders included.";
 
 export function renderFinalTripSummaries({
   getUnsavedFinalSummaries,
@@ -298,8 +297,56 @@ function createFinalTripSummaryCard(summary, options = {}) {
     trips.append(tripSection);
   });
 
+  if ((summary.opshop_pickups || []).length > 0) {
+    trips.append(createOpShopPickupSection(summary.opshop_pickups));
+  }
+
   card.append(header, meta, trips);
   return card;
+}
+
+function createOpShopPickupSection(pickups) {
+  const section = document.createElement("section");
+  section.className = "final-trip-section final-summary-opshop-section";
+
+  const heading = document.createElement("h4");
+  heading.textContent = "OP SHOP PICKUPS";
+
+  const table = document.createElement("table");
+  table.className = "final-trip-table final-summary-opshop-table";
+
+  const thead = document.createElement("thead");
+  const headerRow = document.createElement("tr");
+  ["No.", "OP SHOP Name", "Suburb", "Pickup Date", "Phone", "Address", "Notes"].forEach((label) => {
+    const th = document.createElement("th");
+    th.scope = "col";
+    th.textContent = label;
+    headerRow.append(th);
+  });
+  thead.append(headerRow);
+
+  const tbody = document.createElement("tbody");
+  pickups.forEach((pickup, index) => {
+    const row = document.createElement("tr");
+    [
+      index + 1,
+      formatOptional(pickup.opshop_name, ""),
+      formatOptional(pickup.suburb, ""),
+      formatOptional(pickup.pickup_date, ""),
+      formatOptional(pickup.primary_phone, ""),
+      formatOptional(pickup.street_address, ""),
+      formatOptional(pickup.notes, ""),
+    ].forEach((value) => {
+      const td = document.createElement("td");
+      td.textContent = value;
+      row.append(td);
+    });
+    tbody.append(row);
+  });
+
+  table.append(thead, tbody);
+  section.append(heading, table);
+  return section;
 }
 
 function formatProductDetails(order) {

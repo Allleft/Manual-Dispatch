@@ -166,7 +166,7 @@ export function renderDriverSummary({
       const opShopExportHint = document.createElement("p");
       opShopExportHint.className = "vehicle-hint";
       opShopExportHint.textContent =
-        "OP SHOP PICKUP tasks are shown in Driver Summary but are not included in Final Trip Summary or Excel export.";
+        "OP SHOP PICKUP tasks appear in a separate Final Trip Summary section and do not affect Delivery totals or trip rows.";
       header.append(opShopExportHint);
     }
     if (finalLockHint.textContent) {

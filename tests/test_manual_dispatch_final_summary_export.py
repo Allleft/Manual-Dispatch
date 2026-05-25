@@ -14,6 +14,9 @@ from backend.repositories.sqlite_manual_dispatch_repository import (
 )
 from backend.schemas import (
     AssignTaskRequest,
+    OpShopLocation,
+    OpShopPickupSchedule,
+    OpShopPickupTask,
     RegisterOperatorAccountRequest,
     SaveFinalTripSummaryRequest,
 )
@@ -175,6 +178,40 @@ class ManualDispatchFinalSummaryExportTest(unittest.TestCase):
         self.assertIn("No Delivery Orders included.", values)
         self.assertNotIn("OPSHOP_PICKUP", values)
 
+    def test_opshop_only_export_writes_separate_opshop_pickups_section(self):
+        self._seed_opshop_pickup("TASK-OPSHOP-001")
+        self.service.save_final_trip_summary(
+            self._summary_request(
+                trips=[],
+                opshop_pickups=[self._opshop_payload("TASK-OPSHOP-001")],
+            )
+        )
+
+        values = self._flat_values(self._load_export_workbook())
+
+        self.assertIn("No Delivery Orders included.", values)
+        self.assertIn("OP SHOP PICKUPS", values)
+        self.assertIn("Northside Op Shop", values)
+        self.assertIn("Coburg", values)
+        self.assertIn("1 Sydney Road", values)
+        self.assertNotIn("Trip 1", values)
+
+    def test_mixed_export_keeps_opshop_section_separate_from_delivery_trip(self):
+        self._assign_order("ORD-001", "D001", "trip1")
+        self._seed_opshop_pickup("TASK-OPSHOP-001")
+        self.service.save_final_trip_summary(
+            self._summary_request(opshop_pickups=[self._opshop_payload("TASK-OPSHOP-001")])
+        )
+
+        worksheet_rows = list(self._load_export_workbook().active.iter_rows(values_only=True))
+        values = [value for row in worksheet_rows for value in row if value is not None]
+        trip_heading_index = next(index for index, row in enumerate(worksheet_rows) if row[0] == "Trip 1")
+        opshop_heading_index = next(index for index, row in enumerate(worksheet_rows) if row[0] == "OP SHOP PICKUPS")
+
+        self.assertLess(trip_heading_index, opshop_heading_index)
+        self.assertIn("Demo Customer A", values)
+        self.assertIn("Northside Op Shop", values)
+
     def _load_export_workbook(self):
         workbook_bytes = build_final_summary_excel(
             self.service.list_final_trip_summaries(self.dispatch_date),
@@ -200,7 +237,7 @@ class ManualDispatchFinalSummaryExportTest(unittest.TestCase):
             )
         )
 
-    def _summary_request(self, driver_name="John", vehicle_rego="XYZ888", trips=None):
+    def _summary_request(self, driver_name="John", vehicle_rego="XYZ888", trips=None, opshop_pickups=None):
         return SaveFinalTripSummaryRequest(
             dispatch_date=self.dispatch_date,
             delivery_date=self.dispatch_date,
@@ -216,6 +253,7 @@ class ManualDispatchFinalSummaryExportTest(unittest.TestCase):
             trips=trips
             if trips is not None
             else [self._trip_payload("trip1", [self._order_payload("ORD-001")])],
+            opshop_pickups=opshop_pickups or [],
         )
 
     def _trip_payload(self, trip_no, orders):
@@ -235,6 +273,84 @@ class ManualDispatchFinalSummaryExportTest(unittest.TestCase):
             "pallet_quantity": order.pallet_quantity,
             "loose_bags_quantity": order.loose_bags_quantity,
             "note": order.note,
+        }
+
+    def _seed_opshop_pickup(self, task_id):
+        self.repository.upsert_opshop_location(
+            OpShopLocation(
+                opshop_id="OPSHOP-FINAL",
+                name="Northside Op Shop",
+                suburb="Coburg",
+                street_address="1 Sydney Road",
+                area_region="North",
+                primary_contact="Mary",
+                primary_phone="0400 700 001",
+                secondary_contact=None,
+                secondary_phone=None,
+                access_type="Rear dock",
+                key_required=True,
+                trailer_restriction="Small truck only",
+                status_notes="Ring first",
+                is_active=True,
+                created_at="2026-05-05T00:00:00+00:00",
+                updated_at="2026-05-05T00:00:00+00:00",
+            )
+        )
+        self.repository.upsert_opshop_pickup_schedule(
+            OpShopPickupSchedule(
+                schedule_id="SCHED-FINAL",
+                opshop_id="OPSHOP-FINAL",
+                run_day="TUESDAY",
+                run_type="REGULAR",
+                pickup_frequency="Weekly",
+                time_window="09:00-12:00",
+                call_before_arrival=False,
+                call_timing=None,
+                status="Active",
+                active_flag=True,
+                fortnight_group=None,
+                review_required=False,
+                review_reason=None,
+                created_at="2026-05-05T00:00:00+00:00",
+                updated_at="2026-05-05T00:00:00+00:00",
+            )
+        )
+        self.repository.upsert_opshop_pickup_task(
+            OpShopPickupTask(
+                pickup_task_id=task_id,
+                schedule_id="SCHED-FINAL",
+                opshop_id="OPSHOP-FINAL",
+                pickup_date=self.dispatch_date,
+                task_type="OPSHOP_PICKUP",
+                generated_from="REGULAR",
+                status="ASSIGNED",
+                dispatch_date=self.dispatch_date,
+                driver_id="D001",
+                trip_no="trip1",
+                notes="Leave at rear door",
+                created_at="2026-05-05T00:00:00+00:00",
+                updated_at="2026-05-05T00:00:00+00:00",
+            )
+        )
+
+    def _opshop_payload(self, task_id):
+        return {
+            "task_type": "OPSHOP_PICKUP",
+            "pickup_task_id": task_id,
+            "opshop_name": "Northside Op Shop",
+            "suburb": "Coburg",
+            "street_address": "1 Sydney Road",
+            "pickup_date": self.dispatch_date,
+            "run_type": "REGULAR",
+            "pickup_frequency": "Weekly",
+            "time_window": "09:00-12:00",
+            "primary_contact": "Mary",
+            "primary_phone": "0400 700 001",
+            "access_type": "Rear dock",
+            "key_required": True,
+            "trailer_restriction": "Small truck only",
+            "task_notes": "Leave at rear door",
+            "status": "ASSIGNED",
         }
 
 

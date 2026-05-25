@@ -1,4 +1,5 @@
 from backend.services.manual_dispatch.normalization import (
+    bool_or_default,
     clean_optional_text,
     clean_required_text,
     load_unit_for_quantities,
@@ -43,6 +44,10 @@ class FinalSummaryService:
             )
 
         rows = self._normalize_final_summary_rows(request.trips, delivery_date)
+        opshop_rows = self._normalize_final_summary_opshop_rows(
+            getattr(request, "opshop_pickups", None) or [],
+            delivery_date,
+        )
 
         summary = {
             "dispatch_date": dispatch_date,
@@ -65,7 +70,7 @@ class FinalSummaryService:
             "saved_by_account_name": saved_by_account.account_name,
             "saved_by_account_id": saved_by_account.account_id,
         }
-        return self.repository.save_final_trip_summary(summary, rows)
+        return self.repository.save_final_trip_summary(summary, rows, opshop_rows)
 
     def list_final_trip_summaries(self, dispatch_date, delivery_date=None):
         dispatch_date = clean_required_text(dispatch_date, "dispatch_date")
@@ -244,3 +249,117 @@ class FinalSummaryService:
                 row_no += 1
 
         return sorted_rows
+
+    def _normalize_final_summary_opshop_rows(self, pickups, delivery_date):
+        if not isinstance(pickups, list):
+            raise ValueError("opshop_pickups must be a list")
+
+        normalized_rows = []
+        for row_no, pickup_snapshot in enumerate(pickups, start=1):
+            if not isinstance(pickup_snapshot, dict):
+                raise ValueError("Each final summary OP SHOP pickup row must be an object")
+
+            task_type = clean_optional_text(pickup_snapshot.get("task_type")) or "OPSHOP_PICKUP"
+            self.validator.validate_task_type(task_type)
+            if task_type != "OPSHOP_PICKUP":
+                raise ValueError("Final Summary OP SHOP pickup rows must use OPSHOP_PICKUP tasks")
+
+            pickup_task_id = clean_required_text(
+                pickup_snapshot.get("pickup_task_id_snapshot")
+                or pickup_snapshot.get("pickup_task_id")
+                or pickup_snapshot.get("task_id"),
+                "pickup_task_id",
+            )
+            task = self.repository.get_opshop_pickup_task(pickup_task_id)
+            if not task:
+                raise ValueError(f"Task does not exist: OPSHOP_PICKUP {pickup_task_id}")
+            if getattr(task, "pickup_date", None) != delivery_date:
+                raise ValueError(
+                    "Final Summary OP SHOP pickups must match the selected delivery date"
+                )
+
+            notes = clean_optional_text(
+                pickup_snapshot.get("notes_snapshot") or pickup_snapshot.get("notes")
+            )
+            if not notes:
+                note_parts = [
+                    clean_optional_text(pickup_snapshot.get("status_notes")),
+                    clean_optional_text(pickup_snapshot.get("task_notes")),
+                ]
+                notes = "\n".join(part for part in note_parts if part) or None
+
+            normalized_rows.append(
+                {
+                    "row_no": row_no,
+                    "pickup_task_id_snapshot": pickup_task_id,
+                    "opshop_name_snapshot": clean_optional_text(
+                        pickup_snapshot.get("opshop_name_snapshot")
+                        or pickup_snapshot.get("opshop_name")
+                    )
+                    or pickup_task_id,
+                    "suburb_snapshot": clean_optional_text(
+                        pickup_snapshot.get("suburb_snapshot")
+                        or pickup_snapshot.get("suburb")
+                    ),
+                    "street_address_snapshot": clean_optional_text(
+                        pickup_snapshot.get("street_address_snapshot")
+                        or pickup_snapshot.get("street_address")
+                    ),
+                    "area_region_snapshot": clean_optional_text(
+                        pickup_snapshot.get("area_region_snapshot")
+                        or pickup_snapshot.get("area_region")
+                    ),
+                    "pickup_date_snapshot": delivery_date,
+                    "run_type_snapshot": clean_optional_text(
+                        pickup_snapshot.get("run_type_snapshot")
+                        or pickup_snapshot.get("run_type")
+                    ),
+                    "pickup_frequency_snapshot": clean_optional_text(
+                        pickup_snapshot.get("pickup_frequency_snapshot")
+                        or pickup_snapshot.get("pickup_frequency")
+                    ),
+                    "time_window_snapshot": clean_optional_text(
+                        pickup_snapshot.get("time_window_snapshot")
+                        or pickup_snapshot.get("time_window")
+                    ),
+                    "primary_contact_snapshot": clean_optional_text(
+                        pickup_snapshot.get("primary_contact_snapshot")
+                        or pickup_snapshot.get("primary_contact")
+                    ),
+                    "primary_phone_snapshot": clean_optional_text(
+                        pickup_snapshot.get("primary_phone_snapshot")
+                        or pickup_snapshot.get("primary_phone")
+                    ),
+                    "secondary_contact_snapshot": clean_optional_text(
+                        pickup_snapshot.get("secondary_contact_snapshot")
+                        or pickup_snapshot.get("secondary_contact")
+                    ),
+                    "secondary_phone_snapshot": clean_optional_text(
+                        pickup_snapshot.get("secondary_phone_snapshot")
+                        or pickup_snapshot.get("secondary_phone")
+                    ),
+                    "access_type_snapshot": clean_optional_text(
+                        pickup_snapshot.get("access_type_snapshot")
+                        or pickup_snapshot.get("access_type")
+                    ),
+                    "key_required_snapshot": bool_or_default(
+                        pickup_snapshot.get("key_required_snapshot")
+                        if "key_required_snapshot" in pickup_snapshot
+                        else pickup_snapshot.get("key_required"),
+                        False,
+                    ),
+                    "trailer_restriction_snapshot": clean_optional_text(
+                        pickup_snapshot.get("trailer_restriction_snapshot")
+                        or pickup_snapshot.get("trailer_restriction")
+                    ),
+                    "notes_snapshot": notes,
+                    "status_snapshot": clean_optional_text(
+                        pickup_snapshot.get("status_snapshot")
+                        or pickup_snapshot.get("status")
+                        or getattr(task, "status", None)
+                    )
+                    or "ASSIGNED",
+                }
+            )
+
+        return normalized_rows

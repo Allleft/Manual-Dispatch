@@ -13,6 +13,9 @@ from backend.schemas import (
     AssignDriverVehicleRequest,
     AssignTaskRequest,
     CreateOrderRequest,
+    OpShopLocation,
+    OpShopPickupSchedule,
+    OpShopPickupTask,
     RegisterOperatorAccountRequest,
     SaveFinalTripSummaryRequest,
     UpdateOrderRequest,
@@ -59,6 +62,7 @@ class ManualDispatchFinalSummaryTest(unittest.TestCase):
 
         self.assertIn("final_trip_summaries", tables)
         self.assertIn("final_trip_summary_rows", tables)
+        self.assertIn("final_trip_summary_opshop_pickup_rows", tables)
 
     def test_save_final_summary_persists_snapshot_rows(self):
         self._assign_order("ORD-001", "D001", "trip1")
@@ -324,6 +328,58 @@ class ManualDispatchFinalSummaryTest(unittest.TestCase):
         self.assertEqual(0, summary.total_loose_bags)
         self.assertEqual("SAVED", summary.status)
 
+    def test_save_and_load_opshop_only_summary_uses_separate_snapshot_rows(self):
+        self._seed_opshop_pickup("TASK-OPSHOP-001")
+
+        saved = self.service.save_final_trip_summary(
+            self._summary_request(
+                trips=[],
+                opshop_pickups=[self._opshop_payload("TASK-OPSHOP-001")],
+            )
+        )
+        reloaded = self.service.get_final_trip_summary(saved.summary_id)
+
+        self.assertEqual([], reloaded.trips)
+        self.assertEqual(1, len(reloaded.opshop_pickups))
+        self.assertEqual("Northside Op Shop", reloaded.opshop_pickups[0].opshop_name_snapshot)
+        self.assertEqual(0, reloaded.total_pallets)
+        self.assertEqual(0, reloaded.total_loose_bags)
+
+        with sqlite3.connect(self.db_path) as connection:
+            order_rows = connection.execute(
+                "SELECT COUNT(*) FROM final_trip_summary_rows WHERE summary_id = ?",
+                (saved.summary_id,),
+            ).fetchone()[0]
+            opshop_rows = connection.execute(
+                "SELECT COUNT(*) FROM final_trip_summary_opshop_pickup_rows WHERE summary_id = ?",
+                (saved.summary_id,),
+            ).fetchone()[0]
+        self.assertEqual(0, order_rows)
+        self.assertEqual(1, opshop_rows)
+
+    def test_mixed_summary_keeps_opshop_out_of_delivery_totals_and_rows(self):
+        self._assign_order("ORD-001", "D001", "trip1")
+        self._seed_opshop_pickup("TASK-OPSHOP-001")
+
+        saved = self.service.save_final_trip_summary(
+            self._summary_request(opshop_pickups=[self._opshop_payload("TASK-OPSHOP-001")])
+        )
+
+        self.assertEqual(2, saved.total_pallets)
+        self.assertEqual(0, saved.total_loose_bags)
+        self.assertEqual(["ORD-001"], [order.task_id for order in saved.trips[0].orders])
+        self.assertEqual(["TASK-OPSHOP-001"], [pickup.pickup_task_id_snapshot for pickup in saved.opshop_pickups])
+
+        with sqlite3.connect(self.db_path) as connection:
+            delivery_task_types = [
+                row[0]
+                for row in connection.execute(
+                    "SELECT task_type FROM final_trip_summary_rows WHERE summary_id = ?",
+                    (saved.summary_id,),
+                ).fetchall()
+            ]
+        self.assertEqual(["ORDER"], delivery_task_types)
+
     def test_save_final_summary_rejects_missing_saved_by_account_name(self):
         self._assign_order("ORD-001", "D001", "trip1")
 
@@ -429,7 +485,7 @@ class ManualDispatchFinalSummaryTest(unittest.TestCase):
             )
         )
 
-    def _summary_request(self, trips=None, delivery_date=None):
+    def _summary_request(self, trips=None, delivery_date=None, opshop_pickups=None):
         return SaveFinalTripSummaryRequest(
             dispatch_date=self.dispatch_date,
             delivery_date=delivery_date or self.dispatch_date,
@@ -445,6 +501,7 @@ class ManualDispatchFinalSummaryTest(unittest.TestCase):
             trips=trips
             if trips is not None
             else [self._trip_payload("trip1", [self._order_payload("ORD-001")])],
+            opshop_pickups=opshop_pickups or [],
         )
 
     def _trip_payload(self, trip_no, orders):
@@ -464,6 +521,85 @@ class ManualDispatchFinalSummaryTest(unittest.TestCase):
             "pallet_quantity": order.pallet_quantity,
             "loose_bags_quantity": order.loose_bags_quantity,
             "note": order.note,
+        }
+
+    def _seed_opshop_pickup(self, task_id):
+        self.repository.upsert_opshop_location(
+            OpShopLocation(
+                opshop_id="OPSHOP-FINAL",
+                name="Northside Op Shop",
+                suburb="Coburg",
+                street_address="1 Sydney Road",
+                area_region="North",
+                primary_contact="Mary",
+                primary_phone="0400 700 001",
+                secondary_contact=None,
+                secondary_phone=None,
+                access_type="Rear dock",
+                key_required=True,
+                trailer_restriction="Small truck only",
+                status_notes="Ring first",
+                is_active=True,
+                created_at="2026-05-05T00:00:00+00:00",
+                updated_at="2026-05-05T00:00:00+00:00",
+            )
+        )
+        self.repository.upsert_opshop_pickup_schedule(
+            OpShopPickupSchedule(
+                schedule_id="SCHED-FINAL",
+                opshop_id="OPSHOP-FINAL",
+                run_day="TUESDAY",
+                run_type="REGULAR",
+                pickup_frequency="Weekly",
+                time_window="09:00-12:00",
+                call_before_arrival=False,
+                call_timing=None,
+                status="Active",
+                active_flag=True,
+                fortnight_group=None,
+                review_required=False,
+                review_reason=None,
+                created_at="2026-05-05T00:00:00+00:00",
+                updated_at="2026-05-05T00:00:00+00:00",
+            )
+        )
+        self.repository.upsert_opshop_pickup_task(
+            OpShopPickupTask(
+                pickup_task_id=task_id,
+                schedule_id="SCHED-FINAL",
+                opshop_id="OPSHOP-FINAL",
+                pickup_date=self.dispatch_date,
+                task_type="OPSHOP_PICKUP",
+                generated_from="REGULAR",
+                status="ASSIGNED",
+                dispatch_date=self.dispatch_date,
+                driver_id="D001",
+                trip_no="trip1",
+                notes="Leave at rear door",
+                created_at="2026-05-05T00:00:00+00:00",
+                updated_at="2026-05-05T00:00:00+00:00",
+            )
+        )
+
+    def _opshop_payload(self, task_id):
+        return {
+            "task_type": "OPSHOP_PICKUP",
+            "pickup_task_id": task_id,
+            "opshop_name": "Northside Op Shop",
+            "suburb": "Coburg",
+            "street_address": "1 Sydney Road",
+            "area_region": "North",
+            "pickup_date": self.dispatch_date,
+            "run_type": "REGULAR",
+            "pickup_frequency": "Weekly",
+            "time_window": "09:00-12:00",
+            "primary_contact": "Mary",
+            "primary_phone": "0400 700 001",
+            "access_type": "Rear dock",
+            "key_required": True,
+            "trailer_restriction": "Small truck only",
+            "task_notes": "Leave at rear door",
+            "status": "ASSIGNED",
         }
 
 
@@ -575,6 +711,65 @@ class ManualDispatchFinalSummaryRouteTest(unittest.TestCase):
         self.assertEqual(200, save_response.status_code)
         self.assertEqual(200, dates_response.status_code)
         self.assertEqual([self.dispatch_date], dates_response.json())
+
+    def test_final_summary_api_saves_opshop_snapshot_section(self):
+        self.repository.upsert_opshop_location(
+            OpShopLocation(
+                opshop_id="OPSHOP-ROUTE",
+                name="Route Op Shop",
+                suburb="Coburg",
+                street_address="4 Route Road",
+                area_region=None,
+                primary_contact=None,
+                primary_phone="0400 555 111",
+                secondary_contact=None,
+                secondary_phone=None,
+                access_type=None,
+                key_required=False,
+                trailer_restriction=None,
+                status_notes=None,
+                is_active=True,
+                created_at="2026-05-05T00:00:00+00:00",
+                updated_at="2026-05-05T00:00:00+00:00",
+            )
+        )
+        self.repository.upsert_opshop_pickup_task(
+            OpShopPickupTask(
+                pickup_task_id="TASK-ROUTE",
+                schedule_id=None,
+                opshop_id="OPSHOP-ROUTE",
+                pickup_date=self.dispatch_date,
+                task_type="OPSHOP_PICKUP",
+                generated_from="MANUAL",
+                status="ASSIGNED",
+                dispatch_date=self.dispatch_date,
+                driver_id="D001",
+                trip_no="trip1",
+                notes=None,
+                created_at="2026-05-05T00:00:00+00:00",
+                updated_at="2026-05-05T00:00:00+00:00",
+            )
+        )
+        payload = self._summary_payload()
+        payload["trips"] = []
+        payload["total_pallets"] = 0
+        payload["opshop_pickups"] = [
+            {
+                "task_type": "OPSHOP_PICKUP",
+                "pickup_task_id": "TASK-ROUTE",
+                "opshop_name": "Route Op Shop",
+                "suburb": "Coburg",
+                "street_address": "4 Route Road",
+                "pickup_date": self.dispatch_date,
+                "status": "ASSIGNED",
+            }
+        ]
+
+        response = self.client.post("/api/manual-dispatch/final-summaries", json=payload)
+
+        self.assertEqual(200, response.status_code)
+        self.assertEqual("TASK-ROUTE", response.json()["opshop_pickups"][0]["pickup_task_id_snapshot"])
+        self.assertEqual([], response.json()["trips"])
 
     def _assign_order(self, order_id, driver_id, trip_no):
         return self.service.assign_task(

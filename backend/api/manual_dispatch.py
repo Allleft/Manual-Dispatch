@@ -383,6 +383,7 @@ def _save_final_trip_summary_request_from_payload(payload):
         total_loose_bags=payload.get("total_loose_bags") or 0,
         generated_at=payload.get("generated_at"),
         trips=payload.get("trips") or [],
+        opshop_pickups=payload.get("opshop_pickups") or [],
         saved_by_account_name=payload.get("saved_by_account_name"),
         saved_by_account_id=payload.get("saved_by_account_id"),
     )

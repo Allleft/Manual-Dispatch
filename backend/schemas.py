@@ -372,6 +372,30 @@ class FinalTripSummaryTrip:
 
 
 @dataclass
+class FinalTripSummaryOpShopPickupSnapshot:
+    row_id: Optional[str]
+    row_no: int
+    pickup_task_id_snapshot: str
+    opshop_name_snapshot: str
+    suburb_snapshot: Optional[str]
+    street_address_snapshot: Optional[str]
+    area_region_snapshot: Optional[str]
+    pickup_date_snapshot: str
+    run_type_snapshot: Optional[str]
+    pickup_frequency_snapshot: Optional[str]
+    time_window_snapshot: Optional[str]
+    primary_contact_snapshot: Optional[str]
+    primary_phone_snapshot: Optional[str]
+    secondary_contact_snapshot: Optional[str]
+    secondary_phone_snapshot: Optional[str]
+    access_type_snapshot: Optional[str]
+    key_required_snapshot: bool
+    trailer_restriction_snapshot: Optional[str]
+    notes_snapshot: Optional[str]
+    status_snapshot: str
+
+
+@dataclass
 class FinalTripSummary:
     summary_id: str
     dispatch_date: str
@@ -388,6 +412,7 @@ class FinalTripSummary:
     saved_by_account_name: str
     saved_by_account_id: Optional[int]
     trips: List[FinalTripSummaryTrip]
+    opshop_pickups: List[FinalTripSummaryOpShopPickupSnapshot] = field(default_factory=list)
 
 
 @dataclass
@@ -401,6 +426,7 @@ class SaveFinalTripSummaryRequest:
     total_loose_bags: int
     generated_at: Optional[str]
     trips: List[dict]
+    opshop_pickups: List[dict] = field(default_factory=list)
     delivery_date: Optional[str] = None
     saved_by_account_name: Optional[str] = None
     saved_by_account_id: Optional[int] = None

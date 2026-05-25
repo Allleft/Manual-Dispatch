@@ -198,10 +198,12 @@ class ManualDispatchOpShopAssignmentTest(unittest.TestCase):
                 saved_by_account_name=account.account_name,
                 saved_by_account_id=account.account_id,
                 trips=[],
+                opshop_pickups=[self._opshop_summary_payload("TASK-001")],
             )
         )
 
         self.assertEqual([], summary.trips)
+        self.assertEqual(["TASK-001"], [pickup.pickup_task_id_snapshot for pickup in summary.opshop_pickups])
         self.assertEqual(0, summary.total_pallets)
         self.assertEqual(0, summary.total_loose_bags)
         self.assertIsNotNone(
@@ -211,6 +213,26 @@ class ManualDispatchOpShopAssignmentTest(unittest.TestCase):
                 "TASK-001",
             )
         )
+
+    def _opshop_summary_payload(self, task_id):
+        return {
+            "task_type": "OPSHOP_PICKUP",
+            "pickup_task_id": task_id,
+            "opshop_name": "Northside Op Shop",
+            "suburb": "Coburg",
+            "street_address": "1 Sydney Road",
+            "pickup_date": "2026-05-20",
+            "run_type": "REGULAR",
+            "pickup_frequency": "Weekly",
+            "time_window": "9-12",
+            "primary_contact": "Mary",
+            "primary_phone": "0400 000 001",
+            "access_type": "Rear dock",
+            "key_required": True,
+            "trailer_restriction": "Small truck only",
+            "task_notes": "Manual fixture",
+            "status": "ASSIGNED",
+        }
 
     def _location(self):
         return OpShopLocation(

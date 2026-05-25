@@ -5,6 +5,7 @@ from backend.db.connection import connect, get_database_path, initialize_databas
 from backend.schemas import (
     Driver,
     FinalTripSummary,
+    FinalTripSummaryOpShopPickupSnapshot,
     FinalTripSummaryOrderSnapshot,
     FinalTripSummaryTrip,
     ManualDispatchAssignment,
@@ -1517,8 +1518,9 @@ class SQLiteManualDispatchRepository:
             connection.commit()
         return cursor.rowcount > 0
 
-    def save_final_trip_summary(self, summary, rows):
+    def save_final_trip_summary(self, summary, rows, opshop_rows=None):
         timestamp = self._timestamp()
+        opshop_rows = opshop_rows or []
 
         with connect(self.db_path) as connection:
             existing_summary = connection.execute(
@@ -1646,6 +1648,59 @@ class SQLiteManualDispatchRepository:
                         ),
                     )
 
+            for row in opshop_rows:
+                row_id = self._create_final_trip_summary_opshop_row_id(connection)
+                connection.execute(
+                    """
+                    INSERT INTO final_trip_summary_opshop_pickup_rows (
+                        row_id,
+                        summary_id,
+                        row_no,
+                        pickup_task_id_snapshot,
+                        opshop_name_snapshot,
+                        suburb_snapshot,
+                        street_address_snapshot,
+                        area_region_snapshot,
+                        pickup_date_snapshot,
+                        run_type_snapshot,
+                        pickup_frequency_snapshot,
+                        time_window_snapshot,
+                        primary_contact_snapshot,
+                        primary_phone_snapshot,
+                        secondary_contact_snapshot,
+                        secondary_phone_snapshot,
+                        access_type_snapshot,
+                        key_required_snapshot,
+                        trailer_restriction_snapshot,
+                        notes_snapshot,
+                        status_snapshot
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        row_id,
+                        summary_id,
+                        row["row_no"],
+                        row["pickup_task_id_snapshot"],
+                        row["opshop_name_snapshot"],
+                        row.get("suburb_snapshot"),
+                        row.get("street_address_snapshot"),
+                        row.get("area_region_snapshot"),
+                        row["pickup_date_snapshot"],
+                        row.get("run_type_snapshot"),
+                        row.get("pickup_frequency_snapshot"),
+                        row.get("time_window_snapshot"),
+                        row.get("primary_contact_snapshot"),
+                        row.get("primary_phone_snapshot"),
+                        row.get("secondary_contact_snapshot"),
+                        row.get("secondary_phone_snapshot"),
+                        row.get("access_type_snapshot"),
+                        int(bool(row.get("key_required_snapshot"))),
+                        row.get("trailer_restriction_snapshot"),
+                        row.get("notes_snapshot"),
+                        row["status_snapshot"],
+                    ),
+                )
+
             connection.commit()
 
         return self.get_final_trip_summary(summary_id)
@@ -1692,6 +1747,17 @@ class SQLiteManualDispatchRepository:
             """
         ).fetchone()
         return f"FSR-{row['next_number']:03d}"
+
+    def _create_final_trip_summary_opshop_row_id(self, connection):
+        row = connection.execute(
+            """
+            SELECT COALESCE(MAX(CAST(SUBSTR(row_id, 5) AS INTEGER)), 0) + 1
+                AS next_number
+            FROM final_trip_summary_opshop_pickup_rows
+            WHERE row_id LIKE 'FSO-%'
+            """
+        ).fetchone()
+        return f"FSO-{row['next_number']:03d}"
 
     def _row_to_order(self, row):
         return Order(
@@ -1778,6 +1844,15 @@ class SQLiteManualDispatchRepository:
                 """,
                 (row["summary_id"],),
             ).fetchall()
+            opshop_rows = connection.execute(
+                """
+                SELECT *
+                FROM final_trip_summary_opshop_pickup_rows
+                WHERE summary_id = ?
+                ORDER BY row_no, row_id
+                """,
+                (row["summary_id"],),
+            ).fetchall()
 
         trips = []
         for trip_no in ("trip1", "trip2"):
@@ -1805,6 +1880,10 @@ class SQLiteManualDispatchRepository:
             saved_by_account_name=row["saved_by_account_name"] or "Unknown",
             saved_by_account_id=row["saved_by_account_id"],
             trips=trips,
+            opshop_pickups=[
+                self._row_to_final_trip_summary_opshop_pickup(opshop_row)
+                for opshop_row in opshop_rows
+            ],
         )
 
     def _row_to_final_trip_summary_order(self, row):
@@ -1833,6 +1912,30 @@ class SQLiteManualDispatchRepository:
                 if "estimated_distance_km_from_warehouse_snapshot" in row.keys()
                 else None
             ),
+        )
+
+    def _row_to_final_trip_summary_opshop_pickup(self, row):
+        return FinalTripSummaryOpShopPickupSnapshot(
+            row_id=row["row_id"],
+            row_no=row["row_no"],
+            pickup_task_id_snapshot=row["pickup_task_id_snapshot"],
+            opshop_name_snapshot=row["opshop_name_snapshot"],
+            suburb_snapshot=row["suburb_snapshot"],
+            street_address_snapshot=row["street_address_snapshot"],
+            area_region_snapshot=row["area_region_snapshot"],
+            pickup_date_snapshot=row["pickup_date_snapshot"],
+            run_type_snapshot=row["run_type_snapshot"],
+            pickup_frequency_snapshot=row["pickup_frequency_snapshot"],
+            time_window_snapshot=row["time_window_snapshot"],
+            primary_contact_snapshot=row["primary_contact_snapshot"],
+            primary_phone_snapshot=row["primary_phone_snapshot"],
+            secondary_contact_snapshot=row["secondary_contact_snapshot"],
+            secondary_phone_snapshot=row["secondary_phone_snapshot"],
+            access_type_snapshot=row["access_type_snapshot"],
+            key_required_snapshot=bool(row["key_required_snapshot"]),
+            trailer_restriction_snapshot=row["trailer_restriction_snapshot"],
+            notes_snapshot=row["notes_snapshot"],
+            status_snapshot=row["status_snapshot"],
         )
 
     def _row_to_operator_account(self, row):

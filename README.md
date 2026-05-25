@@ -26,7 +26,7 @@ The current branch extends the Manual Dispatch Board with an OP SHOP PICKUP work
 - Driver Summary filtered by selected Delivery Date without changing Task Pool membership.
 - Vehicle selection scoped by `driver_id + dispatch_date + delivery_date`.
 - Product Details with pallet/bag exclusivity.
-- Historical Final Trip Summary save, history, and Excel export from snapshot data.
+- Historical Final Trip Summary save, history, and Excel export from snapshot data, with OP SHOP pickups retained in a separate section.
 - Final Trip Summary suburb-distance sorting using a static local estimate table.
 - OP SHOP PICKUP source tables, pickup task records, board payloads, list modals, and Driver Summary display.
 - Regular OP SHOP Pickup List for scheduled Regular pickups.
@@ -49,7 +49,7 @@ Runtime SQLite databases, backups, local OP SHOP workbooks, and generated output
 7. Open Regular or Oncall OP SHOP lists, choose assigned drivers, then close the list to apply OP SHOP assignments.
 8. Select the Driver Summary Delivery Date.
 9. Choose a Vehicle for Driver + Dispatch Date + Delivery Date.
-10. Generate the Final Trip Summary for Delivery Orders.
+10. Generate the Final Trip Summary, with Delivery trips and OP SHOP pickups kept in separate sections.
 11. Save and Export the historical Final Trip Summary snapshot.
 
 ## Key Concepts
@@ -65,7 +65,7 @@ Runtime SQLite databases, backups, local OP SHOP workbooks, and generated output
 | OP SHOP Template Management | Office UI for adding, editing, and soft-disabling Regular and Oncall templates without requiring an importer run. |
 | Driver Summary Delivery Date | Date filter that decides which assigned Delivery Orders and OP SHOP pickups appear inside driver cards. |
 | Vehicle Assignment Scope | Vehicle selection is stored per `driver_id + dispatch_date + delivery_date`. |
-| Final Trip Summary | Generated and saved historical snapshot scoped by `dispatch_date + delivery_date`. It is currently ORDER-only. |
+| Final Trip Summary | Generated and saved historical snapshot scoped by `dispatch_date + delivery_date`; Delivery trips and OP SHOP pickups are captured in separate sections. |
 | Product Details | Structured product lines attached to an Order and copied into saved Final Trip Summary snapshots. |
 | Estimated Distance | Static suburb-level estimated straight-line distance from the Somerton warehouse, used only for Final Trip Summary sorting. |
 
@@ -172,7 +172,8 @@ OP SHOP PICKUP is a separate manual task type. It is not stored as a Delivery Or
 - OP SHOP pickups are filtered by `pickup_date` matching the selected Driver Summary Delivery Date.
 - OP SHOP pickups are not displayed inside Delivery Order `trip1` or `trip2` groups, even though assignment rows store `trip_no = trip1` for compatibility.
 - OP SHOP pickups can be unassigned from Driver Summary when applicable.
-- OP SHOP pickups do not affect Delivery Order totals, pallet totals, loose bag totals, capacity totals, Final Trip Summary, or Excel export.
+- OP SHOP pickups do not affect Delivery Order totals, pallet totals, loose bag totals, or capacity totals.
+- Final Trip Summary stores OP SHOP pickups in a separate `OP SHOP PICKUPS` snapshot section and never mixes them into Delivery Order Trip 1 / Trip 2 rows.
 
 ## Driver & Vehicle Specification
 
@@ -188,8 +189,8 @@ OP SHOP PICKUP is a separate manual task type. It is not stored as a Delivery Or
 - Saved snapshots do not auto-update after later edits.
 - Duplicate saves are rejected for the same Driver + Dispatch Date + Delivery Date.
 - Generated-but-unsaved previews remain frontend-memory only and may be lost on refresh.
-- Final Trip Summary currently supports `ORDER` tasks only.
-- OP SHOP PICKUP rows are intentionally excluded from Final Trip Summary.
+- Delivery Order Trip 1 / Trip 2 rows continue to support `ORDER` tasks only.
+- OP SHOP PICKUP rows are saved independently in the Final Trip Summary `OP SHOP PICKUPS` section.
 - Static frontend assets are served with `Cache-Control: no-store` for local/demo reliability.
 
 ## Excel Export
@@ -198,7 +199,8 @@ OP SHOP PICKUP is a separate manual task type. It is not stored as a Delivery Or
 - Export uses saved snapshot records, not active assignment rows.
 - Export includes Dispatch Date, Delivery Date, Saved By, Product Details, and estimated suburb distance.
 - Generated At / Saved At are intentionally excluded from the workbook layout.
-- OP SHOP PICKUP rows are intentionally excluded from Excel export.
+- OP SHOP PICKUP rows appear only in a separate `OP SHOP PICKUPS` section of Final Trip Summary export and are not written into Delivery trip tables.
+- The independent OP SHOP Pickup Run Sheet export remains available for driver/office operational use.
 
 ## OP SHOP Data Model and APIs
 
@@ -209,6 +211,7 @@ Key OP SHOP tables:
 - `opshop_locations`: deduplicated OP SHOP locations.
 - `opshop_pickup_schedules`: Regular schedules and Oncall templates linked to locations.
 - `opshop_pickup_tasks`: actual OP SHOP pickup tasks for specific dates.
+- `final_trip_summary_opshop_pickup_rows`: saved OP SHOP pickup snapshots kept separate from Delivery Order final-summary rows.
 
 Assignment storage:
 

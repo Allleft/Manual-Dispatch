@@ -153,6 +153,12 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
                     "PRAGMA table_info(final_trip_summary_rows)"
                 ).fetchall()
             }
+            final_summary_opshop_tables = {
+                row[0]
+                for row in connection.execute(
+                    "SELECT name FROM sqlite_master WHERE type = 'table'"
+                ).fetchall()
+            }
 
         self.assertIn("invoice_number", order_columns)
         self.assertIn("phone", order_columns)
@@ -164,6 +170,7 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
             "estimated_distance_km_from_warehouse_snapshot",
             final_summary_row_columns,
         )
+        self.assertIn("final_trip_summary_opshop_pickup_rows", final_summary_opshop_tables)
 
     def test_assign_task_persists_assignment(self):
         self.service.assign_task(

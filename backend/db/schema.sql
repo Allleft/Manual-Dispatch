@@ -214,6 +214,32 @@ CREATE TABLE IF NOT EXISTS final_trip_summary_rows (
         ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS final_trip_summary_opshop_pickup_rows (
+    row_id TEXT PRIMARY KEY,
+    summary_id TEXT NOT NULL,
+    row_no INTEGER NOT NULL,
+    pickup_task_id_snapshot TEXT,
+    opshop_name_snapshot TEXT,
+    suburb_snapshot TEXT,
+    street_address_snapshot TEXT,
+    area_region_snapshot TEXT,
+    pickup_date_snapshot TEXT,
+    run_type_snapshot TEXT,
+    pickup_frequency_snapshot TEXT,
+    time_window_snapshot TEXT,
+    primary_contact_snapshot TEXT,
+    primary_phone_snapshot TEXT,
+    secondary_contact_snapshot TEXT,
+    secondary_phone_snapshot TEXT,
+    access_type_snapshot TEXT,
+    key_required_snapshot INTEGER,
+    trailer_restriction_snapshot TEXT,
+    notes_snapshot TEXT,
+    status_snapshot TEXT,
+    FOREIGN KEY(summary_id) REFERENCES final_trip_summaries(summary_id)
+        ON DELETE CASCADE
+);
+
 INSERT OR IGNORE INTO manual_orders (
     order_id,
     invoice_number,

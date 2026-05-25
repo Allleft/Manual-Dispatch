@@ -1,6 +1,7 @@
 from backend.schemas import (
     Driver,
     FinalTripSummary,
+    FinalTripSummaryOpShopPickupSnapshot,
     FinalTripSummaryOrderSnapshot,
     FinalTripSummaryTrip,
     ManualDispatchAssignment,
@@ -161,6 +162,7 @@ class InMemoryManualDispatchRepository:
         self._next_assignment_number = 1
         self._next_final_summary_number = 1
         self._next_final_summary_row_number = 1
+        self._next_final_summary_opshop_row_number = 1
         self._next_operator_account_id = 1
 
     def list_orders(self, delivery_date=None):
@@ -897,7 +899,7 @@ class InMemoryManualDispatchRepository:
         ]
         return len(self.driver_vehicle_assignments) != before_count
 
-    def save_final_trip_summary(self, summary, rows):
+    def save_final_trip_summary(self, summary, rows, opshop_rows=None):
         if self.has_saved_final_trip_summary(
             summary["dispatch_date"], summary["driver_id"], summary.get("delivery_date")
         ):
@@ -906,6 +908,7 @@ class InMemoryManualDispatchRepository:
             )
 
         summary_id = self._create_final_summary_id()
+        opshop_rows = opshop_rows or []
         trips = []
         for trip_no in ("trip1", "trip2"):
             trip_orders = []
@@ -944,6 +947,32 @@ class InMemoryManualDispatchRepository:
             if trip_orders:
                 trips.append(FinalTripSummaryTrip(trip_no=trip_no, orders=trip_orders))
 
+        opshop_pickups = [
+            FinalTripSummaryOpShopPickupSnapshot(
+                row_id=self._create_final_summary_opshop_row_id(),
+                row_no=row["row_no"],
+                pickup_task_id_snapshot=row["pickup_task_id_snapshot"],
+                opshop_name_snapshot=row["opshop_name_snapshot"],
+                suburb_snapshot=row.get("suburb_snapshot"),
+                street_address_snapshot=row.get("street_address_snapshot"),
+                area_region_snapshot=row.get("area_region_snapshot"),
+                pickup_date_snapshot=row["pickup_date_snapshot"],
+                run_type_snapshot=row.get("run_type_snapshot"),
+                pickup_frequency_snapshot=row.get("pickup_frequency_snapshot"),
+                time_window_snapshot=row.get("time_window_snapshot"),
+                primary_contact_snapshot=row.get("primary_contact_snapshot"),
+                primary_phone_snapshot=row.get("primary_phone_snapshot"),
+                secondary_contact_snapshot=row.get("secondary_contact_snapshot"),
+                secondary_phone_snapshot=row.get("secondary_phone_snapshot"),
+                access_type_snapshot=row.get("access_type_snapshot"),
+                key_required_snapshot=bool(row.get("key_required_snapshot")),
+                trailer_restriction_snapshot=row.get("trailer_restriction_snapshot"),
+                notes_snapshot=row.get("notes_snapshot"),
+                status_snapshot=row["status_snapshot"],
+            )
+            for row in opshop_rows
+        ]
+
         saved_at = summary.get("saved_at") or summary.get("generated_at") or "in-memory"
         final_summary = FinalTripSummary(
             summary_id=summary_id,
@@ -961,6 +990,7 @@ class InMemoryManualDispatchRepository:
             saved_by_account_name=summary.get("saved_by_account_name") or "Unknown",
             saved_by_account_id=summary.get("saved_by_account_id"),
             trips=trips,
+            opshop_pickups=opshop_pickups,
         )
         self.final_trip_summaries.append(final_summary)
 
@@ -986,4 +1016,9 @@ class InMemoryManualDispatchRepository:
     def _create_final_summary_row_id(self):
         row_id = f"FSR-{self._next_final_summary_row_number:03d}"
         self._next_final_summary_row_number += 1
+        return row_id
+
+    def _create_final_summary_opshop_row_id(self):
+        row_id = f"FSO-{self._next_final_summary_opshop_row_number:03d}"
+        self._next_final_summary_opshop_row_number += 1
         return row_id

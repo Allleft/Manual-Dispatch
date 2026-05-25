@@ -163,6 +163,31 @@ export function createFinalSummaryActions({
           })),
         }))
         .filter((trip) => trip.orders.length > 0),
+      opshop_pickups: (summary.opshop_pickups || []).map((pickup, index) => ({
+        row_id: pickup.row_id || "",
+        row_no: Number(pickup.row_no || index + 1),
+        task_type: "OPSHOP_PICKUP",
+        pickup_task_id: pickup.pickup_task_id || pickup.pickup_task_id_snapshot || "",
+        opshop_name: pickup.opshop_name || pickup.opshop_name_snapshot || "",
+        suburb: pickup.suburb || pickup.suburb_snapshot || "",
+        street_address: pickup.street_address || pickup.street_address_snapshot || "",
+        area_region: pickup.area_region || pickup.area_region_snapshot || "",
+        pickup_date: pickup.pickup_date || pickup.pickup_date_snapshot || "",
+        run_type: pickup.run_type || pickup.run_type_snapshot || "",
+        pickup_frequency: pickup.pickup_frequency || pickup.pickup_frequency_snapshot || "",
+        time_window: pickup.time_window || pickup.time_window_snapshot || "",
+        primary_contact: pickup.primary_contact || pickup.primary_contact_snapshot || "",
+        primary_phone: pickup.primary_phone || pickup.primary_phone_snapshot || "",
+        secondary_contact: pickup.secondary_contact || pickup.secondary_contact_snapshot || "",
+        secondary_phone: pickup.secondary_phone || pickup.secondary_phone_snapshot || "",
+        access_type: pickup.access_type || pickup.access_type_snapshot || "",
+        key_required: Boolean(
+          pickup.key_required ?? pickup.key_required_snapshot ?? false,
+        ),
+        trailer_restriction: pickup.trailer_restriction || pickup.trailer_restriction_snapshot || "",
+        notes: pickup.notes || pickup.notes_snapshot || "",
+        status: pickup.status || pickup.status_snapshot || "",
+      })),
     };
   }
 
@@ -251,6 +276,28 @@ export function createFinalSummaryActions({
       .filter((trip) => trip.orders.length > 0);
 
     const allOrders = trips.flatMap((trip) => trip.orders);
+    const opshopPickups = getAssignedOpShopPickupsForDriver(driverId).map((pickup, index) => ({
+      row_no: index + 1,
+      task_type: "OPSHOP_PICKUP",
+      pickup_task_id: pickup.pickup_task_id,
+      opshop_name: pickup.opshop_name || "",
+      suburb: pickup.suburb || "",
+      street_address: pickup.street_address || "",
+      area_region: pickup.area_region || "",
+      pickup_date: pickup.pickup_date || "",
+      run_type: pickup.run_type || "",
+      pickup_frequency: pickup.pickup_frequency || "",
+      time_window: pickup.time_window || "",
+      primary_contact: pickup.primary_contact || "",
+      primary_phone: pickup.primary_phone || "",
+      secondary_contact: pickup.secondary_contact || "",
+      secondary_phone: pickup.secondary_phone || "",
+      access_type: pickup.access_type || "",
+      key_required: Boolean(pickup.key_required),
+      trailer_restriction: pickup.trailer_restriction || "",
+      notes: [pickup.status_notes, pickup.task_notes].filter(Boolean).join("\n"),
+      status: pickup.status || "",
+    }));
 
     return {
       generated_at: new Date().toISOString(),
@@ -268,6 +315,7 @@ export function createFinalSummaryActions({
       saved_by_account_id: state.accountId || "",
       status: "LOCKED",
       trips,
+      opshop_pickups: opshopPickups,
     };
   }
 
@@ -374,6 +422,27 @@ export function createFinalSummaryActions({
           loose_bags_quantity_snapshot: order.loose_bags_quantity,
           note_snapshot: order.note,
         })),
+      })),
+      opshop_pickups: normalized.opshop_pickups.map((pickup) => ({
+        task_type: "OPSHOP_PICKUP",
+        pickup_task_id_snapshot: pickup.pickup_task_id,
+        opshop_name_snapshot: pickup.opshop_name,
+        suburb_snapshot: pickup.suburb,
+        street_address_snapshot: pickup.street_address,
+        area_region_snapshot: pickup.area_region,
+        pickup_date_snapshot: pickup.pickup_date,
+        run_type_snapshot: pickup.run_type,
+        pickup_frequency_snapshot: pickup.pickup_frequency,
+        time_window_snapshot: pickup.time_window,
+        primary_contact_snapshot: pickup.primary_contact,
+        primary_phone_snapshot: pickup.primary_phone,
+        secondary_contact_snapshot: pickup.secondary_contact,
+        secondary_phone_snapshot: pickup.secondary_phone,
+        access_type_snapshot: pickup.access_type,
+        key_required_snapshot: pickup.key_required,
+        trailer_restriction_snapshot: pickup.trailer_restriction,
+        notes_snapshot: pickup.notes,
+        status_snapshot: pickup.status,
       })),
     };
   }

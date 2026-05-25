@@ -221,7 +221,7 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn('assignment.task_type === "OPSHOP_PICKUP"', trip_summary_renderer)
         self.assertIn("onOpenOpShopPickupDetail(pickup.pickup_task_id)", trip_summary_renderer)
         self.assertIn("onUnassign(assignment.task_type, assignment.task_id)", trip_summary_renderer)
-        self.assertIn("not included in Final Trip Summary or Excel export", trip_summary_renderer)
+        self.assertIn("appear in a separate Final Trip Summary section", trip_summary_renderer)
         self.assertIn(
             "name.textContent = formatOptional(pickup.opshop_name || pickup.pickup_task_id)",
             assigned_opshop_renderer,
@@ -232,7 +232,8 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertNotIn("Frequency:", assigned_opshop_renderer)
         self.assertNotIn("Phone:", assigned_opshop_renderer)
         self.assertNotIn("pickup.opshop_name)", assigned_opshop_renderer)
-        self.assertNotIn("OP SHOP PICKUP", final_summary_renderer)
+        self.assertIn("OP SHOP PICKUPS", final_summary_renderer)
+        self.assertIn("createOpShopPickupSection", final_summary_renderer)
 
         final_summary_actions = (
             FRONTEND_ROOT / "js" / "actions" / "final-summary-actions.js"
@@ -240,6 +241,8 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("getAssignedOpShopPickupsForDriver", final_summary_actions)
         self.assertIn("assignedOrders.length === 0 && assignedOpShopPickups.length === 0", final_summary_actions)
         self.assertIn("Assign at least one Order or OP SHOP pickup", final_summary_actions)
+        self.assertIn("opshop_pickups: opshopPickups", final_summary_actions)
+        self.assertIn("opshop_pickups: normalized.opshop_pickups.map", final_summary_actions)
 
     def test_phase8_opshop_pickup_list_frontend_contract(self):
         app_js = (FRONTEND_ROOT / "app.js").read_text(encoding="utf-8")
@@ -404,8 +407,8 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertNotIn('textContent = "Unassign"', modal_renderer)
         self.assertNotIn("tripSelect", modal_renderer)
         self.assertNotIn("Trip dropdown", modal_renderer)
-        self.assertNotIn("OP SHOP PICKUP", final_summary_renderer)
-        self.assertIn("No Delivery Orders included. OP SHOP pickups are excluded from Final Trip Summary", final_summary_renderer)
+        self.assertIn("OP SHOP PICKUPS", final_summary_renderer)
+        self.assertIn('const EMPTY_ORDER_SUMMARY_MESSAGE = "No Delivery Orders included."', final_summary_renderer)
         self.assertNotIn("fetch(", actions)
         self.assertNotIn("fetch(", modal_renderer)
 
