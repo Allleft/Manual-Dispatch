@@ -243,6 +243,10 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("Assign at least one Order or OP SHOP pickup", final_summary_actions)
         self.assertIn("opshop_pickups: opshopPickups", final_summary_actions)
         self.assertIn("opshop_pickups: normalized.opshop_pickups.map", final_summary_actions)
+        self.assertIn('state.generatedTaskKeys.add(getTaskKey("OPSHOP_PICKUP", pickup.pickup_task_id))', final_summary_actions)
+        self.assertIn('task_type: "OPSHOP_PICKUP"', final_summary_actions)
+        self.assertIn("task_id: pickup.pickup_task_id", final_summary_actions)
+        self.assertIn('!isGeneratedTask("OPSHOP_PICKUP", pickup.pickup_task_id)', selectors)
 
     def test_phase8_opshop_pickup_list_frontend_contract(self):
         app_js = (FRONTEND_ROOT / "app.js").read_text(encoding="utf-8")
@@ -269,6 +273,7 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("createOpShopPickupActions", actions)
         self.assertIn("openOpShopPickupList", actions)
         self.assertIn("apiApplyWeeklyOpShopPickupAssignments", actions)
+        self.assertIn('!isGeneratedTask("OPSHOP_PICKUP", pickup.pickup_task_id)', actions)
         self.assertIn("apiExportOpShopPickupRunSheetExcel", actions)
         self.assertIn("exportOpShopRunSheet", actions)
         self.assertIn("updateAssignedDriverSelection", actions)
@@ -370,6 +375,7 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("createOncallOpShopPickupActions", actions)
         self.assertIn("openOncallOpShopPickupList", actions)
         self.assertIn("apiApplyOncallOpShopPickupAssignments", actions)
+        self.assertIn('!isGeneratedTask("OPSHOP_PICKUP", pickup.pickup_task_id)', actions)
         self.assertIn("apiCreateOncallOpShopPickup", actions)
         self.assertIn("updateAssignedDriverSelection", actions)
         self.assertIn("WEEKDAY_OFFSETS", actions)

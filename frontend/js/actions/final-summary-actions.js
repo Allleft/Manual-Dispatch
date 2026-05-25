@@ -362,12 +362,21 @@ export function createFinalSummaryActions({
         state.generatedTaskKeys.add(getTaskKey(order.task_type, order.task_id));
       });
     });
+    snapshot.opshop_pickups.forEach((pickup) => {
+      state.generatedTaskKeys.add(getTaskKey("OPSHOP_PICKUP", pickup.pickup_task_id));
+    });
 
     state.isSaving = true;
     clearError();
     renderBoard();
 
-    const generatedTasks = snapshot.trips.flatMap((trip) => trip.orders);
+    const generatedTasks = [
+      ...snapshot.trips.flatMap((trip) => trip.orders),
+      ...snapshot.opshop_pickups.map((pickup) => ({
+        task_type: "OPSHOP_PICKUP",
+        task_id: pickup.pickup_task_id,
+      })),
+    ];
 
     try {
       await Promise.all(

@@ -5,6 +5,7 @@ import {
   apiListOncallOpShopPickupSchedules,
   apiUpdateOpShopPickup,
 } from "../api/manual-dispatch-api.js";
+import { isGeneratedTask } from "../state/selectors.js";
 
 const WEEKDAY_OFFSETS = {
   MONDAY: 0,
@@ -41,10 +42,12 @@ export function createOncallOpShopPickupActions({
     try {
       await apiApplyOncallOpShopPickupAssignments({
         dispatch_date: state.dispatchDate,
-        assignments: state.oncallOpShopPickups.map((pickup) => ({
-          pickup_task_id: pickup.pickup_task_id,
-          driver_id: state.oncallOpShopPickupAssignedDriverSelections[pickup.pickup_task_id] || "",
-        })),
+        assignments: state.oncallOpShopPickups
+          .filter((pickup) => !isGeneratedTask("OPSHOP_PICKUP", pickup.pickup_task_id))
+          .map((pickup) => ({
+            pickup_task_id: pickup.pickup_task_id,
+            driver_id: state.oncallOpShopPickupAssignedDriverSelections[pickup.pickup_task_id] || "",
+          })),
       });
       state.isOncallOpShopPickupListOpen = false;
       state.oncallOpShopPickupFormMode = "";

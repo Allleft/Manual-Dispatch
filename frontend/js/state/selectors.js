@@ -142,7 +142,10 @@ export function getAssignedOpShopPickupsForDriver(driverId) {
   return getAssignmentsForDriver(driverId)
     .filter((assignment) => assignment.task_type === "OPSHOP_PICKUP")
     .map((assignment) => getOpShopPickupByTaskId(assignment.task_id))
-    .filter(Boolean);
+    .filter(
+      (pickup) =>
+        pickup && !isGeneratedTask("OPSHOP_PICKUP", pickup.pickup_task_id),
+    );
 }
 
 export function getAssignedTaskForAssignment(assignment) {

@@ -7,6 +7,7 @@ import {
   apiUpdateOpShopPickup,
   formatApiErrorDetail,
 } from "../api/manual-dispatch-api.js";
+import { isGeneratedTask } from "../state/selectors.js";
 
 function getExportFilename(response, fallbackFilename) {
   const disposition = response.headers.get("Content-Disposition") || "";
@@ -54,10 +55,12 @@ export function createOpShopPickupActions({
     try {
       await apiApplyWeeklyOpShopPickupAssignments({
         dispatch_date: state.dispatchDate,
-        assignments: state.scheduledOpShopPickups.map((pickup) => ({
-          pickup_task_id: pickup.pickup_task_id,
-          driver_id: state.opshopPickupAssignedDriverSelections[pickup.pickup_task_id] || "",
-        })),
+        assignments: state.scheduledOpShopPickups
+          .filter((pickup) => !isGeneratedTask("OPSHOP_PICKUP", pickup.pickup_task_id))
+          .map((pickup) => ({
+            pickup_task_id: pickup.pickup_task_id,
+            driver_id: state.opshopPickupAssignedDriverSelections[pickup.pickup_task_id] || "",
+          })),
       });
       state.isOpShopPickupListOpen = false;
       state.opshopPickupFormMode = "";

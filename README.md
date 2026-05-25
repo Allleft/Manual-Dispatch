@@ -173,6 +173,7 @@ OP SHOP PICKUP is a separate manual task type. It is not stored as a Delivery Or
 - OP SHOP pickups are not displayed inside Delivery Order `trip1` or `trip2` groups, even though assignment rows store `trip_no = trip1` for compatibility.
 - OP SHOP pickups can be unassigned from Driver Summary when applicable.
 - OP SHOP pickups do not affect Delivery Order totals, pallet totals, loose bag totals, or capacity totals.
+- Generating Final Trip Summary captures the selected driver's OP SHOP pickups in its snapshot, then clears those pickups from the editable Driver Summary for that Delivery Date.
 - Final Trip Summary stores OP SHOP pickups in a separate `OP SHOP PICKUPS` snapshot section and never mixes them into Delivery Order Trip 1 / Trip 2 rows.
 
 ## Driver & Vehicle Specification
