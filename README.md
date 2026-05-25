@@ -31,6 +31,7 @@ The current branch extends the Manual Dispatch Board with an OP SHOP PICKUP work
 - OP SHOP PICKUP source tables, pickup task records, board payloads, list modals, and Driver Summary display.
 - Regular OP SHOP Pickup List for scheduled Regular pickups.
 - Oncall OP SHOP Pickup List for office-created Oncall pickup requests.
+- OP SHOP Template Management for office-managed Regular and Oncall template add, edit, and soft-disable.
 - Regular and Oncall OP SHOP workbook import tools that populate OP SHOP locations and schedules/templates without directly creating pickup tasks.
 - CI coverage on Ubuntu and Windows for Python compile/tests, frontend JavaScript syntax, and whitespace checks.
 - Office-trial startup, SQLite backup/restore guidance, runtime configuration examples, and NAS/internal deployment notes.
@@ -43,12 +44,13 @@ Runtime SQLite databases, backups, local OP SHOP workbooks, and generated output
 2. Select the Dispatch Date.
 3. Review the Task Pool.
 4. Use the OP SHOP PICKUP section when OP SHOP work is needed.
-5. Assign Delivery Orders to Driver + `trip1` or `trip2`.
-6. Open Regular or Oncall OP SHOP lists, choose assigned drivers, then close the list to apply OP SHOP assignments.
-7. Select the Driver Summary Delivery Date.
-8. Choose a Vehicle for Driver + Dispatch Date + Delivery Date.
-9. Generate the Final Trip Summary for Delivery Orders.
-10. Save and Export the historical Final Trip Summary snapshot.
+5. Use Manage OP SHOP Templates when a Regular schedule source or Oncall request template needs maintenance.
+6. Assign Delivery Orders to Driver + `trip1` or `trip2`.
+7. Open Regular or Oncall OP SHOP lists, choose assigned drivers, then close the list to apply OP SHOP assignments.
+8. Select the Driver Summary Delivery Date.
+9. Choose a Vehicle for Driver + Dispatch Date + Delivery Date.
+10. Generate the Final Trip Summary for Delivery Orders.
+11. Save and Export the historical Final Trip Summary snapshot.
 
 ## Key Concepts
 
@@ -60,6 +62,7 @@ Runtime SQLite databases, backups, local OP SHOP workbooks, and generated output
 | OP SHOP PICKUP section | Separate Task Pool section above Delivery Orders. It contains Regular and Oncall OP SHOP list entry cards. |
 | Regular OP SHOP Pickup List | Scheduled Regular pickup list for the selected Regular pickup week. |
 | Oncall OP SHOP Pickup List | Request-driven list that starts empty and only shows actual Oncall pickup tasks created by office staff. |
+| OP SHOP Template Management | Office UI for adding, editing, and soft-disabling Regular and Oncall templates without requiring an importer run. |
 | Driver Summary Delivery Date | Date filter that decides which assigned Delivery Orders and OP SHOP pickups appear inside driver cards. |
 | Vehicle Assignment Scope | Vehicle selection is stored per `driver_id + dispatch_date + delivery_date`. |
 | Final Trip Summary | Generated and saved historical snapshot scoped by `dispatch_date + delivery_date`. It is currently ORDER-only. |
@@ -126,15 +129,26 @@ OP SHOP PICKUP is a separate manual task type. It is not stored as a Delivery Or
 - It contains two list entry cards:
   - `Regular OP SHOP Pickup List`
   - `Oncall OP SHOP Pickup List`
+- `Manage OP SHOP Templates` opens the office-facing template manager for Regular and Oncall template maintenance.
 - The list entry cards open modal lists. Standard/Regular OP SHOP pickups are not rendered as dozens of direct Task Pool cards.
+
+### Template Management
+
+- Staff can add, edit, and disable `REGULAR` and `ON_CALL` templates from the `Manage OP SHOP Templates` modal.
+- `REGULAR` templates are schedule sources for the Regular OP SHOP Pickup List.
+- `ON_CALL` templates are candidates in the Oncall Add Pickup Task dropdown only. Adding or editing an Oncall template does not automatically create an actual pickup task.
+- Disable is a soft disable: the schedule is retained with `status = On_Hold` and `active_flag = false`.
+- Soft disable removes a template from active candidate/generation sources without deleting existing pickup tasks, historical assignments, or saved Final Trip Summaries.
+- Changes to identity fields create/use the updated active schedule while retaining older schedule history for existing pickup tasks.
 
 ### Regular OP SHOP Pickup List
 
-- Regular pickups come from imported `REGULAR` schedules.
+- Regular pickups come from active `REGULAR` schedules created in the UI or maintained through an approved workbook import.
 - The board ensures and displays the Regular pickup week for the selected Dispatch Date.
-- The Regular pickup week is Monday-Friday:
+- The Regular pickup window follows the office refresh rule:
   - Monday-Thursday Dispatch Dates show the current Monday-Friday week.
-  - Friday-Sunday Dispatch Dates refresh to the next Monday-Friday week.
+  - Friday Dispatch Dates include Friday today plus the following Monday-Friday.
+  - Saturday-Sunday Dispatch Dates show the next Monday-Friday week.
 - The workbook sheet weekday controls the pickup weekday. Pickup frequency text is display/source metadata and does not expand one row into extra weekdays in this Regular list flow.
 - Each list row shows compact information: OP SHOP name, suburb, pickup date, assigned-to dropdown, and Edit when not locked.
 - Closing the list applies visible Regular pickup assignments to Driver Summary using `trip1` internally.
@@ -142,8 +156,8 @@ OP SHOP PICKUP is a separate manual task type. It is not stored as a Delivery Or
 
 ### Oncall OP SHOP Pickup List
 
-- Oncall templates come from imported `ON_CALL` schedules.
-- Importing Oncall templates does not create actual pickup tasks.
+- Oncall templates come from active `ON_CALL` schedules created in the UI or maintained through an approved workbook import.
+- Creating or importing Oncall templates does not create actual pickup tasks.
 - The Oncall list is empty until office staff clicks Add Pickup Task and chooses a template.
 - Add Pickup Task lets staff choose an imported Oncall template, pickup date, assigned driver, and notes.
 - MON/TUE/WED/THU/FRI Oncall templates can default to the matching weekday in the current week window.
@@ -211,6 +225,10 @@ OP SHOP API endpoints include:
 
 - `GET /api/manual-dispatch/opshop-pickup-schedules?run_type=scheduled`
 - `GET /api/manual-dispatch/opshop-pickup-schedules?run_type=oncall`
+- `GET /api/manual-dispatch/opshop-templates?run_type=REGULAR|ON_CALL&include_inactive=false`
+- `POST /api/manual-dispatch/opshop-templates`
+- `PATCH /api/manual-dispatch/opshop-templates/{schedule_id}`
+- `POST /api/manual-dispatch/opshop-templates/{schedule_id}/disable`
 - `POST /api/manual-dispatch/opshop-pickups`
 - `POST /api/manual-dispatch/opshop-pickups/oncall`
 - `PATCH /api/manual-dispatch/opshop-pickups/{pickup_task_id}`
@@ -256,6 +274,13 @@ Behavior:
 - Reports unresolved Assigned to aliases without crashing.
 - Creates a timestamped SQLite backup first when the target database already exists.
 - Does not directly create `opshop_pickup_tasks`; office staff create actual Oncall tasks from templates.
+
+### Template Management and Importer Coexistence
+
+- Workbook importer tools remain available for approved bulk source refreshes.
+- UI-created templates and workbook-managed templates can coexist in SQLite, but a workbook refresh is not a backup of office changes made through the UI.
+- A Regular or Oncall workbook importer run manages schedules for its corresponding run type; active UI-created templates absent from the workbook source may be set to `On_Hold`.
+- Before rerunning importers after office-managed template changes, define which source is authoritative and back up the SQLite database.
 
 ## Distance Estimation
 
@@ -398,6 +423,7 @@ Useful targeted OP SHOP test modules include:
 - `tests.test_manual_dispatch_opshop_board_payload`
 - `tests.test_manual_dispatch_opshop_assignment`
 - `tests.test_manual_dispatch_opshop_pickup_list_management`
+- `tests.test_manual_dispatch_opshop_template_management`
 - `tests.test_manual_dispatch_frontend_static_contract`
 
 Distance QA remains available through:
