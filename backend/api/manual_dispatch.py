@@ -11,6 +11,7 @@ from backend.schemas import (
     CreateDriverRequest,
     CreateOrderRequest,
     CreateOpShopPickupTaskRequest,
+    CreateOpShopTemplateRequest,
     CreateVehicleRequest,
     EnsureOpShopPickupTasksRequest,
     LoginOperatorAccountRequest,
@@ -20,6 +21,7 @@ from backend.schemas import (
     UnassignTaskRequest,
     UpdateDriverRequest,
     UpdateOpShopPickupTaskRequest,
+    UpdateOpShopTemplateRequest,
     UpdateOrderRequest,
     UpdateVehicleRequest,
     to_dict,
@@ -155,6 +157,41 @@ def list_opshop_pickup_schedules(run_type: str = "scheduled"):
             to_dict(candidate)
             for candidate in service.list_opshop_pickup_schedule_candidates(run_type)
         ]
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.get("/opshop-templates")
+def list_opshop_templates(run_type: str = None, include_inactive: bool = False):
+    try:
+        return [
+            to_dict(template)
+            for template in service.list_opshop_templates(run_type, include_inactive)
+        ]
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.post("/opshop-templates")
+def create_opshop_template(request: CreateOpShopTemplateRequest):
+    try:
+        return to_dict(service.create_opshop_template(request))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.patch("/opshop-templates/{schedule_id}")
+def update_opshop_template(schedule_id: str, request: UpdateOpShopTemplateRequest):
+    try:
+        return to_dict(service.update_opshop_template(schedule_id, request))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.post("/opshop-templates/{schedule_id}/disable")
+def disable_opshop_template(schedule_id: str):
+    try:
+        return to_dict(service.disable_opshop_template(schedule_id))
     except ValueError as error:
         raise _to_http_exception(error) from error
 

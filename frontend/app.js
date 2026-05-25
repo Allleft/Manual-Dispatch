@@ -8,6 +8,7 @@ import { createFinalSummaryActions } from "./js/actions/final-summary-actions.js
 import { createOrderActions } from "./js/actions/order-actions.js";
 import { createOncallOpShopPickupActions } from "./js/actions/opshop-oncall-pickup-actions.js";
 import { createOpShopPickupActions } from "./js/actions/opshop-pickup-actions.js";
+import { createOpShopTemplateActions } from "./js/actions/opshop-template-actions.js";
 import { createSpecificationActions } from "./js/actions/specification-actions.js";
 import { createVehicleActions } from "./js/actions/vehicle-actions.js";
 import { DEFAULT_DISPATCH_DATE, state } from "./js/state/app-state.js";
@@ -31,6 +32,7 @@ import { renderDriverSummary as renderDriverSummaryView } from "./js/render/trip
 import { renderOpShopPickupDetailPopup as renderOpShopPickupDetailPopupView } from "./js/render/opshop-pickup-modal-renderer.js";
 import { renderOpShopPickupListModal as renderOpShopPickupListModalView } from "./js/render/opshop-pickup-list-modal-renderer.js";
 import { renderOncallOpShopPickupListModal as renderOncallOpShopPickupListModalView } from "./js/render/opshop-oncall-pickup-list-modal-renderer.js";
+import { renderOpShopTemplateManagementModal as renderOpShopTemplateManagementModalView } from "./js/render/opshop-template-management-modal-renderer.js";
 
 function normalizeBoardResponse(payload) {
   return {
@@ -246,6 +248,7 @@ function renderTaskPool() {
     onExportOpShopRunSheet: opShopPickupActions.exportOpShopRunSheet,
     onOpenOncallOpShopPickupList: oncallOpShopPickupActions.openOncallOpShopPickupList,
     onOpenOpShopPickupList: opShopPickupActions.openOpShopPickupList,
+    onOpenOpShopTemplateManagement: opShopTemplateActions.openTemplateManagement,
     onOpenOrderDetail: orderActions.openOrderDetail,
     onPendingSelectionChange: assignmentActions.updatePendingSelection,
     onAssignTask: assignmentActions.handleAssignTask,
@@ -281,6 +284,21 @@ function renderOpShopPickupListModal() {
     onUpdateAssignedDriver: opShopPickupActions.updateAssignedDriverSelection,
     onUpdateForm: opShopPickupActions.updatePickupTaskForm,
     onUpdatePickup: opShopPickupActions.handleUpdatePickupTask,
+  });
+}
+
+function renderOpShopTemplateManagementModal() {
+  renderOpShopTemplateManagementModalView({
+    onCancelForm: opShopTemplateActions.cancelTemplateForm,
+    onClose: opShopTemplateActions.closeTemplateManagement,
+    onConfirmDisable: opShopTemplateActions.disableTemplate,
+    onSave: opShopTemplateActions.saveTemplate,
+    onSelectTab: opShopTemplateActions.selectTab,
+    onStartAdd: opShopTemplateActions.startAddTemplate,
+    onStartDisable: opShopTemplateActions.startDisableTemplate,
+    onStartEdit: opShopTemplateActions.startEditTemplate,
+    onToggleIncludeInactive: opShopTemplateActions.toggleIncludeInactive,
+    onUpdateForm: opShopTemplateActions.updateTemplateForm,
   });
 }
 
@@ -811,6 +829,7 @@ function renderBoard() {
   renderAddOrderPopup();
   renderOpShopPickupListModal();
   renderOncallOpShopPickupListModal();
+  renderOpShopTemplateManagementModal();
   renderOpShopPickupDetailPopup();
   renderSpecificationModal();
   renderAuthGate();
@@ -851,6 +870,14 @@ const opShopPickupActions = createOpShopPickupActions({
 
 const oncallOpShopPickupActions = createOncallOpShopPickupActions({
   loadBoard,
+  renderBoard,
+  state,
+});
+
+const opShopTemplateActions = createOpShopTemplateActions({
+  loadBoard,
+  reloadOncallCandidates: oncallOpShopPickupActions.loadScheduleCandidates,
+  reloadRegularCandidates: opShopPickupActions.loadScheduleCandidates,
   renderBoard,
   state,
 });

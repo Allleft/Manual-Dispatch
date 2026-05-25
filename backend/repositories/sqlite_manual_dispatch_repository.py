@@ -15,6 +15,7 @@ from backend.schemas import (
     OpShopPickupSchedule,
     OpShopPickupScheduleCandidate,
     OpShopPickupTask,
+    OpShopTemplate,
     OperatorAccountRecord,
     ProductDetailLine,
     Vehicle,
@@ -505,6 +506,48 @@ class SQLiteManualDispatchRepository:
                 """
             ).fetchall()
         return [self._row_to_opshop_pickup_schedule_candidate(row) for row in rows]
+
+    def list_opshop_templates(self, run_type=None, include_inactive=False):
+        clauses = []
+        parameters = []
+        if run_type:
+            clauses.append("schedule.run_type = ?")
+            parameters.append(run_type)
+        if not include_inactive:
+            clauses.extend(["schedule.active_flag = 1", "schedule.status = 'Active'"])
+        where_clause = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+
+        with connect(self.db_path) as connection:
+            rows = connection.execute(
+                f"""
+                SELECT
+                    schedule.*,
+                    location.name,
+                    location.suburb,
+                    location.street_address,
+                    location.area_region,
+                    location.primary_contact,
+                    location.primary_phone,
+                    location.secondary_contact,
+                    location.secondary_phone,
+                    location.access_type,
+                    location.key_required,
+                    location.trailer_restriction,
+                    location.status_notes
+                FROM opshop_pickup_schedules schedule
+                INNER JOIN opshop_locations location
+                    ON location.opshop_id = schedule.opshop_id
+                {where_clause}
+                ORDER BY
+                    schedule.run_type,
+                    location.name,
+                    COALESCE(location.suburb, ''),
+                    COALESCE(schedule.run_day, 'ZZZ'),
+                    schedule.schedule_id
+                """,
+                parameters,
+            ).fetchall()
+        return [self._row_to_opshop_template(row) for row in rows]
 
     def get_opshop_pickup_schedule(self, schedule_id):
         with connect(self.db_path) as connection:
@@ -1858,6 +1901,35 @@ class SQLiteManualDispatchRepository:
             default_driver_id=row["default_driver_id"],
             default_driver_alias=row["default_driver_alias"],
             default_driver_name=row["default_driver_name"],
+        )
+
+    def _row_to_opshop_template(self, row):
+        return OpShopTemplate(
+            schedule_id=row["schedule_id"],
+            opshop_id=row["opshop_id"],
+            run_type=row["run_type"],
+            run_day=row["run_day"],
+            name=row["name"],
+            suburb=row["suburb"],
+            street_address=row["street_address"],
+            area_region=row["area_region"],
+            primary_contact=row["primary_contact"],
+            primary_phone=row["primary_phone"],
+            secondary_contact=row["secondary_contact"],
+            secondary_phone=row["secondary_phone"],
+            pickup_frequency=row["pickup_frequency"],
+            time_window=row["time_window"],
+            call_before_arrival=bool(row["call_before_arrival"]),
+            call_timing=row["call_timing"],
+            access_type=row["access_type"],
+            key_required=bool(row["key_required"]),
+            trailer_restriction=row["trailer_restriction"],
+            status_notes=row["status_notes"],
+            default_driver_id=row["default_driver_id"],
+            default_driver_alias=row["default_driver_alias"],
+            default_driver_name=row["default_driver_name_snapshot"],
+            status=row["status"],
+            active_flag=bool(row["active_flag"]),
         )
 
     def _row_to_opshop_pickup_task(self, row):

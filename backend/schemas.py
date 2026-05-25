@@ -214,6 +214,63 @@ class OpShopPickupScheduleCandidate:
 
 
 @dataclass
+class OpShopTemplate:
+    schedule_id: str
+    opshop_id: str
+    run_type: str
+    run_day: Optional[str]
+    name: str
+    suburb: Optional[str]
+    street_address: Optional[str]
+    area_region: Optional[str]
+    primary_contact: Optional[str]
+    primary_phone: Optional[str]
+    secondary_contact: Optional[str]
+    secondary_phone: Optional[str]
+    pickup_frequency: Optional[str]
+    time_window: Optional[str]
+    call_before_arrival: bool
+    call_timing: Optional[str]
+    access_type: Optional[str]
+    key_required: bool
+    trailer_restriction: Optional[str]
+    status_notes: Optional[str]
+    default_driver_id: Optional[str]
+    default_driver_alias: Optional[str]
+    default_driver_name: Optional[str]
+    status: str
+    active_flag: bool
+
+
+@dataclass
+class CreateOpShopTemplateRequest:
+    run_type: Optional[str] = None
+    run_day: Optional[str] = None
+    name: Optional[str] = None
+    suburb: Optional[str] = None
+    street_address: Optional[str] = None
+    area_region: Optional[str] = None
+    primary_contact: Optional[str] = None
+    primary_phone: Optional[str] = None
+    secondary_contact: Optional[str] = None
+    secondary_phone: Optional[str] = None
+    pickup_frequency: Optional[str] = None
+    time_window: Optional[str] = None
+    call_before_arrival: Optional[bool] = None
+    call_timing: Optional[str] = None
+    access_type: Optional[str] = None
+    key_required: Optional[bool] = None
+    trailer_restriction: Optional[str] = None
+    status_notes: Optional[str] = None
+    default_driver_id: Optional[str] = None
+
+
+@dataclass
+class UpdateOpShopTemplateRequest(CreateOpShopTemplateRequest):
+    pass
+
+
+@dataclass
 class CreateOpShopPickupTaskRequest:
     schedule_id: Optional[str] = None
     pickup_date: Optional[str] = None

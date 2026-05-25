@@ -69,6 +69,7 @@ export function renderTaskPool({
   onExportOpShopRunSheet,
   onOpenOncallOpShopPickupList,
   onOpenOpShopPickupList,
+  onOpenOpShopTemplateManagement,
   onOpenOrderDetail,
   onPendingSelectionChange,
   onAssignTask,
@@ -100,6 +101,7 @@ export function renderTaskPool({
       onExportOpShopRunSheet,
       onOpenOncallOpShopPickupList,
       onOpenOpShopPickupList,
+      onOpenOpShopTemplateManagement,
       oncallPickups: state.oncallOpShopPickups,
       pickups: state.scheduledOpShopPickups,
     }),
@@ -138,6 +140,7 @@ function createOpShopPickupSection({
   onOpenOncallOpShopPickupList,
   pickups,
   onOpenOpShopPickupList,
+  onOpenOpShopTemplateManagement,
 }) {
   const section = createTaskPoolSection({
     className: "task-pool-section-opshop",
@@ -159,7 +162,18 @@ function createOpShopPickupSection({
     : "Export OP SHOP Run Sheet";
   exportButton.addEventListener("click", onExportOpShopRunSheet);
 
-  section.append(list, exportButton);
+  const manageButton = document.createElement("button");
+  manageButton.type = "button";
+  manageButton.className = "button-secondary";
+  manageButton.textContent = "Manage OP SHOP Templates";
+  manageButton.disabled = state.isLoading || state.isSaving;
+  manageButton.addEventListener("click", onOpenOpShopTemplateManagement);
+
+  const actions = document.createElement("div");
+  actions.className = "opshop-section-actions";
+  actions.append(manageButton, exportButton);
+
+  section.append(list, actions);
   return section;
 }
 

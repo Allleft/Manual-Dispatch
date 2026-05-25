@@ -409,6 +409,44 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertNotIn("fetch(", actions)
         self.assertNotIn("fetch(", modal_renderer)
 
+    def test_opshop_template_management_frontend_contract(self):
+        app_js = (FRONTEND_ROOT / "app.js").read_text(encoding="utf-8")
+        api_module = (
+            FRONTEND_ROOT / "js" / "api" / "manual-dispatch-api.js"
+        ).read_text(encoding="utf-8")
+        task_pool_renderer = (
+            FRONTEND_ROOT / "js" / "render" / "task-pool-renderer.js"
+        ).read_text(encoding="utf-8")
+        actions = (
+            FRONTEND_ROOT / "js" / "actions" / "opshop-template-actions.js"
+        ).read_text(encoding="utf-8")
+        modal_renderer = (
+            FRONTEND_ROOT / "js" / "render" / "opshop-template-management-modal-renderer.js"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("Manage OP SHOP Templates", task_pool_renderer)
+        self.assertIn("Regular OP SHOP Pickup List", task_pool_renderer)
+        self.assertIn("Oncall OP SHOP Pickup List", task_pool_renderer)
+        self.assertIn("Export OP SHOP Run Sheet", task_pool_renderer)
+        self.assertIn("/api/manual-dispatch/opshop-templates", api_module)
+        self.assertIn("apiCreateOpShopTemplate", api_module)
+        self.assertIn("apiUpdateOpShopTemplate", api_module)
+        self.assertIn("apiDisableOpShopTemplate", api_module)
+        self.assertIn("createOpShopTemplateActions", actions)
+        self.assertIn("refreshTemplateConsumers", actions)
+        self.assertIn("renderOpShopTemplateManagementModal", app_js)
+        self.assertIn("OP SHOP Template Management", modal_renderer)
+        self.assertIn("Regular Templates", modal_renderer)
+        self.assertIn("Oncall Templates", modal_renderer)
+        self.assertIn("Add Template", modal_renderer)
+        self.assertIn("Default Driver", modal_renderer)
+        self.assertIn(
+            "Disable this template? Existing pickup tasks and saved history will not be deleted.",
+            modal_renderer,
+        )
+        self.assertNotIn("fetch(", actions)
+        self.assertNotIn("fetch(", modal_renderer)
+
     def test_product_line_typing_updates_state_without_popup_rerender(self):
         order_actions = (
             FRONTEND_ROOT / "js" / "actions" / "order-actions.js"

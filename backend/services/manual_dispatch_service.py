@@ -8,6 +8,7 @@ from backend.services.manual_dispatch.final_summary_service import FinalSummaryS
 from backend.services.manual_dispatch.id_generation import ManualDispatchIdGenerator
 from backend.services.manual_dispatch.order_service import OrderService
 from backend.services.manual_dispatch.opshop_pickup_service import OpShopPickupService
+from backend.services.manual_dispatch.opshop_template_service import OpShopTemplateService
 from backend.services.manual_dispatch.specification_service import SpecificationService
 from backend.services.manual_dispatch.validation import ManualDispatchValidator
 
@@ -23,6 +24,10 @@ class ManualDispatchService:
             self.opshop_pickup_service,
         )
         self.validator = ManualDispatchValidator(self.repository)
+        self.opshop_template_service = OpShopTemplateService(
+            self.repository,
+            self.validator,
+        )
         self.id_generator = ManualDispatchIdGenerator(self.repository)
         self.auth_service = OperatorAuthService(self.repository)
         self.assignment_service = AssignmentService(
@@ -87,6 +92,21 @@ class ManualDispatchService:
 
     def list_opshop_pickup_schedule_candidates(self, run_type="scheduled"):
         return self.opshop_pickup_service.list_opshop_pickup_schedule_candidates(run_type)
+
+    def list_opshop_templates(self, run_type=None, include_inactive=False):
+        return self.opshop_template_service.list_opshop_templates(
+            run_type,
+            include_inactive,
+        )
+
+    def create_opshop_template(self, request):
+        return self.opshop_template_service.create_opshop_template(request)
+
+    def update_opshop_template(self, schedule_id, request):
+        return self.opshop_template_service.update_opshop_template(schedule_id, request)
+
+    def disable_opshop_template(self, schedule_id):
+        return self.opshop_template_service.disable_opshop_template(schedule_id)
 
     def create_opshop_pickup_task(self, request):
         return self.opshop_pickup_service.create_opshop_pickup_task(request)

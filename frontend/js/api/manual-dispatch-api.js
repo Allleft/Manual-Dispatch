@@ -166,6 +166,37 @@ export async function apiListOncallOpShopPickupSchedules() {
 }
 
 
+export async function apiListOpShopTemplates(runType, includeInactive = false) {
+  return requestJson("/api/manual-dispatch/opshop-templates", {
+    query: { run_type: runType, include_inactive: includeInactive },
+  });
+}
+
+
+export async function apiCreateOpShopTemplate(payload) {
+  return requestJson("/api/manual-dispatch/opshop-templates", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+
+export async function apiUpdateOpShopTemplate(scheduleId, payload) {
+  return requestJson(`/api/manual-dispatch/opshop-templates/${encodeURIComponent(scheduleId)}`, {
+    method: "PATCH",
+    body: payload,
+  });
+}
+
+
+export async function apiDisableOpShopTemplate(scheduleId) {
+  return requestJson(
+    `/api/manual-dispatch/opshop-templates/${encodeURIComponent(scheduleId)}/disable`,
+    { method: "POST" },
+  );
+}
+
+
 export async function apiCreateOpShopPickup(payload) {
   return requestJson("/api/manual-dispatch/opshop-pickups", {
     method: "POST",

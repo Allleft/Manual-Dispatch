@@ -11,6 +11,7 @@ from backend.schemas import (
     OpShopPickupSchedule,
     OpShopPickupScheduleCandidate,
     OpShopPickupTask,
+    OpShopTemplate,
     OperatorAccountRecord,
     ProductDetailLine,
     Vehicle,
@@ -427,6 +428,58 @@ class InMemoryManualDispatchRepository:
                 candidate.opshop_name or "",
                 candidate.suburb or "",
                 candidate.schedule_id,
+            ),
+        )
+
+    def list_opshop_templates(self, run_type=None, include_inactive=False):
+        templates = []
+        for schedule in self.list_opshop_pickup_schedules():
+            if run_type and schedule.run_type != run_type:
+                continue
+            if not include_inactive and not (
+                schedule.active_flag and schedule.status == "Active"
+            ):
+                continue
+            location = self.get_opshop_location(schedule.opshop_id)
+            if not location:
+                continue
+            templates.append(
+                OpShopTemplate(
+                    schedule_id=schedule.schedule_id,
+                    opshop_id=schedule.opshop_id,
+                    run_type=schedule.run_type,
+                    run_day=schedule.run_day,
+                    name=location.name,
+                    suburb=location.suburb,
+                    street_address=location.street_address,
+                    area_region=location.area_region,
+                    primary_contact=location.primary_contact,
+                    primary_phone=location.primary_phone,
+                    secondary_contact=location.secondary_contact,
+                    secondary_phone=location.secondary_phone,
+                    pickup_frequency=schedule.pickup_frequency,
+                    time_window=schedule.time_window,
+                    call_before_arrival=schedule.call_before_arrival,
+                    call_timing=schedule.call_timing,
+                    access_type=location.access_type,
+                    key_required=location.key_required,
+                    trailer_restriction=location.trailer_restriction,
+                    status_notes=location.status_notes,
+                    default_driver_id=schedule.default_driver_id,
+                    default_driver_alias=schedule.default_driver_alias,
+                    default_driver_name=schedule.default_driver_name_snapshot,
+                    status=schedule.status,
+                    active_flag=schedule.active_flag,
+                )
+            )
+        return sorted(
+            templates,
+            key=lambda template: (
+                template.run_type,
+                template.name,
+                template.suburb or "",
+                template.run_day or "ZZZ",
+                template.schedule_id,
             ),
         )
 
