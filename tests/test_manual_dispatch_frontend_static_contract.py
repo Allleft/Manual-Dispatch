@@ -137,22 +137,30 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
 
     def test_phase5_opshop_pickup_detail_modal_is_read_only(self):
         app_js = (FRONTEND_ROOT / "app.js").read_text(encoding="utf-8")
+        board_state_sync = (
+            FRONTEND_ROOT / "js" / "state" / "board-state-sync.js"
+        ).read_text(encoding="utf-8")
         modal_renderer = (
             FRONTEND_ROOT / "js" / "render" / "opshop-pickup-modal-renderer.js"
         ).read_text(encoding="utf-8")
 
-        self.assertIn("opshopPickups: payload.opshop_pickups || []", app_js)
-        self.assertIn("assignedOpShopPickups: payload.assigned_opshop_pickups || []", app_js)
-        self.assertIn("scheduledOpShopPickups: payload.scheduled_opshop_pickups || []", app_js)
-        self.assertIn("oncallOpShopPickups: payload.oncall_opshop_pickups || []", app_js)
-        self.assertIn("finalizedDriverDeliveryDates: payload.finalized_driver_delivery_dates || []", app_js)
-        self.assertIn("opshopRegularListWindowStart: payload.opshop_regular_list_window_start || \"\"", app_js)
-        self.assertIn("opshopRegularListWindowEnd: payload.opshop_regular_list_window_end || \"\"", app_js)
-        self.assertIn("state.opshopPickups = board.opshopPickups", app_js)
-        self.assertIn("state.assignedOpShopPickups = board.assignedOpShopPickups", app_js)
-        self.assertIn("state.scheduledOpShopPickups = board.scheduledOpShopPickups", app_js)
-        self.assertIn("state.oncallOpShopPickups = board.oncallOpShopPickups", app_js)
-        self.assertIn("state.finalizedDriverDeliveryDates = board.finalizedDriverDeliveryDates", app_js)
+        self.assertIn("opshopPickups: payload.opshop_pickups || []", board_state_sync)
+        self.assertIn("assignedOpShopPickups: payload.assigned_opshop_pickups || []", board_state_sync)
+        self.assertIn("scheduledOpShopPickups: payload.scheduled_opshop_pickups || []", board_state_sync)
+        self.assertIn("oncallOpShopPickups: payload.oncall_opshop_pickups || []", board_state_sync)
+        self.assertIn("finalizedDriverDeliveryDates: payload.finalized_driver_delivery_dates || []", board_state_sync)
+        self.assertIn("opshopRegularListWindowStart: payload.opshop_regular_list_window_start || \"\"", board_state_sync)
+        self.assertIn("opshopRegularListWindowEnd: payload.opshop_regular_list_window_end || \"\"", board_state_sync)
+        self.assertIn("state.opshopPickups = board.opshopPickups", board_state_sync)
+        self.assertIn("state.assignedOpShopPickups = board.assignedOpShopPickups", board_state_sync)
+        self.assertIn("state.scheduledOpShopPickups = board.scheduledOpShopPickups", board_state_sync)
+        self.assertIn("state.oncallOpShopPickups = board.oncallOpShopPickups", board_state_sync)
+        self.assertIn("state.finalizedDriverDeliveryDates = board.finalizedDriverDeliveryDates", board_state_sync)
+        self.assertIn(
+            "assignment.delivery_date || assignment.dispatch_date || payload.dispatch_date || state.dispatchDate",
+            board_state_sync,
+        )
+        self.assertIn("syncBoardResponse(payload, () => assignmentActions.cleanupPendingSelections())", app_js)
         self.assertIn("onOpenOpShopPickupDetail: openOpShopPickupDetail", app_js)
         self.assertIn("renderOpShopPickupDetailPopup", app_js)
         self.assertIn('closeButton.textContent = "Close"', modal_renderer)
@@ -245,6 +253,9 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         final_summary_actions = (
             FRONTEND_ROOT / "js" / "actions" / "final-summary-actions.js"
         ).read_text(encoding="utf-8")
+        download_utils = (
+            FRONTEND_ROOT / "js" / "utils" / "download-utils.js"
+        ).read_text(encoding="utf-8")
         self.assertIn("getAssignedOpShopPickupsForDriver", final_summary_actions)
         self.assertIn("assignedOrders.length === 0 && assignedOpShopPickups.length === 0", final_summary_actions)
         self.assertIn("Assign at least one Order or OP SHOP pickup", final_summary_actions)
@@ -253,6 +264,8 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn('state.generatedTaskKeys.add(getTaskKey("OPSHOP_PICKUP", pickup.pickup_task_id))', final_summary_actions)
         self.assertIn('task_type: "OPSHOP_PICKUP"', final_summary_actions)
         self.assertIn("task_id: pickup.pickup_task_id", final_summary_actions)
+        self.assertIn('import { downloadExcelResponse } from "../utils/download-utils.js"', final_summary_actions)
+        self.assertIn("getExportFilename", download_utils)
         self.assertIn('!isGeneratedTask("OPSHOP_PICKUP", pickup.pickup_task_id)', selectors)
         self.assertIn("export function isDriverDeliveryDateFinalized", selectors)
 
@@ -263,6 +276,9 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         ).read_text(encoding="utf-8")
         actions = (
             FRONTEND_ROOT / "js" / "actions" / "opshop-pickup-actions.js"
+        ).read_text(encoding="utf-8")
+        download_utils = (
+            FRONTEND_ROOT / "js" / "utils" / "download-utils.js"
         ).read_text(encoding="utf-8")
         task_pool_renderer = (
             FRONTEND_ROOT / "js" / "render" / "task-pool-renderer.js"
@@ -284,6 +300,9 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn('!isGeneratedTask("OPSHOP_PICKUP", pickup.pickup_task_id)', actions)
         self.assertIn("apiExportOpShopPickupRunSheetExcel", actions)
         self.assertIn("exportOpShopRunSheet", actions)
+        self.assertIn('import { downloadExcelResponse } from "../utils/download-utils.js"', actions)
+        self.assertIn("URL.createObjectURL(blob)", download_utils)
+        self.assertIn("URL.revokeObjectURL(downloadUrl)", download_utils)
         self.assertIn("updateAssignedDriverSelection", actions)
         self.assertIn("handleCreatePickupTask", actions)
         self.assertIn("handleUpdatePickupTask", actions)
@@ -361,6 +380,9 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
 
     def test_oncall_opshop_pickup_frontend_contract(self):
         app_js = (FRONTEND_ROOT / "app.js").read_text(encoding="utf-8")
+        board_state_sync = (
+            FRONTEND_ROOT / "js" / "state" / "board-state-sync.js"
+        ).read_text(encoding="utf-8")
         api_module = (
             FRONTEND_ROOT / "js" / "api" / "manual-dispatch-api.js"
         ).read_text(encoding="utf-8")
@@ -396,8 +418,8 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("renderOncallOpShopPickupListModal", app_js)
         self.assertIn("createOncallOpShopPickupActions", app_js)
         self.assertIn("onOpenOncallOpShopPickupList: oncallOpShopPickupActions.openOncallOpShopPickupList", app_js)
-        self.assertIn("oncallOpShopPickups: payload.oncall_opshop_pickups || []", app_js)
-        self.assertIn("state.oncallOpShopPickups = board.oncallOpShopPickups", app_js)
+        self.assertIn("oncallOpShopPickups: payload.oncall_opshop_pickups || []", board_state_sync)
+        self.assertIn("state.oncallOpShopPickups = board.oncallOpShopPickups", board_state_sync)
         self.assertIn("Oncall OP SHOP Pickup List", task_pool_renderer)
         self.assertIn("Oncall OP SHOP Pickup List", modal_renderer)
         self.assertIn("No Oncall OP SHOP pickups added.", modal_renderer)
