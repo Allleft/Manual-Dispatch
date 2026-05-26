@@ -217,6 +217,8 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("state.isSaving || state.isLoading || hasSavedFinalSummary", trip_summary_renderer)
         self.assertIn("Final Trip Summary has been saved for this driver and delivery date.", trip_summary_renderer)
         self.assertIn("if (hasAssignedTasks && !hasLockedFinalSummary && !hasSavedFinalSummary)", trip_summary_renderer)
+        self.assertIn("if (!hasAssignedTasks && !hasSavedFinalSummary)", trip_summary_renderer)
+        self.assertNotIn("emptyState.textContent = hasSavedFinalSummary", trip_summary_renderer)
         self.assertIn("pickup.pickup_date === state.driverSummaryDeliveryDate", selectors)
         self.assertIn("getOrderAssignmentsForDriverTrip", selectors)
         self.assertIn("createOpShopPickupGroup", trip_summary_renderer)
@@ -455,6 +457,14 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("apiDisableOpShopTemplate", api_module)
         self.assertIn("createOpShopTemplateActions", actions)
         self.assertIn("refreshTemplateConsumers", actions)
+        template_form_update = actions.split("function updateTemplateForm", 1)[1].split(
+            "async function saveTemplate",
+            1,
+        )[0]
+        self.assertIn("function updateTemplateForm(field, value, options = {})", actions)
+        self.assertIn('const shouldRender = options.render ?? field === "run_type";', template_form_update)
+        self.assertIn("if (shouldRender)", template_form_update)
+        self.assertNotIn("state.opshopTemplateForm = form;\n    renderBoard();", template_form_update)
         self.assertIn("renderOpShopTemplateManagementModal", app_js)
         self.assertIn("OP SHOP Template Management", modal_renderer)
         self.assertIn("Regular Templates", modal_renderer)

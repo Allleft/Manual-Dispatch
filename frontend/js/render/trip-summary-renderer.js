@@ -179,14 +179,12 @@ export function renderDriverSummary({
 
     const trips = document.createElement("div");
     trips.className = "trip-columns";
-    if (!hasAssignedTasks) {
+    if (!hasAssignedTasks && !hasSavedFinalSummary) {
       const emptyState = document.createElement("p");
       emptyState.className = "empty-trip editable-empty-state";
-      emptyState.textContent = hasSavedFinalSummary
-        ? "Final Trip Summary has been saved for this driver and delivery date."
-        : hasUnsavedLockedFinalSummary
-          ? "No editable tasks. Locked Final Trip Summary is shown below."
-          : "No assigned orders for this delivery date.";
+      emptyState.textContent = hasUnsavedLockedFinalSummary
+        ? "No editable tasks. Locked Final Trip Summary is shown below."
+        : "No assigned orders for this delivery date.";
       trips.append(emptyState);
     } else {
       ["trip1", "trip2"].forEach((tripNo) => {

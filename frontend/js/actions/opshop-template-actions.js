@@ -145,7 +145,7 @@ export function createOpShopTemplateActions({
     renderBoard();
   }
 
-  function updateTemplateForm(field, value) {
+  function updateTemplateForm(field, value, options = {}) {
     const form = {
       ...state.opshopTemplateForm,
       [field]: value,
@@ -157,7 +157,10 @@ export function createOpShopTemplateActions({
         : form.pickup_frequency;
     }
     state.opshopTemplateForm = form;
-    renderBoard();
+    const shouldRender = options.render ?? field === "run_type";
+    if (shouldRender) {
+      renderBoard();
+    }
   }
 
   async function saveTemplate() {
