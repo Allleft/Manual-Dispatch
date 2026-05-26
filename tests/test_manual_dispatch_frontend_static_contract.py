@@ -126,8 +126,14 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("No Oncall OP SHOP pickups added.", task_pool_renderer)
         self.assertIn("onOpenOncallOpShopPickupList", task_pool_renderer)
         self.assertIn("opshop-pickup-list-summary-card", task_pool_renderer)
+        self.assertIn("section.append(actions, list)", task_pool_renderer)
         self.assertIn(".opshop-summary-grid .opshop-pickup-list-summary-card", styles)
-        self.assertIn("grid-column: 1 / -1", styles)
+        self.assertIn("grid-template-columns: repeat(2, minmax(0, 1fr));", styles)
+        self.assertIn(".opshop-summary-grid {\n    grid-template-columns: minmax(0, 1fr);", styles)
+        self.assertNotIn(
+            ".opshop-summary-grid .opshop-pickup-list-summary-card {\n  grid-column: 1 / -1;",
+            styles,
+        )
         self.assertIn("max-width: none", styles)
         self.assertIn("Open List", task_pool_renderer)
         self.assertIn("state.scheduledOpShopPickups", task_pool_renderer)

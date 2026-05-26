@@ -173,7 +173,7 @@ function createOpShopPickupSection({
   actions.className = "opshop-section-actions";
   actions.append(manageButton, exportButton);
 
-  section.append(list, actions);
+  section.append(actions, list);
   return section;
 }
 

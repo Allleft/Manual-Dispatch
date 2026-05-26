@@ -360,13 +360,12 @@ h1 {
 }
 
 .opshop-summary-grid {
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: stretch;
   width: 100%;
 }
 
 .opshop-summary-grid .opshop-pickup-list-summary-card {
-  grid-column: 1 / -1;
   width: 100%;
   max-width: none;
 }
@@ -380,6 +379,8 @@ h1 {
   flex-wrap: wrap;
   gap: 0.7rem;
   justify-content: flex-start;
+  align-items: center;
+  margin-bottom: 0.25rem;
 }
 
 .opshop-pickup-list-summary-main {
@@ -1612,6 +1613,10 @@ select:disabled {
   .task-grid,
   .task-pool-section-grid {
     grid-template-columns: 1fr;
+  }
+
+  .opshop-summary-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .task-grid .order-card,
