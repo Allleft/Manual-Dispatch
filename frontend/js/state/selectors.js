@@ -234,6 +234,14 @@ export function getFinalSummaryKey(driverId, deliveryDate = state.driverSummaryD
   return `${driverId}:${deliveryDate || ""}`;
 }
 
+export function isDriverDeliveryDateFinalized(driverId, deliveryDate = state.driverSummaryDeliveryDate) {
+  return state.finalizedDriverDeliveryDates.some(
+    (lockedDate) =>
+      lockedDate.driver_id === driverId &&
+      lockedDate.delivery_date === deliveryDate,
+  );
+}
+
 function assignmentMatchesDriverSummaryDeliveryDate(assignment) {
   if (!state.driverSummaryDeliveryDate) {
     return false;

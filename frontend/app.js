@@ -41,6 +41,7 @@ function normalizeBoardResponse(payload) {
     drivers: payload.drivers || [],
     vehicles: payload.vehicles || [],
     assignments: payload.assignments || [],
+    finalizedDriverDeliveryDates: payload.finalized_driver_delivery_dates || [],
     opshopPickups: payload.opshop_pickups || [],
     assignedOpShopPickups: payload.assigned_opshop_pickups || [],
     scheduledOpShopPickups: payload.scheduled_opshop_pickups || [],
@@ -64,6 +65,7 @@ function applyBoardResponse(payload) {
   state.drivers = board.drivers;
   state.vehicles = board.vehicles;
   state.assignments = board.assignments;
+  state.finalizedDriverDeliveryDates = board.finalizedDriverDeliveryDates;
   state.opshopPickups = board.opshopPickups;
   state.assignedOpShopPickups = board.assignedOpShopPickups;
   state.scheduledOpShopPickups = board.scheduledOpShopPickups;

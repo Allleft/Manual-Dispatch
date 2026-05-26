@@ -43,10 +43,12 @@ class OpShopBoardPayloadTest(unittest.TestCase):
         self.assertIn("oncall_opshop_pickups", payload)
         self.assertIn("opshop_regular_list_window_start", payload)
         self.assertIn("opshop_regular_list_window_end", payload)
+        self.assertIn("finalized_driver_delivery_dates", payload)
         self.assertEqual([], payload["opshop_pickups"])
         self.assertEqual([], payload["assigned_opshop_pickups"])
         self.assertEqual([], payload["scheduled_opshop_pickups"])
         self.assertEqual([], payload["oncall_opshop_pickups"])
+        self.assertEqual([], payload["finalized_driver_delivery_dates"])
         self.assertEqual("2026-05-18", payload["opshop_regular_list_window_start"])
         self.assertEqual("2026-05-22", payload["opshop_regular_list_window_end"])
         for key in [

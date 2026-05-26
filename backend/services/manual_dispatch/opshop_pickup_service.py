@@ -13,6 +13,9 @@ from backend.schemas import (
     OpShopPickupTask,
     UpdateOpShopPickupTaskRequest,
 )
+from backend.services.manual_dispatch.final_summary_lock import (
+    is_driver_delivery_date_finalized,
+)
 
 
 OPSHOP_FORTNIGHT_ANCHOR_DATE = date(2026, 5, 18)
@@ -316,6 +319,14 @@ class OpShopPickupService:
                 continue
             if driver_id not in driver_ids:
                 continue
+            if is_driver_delivery_date_finalized(
+                self.repository,
+                request.dispatch_date,
+                driver_id,
+                task.pickup_date,
+            ):
+                self._clear_stale_locked_assignment(request.dispatch_date, task, driver_id)
+                continue
 
             self.repository.upsert_assignment(
                 request.dispatch_date,
@@ -364,6 +375,14 @@ class OpShopPickupService:
                 continue
             if driver_id not in driver_ids:
                 continue
+            if is_driver_delivery_date_finalized(
+                self.repository,
+                request.dispatch_date,
+                driver_id,
+                task.pickup_date,
+            ):
+                self._clear_stale_locked_assignment(request.dispatch_date, task, driver_id)
+                continue
 
             self.repository.upsert_assignment(
                 request.dispatch_date,
@@ -378,6 +397,21 @@ class OpShopPickupService:
                 driver_id,
                 "trip1",
             )
+
+    def _clear_stale_locked_assignment(self, dispatch_date, task, driver_id):
+        if task.status != "ASSIGNED" or task.driver_id != driver_id:
+            return
+        self.repository.remove_assignment(
+            dispatch_date,
+            "OPSHOP_PICKUP",
+            task.pickup_task_id,
+        )
+        self.repository.update_opshop_pickup_task_assignment_status(
+            task.pickup_task_id,
+            "ACTIVE",
+            None,
+            None,
+        )
 
     def _ensure_opshop_pickup_tasks_for_window(self, request, include_start_date):
         start = _parse_iso_date(request.start_date, "start_date")

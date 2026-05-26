@@ -1,4 +1,7 @@
 from backend.schemas import ManualDriverVehicleClearResponse
+from backend.services.manual_dispatch.final_summary_lock import (
+    ensure_driver_delivery_date_not_finalized,
+)
 from backend.services.manual_dispatch.normalization import (
     clean_optional_text,
     clean_required_text,
@@ -16,6 +19,13 @@ class AssignmentService:
         self.validator.validate_task_exists(request.task_type, request.task_id)
         self.validator.validate_driver_exists(request.driver_id)
         self.validator.validate_trip_no(request.trip_no)
+        delivery_date = self._get_task_delivery_date(request.task_type, request.task_id)
+        ensure_driver_delivery_date_not_finalized(
+            self.repository,
+            request.dispatch_date,
+            request.driver_id,
+            delivery_date,
+        )
 
         assignment = self.repository.upsert_assignment(
             dispatch_date=request.dispatch_date,
@@ -59,6 +69,12 @@ class AssignmentService:
         vehicle_id = clean_optional_text(getattr(request, "vehicle_id", None))
 
         self.validator.validate_driver_exists(driver_id)
+        ensure_driver_delivery_date_not_finalized(
+            self.repository,
+            dispatch_date,
+            driver_id,
+            delivery_date,
+        )
 
         if not vehicle_id:
             return self.clear_driver_vehicle_assignment(
@@ -81,6 +97,12 @@ class AssignmentService:
         delivery_date = clean_required_text(delivery_date or dispatch_date, "delivery_date")
         driver_id = clean_required_text(driver_id, "driver_id")
         self.validator.validate_driver_exists(driver_id)
+        ensure_driver_delivery_date_not_finalized(
+            self.repository,
+            dispatch_date,
+            driver_id,
+            delivery_date,
+        )
         self.repository.remove_driver_vehicle_assignment(
             dispatch_date,
             driver_id,
@@ -91,3 +113,8 @@ class AssignmentService:
             delivery_date=delivery_date,
             driver_id=driver_id,
         )
+
+    def _get_task_delivery_date(self, task_type, task_id):
+        if task_type == "ORDER":
+            return self.repository.get_order(task_id).delivery_date
+        return self.repository.get_opshop_pickup_task(task_id).pickup_date

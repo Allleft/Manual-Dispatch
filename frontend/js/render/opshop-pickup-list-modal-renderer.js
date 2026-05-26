@@ -487,7 +487,14 @@ function createAssignedToSelect(pickup, onUpdateAssignedDriver) {
   select.disabled = Boolean(pickup.assigned_to_locked) || state.isOpShopPickupSaving;
   select.append(createOption("", "Unassigned", !selectedDriverId));
   state.drivers.forEach((driver) => {
-    select.append(createOption(driver.driver_id, driver.name, selectedDriverId === driver.driver_id));
+    const hasSavedFinalSummary = isDriverFinalizedForPickup(driver.driver_id, pickup.pickup_date);
+    const option = createOption(
+      driver.driver_id,
+      hasSavedFinalSummary ? `${driver.name} (Final Summary saved)` : driver.name,
+      selectedDriverId === driver.driver_id,
+    );
+    option.disabled = hasSavedFinalSummary;
+    select.append(option);
   });
   select.value = selectedDriverId;
   select.addEventListener("change", (event) => {
@@ -505,6 +512,14 @@ function createAssignedToSelect(pickup, onUpdateAssignedDriver) {
     wrapper.append(lock);
   }
   return wrapper;
+}
+
+function isDriverFinalizedForPickup(driverId, pickupDate) {
+  return state.finalizedDriverDeliveryDates.some(
+    (lockedDate) =>
+      lockedDate.driver_id === driverId &&
+      lockedDate.delivery_date === pickupDate,
+  );
 }
 
 function groupPickupsByDate(pickups) {

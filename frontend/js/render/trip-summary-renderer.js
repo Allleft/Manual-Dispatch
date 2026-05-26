@@ -10,6 +10,7 @@ import {
   getFinalSummaryKey,
   getOrderAssignmentsForDriverTrip,
   getSelectedVehicleForDriver,
+  isDriverDeliveryDateFinalized,
   isVehicleSelectedByAnotherDriver,
 } from "../state/selectors.js";
 import {
@@ -76,6 +77,7 @@ export function renderDriverSummary({
     const finalSummary = state.finalTripSummaries[getFinalSummaryKey(driver.driver_id)];
     const hasLockedFinalSummary = Boolean(finalSummary);
     const hasUnsavedLockedFinalSummary = Boolean(finalSummary && !finalSummary.summary_id);
+    const hasSavedFinalSummary = isDriverDeliveryDateFinalized(driver.driver_id);
     const driverTotals = calculateDriverTotals(driver.driver_id);
     const loadSummary = document.createElement("div");
     loadSummary.className = "load-summary";
@@ -91,7 +93,7 @@ export function renderDriverSummary({
     vehicleWrap.textContent = "Choose Vehicle";
 
     const vehicleSelect = document.createElement("select");
-    vehicleSelect.disabled = state.isSaving || state.isLoading;
+    vehicleSelect.disabled = state.isSaving || state.isLoading || hasSavedFinalSummary;
     vehicleSelect.append(createOption("", "Select Vehicle", !selectedVehicle));
     state.vehicles.forEach((vehicle) => {
       vehicleSelect.append(
@@ -134,9 +136,11 @@ export function renderDriverSummary({
 
     const finalLockHint = document.createElement("p");
     finalLockHint.className = "vehicle-hint final-lock-hint";
-    finalLockHint.textContent = hasUnsavedLockedFinalSummary
-      ? "Final Trip Summary for this driver is already generated and locked."
-      : "";
+    finalLockHint.textContent = hasSavedFinalSummary
+      ? "Final Trip Summary has been saved for this driver and delivery date."
+      : hasUnsavedLockedFinalSummary
+        ? "Final Trip Summary for this driver is already generated and locked."
+        : "";
 
     const generateButton = document.createElement("button");
     generateButton.type = "button";
@@ -159,7 +163,7 @@ export function renderDriverSummary({
     if (exceptions.length > 0) {
       header.append(exceptionList);
     }
-    if (hasAssignedTasks && !hasLockedFinalSummary) {
+    if (hasAssignedTasks && !hasLockedFinalSummary && !hasSavedFinalSummary) {
       header.append(generateButton);
     }
     if (assignedOpShopPickups.length > 0) {
@@ -178,9 +182,11 @@ export function renderDriverSummary({
     if (!hasAssignedTasks) {
       const emptyState = document.createElement("p");
       emptyState.className = "empty-trip editable-empty-state";
-      emptyState.textContent = hasUnsavedLockedFinalSummary
-        ? "No editable tasks. Locked Final Trip Summary is shown below."
-        : "No assigned orders for this delivery date.";
+      emptyState.textContent = hasSavedFinalSummary
+        ? "Final Trip Summary has been saved for this driver and delivery date."
+        : hasUnsavedLockedFinalSummary
+          ? "No editable tasks. Locked Final Trip Summary is shown below."
+          : "No assigned orders for this delivery date.";
       trips.append(emptyState);
     } else {
       ["trip1", "trip2"].forEach((tripNo) => {

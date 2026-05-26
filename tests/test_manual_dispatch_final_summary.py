@@ -175,6 +175,37 @@ class ManualDispatchFinalSummaryTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self._assign_order("ORD-001", "D001", "trip1")
 
+    def test_saved_final_summary_blocks_new_order_assignment_and_vehicle_changes_for_driver_date(self):
+        self.service.save_final_trip_summary(
+            self._summary_request(trips=[])
+        )
+        same_date_order = self.service.create_order(
+            CreateOrderRequest(
+                company_name="Locked Driver Customer",
+                suburb="Coburg",
+                delivery_date=self.dispatch_date,
+                pallet_quantity=1,
+            )
+        )
+        next_date_order = self.service.create_order(
+            CreateOrderRequest(
+                company_name="Next Day Customer",
+                suburb="Coburg",
+                delivery_date="2026-05-06",
+                pallet_quantity=1,
+            )
+        )
+
+        with self.assertRaisesRegex(ValueError, "Final Trip Summary has already been saved"):
+            self._assign_order(same_date_order.order_id, "D001", "trip1")
+        with self.assertRaisesRegex(ValueError, "Final Trip Summary has already been saved"):
+            self._assign_vehicle("D001", "V002")
+
+        other_driver_assignment = self._assign_order(same_date_order.order_id, "D002", "trip1")
+        next_date_assignment = self._assign_order(next_date_order.order_id, "D001", "trip1")
+        self.assertEqual("D002", other_driver_assignment.driver_id)
+        self.assertEqual("D001", next_date_assignment.driver_id)
+
     def test_duplicate_final_summary_for_same_driver_dispatch_and_delivery_date_is_rejected(self):
         self._assign_order("ORD-001", "D001", "trip1")
         self.service.save_final_trip_summary(self._summary_request())
@@ -356,6 +387,10 @@ class ManualDispatchFinalSummaryTest(unittest.TestCase):
             ).fetchone()[0]
         self.assertEqual(0, order_rows)
         self.assertEqual(1, opshop_rows)
+        task = self.repository.get_opshop_pickup_task("TASK-OPSHOP-001")
+        self.assertEqual("ACTIVE", task.status)
+        self.assertIsNone(task.driver_id)
+        self.assertIsNone(task.trip_no)
 
     def test_mixed_summary_keeps_opshop_out_of_delivery_totals_and_rows(self):
         self._assign_order("ORD-001", "D001", "trip1")

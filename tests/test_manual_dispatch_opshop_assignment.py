@@ -206,12 +206,57 @@ class ManualDispatchOpShopAssignmentTest(unittest.TestCase):
         self.assertEqual(["TASK-001"], [pickup.pickup_task_id_snapshot for pickup in summary.opshop_pickups])
         self.assertEqual(0, summary.total_pallets)
         self.assertEqual(0, summary.total_loose_bags)
-        self.assertIsNotNone(
+        self.assertIsNone(
             self.repository.get_assignment(
                 "2026-05-18",
                 "OPSHOP_PICKUP",
                 "TASK-001",
             )
+        )
+        task = self.repository.get_opshop_pickup_task("TASK-001")
+        self.assertEqual("ACTIVE", task.status)
+        self.assertIsNone(task.driver_id)
+        self.assertIsNone(task.trip_no)
+
+    def test_saved_final_summary_blocks_direct_opshop_assignment_for_driver_pickup_date(self):
+        self.repository.upsert_opshop_pickup_task(self._task("TASK-LOCKED"))
+        account = self.service.register_operator_account(
+            RegisterOperatorAccountRequest(
+                account_name="Mandy",
+                password="secret123",
+                confirm_password="secret123",
+            )
+        )
+        self.service.save_final_trip_summary(
+            SaveFinalTripSummaryRequest(
+                dispatch_date="2026-05-18",
+                delivery_date="2026-05-20",
+                driver_id="D001",
+                driver_name_snapshot="John",
+                vehicle_id=None,
+                vehicle_rego_snapshot="No vehicle selected",
+                total_pallets=0,
+                total_loose_bags=0,
+                generated_at="2026-05-18T00:00:00+00:00",
+                saved_by_account_name=account.account_name,
+                saved_by_account_id=account.account_id,
+                trips=[],
+            )
+        )
+
+        with self.assertRaisesRegex(ValueError, "Final Trip Summary has already been saved"):
+            self.service.assign_task(
+                AssignTaskRequest(
+                    dispatch_date="2026-05-18",
+                    task_type="OPSHOP_PICKUP",
+                    task_id="TASK-LOCKED",
+                    driver_id="D001",
+                    trip_no="trip1",
+                )
+            )
+
+        self.assertIsNone(
+            self.repository.get_assignment("2026-05-18", "OPSHOP_PICKUP", "TASK-LOCKED")
         )
 
     def _opshop_summary_payload(self, task_id):

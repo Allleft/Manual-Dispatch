@@ -310,6 +310,7 @@ class ManualDispatchBoardResponse:
     oncall_opshop_pickups: List[OpShopPickupBoardItem] = field(default_factory=list)
     opshop_regular_list_window_start: Optional[str] = None
     opshop_regular_list_window_end: Optional[str] = None
+    finalized_driver_delivery_dates: List[dict] = field(default_factory=list)
 
 
 @dataclass
