@@ -12,6 +12,7 @@ import { createOpShopTemplateActions } from "./js/actions/opshop-template-action
 import { createSpecificationActions } from "./js/actions/specification-actions.js";
 import { createVehicleActions } from "./js/actions/vehicle-actions.js";
 import { DEFAULT_DISPATCH_DATE, state } from "./js/state/app-state.js";
+import { applyBoardResponse as syncBoardResponse } from "./js/state/board-state-sync.js";
 import {
   formatOptional,
 } from "./js/utils/format-utils.js";
@@ -34,48 +35,6 @@ import { renderOpShopPickupListModal as renderOpShopPickupListModalView } from "
 import { renderOncallOpShopPickupListModal as renderOncallOpShopPickupListModalView } from "./js/render/opshop-oncall-pickup-list-modal-renderer.js";
 import { renderOpShopTemplateManagementModal as renderOpShopTemplateManagementModalView } from "./js/render/opshop-template-management-modal-renderer.js";
 
-function normalizeBoardResponse(payload) {
-  return {
-    dispatchDate: payload.dispatch_date || state.dispatchDate,
-    orders: payload.orders || [],
-    drivers: payload.drivers || [],
-    vehicles: payload.vehicles || [],
-    assignments: payload.assignments || [],
-    finalizedDriverDeliveryDates: payload.finalized_driver_delivery_dates || [],
-    opshopPickups: payload.opshop_pickups || [],
-    assignedOpShopPickups: payload.assigned_opshop_pickups || [],
-    scheduledOpShopPickups: payload.scheduled_opshop_pickups || [],
-    oncallOpShopPickups: payload.oncall_opshop_pickups || [],
-    opshopRegularListWindowStart: payload.opshop_regular_list_window_start || "",
-    opshopRegularListWindowEnd: payload.opshop_regular_list_window_end || "",
-    driverVehicleAssignments: (payload.driver_vehicle_assignments || []).map((assignment) => ({
-      ...assignment,
-      delivery_date: assignment.delivery_date || assignment.dispatch_date || payload.dispatch_date || state.dispatchDate,
-    })),
-  };
-}
-
-function applyBoardResponse(payload) {
-  const board = normalizeBoardResponse(payload);
-  state.dispatchDate = board.dispatchDate;
-  if (!state.driverSummaryDeliveryDate) {
-    state.driverSummaryDeliveryDate = board.dispatchDate;
-  }
-  state.orders = board.orders;
-  state.drivers = board.drivers;
-  state.vehicles = board.vehicles;
-  state.assignments = board.assignments;
-  state.finalizedDriverDeliveryDates = board.finalizedDriverDeliveryDates;
-  state.opshopPickups = board.opshopPickups;
-  state.assignedOpShopPickups = board.assignedOpShopPickups;
-  state.scheduledOpShopPickups = board.scheduledOpShopPickups;
-  state.oncallOpShopPickups = board.oncallOpShopPickups;
-  state.opshopRegularListWindowStart = board.opshopRegularListWindowStart;
-  state.opshopRegularListWindowEnd = board.opshopRegularListWindowEnd;
-  state.driverVehicleAssignments = board.driverVehicleAssignments;
-  assignmentActions.cleanupPendingSelections();
-}
-
 async function loadBoard(dispatchDate = state.dispatchDate, options = {}) {
   const force = Boolean(options.force);
 
@@ -97,7 +56,7 @@ async function loadBoard(dispatchDate = state.dispatchDate, options = {}) {
       return;
     }
 
-    applyBoardResponse(payload);
+    syncBoardResponse(payload, () => assignmentActions.cleanupPendingSelections());
   } catch (error) {
     showError(`Unable to load board data. ${error.message}`);
   } finally {
