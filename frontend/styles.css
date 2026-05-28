@@ -515,9 +515,45 @@ h1 {
   padding-top: 0.85rem;
 }
 
-.opshop-date-group h3 {
+.opshop-date-group-heading {
   margin-bottom: 0;
+}
+
+.opshop-date-group-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  border: 1px solid rgba(39, 93, 69, 0.18);
+  border-radius: var(--radius-md);
+  padding: 0.65rem 0.8rem;
+  background: rgba(223, 238, 229, 0.38);
   color: var(--accent-strong);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.opshop-date-group-toggle:hover,
+.opshop-date-group-toggle:focus-visible {
+  border-color: rgba(39, 93, 69, 0.36);
+  background: rgba(223, 238, 229, 0.62);
+  box-shadow: 0 8px 20px rgba(23, 63, 48, 0.1);
+}
+
+.opshop-date-group-count {
+  margin-left: 0.45rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.opshop-date-group-state {
+  color: var(--accent-strong);
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .opshop-list-item {

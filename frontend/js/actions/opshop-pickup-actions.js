@@ -9,6 +9,10 @@ import {
 } from "../api/manual-dispatch-api.js";
 import { isGeneratedTask } from "../state/selectors.js";
 import { downloadExcelResponse } from "../utils/download-utils.js";
+import {
+  initializeCollapsedPickupDateGroups,
+  toggleCollapsedPickupDateGroup,
+} from "../utils/opshop-date-group-utils.js";
 
 export function createOpShopPickupActions({
   loadBoard,
@@ -23,6 +27,7 @@ export function createOpShopPickupActions({
     state.opshopPickupEditingTaskId = "";
     state.opshopPickupForm = {};
     initializeAssignedDriverSelections();
+    initializeCollapsedDateGroups();
     renderBoard();
     await loadScheduleCandidates();
   }
@@ -214,6 +219,15 @@ export function createOpShopPickupActions({
     renderBoard();
   }
 
+  function toggleDateGroup(pickupDate) {
+    state.collapsedRegularOpShopPickupDates = toggleCollapsedPickupDateGroup(
+      state.collapsedRegularOpShopPickupDates,
+      pickupDate,
+      state.dispatchDate,
+    );
+    renderBoard();
+  }
+
   async function exportOpShopRunSheet() {
     if (state.isOpShopRunSheetExporting) {
       return;
@@ -257,6 +271,13 @@ export function createOpShopPickupActions({
     state.opshopPickupAssignedDriverSelections = selections;
   }
 
+  function initializeCollapsedDateGroups() {
+    state.collapsedRegularOpShopPickupDates = initializeCollapsedPickupDateGroups(
+      state.scheduledOpShopPickups,
+      state.dispatchDate,
+    );
+  }
+
   return {
     cancelPickupTaskForm,
     closeOpShopPickupList,
@@ -270,6 +291,7 @@ export function createOpShopPickupActions({
     startAddPickupTask,
     startDeletePickupTask,
     startEditPickupTask,
+    toggleDateGroup,
     updateAssignedDriverSelection,
     updatePickupTaskForm,
   };

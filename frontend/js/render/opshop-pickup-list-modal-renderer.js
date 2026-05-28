@@ -7,6 +7,10 @@ import {
 import {
   formatOptional,
 } from "../utils/format-utils.js";
+import {
+  getDateGroupCollapsed,
+  getDateGroupListId,
+} from "../utils/opshop-date-group-utils.js";
 
 export function renderOpShopPickupListModal({
   onCancelForm,
@@ -17,6 +21,7 @@ export function renderOpShopPickupListModal({
   onStartAdd,
   onStartDelete,
   onStartEdit,
+  onToggleDateGroup,
   onUpdateAssignedDriver,
   onUpdateForm,
   onUpdatePickup,
@@ -59,6 +64,7 @@ export function renderOpShopPickupListModal({
     createPickupGroups({
       onOpenDetail,
       onStartEdit,
+      onToggleDateGroup,
       onUpdateAssignedDriver,
     }),
   );
@@ -365,7 +371,7 @@ function createFormActions({
   return actions;
 }
 
-function createPickupGroups({ onOpenDetail, onStartEdit, onUpdateAssignedDriver }) {
+function createPickupGroups({ onOpenDetail, onStartEdit, onToggleDateGroup, onUpdateAssignedDriver }) {
   const container = document.createElement("div");
   container.className = "opshop-date-group-list";
 
@@ -388,13 +394,28 @@ function createPickupGroups({ onOpenDetail, onStartEdit, onUpdateAssignedDriver 
   groupPickupsByDate(state.scheduledOpShopPickups).forEach(([pickupDate, pickups]) => {
     const section = document.createElement("section");
     section.className = "opshop-date-group";
+    const collapsed = getDateGroupCollapsed(
+      state.collapsedRegularOpShopPickupDates,
+      pickupDate,
+      state.dispatchDate,
+    );
+    const listId = getDateGroupListId("regular", pickupDate);
 
     const heading = document.createElement("h3");
-    heading.textContent = formatDateHeading(pickupDate);
+    heading.className = "opshop-date-group-heading";
+    heading.append(createDateGroupToggle({
+      collapsed,
+      listId,
+      onToggleDateGroup,
+      pickupCount: pickups.length,
+      pickupDate,
+    }));
     section.append(heading);
 
     const list = document.createElement("div");
     list.className = "opshop-date-card-list";
+    list.id = listId;
+    list.hidden = collapsed;
     pickups.forEach((pickup) => {
       list.append(createPickupItem(pickup, {
         onOpenDetail,
@@ -408,6 +429,37 @@ function createPickupGroups({ onOpenDetail, onStartEdit, onUpdateAssignedDriver 
   });
 
   return container;
+}
+
+function createDateGroupToggle({
+  collapsed,
+  listId,
+  onToggleDateGroup,
+  pickupCount,
+  pickupDate,
+}) {
+  const toggle = document.createElement("button");
+  toggle.type = "button";
+  toggle.className = "opshop-date-group-toggle";
+  toggle.setAttribute("aria-controls", listId);
+  toggle.setAttribute("aria-expanded", String(!collapsed));
+  toggle.addEventListener("click", () => onToggleDateGroup(pickupDate));
+
+  const label = document.createElement("span");
+  label.textContent = formatDateHeading(pickupDate);
+
+  const count = document.createElement("span");
+  count.className = "opshop-date-group-count";
+  count.textContent = `(${pickupCount} ${pickupCount === 1 ? "pickup" : "pickups"})`;
+
+  const stateLabel = document.createElement("span");
+  stateLabel.className = "opshop-date-group-state";
+  stateLabel.textContent = collapsed ? "Collapsed" : "Expanded";
+
+  const title = document.createElement("span");
+  title.append(label, count);
+  toggle.append(title, stateLabel);
+  return toggle;
 }
 
 function createPickupItem(pickup, {

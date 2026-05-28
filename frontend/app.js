@@ -43,7 +43,13 @@ async function loadBoard(dispatchDate = state.dispatchDate, options = {}) {
     return;
   }
 
-  state.dispatchDate = dispatchDate || DEFAULT_DISPATCH_DATE;
+  const nextDispatchDate = dispatchDate || DEFAULT_DISPATCH_DATE;
+  const dispatchDateChanged = state.dispatchDate !== nextDispatchDate;
+  state.dispatchDate = nextDispatchDate;
+  if (dispatchDateChanged) {
+    state.collapsedRegularOpShopPickupDates = {};
+    state.collapsedOncallOpShopPickupDates = {};
+  }
   state.isLoading = true;
   state.errorMessage = "";
   renderBoard();
@@ -226,6 +232,7 @@ function renderOncallOpShopPickupListModal() {
     onStartAdd: oncallOpShopPickupActions.startAddPickupTask,
     onStartDelete: oncallOpShopPickupActions.startDeletePickupTask,
     onStartEdit: oncallOpShopPickupActions.startEditPickupTask,
+    onToggleDateGroup: oncallOpShopPickupActions.toggleDateGroup,
     onUpdateAssignedDriver: oncallOpShopPickupActions.updateAssignedDriverSelection,
     onUpdateForm: oncallOpShopPickupActions.updatePickupTaskForm,
     onUpdatePickup: oncallOpShopPickupActions.handleUpdatePickupTask,
@@ -242,6 +249,7 @@ function renderOpShopPickupListModal() {
     onStartAdd: opShopPickupActions.startAddPickupTask,
     onStartDelete: opShopPickupActions.startDeletePickupTask,
     onStartEdit: opShopPickupActions.startEditPickupTask,
+    onToggleDateGroup: opShopPickupActions.toggleDateGroup,
     onUpdateAssignedDriver: opShopPickupActions.updateAssignedDriverSelection,
     onUpdateForm: opShopPickupActions.updatePickupTaskForm,
     onUpdatePickup: opShopPickupActions.handleUpdatePickupTask,

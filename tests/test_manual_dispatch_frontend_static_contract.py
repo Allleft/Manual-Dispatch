@@ -283,9 +283,16 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         actions = (
             FRONTEND_ROOT / "js" / "actions" / "opshop-pickup-actions.js"
         ).read_text(encoding="utf-8")
+        app_state = (
+            FRONTEND_ROOT / "js" / "state" / "app-state.js"
+        ).read_text(encoding="utf-8")
         download_utils = (
             FRONTEND_ROOT / "js" / "utils" / "download-utils.js"
         ).read_text(encoding="utf-8")
+        date_group_utils = (
+            FRONTEND_ROOT / "js" / "utils" / "opshop-date-group-utils.js"
+        ).read_text(encoding="utf-8")
+        styles = (FRONTEND_ROOT / "styles.css").read_text(encoding="utf-8")
         task_pool_renderer = (
             FRONTEND_ROOT / "js" / "render" / "task-pool-renderer.js"
         ).read_text(encoding="utf-8")
@@ -313,6 +320,9 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("handleCreatePickupTask", actions)
         self.assertIn("handleUpdatePickupTask", actions)
         self.assertIn("handleDeletePickupTask", actions)
+        self.assertIn("collapsedRegularOpShopPickupDates", app_state)
+        self.assertIn("initializeCollapsedPickupDateGroups", actions)
+        self.assertIn("toggleCollapsedPickupDateGroup", actions)
         self.assertIn("onOpenOpShopPickupList", task_pool_renderer)
         self.assertIn("Regular OP SHOP Pickup List", task_pool_renderer)
         self.assertIn("Count:", task_pool_renderer)
@@ -324,6 +334,7 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("renderOpShopPickupListModal", app_js)
         self.assertIn("onOpenOpShopPickupList: opShopPickupActions.openOpShopPickupList", app_js)
         self.assertIn("onExportOpShopRunSheet: opShopPickupActions.exportOpShopRunSheet", app_js)
+        self.assertIn("onToggleDateGroup: opShopPickupActions.toggleDateGroup", app_js)
         self.assertIn("onUpdateAssignedDriver: opShopPickupActions.updateAssignedDriverSelection", app_js)
 
         self.assertIn("groupPickupsByDate", modal_renderer)
@@ -340,6 +351,22 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("formatDateHeading", modal_renderer)
         self.assertIn("Monday", modal_renderer)
         self.assertIn("opshop-date-group", modal_renderer)
+        self.assertIn("opshop-date-group-toggle", modal_renderer)
+        self.assertIn('toggle.setAttribute("aria-expanded", String(!collapsed))', modal_renderer)
+        self.assertIn('toggle.setAttribute("aria-controls", listId)', modal_renderer)
+        self.assertIn("state.collapsedRegularOpShopPickupDates", modal_renderer)
+        self.assertIn("getDateGroupCollapsed", modal_renderer)
+        self.assertIn("list.hidden = collapsed", modal_renderer)
+        self.assertIn("Collapsed", modal_renderer)
+        self.assertIn("Expanded", modal_renderer)
+        self.assertIn("opshop-date-group-toggle", styles)
+        self.assertIn("opshop-date-group-count", styles)
+        self.assertIn("opshop-date-group-state", styles)
+        self.assertIn("String(pickupDate) < String(dispatchDate)", date_group_utils)
+        self.assertNotIn("localStorage", date_group_utils)
+        self.assertNotIn("sessionStorage", date_group_utils)
+        self.assertNotIn("localStorage", modal_renderer)
+        self.assertNotIn("sessionStorage", modal_renderer)
         self.assertIn("opshop-list-item", modal_renderer)
         list_item_renderer = modal_renderer.split("function createPickupItem", 1)[1].split(
             "function createAssignedToSelect",
@@ -395,6 +422,9 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         actions = (
             FRONTEND_ROOT / "js" / "actions" / "opshop-oncall-pickup-actions.js"
         ).read_text(encoding="utf-8")
+        app_state = (
+            FRONTEND_ROOT / "js" / "state" / "app-state.js"
+        ).read_text(encoding="utf-8")
         task_pool_renderer = (
             FRONTEND_ROOT / "js" / "render" / "task-pool-renderer.js"
         ).read_text(encoding="utf-8")
@@ -417,6 +447,9 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn('!isGeneratedTask("OPSHOP_PICKUP", pickup.pickup_task_id)', actions)
         self.assertIn("apiCreateOncallOpShopPickup", actions)
         self.assertIn("updateAssignedDriverSelection", actions)
+        self.assertIn("collapsedOncallOpShopPickupDates", app_state)
+        self.assertIn("initializeCollapsedPickupDateGroups", actions)
+        self.assertIn("toggleCollapsedPickupDateGroup", actions)
         self.assertIn("WEEKDAY_OFFSETS", actions)
         self.assertIn("candidate.run_day", actions)
         self.assertIn("getOncallTargetWeekMonday(state.dispatchDate)", actions)
@@ -424,6 +457,7 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("renderOncallOpShopPickupListModal", app_js)
         self.assertIn("createOncallOpShopPickupActions", app_js)
         self.assertIn("onOpenOncallOpShopPickupList: oncallOpShopPickupActions.openOncallOpShopPickupList", app_js)
+        self.assertIn("onToggleDateGroup: oncallOpShopPickupActions.toggleDateGroup", app_js)
         self.assertIn("oncallOpShopPickups: payload.oncall_opshop_pickups || []", board_state_sync)
         self.assertIn("state.oncallOpShopPickups = board.oncallOpShopPickups", board_state_sync)
         self.assertIn("Oncall OP SHOP Pickup List", task_pool_renderer)
@@ -442,6 +476,14 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("removes any OP SHOP assignment", modal_renderer)
         self.assertIn("opshop-list-item-suburb", modal_renderer)
         self.assertIn("opshop-list-item-date", modal_renderer)
+        self.assertIn("opshop-date-group-toggle", modal_renderer)
+        self.assertIn('toggle.setAttribute("aria-expanded", String(!collapsed))', modal_renderer)
+        self.assertIn('toggle.setAttribute("aria-controls", listId)', modal_renderer)
+        self.assertIn("state.collapsedOncallOpShopPickupDates", modal_renderer)
+        self.assertIn("getDateGroupCollapsed", modal_renderer)
+        self.assertIn("list.hidden = collapsed", modal_renderer)
+        self.assertNotIn("localStorage", modal_renderer)
+        self.assertNotIn("sessionStorage", modal_renderer)
         self.assertIn("state.oncallOpShopPickupAssignedDriverSelections[pickup.pickup_task_id]", modal_renderer)
         self.assertIn("isDriverFinalizedForPickup", modal_renderer)
         self.assertIn("(Final Summary saved)", modal_renderer)

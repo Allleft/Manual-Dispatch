@@ -6,6 +6,10 @@ import {
   apiUpdateOpShopPickup,
 } from "../api/manual-dispatch-api.js";
 import { isGeneratedTask } from "../state/selectors.js";
+import {
+  initializeCollapsedPickupDateGroups,
+  toggleCollapsedPickupDateGroup,
+} from "../utils/opshop-date-group-utils.js";
 
 const WEEKDAY_OFFSETS = {
   MONDAY: 0,
@@ -27,6 +31,7 @@ export function createOncallOpShopPickupActions({
     state.oncallOpShopPickupEditingTaskId = "";
     state.oncallOpShopPickupForm = {};
     initializeAssignedDriverSelections();
+    initializeCollapsedDateGroups();
     renderBoard();
     await loadScheduleCandidates();
   }
@@ -241,6 +246,15 @@ export function createOncallOpShopPickupActions({
     renderBoard();
   }
 
+  function toggleDateGroup(pickupDate) {
+    state.collapsedOncallOpShopPickupDates = toggleCollapsedPickupDateGroup(
+      state.collapsedOncallOpShopPickupDates,
+      pickupDate,
+      state.dispatchDate,
+    );
+    renderBoard();
+  }
+
   function initializeAssignedDriverSelections() {
     const selections = {};
     state.oncallOpShopPickups.forEach((pickup) => {
@@ -251,6 +265,13 @@ export function createOncallOpShopPickupActions({
         "";
     });
     state.oncallOpShopPickupAssignedDriverSelections = selections;
+  }
+
+  function initializeCollapsedDateGroups() {
+    state.collapsedOncallOpShopPickupDates = initializeCollapsedPickupDateGroups(
+      state.oncallOpShopPickups,
+      state.dispatchDate,
+    );
   }
 
   function getDefaultPickupDateForCandidate(candidate) {
@@ -277,6 +298,7 @@ export function createOncallOpShopPickupActions({
     startAddPickupTask,
     startDeletePickupTask,
     startEditPickupTask,
+    toggleDateGroup,
     updateAssignedDriverSelection,
     updatePickupTaskForm,
   };

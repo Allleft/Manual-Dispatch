@@ -35,6 +35,8 @@ export const state = {
   opshopRegularListWindowEnd: "",
   opshopPickupAssignedDriverSelections: {},
   oncallOpShopPickupAssignedDriverSelections: {},
+  collapsedRegularOpShopPickupDates: {},
+  collapsedOncallOpShopPickupDates: {},
   opshopPickupScheduleCandidates: [],
   oncallOpShopPickupScheduleCandidates: [],
   opshopTemplates: [],
