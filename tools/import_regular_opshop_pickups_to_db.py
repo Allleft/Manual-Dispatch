@@ -68,6 +68,7 @@ DRIVER_ALIAS_TO_NAME = {
     "nonda": "Epaminondas Tsatsoulis",
     "lee": "Guanlin Li",
 }
+WORKBOOK_IMPORT_REVIEW_REASON = "WORKBOOK_IMPORT"
 
 
 @dataclass
@@ -289,7 +290,7 @@ def prepare_regular_rows(rows, driver_lookup):
             active_flag=True,
             fortnight_group=None,
             review_required=False,
-            review_reason=None,
+            review_reason=WORKBOOK_IMPORT_REVIEW_REASON,
             created_at=now,
             updated_at=now,
             default_driver_id=driver.driver_id if driver else None,
@@ -398,14 +399,25 @@ def find_schedule_id_by_key(connection, key):
 
 
 def deactivate_missing_regular_schedules(connection, imported_schedule_ids):
-    """Treat the workbook as the complete active Regular source list."""
+    """Treat the workbook as the complete active Regular source list.
+
+    Only workbook-backed schedules are deactivated. UI-created templates have
+    no workbook source marker and must remain under office control.
+    """
     timestamp_value = timestamp()
+    workbook_source_filter = """
+                AND (
+                    review_reason = ?
+                    OR default_driver_alias IS NOT NULL
+                )
+    """
     if imported_schedule_ids:
         placeholders = ", ".join("?" for _ in imported_schedule_ids)
         parameters = [
             "On_Hold",
             0,
             timestamp_value,
+            WORKBOOK_IMPORT_REVIEW_REASON,
             *sorted(imported_schedule_ids),
         ]
         cursor = connection.execute(
@@ -416,6 +428,7 @@ def deactivate_missing_regular_schedules(connection, imported_schedule_ids):
                 updated_at = ?
             WHERE run_type = 'REGULAR'
                 AND active_flag = 1
+                {workbook_source_filter}
                 AND schedule_id NOT IN ({placeholders})
             """,
             parameters,
@@ -429,8 +442,9 @@ def deactivate_missing_regular_schedules(connection, imported_schedule_ids):
                 updated_at = ?
             WHERE run_type = 'REGULAR'
                 AND active_flag = 1
+                {workbook_source_filter}
             """,
-            ("On_Hold", 0, timestamp_value),
+            ("On_Hold", 0, timestamp_value, WORKBOOK_IMPORT_REVIEW_REASON),
         )
     return cursor.rowcount
 

@@ -6,7 +6,7 @@ from pathlib import Path
 from openpyxl import Workbook
 
 from backend.repositories.sqlite_manual_dispatch_repository import SQLiteManualDispatchRepository
-from backend.schemas import CreateDriverRequest, UpdateDriverRequest
+from backend.schemas import CreateDriverRequest, CreateOpShopTemplateRequest, UpdateDriverRequest
 from backend.services.manual_dispatch_service import ManualDispatchService
 from tools.import_oncall_opshop_pickups_to_db import (
     REQUIRED_COLUMNS,
@@ -115,6 +115,41 @@ class ImportOncallOpShopPickupsToDbTest(unittest.TestCase):
         self.assertEqual(["MONDAY"], [schedule.run_day for schedule in active_schedules])
         self.assertIsNotNone(second_summary.backup_path)
         self.assertTrue(Path(second_summary.backup_path).exists())
+
+    def test_rerun_deactivates_missing_workbook_oncall_without_disabling_ui_template(self):
+        ui_template = self.service.create_opshop_template(
+            CreateOpShopTemplateRequest(
+                run_type="ON_CALL",
+                run_day=None,
+                name="UI Created Oncall",
+                suburb="Richmond",
+                street_address="10 Bridge Road",
+                pickup_frequency="On Call",
+                time_window="",
+            )
+        )
+        self._save_workbook(
+            {
+                "MON": [self._row(Op_Shop_Name="Monday Oncall", Assigned_to="John G")],
+                "Gavin": [self._row(Op_Shop_Name="Gavin Sheet Oncall", Assigned_to="Gavin")],
+            }
+        )
+        import_oncall_opshop_pickups_to_db(self.workbook_path, self.db_path)
+
+        self._save_workbook(
+            {
+                "MON": [self._row(Op_Shop_Name="Monday Oncall", Assigned_to="John G")],
+            }
+        )
+        second_summary = import_oncall_opshop_pickups_to_db(self.workbook_path, self.db_path)
+        schedules_by_id = {
+            schedule.schedule_id: schedule
+            for schedule in self.repository.list_opshop_pickup_schedules()
+        }
+
+        self.assertEqual(1, second_summary.schedules_deactivated)
+        self.assertTrue(schedules_by_id[ui_template.schedule_id].active_flag)
+        self.assertEqual("Active", schedules_by_id[ui_template.schedule_id].status)
 
     def test_missing_required_sheet_or_column_fails_before_writing_database(self):
         workbook = Workbook()

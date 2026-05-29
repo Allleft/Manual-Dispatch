@@ -273,7 +273,8 @@ The repository provides importer tools for approved local bulk refreshes. Real w
 
 - Excel importers remain available for authorized bulk source refreshes.
 - UI-created templates and imported templates may coexist, but the importer is not an automatic backup of office UI edits.
-- A subsequent importer run manages its workbook-backed schedule source and may soft-disable templates absent from that source.
+- A subsequent importer run manages only its workbook-backed schedule source and may soft-disable workbook-backed templates absent from that source.
+- UI-created templates remain office-managed and should not be soft-disabled merely because they are absent from a workbook.
 - Before any source refresh, establish which source is authoritative and back up the SQLite database.
 
 ## Deployment / Backup
