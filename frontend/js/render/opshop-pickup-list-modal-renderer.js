@@ -443,7 +443,11 @@ function createDateGroupToggle({
   toggle.className = "opshop-date-group-toggle";
   toggle.setAttribute("aria-controls", listId);
   toggle.setAttribute("aria-expanded", String(!collapsed));
-  toggle.addEventListener("click", () => onToggleDateGroup(pickupDate));
+  toggle.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onToggleDateGroup(pickupDate);
+  });
 
   const label = document.createElement("span");
   label.textContent = formatDateHeading(pickupDate);

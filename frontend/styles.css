@@ -556,6 +556,10 @@ h1 {
   text-transform: uppercase;
 }
 
+.opshop-date-card-list[hidden] {
+  display: none;
+}
+
 .opshop-list-item {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
