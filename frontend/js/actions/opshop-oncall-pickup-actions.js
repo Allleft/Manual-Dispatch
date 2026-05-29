@@ -10,6 +10,10 @@ import {
   initializeCollapsedPickupDateGroups,
   toggleCollapsedPickupDateGroup,
 } from "../utils/opshop-date-group-utils.js";
+import {
+  captureElementScroll,
+  restoreElementScroll,
+} from "../utils/scroll-utils.js";
 
 const WEEKDAY_OFFSETS = {
   MONDAY: 0,
@@ -247,12 +251,15 @@ export function createOncallOpShopPickupActions({
   }
 
   function toggleDateGroup(pickupDate) {
+    const scrollSnapshot = captureElementScroll("#opshop-oncall-pickup-list-root");
+
     state.collapsedOncallOpShopPickupDates = toggleCollapsedPickupDateGroup(
       state.collapsedOncallOpShopPickupDates,
       pickupDate,
       state.dispatchDate,
     );
     renderBoard();
+    restoreElementScroll(scrollSnapshot);
   }
 
   function initializeAssignedDriverSelections() {

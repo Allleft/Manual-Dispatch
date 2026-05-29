@@ -13,6 +13,10 @@ import {
   initializeCollapsedPickupDateGroups,
   toggleCollapsedPickupDateGroup,
 } from "../utils/opshop-date-group-utils.js";
+import {
+  captureElementScroll,
+  restoreElementScroll,
+} from "../utils/scroll-utils.js";
 
 export function createOpShopPickupActions({
   loadBoard,
@@ -220,12 +224,15 @@ export function createOpShopPickupActions({
   }
 
   function toggleDateGroup(pickupDate) {
+    const scrollSnapshot = captureElementScroll("#opshop-pickup-list-root");
+
     state.collapsedRegularOpShopPickupDates = toggleCollapsedPickupDateGroup(
       state.collapsedRegularOpShopPickupDates,
       pickupDate,
       state.dispatchDate,
     );
     renderBoard();
+    restoreElementScroll(scrollSnapshot);
   }
 
   async function exportOpShopRunSheet() {

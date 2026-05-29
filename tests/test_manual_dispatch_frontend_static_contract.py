@@ -292,6 +292,9 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         date_group_utils = (
             FRONTEND_ROOT / "js" / "utils" / "opshop-date-group-utils.js"
         ).read_text(encoding="utf-8")
+        scroll_utils = (
+            FRONTEND_ROOT / "js" / "utils" / "scroll-utils.js"
+        ).read_text(encoding="utf-8")
         styles = (FRONTEND_ROOT / "styles.css").read_text(encoding="utf-8")
         task_pool_renderer = (
             FRONTEND_ROOT / "js" / "render" / "task-pool-renderer.js"
@@ -323,6 +326,15 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("collapsedRegularOpShopPickupDates", app_state)
         self.assertIn("initializeCollapsedPickupDateGroups", actions)
         self.assertIn("toggleCollapsedPickupDateGroup", actions)
+        self.assertIn('captureElementScroll("#opshop-pickup-list-root")', actions)
+        self.assertIn("restoreElementScroll(scrollSnapshot)", actions)
+        self.assertIn("requestAnimationFrame", scroll_utils)
+        self.assertIn("scrollTop", scroll_utils)
+        self.assertIn("scrollLeft", scroll_utils)
+        self.assertNotIn("localStorage", scroll_utils)
+        self.assertNotIn("sessionStorage", scroll_utils)
+        self.assertNotIn("location.hash", scroll_utils)
+        self.assertNotIn("scrollIntoView", scroll_utils)
         self.assertIn("onOpenOpShopPickupList", task_pool_renderer)
         self.assertIn("Regular OP SHOP Pickup List", task_pool_renderer)
         self.assertIn("Count:", task_pool_renderer)
@@ -372,8 +384,16 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("String(pickupDate) < String(dispatchDate)", date_group_utils)
         self.assertNotIn("localStorage", date_group_utils)
         self.assertNotIn("sessionStorage", date_group_utils)
+        self.assertNotIn("location.hash", date_group_utils)
+        self.assertNotIn("scrollIntoView", date_group_utils)
+        self.assertNotIn("localStorage", actions)
+        self.assertNotIn("sessionStorage", actions)
+        self.assertNotIn("location.hash", actions)
+        self.assertNotIn("scrollIntoView", actions)
         self.assertNotIn("localStorage", modal_renderer)
         self.assertNotIn("sessionStorage", modal_renderer)
+        self.assertNotIn("location.hash", modal_renderer)
+        self.assertNotIn("scrollIntoView", modal_renderer)
         self.assertIn("opshop-list-item", modal_renderer)
         list_item_renderer = modal_renderer.split("function createPickupItem", 1)[1].split(
             "function createAssignedToSelect",
@@ -438,6 +458,9 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         modal_renderer = (
             FRONTEND_ROOT / "js" / "render" / "opshop-oncall-pickup-list-modal-renderer.js"
         ).read_text(encoding="utf-8")
+        scroll_utils = (
+            FRONTEND_ROOT / "js" / "utils" / "scroll-utils.js"
+        ).read_text(encoding="utf-8")
         selectors = (FRONTEND_ROOT / "js" / "state" / "selectors.js").read_text(encoding="utf-8")
         final_summary_renderer = (
             FRONTEND_ROOT / "js" / "render" / "final-summary-renderer.js"
@@ -457,6 +480,13 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("collapsedOncallOpShopPickupDates", app_state)
         self.assertIn("initializeCollapsedPickupDateGroups", actions)
         self.assertIn("toggleCollapsedPickupDateGroup", actions)
+        self.assertIn('captureElementScroll("#opshop-oncall-pickup-list-root")', actions)
+        self.assertIn("restoreElementScroll(scrollSnapshot)", actions)
+        self.assertIn("requestAnimationFrame", scroll_utils)
+        self.assertNotIn("localStorage", scroll_utils)
+        self.assertNotIn("sessionStorage", scroll_utils)
+        self.assertNotIn("location.hash", scroll_utils)
+        self.assertNotIn("scrollIntoView", scroll_utils)
         self.assertIn("WEEKDAY_OFFSETS", actions)
         self.assertIn("candidate.run_day", actions)
         self.assertIn("getOncallTargetWeekMonday(state.dispatchDate)", actions)
@@ -492,8 +522,14 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("toggle.addEventListener(\"click\", (event) =>", modal_renderer)
         self.assertIn("event.preventDefault()", modal_renderer)
         self.assertIn("event.stopPropagation()", modal_renderer)
+        self.assertNotIn("localStorage", actions)
+        self.assertNotIn("sessionStorage", actions)
+        self.assertNotIn("location.hash", actions)
+        self.assertNotIn("scrollIntoView", actions)
         self.assertNotIn("localStorage", modal_renderer)
         self.assertNotIn("sessionStorage", modal_renderer)
+        self.assertNotIn("location.hash", modal_renderer)
+        self.assertNotIn("scrollIntoView", modal_renderer)
         self.assertIn("state.oncallOpShopPickupAssignedDriverSelections[pickup.pickup_task_id]", modal_renderer)
         self.assertIn("isDriverFinalizedForPickup", modal_renderer)
         self.assertIn("(Final Summary saved)", modal_renderer)
@@ -596,6 +632,8 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         for source_path in frontend_sources:
             source = source_path.read_text(encoding="utf-8")
             self.assertNotIn("localStorage", source)
+            self.assertNotIn("location.hash", source)
+            self.assertNotIn("scrollIntoView", source)
             self.assertNotIn("google.maps", source)
             self.assertNotIn("geolocation", source)
 
