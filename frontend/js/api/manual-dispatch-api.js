@@ -178,6 +178,70 @@ export async function apiListCountrysideRouteGroups() {
 }
 
 
+export async function apiCreateCountrysideRouteGroup(payload) {
+  return requestJson("/api/manual-dispatch/opshop-countryside-route-groups", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+
+export async function apiUpdateCountrysideRouteGroup(routeGroupId, payload) {
+  return requestJson(
+    `/api/manual-dispatch/opshop-countryside-route-groups/${encodeURIComponent(routeGroupId)}`,
+    {
+      method: "PATCH",
+      body: payload,
+    },
+  );
+}
+
+
+export async function apiDisableCountrysideRouteGroup(routeGroupId) {
+  return requestJson(
+    `/api/manual-dispatch/opshop-countryside-route-groups/${encodeURIComponent(routeGroupId)}/disable`,
+    { method: "POST" },
+  );
+}
+
+
+export async function apiListCountrysideRouteMemberships(routeGroupId) {
+  return requestJson(
+    `/api/manual-dispatch/opshop-countryside-route-groups/${encodeURIComponent(routeGroupId)}/memberships`,
+  );
+}
+
+
+export async function apiAddCountrysideRouteMembership(routeGroupId, payload) {
+  return requestJson(
+    `/api/manual-dispatch/opshop-countryside-route-groups/${encodeURIComponent(routeGroupId)}/memberships`,
+    {
+      method: "POST",
+      body: payload,
+    },
+  );
+}
+
+
+export async function apiRemoveCountrysideRouteMembership(scheduleId) {
+  return requestJson(
+    `/api/manual-dispatch/opshop-countryside-memberships/${encodeURIComponent(scheduleId)}/remove`,
+    { method: "POST" },
+  );
+}
+
+
+export async function apiMoveCountrysideRouteMembership(scheduleId, payload) {
+  return requestJson(
+    `/api/manual-dispatch/opshop-countryside-memberships/${encodeURIComponent(scheduleId)}/move`,
+    {
+      method: "POST",
+      body: payload,
+    },
+  );
+}
+
+
 export async function apiListOpShopTemplates(runType, includeInactive = false) {
   return requestJson("/api/manual-dispatch/opshop-templates", {
     query: { run_type: runType, include_inactive: includeInactive },

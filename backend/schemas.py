@@ -312,6 +312,32 @@ class UpdateOpShopCountrysideRouteGroupRequest:
 
 
 @dataclass
+class AddCountrysideRouteMembershipRequest:
+    name: Optional[str] = None
+    suburb: Optional[str] = None
+    street_address: Optional[str] = None
+    area_region: Optional[str] = None
+    primary_contact: Optional[str] = None
+    primary_phone: Optional[str] = None
+    secondary_contact: Optional[str] = None
+    secondary_phone: Optional[str] = None
+    pickup_frequency: Optional[str] = None
+    time_window: Optional[str] = None
+    call_before_arrival: Optional[bool] = None
+    call_timing: Optional[str] = None
+    access_type: Optional[str] = None
+    key_required: Optional[bool] = None
+    trailer_restriction: Optional[str] = None
+    status_notes: Optional[str] = None
+    default_driver_id: Optional[str] = None
+
+
+@dataclass
+class MoveCountrysideRouteMembershipRequest:
+    target_route_group_id: Optional[str] = None
+
+
+@dataclass
 class CreateOpShopPickupTaskRequest:
     schedule_id: Optional[str] = None
     pickup_date: Optional[str] = None

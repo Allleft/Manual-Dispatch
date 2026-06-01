@@ -719,8 +719,6 @@ class InMemoryManualDispatchRepository:
                 continue
             if schedule.pickup_category != "COUNTRYSIDE":
                 continue
-            if not schedule.active_flag or schedule.status != "Active":
-                continue
             route_group = self.get_countryside_route_group(schedule.route_group_id)
             if not route_group or not route_group.active_flag or route_group.status != "Active":
                 continue

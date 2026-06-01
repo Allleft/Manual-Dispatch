@@ -4,6 +4,7 @@ from fastapi import APIRouter, Body, HTTPException
 from fastapi.responses import Response
 
 from backend.schemas import (
+    AddCountrysideRouteMembershipRequest,
     ApplyCountrysideOpShopPickupAssignmentsRequest,
     ApplyOncallOpShopPickupAssignmentsRequest,
     ApplyWeeklyOpShopPickupAssignmentsRequest,
@@ -17,6 +18,7 @@ from backend.schemas import (
     CreateVehicleRequest,
     EnsureOpShopPickupTasksRequest,
     LoginOperatorAccountRequest,
+    MoveCountrysideRouteMembershipRequest,
     RegisterOperatorAccountRequest,
     ResetOperatorPasswordRequest,
     SaveFinalTripSummaryRequest,
@@ -204,6 +206,47 @@ def update_opshop_countryside_route_group(
 def disable_opshop_countryside_route_group(route_group_id: str):
     try:
         return to_dict(service.disable_countryside_route_group(route_group_id))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.get("/opshop-countryside-route-groups/{route_group_id}/memberships")
+def list_opshop_countryside_route_memberships(route_group_id: str):
+    try:
+        return [
+            to_dict(template)
+            for template in service.list_countryside_route_memberships(route_group_id)
+        ]
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.post("/opshop-countryside-route-groups/{route_group_id}/memberships")
+def add_opshop_countryside_route_membership(
+    route_group_id: str,
+    request: AddCountrysideRouteMembershipRequest,
+):
+    try:
+        return to_dict(service.add_countryside_route_membership(route_group_id, request))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.post("/opshop-countryside-memberships/{schedule_id}/remove")
+def remove_opshop_countryside_route_membership(schedule_id: str):
+    try:
+        return to_dict(service.remove_countryside_route_membership(schedule_id))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.post("/opshop-countryside-memberships/{schedule_id}/move")
+def move_opshop_countryside_route_membership(
+    schedule_id: str,
+    request: MoveCountrysideRouteMembershipRequest,
+):
+    try:
+        return to_dict(service.move_countryside_route_membership(schedule_id, request))
     except ValueError as error:
         raise _to_http_exception(error) from error
 

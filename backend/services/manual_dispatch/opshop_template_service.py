@@ -3,6 +3,7 @@ from dataclasses import replace
 from datetime import datetime, timezone
 
 from backend.schemas import (
+    CreateOpShopTemplateRequest,
     OpShopCountrysideRouteGroup,
     OpShopLocation,
     OpShopPickupSchedule,
@@ -92,15 +93,99 @@ class OpShopTemplateService:
             for schedule in self.repository.list_opshop_pickup_schedules()
             if schedule.route_group_id == route_group_id
             and schedule.pickup_category == "COUNTRYSIDE"
-            and schedule.active_flag
-            and schedule.status == "Active"
         }
         for task in self.repository.list_opshop_pickup_tasks():
             if task.schedule_id in active_schedule_ids and task.status in {"ACTIVE", "ASSIGNED"}:
                 raise ValueError(
-                    "Countryside route group has active pickup tasks and cannot be disabled"
+                    "This route group has active pickup tasks. Cancel or complete them before disabling this route group."
                 )
         return self.repository.disable_countryside_route_group(route_group_id)
+
+    def list_countryside_route_memberships(self, route_group_id):
+        route_group = self._active_route_group(route_group_id)
+        return [
+            template
+            for template in self.repository.list_opshop_templates(
+                "ON_CALL",
+                include_inactive=False,
+            )
+            if template.pickup_category == "COUNTRYSIDE"
+            and template.route_group_id == route_group.route_group_id
+        ]
+
+    def add_countryside_route_membership(self, route_group_id, request):
+        route_group = self._active_route_group(route_group_id)
+        payload = CreateOpShopTemplateRequest(
+            run_type="ON_CALL",
+            pickup_category="COUNTRYSIDE",
+            route_group_id=route_group.route_group_id,
+            name=getattr(request, "name", None),
+            suburb=getattr(request, "suburb", None),
+            street_address=getattr(request, "street_address", None),
+            area_region=getattr(request, "area_region", None),
+            primary_contact=getattr(request, "primary_contact", None),
+            primary_phone=getattr(request, "primary_phone", None),
+            secondary_contact=getattr(request, "secondary_contact", None),
+            secondary_phone=getattr(request, "secondary_phone", None),
+            pickup_frequency=getattr(request, "pickup_frequency", None) or "On Call",
+            time_window=getattr(request, "time_window", None),
+            call_before_arrival=getattr(request, "call_before_arrival", None),
+            call_timing=getattr(request, "call_timing", None),
+            access_type=getattr(request, "access_type", None),
+            key_required=getattr(request, "key_required", None),
+            trailer_restriction=getattr(request, "trailer_restriction", None),
+            status_notes=getattr(request, "status_notes", None),
+            default_driver_id=getattr(request, "default_driver_id", None),
+        )
+        return self.create_opshop_template(payload)
+
+    def remove_countryside_route_membership(self, schedule_id):
+        schedule = self._countryside_schedule(schedule_id)
+        if self._has_active_pickup_tasks(schedule.schedule_id):
+            raise ValueError(
+                "This route template has active pickup tasks. Cancel or complete them before removing it from the route."
+            )
+        self._disable_schedule(schedule)
+        return self._get_template(schedule.schedule_id, include_inactive=True)
+
+    def move_countryside_route_membership(self, schedule_id, request):
+        schedule = self._countryside_schedule(schedule_id)
+        target_route_group = self._active_route_group(
+            getattr(request, "target_route_group_id", None)
+        )
+        if schedule.route_group_id == target_route_group.route_group_id:
+            raise ValueError("Target route group is already selected for this template")
+
+        location = self.repository.get_opshop_location(schedule.opshop_id)
+        if not location:
+            raise ValueError(f"OP SHOP location does not exist: {schedule.opshop_id}")
+
+        payload = CreateOpShopTemplateRequest(
+            run_type="ON_CALL",
+            pickup_category="COUNTRYSIDE",
+            route_group_id=target_route_group.route_group_id,
+            name=location.name,
+            suburb=location.suburb,
+            street_address=location.street_address,
+            area_region=location.area_region,
+            primary_contact=location.primary_contact,
+            primary_phone=location.primary_phone,
+            secondary_contact=location.secondary_contact,
+            secondary_phone=location.secondary_phone,
+            pickup_frequency=schedule.pickup_frequency or "On Call",
+            time_window=schedule.time_window,
+            call_before_arrival=schedule.call_before_arrival,
+            call_timing=schedule.call_timing,
+            access_type=location.access_type,
+            key_required=location.key_required,
+            trailer_restriction=location.trailer_restriction,
+            status_notes=location.status_notes,
+            default_driver_id=schedule.default_driver_id,
+        )
+        moved = self.create_opshop_template(payload)
+        if moved.schedule_id != schedule.schedule_id:
+            self._disable_schedule(schedule)
+        return moved
 
     def create_opshop_template(self, request):
         values = self._values_from_request(request)
@@ -338,6 +423,30 @@ class OpShopTemplateService:
         if not template:
             raise ValueError(f"OP SHOP template does not exist: {schedule_id}")
         return template
+
+    def _active_route_group(self, route_group_id):
+        route_group_id = clean_required_text(route_group_id, "route_group_id")
+        route_group = self.repository.get_countryside_route_group(route_group_id)
+        if not route_group:
+            raise ValueError(f"Countryside route group does not exist: {route_group_id}")
+        if not route_group.active_flag or route_group.status != "Active":
+            raise ValueError("Countryside route group must be active")
+        return route_group
+
+    def _countryside_schedule(self, schedule_id):
+        schedule_id = clean_required_text(schedule_id, "schedule_id")
+        schedule = self.repository.get_opshop_pickup_schedule(schedule_id)
+        if not schedule:
+            raise ValueError(f"Countryside route template does not exist: {schedule_id}")
+        if schedule.run_type != "ON_CALL" or schedule.pickup_category != "COUNTRYSIDE":
+            raise ValueError("Only Countryside ON_CALL route templates can be managed here")
+        return schedule
+
+    def _has_active_pickup_tasks(self, schedule_id):
+        return any(
+            task.schedule_id == schedule_id and task.status in {"ACTIVE", "ASSIGNED"}
+            for task in self.repository.list_opshop_pickup_tasks()
+        )
 
 
 def _normalize_run_type(value):

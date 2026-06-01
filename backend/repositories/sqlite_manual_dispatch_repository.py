@@ -1057,8 +1057,6 @@ class SQLiteManualDispatchRepository:
                     AND task.generated_from = 'ON_CALL'
                     AND schedule.run_type = 'ON_CALL'
                     AND COALESCE(schedule.pickup_category, 'NORMAL') = 'COUNTRYSIDE'
-                    AND schedule.active_flag = 1
-                    AND schedule.status = 'Active'
                     AND route_group.active_flag = 1
                     AND route_group.status = 'Active'
                     {date_clause}

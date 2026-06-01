@@ -12,10 +12,12 @@ from backend.repositories.sqlite_manual_dispatch_repository import (
     SQLiteManualDispatchRepository,
 )
 from backend.schemas import (
+    AddCountrysideRouteMembershipRequest,
     ApplyCountrysideOpShopPickupAssignmentsRequest,
     CreateOpShopCountrysideRouteGroupRequest,
     CreateOpShopTemplateRequest,
     CreateOpShopPickupTaskRequest,
+    MoveCountrysideRouteMembershipRequest,
     OpShopPickupTask,
     RegisterOperatorAccountRequest,
     SaveFinalTripSummaryRequest,
@@ -95,6 +97,106 @@ class CountrysideRouteGroupServiceTest(unittest.TestCase):
         self.assertEqual([template.schedule_id], [item.schedule_id for item in countryside_candidates])
         self.assertEqual(group.route_group_name, countryside_candidates[0].route_group_name)
         self.assertEqual([], self.repository.list_opshop_pickup_tasks())
+
+    def test_route_membership_add_remove_and_move_are_soft_schedule_changes(self):
+        source_group = self.service.create_countryside_route_group(
+            CreateOpShopCountrysideRouteGroupRequest(route_group_name="Source Route")
+        )
+        target_group = self.service.create_countryside_route_group(
+            CreateOpShopCountrysideRouteGroupRequest(route_group_name="Target Route")
+        )
+        membership = self.service.add_countryside_route_membership(
+            source_group.route_group_id,
+            AddCountrysideRouteMembershipRequest(
+                name="Route Membership Shop",
+                suburb="Benalla",
+                street_address="22 Faith Street",
+                primary_phone="0400 000 000",
+                time_window="AM",
+                default_driver_id="D001",
+            ),
+        )
+        task = self.service.create_oncall_opshop_pickup_task(
+            CreateOpShopPickupTaskRequest(
+                schedule_id=membership.schedule_id,
+                pickup_date="2026-05-25",
+            )
+        )
+
+        moved = self.service.move_countryside_route_membership(
+            membership.schedule_id,
+            MoveCountrysideRouteMembershipRequest(
+                target_route_group_id=target_group.route_group_id
+            ),
+        )
+        board = self.service.get_board("2026-05-25")
+        with self.assertRaisesRegex(ValueError, "active pickup tasks"):
+            self.service.disable_countryside_route_group(source_group.route_group_id)
+        moved_removed = self.service.remove_countryside_route_membership(
+            moved.schedule_id
+        )
+
+        self.assertEqual(1, len(self.repository.list_opshop_locations()))
+        self.assertEqual(target_group.route_group_id, moved.route_group_id)
+        self.assertNotEqual(membership.schedule_id, moved.schedule_id)
+        self.assertFalse(
+            self.repository.get_opshop_pickup_schedule(membership.schedule_id).active_flag
+        )
+        self.assertEqual(
+            membership.schedule_id,
+            self.repository.get_opshop_pickup_task(task.pickup_task_id).schedule_id,
+        )
+        self.assertIn(
+            task.pickup_task_id,
+            [item.pickup_task_id for item in board.countryside_opshop_pickups],
+        )
+        self.assertFalse(moved_removed.active_flag)
+        self.assertEqual("On_Hold", moved_removed.status)
+
+    def test_route_membership_remove_blocks_active_tasks(self):
+        group = self.service.create_countryside_route_group(
+            CreateOpShopCountrysideRouteGroupRequest(route_group_name="Blocked Route")
+        )
+        membership = self.service.add_countryside_route_membership(
+            group.route_group_id,
+            AddCountrysideRouteMembershipRequest(
+                name="Blocked Membership Shop",
+                suburb="Seymour",
+                street_address="1 High Street",
+            ),
+        )
+        self.service.create_oncall_opshop_pickup_task(
+            CreateOpShopPickupTaskRequest(
+                schedule_id=membership.schedule_id,
+                pickup_date="2026-05-25",
+            )
+        )
+
+        with self.assertRaisesRegex(ValueError, "active pickup tasks"):
+            self.service.remove_countryside_route_membership(membership.schedule_id)
+
+    def test_route_membership_management_rejects_non_countryside_templates(self):
+        normal_template = self.service.create_opshop_template(
+            CreateOpShopTemplateRequest(
+                run_type="ON_CALL",
+                name="Normal Oncall",
+                suburb="Geelong",
+                street_address="1 Normal Road",
+                pickup_frequency="On Call",
+            )
+        )
+        group = self.service.create_countryside_route_group(
+            CreateOpShopCountrysideRouteGroupRequest(route_group_name="Inactive Target")
+        )
+        self.service.disable_countryside_route_group(group.route_group_id)
+
+        with self.assertRaisesRegex(ValueError, "Only Countryside"):
+            self.service.remove_countryside_route_membership(normal_template.schedule_id)
+        with self.assertRaisesRegex(ValueError, "active"):
+            self.service.add_countryside_route_membership(
+                group.route_group_id,
+                AddCountrysideRouteMembershipRequest(name="Inactive Target Shop"),
+            )
 
     def test_countryside_validation_and_multiple_groups_for_same_location(self):
         first_group = self.service.create_countryside_route_group(
@@ -341,6 +443,21 @@ class CountrysideRouteGroupRouteTest(unittest.TestCase):
                 "pickup_frequency": "On Call",
             },
         )
+        membership_added = self.client.post(
+            f"/api/manual-dispatch/opshop-countryside-route-groups/{route_group_id}/memberships",
+            json={
+                "name": "API Membership Shop",
+                "suburb": "Echuca",
+                "street_address": "9 Membership Road",
+                "primary_phone": "0400 111 222",
+            },
+        )
+        memberships = self.client.get(
+            f"/api/manual-dispatch/opshop-countryside-route-groups/{route_group_id}/memberships"
+        )
+        membership_removed = self.client.post(
+            f"/api/manual-dispatch/opshop-countryside-memberships/{membership_added.json()['schedule_id']}/remove"
+        )
         candidates = self.client.get(
             "/api/manual-dispatch/opshop-pickup-schedules",
             params={"run_type": "countryside"},
@@ -379,6 +496,12 @@ class CountrysideRouteGroupRouteTest(unittest.TestCase):
         self.assertEqual(200, created.status_code)
         self.assertEqual("API Route Updated", updated.json()["route_group_name"])
         self.assertEqual("COUNTRYSIDE", template.json()["pickup_category"])
+        self.assertEqual(200, membership_added.status_code)
+        self.assertIn(
+            membership_added.json()["schedule_id"],
+            [item["schedule_id"] for item in memberships.json()],
+        )
+        self.assertEqual("On_Hold", membership_removed.json()["status"])
         self.assertEqual([template.json()["schedule_id"]], [item["schedule_id"] for item in candidates.json()])
         self.assertEqual(candidates.json(), candidates_by_category.json())
         self.assertEqual(200, created_task.status_code)

@@ -118,6 +118,28 @@ class ManualDispatchService:
             route_group_id
         )
 
+    def list_countryside_route_memberships(self, route_group_id):
+        return self.opshop_template_service.list_countryside_route_memberships(
+            route_group_id
+        )
+
+    def add_countryside_route_membership(self, route_group_id, request):
+        return self.opshop_template_service.add_countryside_route_membership(
+            route_group_id,
+            request,
+        )
+
+    def remove_countryside_route_membership(self, schedule_id):
+        return self.opshop_template_service.remove_countryside_route_membership(
+            schedule_id
+        )
+
+    def move_countryside_route_membership(self, schedule_id, request):
+        return self.opshop_template_service.move_countryside_route_membership(
+            schedule_id,
+            request,
+        )
+
     def create_opshop_template(self, request):
         return self.opshop_template_service.create_opshop_template(request)
 

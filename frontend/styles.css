@@ -548,6 +548,77 @@ h1 {
   max-width: 420px;
 }
 
+.opshop-route-management-bar,
+.opshop-list-section-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.opshop-route-management-actions,
+.opshop-route-template-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.opshop-list-section {
+  display: grid;
+  gap: 0.8rem;
+  border-top: 1px solid rgba(39, 93, 69, 0.14);
+  padding-top: 0.9rem;
+}
+
+.opshop-list-section-heading {
+  margin-bottom: 0;
+  color: var(--accent-strong);
+  font-size: 1.05rem;
+  font-weight: 900;
+}
+
+.opshop-route-template-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.opshop-route-template-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: start;
+  border: 1px solid rgba(39, 93, 69, 0.16);
+  border-radius: var(--radius-md);
+  padding: 0.8rem;
+  background: var(--panel);
+}
+
+.opshop-route-template-main {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.opshop-route-template-main h4 {
+  margin-bottom: 0;
+  color: var(--ink);
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.opshop-route-template-main p {
+  margin-bottom: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.opshop-route-template-notes {
+  color: var(--accent-strong);
+  font-weight: 700;
+}
+
 .opshop-date-group-toggle {
   display: flex;
   align-items: center;
@@ -1701,6 +1772,10 @@ select:disabled {
   }
 
   .order-card-compact {
+    grid-template-columns: 1fr;
+  }
+
+  .opshop-route-template-card {
     grid-template-columns: 1fr;
   }
 }
