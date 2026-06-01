@@ -105,6 +105,9 @@ class OpShopPickupService:
             if schedule.run_type != "REGULAR":
                 _increment(skip_reasons, "NON_REGULAR_NOT_IN_WEEKLY_LIST")
                 continue
+            if getattr(schedule, "pickup_category", "NORMAL") != "NORMAL":
+                _increment(skip_reasons, "NON_NORMAL_CATEGORY_NOT_IN_WEEKLY_LIST")
+                continue
             if schedule.run_day not in WEEKDAY_BY_NAME:
                 _increment(skip_reasons, "UNKNOWN_RUN_DAY")
                 continue
@@ -143,7 +146,9 @@ class OpShopPickupService:
             return self.repository.list_scheduled_opshop_pickup_schedule_candidates()
         if normalized in {"oncall", "on_call"}:
             return self.repository.list_oncall_opshop_pickup_schedule_candidates()
-        raise ValueError("Only scheduled or oncall OP SHOP pickup schedules are supported")
+        if normalized in {"countryside", "country", "countryside_oncall"}:
+            return self.repository.list_countryside_opshop_pickup_schedule_candidates()
+        raise ValueError("Only scheduled, oncall, or countryside OP SHOP pickup schedules are supported")
 
     def create_opshop_pickup_task(self, request):
         request = request or CreateOpShopPickupTaskRequest()
@@ -358,6 +363,8 @@ class OpShopPickupService:
                 continue
             schedule = self.repository.get_opshop_pickup_schedule(task.schedule_id)
             if not schedule or schedule.run_type != "ON_CALL" or not _is_active_schedule(schedule):
+                continue
+            if getattr(schedule, "pickup_category", "NORMAL") != "NORMAL":
                 continue
 
             if not driver_id:

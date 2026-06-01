@@ -2,7 +2,11 @@ import hashlib
 from dataclasses import replace
 from datetime import datetime, timezone
 
-from backend.schemas import OpShopLocation, OpShopPickupSchedule
+from backend.schemas import (
+    OpShopCountrysideRouteGroup,
+    OpShopLocation,
+    OpShopPickupSchedule,
+)
 from backend.services.manual_dispatch.normalization import (
     bool_or_default,
     clean_optional_text,
@@ -12,6 +16,7 @@ from backend.services.manual_dispatch.normalization import (
 
 VALID_RUN_TYPES = {"REGULAR", "ON_CALL"}
 VALID_RUN_DAYS = {"MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"}
+VALID_PICKUP_CATEGORIES = {"NORMAL", "COUNTRYSIDE"}
 
 
 class OpShopTemplateService:
@@ -25,6 +30,77 @@ class OpShopTemplateService:
             normalized_type,
             bool(include_inactive),
         )
+
+    def list_countryside_route_groups(self, include_inactive=False):
+        return self.repository.list_countryside_route_groups(bool(include_inactive))
+
+    def create_countryside_route_group(self, request):
+        name = clean_required_text(getattr(request, "route_group_name", None), "route_group_name")
+        existing = self.repository.find_countryside_route_group_by_name(name)
+        now = _timestamp()
+        route_group = OpShopCountrysideRouteGroup(
+            route_group_id=existing.route_group_id
+            if existing
+            else _deterministic_id("OPSHOP-COUNTRYSIDE-GROUP", _normalize_key(name)),
+            route_group_name=name,
+            status="Active",
+            active_flag=True,
+            display_order=int(getattr(request, "display_order", None) or (existing.display_order if existing else 0)),
+            source_marker=clean_optional_text(
+                getattr(request, "source_marker", None)
+                if getattr(request, "source_marker", None) is not None
+                else (existing.source_marker if existing else None)
+            ),
+            created_at=existing.created_at if existing else now,
+            updated_at=now,
+        )
+        return self.repository.upsert_countryside_route_group(route_group)
+
+    def update_countryside_route_group(self, route_group_id, request):
+        existing = self.repository.get_countryside_route_group(route_group_id)
+        if not existing:
+            raise ValueError(f"Countryside route group does not exist: {route_group_id}")
+        name = clean_optional_text(getattr(request, "route_group_name", None)) or existing.route_group_name
+        status = clean_optional_text(getattr(request, "status", None)) or existing.status
+        if status not in {"Active", "On_Hold"}:
+            raise ValueError("route group status must be Active or On_Hold")
+        active_flag = getattr(request, "active_flag", None)
+        route_group = OpShopCountrysideRouteGroup(
+            route_group_id=existing.route_group_id,
+            route_group_name=name,
+            status=status,
+            active_flag=bool(existing.active_flag if active_flag is None else active_flag),
+            display_order=int(
+                existing.display_order
+                if getattr(request, "display_order", None) is None
+                else getattr(request, "display_order")
+            ),
+            source_marker=clean_optional_text(getattr(request, "source_marker", None))
+            if getattr(request, "source_marker", None) is not None
+            else existing.source_marker,
+            created_at=existing.created_at,
+            updated_at=_timestamp(),
+        )
+        return self.repository.upsert_countryside_route_group(route_group)
+
+    def disable_countryside_route_group(self, route_group_id):
+        existing = self.repository.get_countryside_route_group(route_group_id)
+        if not existing:
+            raise ValueError(f"Countryside route group does not exist: {route_group_id}")
+        active_schedule_ids = {
+            schedule.schedule_id
+            for schedule in self.repository.list_opshop_pickup_schedules()
+            if schedule.route_group_id == route_group_id
+            and schedule.pickup_category == "COUNTRYSIDE"
+            and schedule.active_flag
+            and schedule.status == "Active"
+        }
+        for task in self.repository.list_opshop_pickup_tasks():
+            if task.schedule_id in active_schedule_ids and task.status in {"ACTIVE", "ASSIGNED"}:
+                raise ValueError(
+                    "Countryside route group has active pickup tasks and cannot be disabled"
+                )
+        return self.repository.disable_countryside_route_group(route_group_id)
 
     def create_opshop_template(self, request):
         values = self._values_from_request(request)
@@ -113,6 +189,8 @@ class OpShopTemplateService:
             default_driver_id=driver_id,
             default_driver_alias=None,
             default_driver_name_snapshot=driver_name,
+            pickup_category=values["pickup_category"],
+            route_group_id=values["route_group_id"],
         )
         self.repository.upsert_opshop_pickup_schedule(schedule)
         return self._get_template(schedule.schedule_id)
@@ -128,14 +206,40 @@ class OpShopTemplateService:
         run_day = _normalize_run_day(
             from_request("run_day", existing_schedule.run_day if existing_schedule else None)
         )
+        pickup_category = _normalize_pickup_category(
+            from_request(
+                "pickup_category",
+                existing_schedule.pickup_category if existing_schedule else "NORMAL",
+            )
+        )
+        route_group_id = clean_optional_text(
+            from_request(
+                "route_group_id",
+                existing_schedule.route_group_id if existing_schedule else None,
+            )
+        )
         if run_type == "REGULAR" and run_day not in VALID_RUN_DAYS:
             raise ValueError("REGULAR template requires run_day Monday-Friday")
         if run_day and run_day not in VALID_RUN_DAYS:
             raise ValueError("run_day must be Monday-Friday or blank for ON_CALL")
+        if run_type == "REGULAR" and pickup_category == "COUNTRYSIDE":
+            raise ValueError("REGULAR templates cannot use COUNTRYSIDE pickup_category")
+        if pickup_category == "COUNTRYSIDE":
+            if run_type != "ON_CALL":
+                raise ValueError("COUNTRYSIDE templates must use ON_CALL run_type")
+            if not route_group_id:
+                raise ValueError("COUNTRYSIDE templates require route_group_id")
+            route_group = self.repository.get_countryside_route_group(route_group_id)
+            if not route_group or not route_group.active_flag or route_group.status != "Active":
+                raise ValueError("COUNTRYSIDE templates require an active route group")
+        else:
+            route_group_id = None
 
         return {
             "run_type": run_type,
             "run_day": run_day,
+            "pickup_category": pickup_category,
+            "route_group_id": route_group_id,
             "name": clean_required_text(
                 from_request("name", existing_location.name if existing_location else None),
                 "name",
@@ -201,6 +305,8 @@ class OpShopTemplateService:
                         "run_type": schedule.run_type,
                         "pickup_frequency": schedule.pickup_frequency,
                         "time_window": schedule.time_window,
+                        "pickup_category": schedule.pickup_category,
+                        "route_group_id": schedule.route_group_id,
                     }
                 )
                 == key
@@ -246,6 +352,14 @@ def _normalize_run_day(value):
     return text.upper() if text else None
 
 
+def _normalize_pickup_category(value):
+    normalized = clean_optional_text(value)
+    normalized = normalized.upper().replace("-", "_").replace(" ", "_") if normalized else "NORMAL"
+    if normalized not in VALID_PICKUP_CATEGORIES:
+        raise ValueError("pickup_category must be NORMAL or COUNTRYSIDE")
+    return normalized
+
+
 def _normalize_key(value):
     return " ".join(str(value or "").strip().lower().replace("-", "_").split())
 
@@ -261,15 +375,16 @@ def _location_key(values):
 
 
 def _schedule_key(values):
-    return "|".join(
-        [
-            values["opshop_id"],
-            values.get("run_day") or "",
-            values["run_type"],
-            _normalize_key(values.get("pickup_frequency")),
-            _normalize_key(values.get("time_window")),
-        ]
-    )
+    parts = [
+        values["opshop_id"],
+        values.get("run_day") or "",
+        values["run_type"],
+        _normalize_key(values.get("pickup_frequency")),
+        _normalize_key(values.get("time_window")),
+    ]
+    if values.get("pickup_category") == "COUNTRYSIDE":
+        parts.extend(["COUNTRYSIDE", values.get("route_group_id") or ""])
+    return "|".join(parts)
 
 
 def _deterministic_id(prefix, key):

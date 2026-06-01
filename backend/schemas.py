@@ -99,6 +99,18 @@ class OpShopLocation:
 
 
 @dataclass
+class OpShopCountrysideRouteGroup:
+    route_group_id: str
+    route_group_name: str
+    status: str
+    active_flag: bool
+    display_order: int
+    source_marker: Optional[str]
+    created_at: str
+    updated_at: str
+
+
+@dataclass
 class OpShopPickupSchedule:
     schedule_id: str
     opshop_id: str
@@ -118,6 +130,8 @@ class OpShopPickupSchedule:
     default_driver_id: Optional[str] = None
     default_driver_alias: Optional[str] = None
     default_driver_name_snapshot: Optional[str] = None
+    pickup_category: str = "NORMAL"
+    route_group_id: Optional[str] = None
 
 
 @dataclass
@@ -195,6 +209,9 @@ class OpShopPickupBoardItem:
     assigned_driver_id: Optional[str] = None
     assigned_driver_name: Optional[str] = None
     assigned_to_locked: bool = False
+    pickup_category: str = "NORMAL"
+    route_group_id: Optional[str] = None
+    route_group_name: Optional[str] = None
 
 
 @dataclass
@@ -211,6 +228,9 @@ class OpShopPickupScheduleCandidate:
     default_driver_id: Optional[str] = None
     default_driver_alias: Optional[str] = None
     default_driver_name: Optional[str] = None
+    pickup_category: str = "NORMAL"
+    route_group_id: Optional[str] = None
+    route_group_name: Optional[str] = None
 
 
 @dataclass
@@ -240,6 +260,9 @@ class OpShopTemplate:
     default_driver_name: Optional[str]
     status: str
     active_flag: bool
+    pickup_category: str = "NORMAL"
+    route_group_id: Optional[str] = None
+    route_group_name: Optional[str] = None
 
 
 @dataclass
@@ -263,11 +286,29 @@ class CreateOpShopTemplateRequest:
     trailer_restriction: Optional[str] = None
     status_notes: Optional[str] = None
     default_driver_id: Optional[str] = None
+    pickup_category: Optional[str] = None
+    route_group_id: Optional[str] = None
 
 
 @dataclass
 class UpdateOpShopTemplateRequest(CreateOpShopTemplateRequest):
     pass
+
+
+@dataclass
+class CreateOpShopCountrysideRouteGroupRequest:
+    route_group_name: Optional[str] = None
+    display_order: Optional[int] = None
+    source_marker: Optional[str] = None
+
+
+@dataclass
+class UpdateOpShopCountrysideRouteGroupRequest:
+    route_group_name: Optional[str] = None
+    display_order: Optional[int] = None
+    status: Optional[str] = None
+    active_flag: Optional[bool] = None
+    source_marker: Optional[str] = None
 
 
 @dataclass
@@ -308,6 +349,8 @@ class ManualDispatchBoardResponse:
     assigned_opshop_pickups: List[OpShopPickupBoardItem] = field(default_factory=list)
     scheduled_opshop_pickups: List[OpShopPickupBoardItem] = field(default_factory=list)
     oncall_opshop_pickups: List[OpShopPickupBoardItem] = field(default_factory=list)
+    countryside_route_groups: List[OpShopCountrysideRouteGroup] = field(default_factory=list)
+    countryside_opshop_pickups: List[OpShopPickupBoardItem] = field(default_factory=list)
     opshop_regular_list_window_start: Optional[str] = None
     opshop_regular_list_window_end: Optional[str] = None
     finalized_driver_delivery_dates: List[dict] = field(default_factory=list)

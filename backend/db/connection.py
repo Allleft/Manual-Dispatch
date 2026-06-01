@@ -137,6 +137,20 @@ def _ensure_manual_dispatch_columns(connection):
         "default_driver_name_snapshot",
         "TEXT",
     )
+    _ensure_column(
+        connection,
+        "opshop_pickup_schedules",
+        "pickup_category",
+        "TEXT NOT NULL DEFAULT 'NORMAL'",
+    )
+    _ensure_column(connection, "opshop_pickup_schedules", "route_group_id", "TEXT")
+    connection.execute(
+        """
+        UPDATE opshop_pickup_schedules
+        SET pickup_category = 'NORMAL'
+        WHERE pickup_category IS NULL OR TRIM(pickup_category) = ''
+        """
+    )
 
 
 def _ensure_column(connection, table_name, column_name, column_definition):

@@ -99,6 +99,25 @@ class ManualDispatchService:
             include_inactive,
         )
 
+    def list_countryside_route_groups(self, include_inactive=False):
+        return self.opshop_template_service.list_countryside_route_groups(
+            include_inactive
+        )
+
+    def create_countryside_route_group(self, request):
+        return self.opshop_template_service.create_countryside_route_group(request)
+
+    def update_countryside_route_group(self, route_group_id, request):
+        return self.opshop_template_service.update_countryside_route_group(
+            route_group_id,
+            request,
+        )
+
+    def disable_countryside_route_group(self, route_group_id):
+        return self.opshop_template_service.disable_countryside_route_group(
+            route_group_id
+        )
+
     def create_opshop_template(self, request):
         return self.opshop_template_service.create_opshop_template(request)
 

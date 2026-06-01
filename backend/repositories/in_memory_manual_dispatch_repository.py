@@ -8,6 +8,7 @@ from backend.schemas import (
     ManualDriverVehicleAssignment,
     Order,
     OpShopPickupBoardItem,
+    OpShopCountrysideRouteGroup,
     OpShopLocation,
     OpShopPickupSchedule,
     OpShopPickupScheduleCandidate,
@@ -157,6 +158,7 @@ class InMemoryManualDispatchRepository:
         self.final_trip_summaries = []
         self.operator_accounts = []
         self.opshop_locations = []
+        self.opshop_countryside_route_groups = []
         self.opshop_pickup_schedules = []
         self.opshop_pickup_tasks = []
         self._next_assignment_number = 1
@@ -348,6 +350,58 @@ class InMemoryManualDispatchRepository:
         self.opshop_locations.append(location)
         return location
 
+    def list_countryside_route_groups(self, include_inactive=False):
+        groups = [
+            group
+            for group in self.opshop_countryside_route_groups
+            if include_inactive or (group.active_flag and group.status == "Active")
+        ]
+        return sorted(
+            groups,
+            key=lambda group: (
+                group.display_order,
+                group.route_group_name.lower(),
+                group.route_group_id,
+            ),
+        )
+
+    def get_countryside_route_group(self, route_group_id):
+        return next(
+            (
+                group
+                for group in self.opshop_countryside_route_groups
+                if group.route_group_id == route_group_id
+            ),
+            None,
+        )
+
+    def find_countryside_route_group_by_name(self, route_group_name):
+        normalized = _normalize_text_key(route_group_name)
+        return next(
+            (
+                group
+                for group in self.opshop_countryside_route_groups
+                if _normalize_text_key(group.route_group_name) == normalized
+            ),
+            None,
+        )
+
+    def upsert_countryside_route_group(self, route_group):
+        for index, existing in enumerate(self.opshop_countryside_route_groups):
+            if existing.route_group_id == route_group.route_group_id:
+                self.opshop_countryside_route_groups[index] = route_group
+                return route_group
+        self.opshop_countryside_route_groups.append(route_group)
+        return route_group
+
+    def disable_countryside_route_group(self, route_group_id):
+        group = self.get_countryside_route_group(route_group_id)
+        if not group:
+            return None
+        group.status = "On_Hold"
+        group.active_flag = False
+        return group
+
     def list_opshop_pickup_schedules(self):
         return sorted(
             self.opshop_pickup_schedules,
@@ -368,6 +422,7 @@ class InMemoryManualDispatchRepository:
                 schedule.active_flag
                 and schedule.status == "Active"
                 and schedule.run_type == "REGULAR"
+                and schedule.pickup_category == "NORMAL"
             ):
                 continue
             location = self.get_opshop_location(schedule.opshop_id)
@@ -385,6 +440,9 @@ class InMemoryManualDispatchRepository:
                     default_driver_id=schedule.default_driver_id,
                     default_driver_alias=schedule.default_driver_alias,
                     default_driver_name=schedule.default_driver_name_snapshot,
+                    pickup_category=schedule.pickup_category,
+                    route_group_id=schedule.route_group_id,
+                    route_group_name=None,
                 )
             )
         return sorted(
@@ -404,6 +462,7 @@ class InMemoryManualDispatchRepository:
                 schedule.active_flag
                 and schedule.status == "Active"
                 and schedule.run_type == "ON_CALL"
+                and schedule.pickup_category == "NORMAL"
             ):
                 continue
             location = self.get_opshop_location(schedule.opshop_id)
@@ -421,12 +480,58 @@ class InMemoryManualDispatchRepository:
                     default_driver_id=schedule.default_driver_id,
                     default_driver_alias=schedule.default_driver_alias,
                     default_driver_name=schedule.default_driver_name_snapshot,
+                    pickup_category=schedule.pickup_category,
+                    route_group_id=schedule.route_group_id,
+                    route_group_name=None,
                 )
             )
         return sorted(
             candidates,
             key=lambda candidate: (
                 candidate.run_day or "ZZZ",
+                candidate.opshop_name or "",
+                candidate.suburb or "",
+                candidate.schedule_id,
+            ),
+        )
+
+    def list_countryside_opshop_pickup_schedule_candidates(self):
+        candidates = []
+        for schedule in self.list_opshop_pickup_schedules():
+            if not (
+                schedule.active_flag
+                and schedule.status == "Active"
+                and schedule.run_type == "ON_CALL"
+                and schedule.pickup_category == "COUNTRYSIDE"
+            ):
+                continue
+            route_group = self.get_countryside_route_group(schedule.route_group_id)
+            if not route_group or not route_group.active_flag or route_group.status != "Active":
+                continue
+            location = self.get_opshop_location(schedule.opshop_id)
+            candidates.append(
+                OpShopPickupScheduleCandidate(
+                    schedule_id=schedule.schedule_id,
+                    opshop_id=schedule.opshop_id,
+                    opshop_name=location.name if location else "",
+                    suburb=location.suburb if location else None,
+                    run_day=schedule.run_day,
+                    run_type=schedule.run_type,
+                    pickup_frequency=schedule.pickup_frequency,
+                    time_window=schedule.time_window,
+                    primary_phone=location.primary_phone if location else None,
+                    default_driver_id=schedule.default_driver_id,
+                    default_driver_alias=schedule.default_driver_alias,
+                    default_driver_name=schedule.default_driver_name_snapshot,
+                    pickup_category=schedule.pickup_category,
+                    route_group_id=schedule.route_group_id,
+                    route_group_name=route_group.route_group_name,
+                )
+            )
+        return sorted(
+            candidates,
+            key=lambda candidate: (
+                candidate.route_group_name or "",
                 candidate.opshop_name or "",
                 candidate.suburb or "",
                 candidate.schedule_id,
@@ -445,6 +550,7 @@ class InMemoryManualDispatchRepository:
             location = self.get_opshop_location(schedule.opshop_id)
             if not location:
                 continue
+            route_group = self.get_countryside_route_group(schedule.route_group_id)
             templates.append(
                 OpShopTemplate(
                     schedule_id=schedule.schedule_id,
@@ -472,6 +578,9 @@ class InMemoryManualDispatchRepository:
                     default_driver_name=schedule.default_driver_name_snapshot,
                     status=schedule.status,
                     active_flag=schedule.active_flag,
+                    pickup_category=schedule.pickup_category,
+                    route_group_id=schedule.route_group_id,
+                    route_group_name=route_group.route_group_name if route_group else None,
                 )
             )
         return sorted(
@@ -550,6 +659,8 @@ class InMemoryManualDispatchRepository:
             schedule = self.get_opshop_pickup_schedule(task.schedule_id)
             if not schedule or schedule.run_type != "REGULAR":
                 continue
+            if schedule.pickup_category != "NORMAL":
+                continue
             if not schedule.active_flag or schedule.status != "Active":
                 continue
             location = self.get_opshop_location(task.opshop_id)
@@ -577,6 +688,8 @@ class InMemoryManualDispatchRepository:
             schedule = self.get_opshop_pickup_schedule(task.schedule_id)
             if not schedule or schedule.run_type != "ON_CALL":
                 continue
+            if schedule.pickup_category != "NORMAL":
+                continue
             if not schedule.active_flag or schedule.status != "Active":
                 continue
             location = self.get_opshop_location(task.opshop_id)
@@ -586,6 +699,39 @@ class InMemoryManualDispatchRepository:
             items,
             key=lambda item: (
                 item.pickup_date,
+                item.suburb or "",
+                item.opshop_name or "",
+                item.pickup_task_id,
+            ),
+        )
+
+    def list_countryside_opshop_pickup_board_items(self, dispatch_date=None):
+        items = []
+        for task in self.opshop_pickup_tasks:
+            if task.status not in {"ACTIVE", "ASSIGNED"}:
+                continue
+            if dispatch_date and task.pickup_date < dispatch_date:
+                continue
+            if task.generated_from != "ON_CALL":
+                continue
+            schedule = self.get_opshop_pickup_schedule(task.schedule_id)
+            if not schedule or schedule.run_type != "ON_CALL":
+                continue
+            if schedule.pickup_category != "COUNTRYSIDE":
+                continue
+            if not schedule.active_flag or schedule.status != "Active":
+                continue
+            route_group = self.get_countryside_route_group(schedule.route_group_id)
+            if not route_group or not route_group.active_flag or route_group.status != "Active":
+                continue
+            location = self.get_opshop_location(task.opshop_id)
+            items.append(self._opshop_pickup_board_item(task, schedule, location))
+
+        return sorted(
+            items,
+            key=lambda item: (
+                item.pickup_date,
+                item.route_group_name or "",
                 item.suburb or "",
                 item.opshop_name or "",
                 item.pickup_task_id,
@@ -688,6 +834,9 @@ class InMemoryManualDispatchRepository:
             default_driver_name=schedule.default_driver_name_snapshot if schedule else None,
             assigned_driver_id=task.driver_id,
             assigned_driver_name=self.get_driver(task.driver_id).name if task.driver_id and self.get_driver(task.driver_id) else None,
+            pickup_category=schedule.pickup_category if schedule else "NORMAL",
+            route_group_id=schedule.route_group_id if schedule else None,
+            route_group_name=self.get_countryside_route_group(schedule.route_group_id).route_group_name if schedule and schedule.route_group_id and self.get_countryside_route_group(schedule.route_group_id) else None,
         )
 
     def create_order(self, order):
@@ -1037,3 +1186,7 @@ class InMemoryManualDispatchRepository:
         row_id = f"FSO-{self._next_final_summary_opshop_row_number:03d}"
         self._next_final_summary_opshop_row_number += 1
         return row_id
+
+
+def _normalize_text_key(value):
+    return " ".join(str(value or "").strip().lower().split())

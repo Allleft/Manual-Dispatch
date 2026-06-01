@@ -112,11 +112,29 @@ ON opshop_locations (
     lower(trim(COALESCE(street_address, '')))
 );
 
+CREATE TABLE IF NOT EXISTS opshop_countryside_route_groups (
+    route_group_id TEXT PRIMARY KEY,
+    route_group_name TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'Active',
+    active_flag INTEGER NOT NULL DEFAULT 1,
+    display_order INTEGER NOT NULL DEFAULT 0,
+    source_marker TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_opshop_countryside_route_groups_name
+ON opshop_countryside_route_groups (
+    lower(trim(route_group_name))
+);
+
 CREATE TABLE IF NOT EXISTS opshop_pickup_schedules (
     schedule_id TEXT PRIMARY KEY,
     opshop_id TEXT NOT NULL,
     run_day TEXT,
     run_type TEXT NOT NULL,
+    pickup_category TEXT NOT NULL DEFAULT 'NORMAL',
+    route_group_id TEXT,
     pickup_frequency TEXT,
     time_window TEXT,
     call_before_arrival INTEGER NOT NULL DEFAULT 0,
@@ -132,13 +150,15 @@ CREATE TABLE IF NOT EXISTS opshop_pickup_schedules (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     CHECK(run_type IN ('STANDARD', 'REGULAR', 'ON_CALL')),
+    CHECK(pickup_category IN ('NORMAL', 'COUNTRYSIDE')),
     CHECK(
         run_day IS NULL
         OR run_day IN ('MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY')
     ),
     CHECK(run_day IS NOT NULL OR run_type = 'ON_CALL' OR review_required = 1),
     CHECK(fortnight_group IS NULL OR fortnight_group IN ('A', 'B')),
-    FOREIGN KEY(opshop_id) REFERENCES opshop_locations(opshop_id)
+    FOREIGN KEY(opshop_id) REFERENCES opshop_locations(opshop_id),
+    FOREIGN KEY(route_group_id) REFERENCES opshop_countryside_route_groups(route_group_id)
 );
 
 CREATE TABLE IF NOT EXISTS opshop_pickup_tasks (

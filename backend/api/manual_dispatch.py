@@ -8,6 +8,7 @@ from backend.schemas import (
     ApplyWeeklyOpShopPickupAssignmentsRequest,
     AssignDriverVehicleRequest,
     AssignTaskRequest,
+    CreateOpShopCountrysideRouteGroupRequest,
     CreateDriverRequest,
     CreateOrderRequest,
     CreateOpShopPickupTaskRequest,
@@ -19,6 +20,7 @@ from backend.schemas import (
     ResetOperatorPasswordRequest,
     SaveFinalTripSummaryRequest,
     UnassignTaskRequest,
+    UpdateOpShopCountrysideRouteGroupRequest,
     UpdateDriverRequest,
     UpdateOpShopPickupTaskRequest,
     UpdateOpShopTemplateRequest,
@@ -151,12 +153,56 @@ def generate_opshop_pickups(request: EnsureOpShopPickupTasksRequest):
 
 
 @router.get("/opshop-pickup-schedules")
-def list_opshop_pickup_schedules(run_type: str = "scheduled"):
+def list_opshop_pickup_schedules(
+    run_type: str = "scheduled",
+    pickup_category: str = None,
+):
     try:
+        resolved_run_type = "countryside" if (pickup_category or "").upper() == "COUNTRYSIDE" else run_type
         return [
             to_dict(candidate)
-            for candidate in service.list_opshop_pickup_schedule_candidates(run_type)
+            for candidate in service.list_opshop_pickup_schedule_candidates(resolved_run_type)
         ]
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.get("/opshop-countryside-route-groups")
+def list_opshop_countryside_route_groups(include_inactive: bool = False):
+    try:
+        return [
+            to_dict(route_group)
+            for route_group in service.list_countryside_route_groups(include_inactive)
+        ]
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.post("/opshop-countryside-route-groups")
+def create_opshop_countryside_route_group(
+    request: CreateOpShopCountrysideRouteGroupRequest,
+):
+    try:
+        return to_dict(service.create_countryside_route_group(request))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.patch("/opshop-countryside-route-groups/{route_group_id}")
+def update_opshop_countryside_route_group(
+    route_group_id: str,
+    request: UpdateOpShopCountrysideRouteGroupRequest,
+):
+    try:
+        return to_dict(service.update_countryside_route_group(route_group_id, request))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.post("/opshop-countryside-route-groups/{route_group_id}/disable")
+def disable_opshop_countryside_route_group(route_group_id: str):
+    try:
+        return to_dict(service.disable_countryside_route_group(route_group_id))
     except ValueError as error:
         raise _to_http_exception(error) from error
 

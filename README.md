@@ -123,6 +123,7 @@ OP SHOP PICKUP is a distinct manual task type. The Task Pool shows an `OP SHOP P
 | --- | --- | --- |
 | `REGULAR` | Schedule source for the Regular list and its visible pickup week. | Visible regular tasks are ensured from active schedules. |
 | `ON_CALL` | Candidate source for office-requested Oncall pickups. | No task is created until staff use Add Pickup Task. |
+| `ON_CALL` + `COUNTRYSIDE` | Route-group membership templates for Countryside OP SHOP pickups. | No task is created by import; future staff-created pickup tasks still use `OPSHOP_PICKUP`. |
 
 Template rules:
 
@@ -132,6 +133,22 @@ Template rules:
 - Disable is a soft disable: `status = On_Hold` and `active_flag = false`.
 - Disabling a template does not delete existing pickup tasks, assignments already captured in history, or saved Final Summaries.
 - An identity-field edit can create/use a new deterministic active schedule while old task references remain historically valid.
+
+### Countryside OP SHOP Route Groups
+
+Countryside pickup is an OP SHOP Oncall subcategory, not a new Delivery workflow or task type.
+
+| Field | Countryside Value |
+| --- | --- |
+| `task_type` | `OPSHOP_PICKUP` |
+| `run_type` | `ON_CALL` |
+| `pickup_category` | `COUNTRYSIDE` |
+
+- Each Countryside workbook sheet represents one route group.
+- A single OP SHOP location can belong to multiple route groups.
+- Duplicate addresses are expected; they reuse the same `opshop_locations` row and create separate route membership schedules.
+- Countryside route groups and membership schedules are template/source data only. Importing them does not create actual pickup tasks.
+- Countryside remains outside Delivery Order totals, vehicle capacity totals, Delivery Trip 1 / Trip 2 rows, and Delivery-style automation.
 
 ### Regular OP SHOP Pickup List
 
@@ -207,7 +224,8 @@ Final Trip Summary is a saved historical snapshot for a driver, Dispatch Date, a
 | --- | --- |
 | `manual_dispatch_assignments` | Manual assignment records keyed by `task_type + task_id`, supporting `ORDER` and `OPSHOP_PICKUP`. |
 | `opshop_locations` | Deduplicated OP SHOP location records. |
-| `opshop_pickup_schedules` | Regular schedules and Oncall templates linked to locations. |
+| `opshop_countryside_route_groups` | Countryside route group records, with workbook-backed and UI-created sources able to coexist. |
+| `opshop_pickup_schedules` | Regular schedules, Oncall templates, and Countryside route memberships linked to locations. |
 | `opshop_pickup_tasks` | Actual dated OP SHOP pickup tasks. |
 | `final_trip_summaries` | Saved summary header and driver/date lock source. |
 | `final_trip_summary_rows` | Delivery Order Trip 1 / Trip 2 snapshot rows only. |
@@ -219,6 +237,8 @@ Final Trip Summary is a saved historical snapshot for a driver, Dispatch Date, a
 | --- | --- |
 | `scheduled_opshop_pickups` | Regular list tasks for the active Regular window. |
 | `oncall_opshop_pickups` | Actual created Oncall tasks visible in the Oncall list. |
+| `countryside_route_groups` | Active Countryside route groups available for foundation/API use. |
+| `countryside_opshop_pickups` | Reserved board-ready Countryside pickup list; currently safe default data for future UI. |
 | `assigned_opshop_pickups` | Assigned pickup items used in Driver Summary. |
 | `opshop_regular_list_window_start` / `opshop_regular_list_window_end` | Display window for the Regular list. |
 | `finalized_driver_delivery_dates` | Saved-summary hard-lock information for frontend interaction guards. |
@@ -233,6 +253,7 @@ Final Trip Summary is a saved historical snapshot for a driver, Dispatch Date, a
 | Assignment | `POST /api/manual-dispatch/assign`, `POST /api/manual-dispatch/unassign` |
 | Driver / Vehicle | `GET /api/manual-dispatch/specifications`, `POST/PATCH/DELETE /api/manual-dispatch/drivers...`, `POST/PATCH/DELETE /api/manual-dispatch/vehicles...`, `POST /api/manual-dispatch/driver-vehicle` |
 | OP SHOP Templates | `GET/POST /api/manual-dispatch/opshop-templates`, `PATCH /api/manual-dispatch/opshop-templates/{schedule_id}`, `POST /api/manual-dispatch/opshop-templates/{schedule_id}/disable` |
+| OP SHOP Countryside Route Groups | `GET/POST /api/manual-dispatch/opshop-countryside-route-groups`, `PATCH /api/manual-dispatch/opshop-countryside-route-groups/{route_group_id}`, `POST /api/manual-dispatch/opshop-countryside-route-groups/{route_group_id}/disable` |
 | OP SHOP Pickups | `GET /api/manual-dispatch/opshop-pickup-schedules`, `POST /api/manual-dispatch/opshop-pickups`, `POST /api/manual-dispatch/opshop-pickups/oncall`, `PATCH/DELETE /api/manual-dispatch/opshop-pickups/{pickup_task_id}`, `POST /api/manual-dispatch/opshop-pickups/weekly-assignments/apply`, `POST /api/manual-dispatch/opshop-pickups/oncall-assignments/apply` |
 | Final Summaries | `POST/GET /api/manual-dispatch/final-summaries`, `GET /api/manual-dispatch/final-summaries/{summary_id}`, `GET /api/manual-dispatch/final-summary-dates` |
 | Exports | `GET /api/manual-dispatch/final-summaries/export-excel`, `GET /api/manual-dispatch/opshop-pickups/export-excel` |
@@ -268,6 +289,22 @@ The repository provides importer tools for approved local bulk refreshes. Real w
 - Reports unresolved assigned-driver aliases without aborting the entire import.
 - Makes a timestamped SQLite backup first when the target database exists.
 - Does not create actual Oncall pickup tasks.
+
+### Countryside Workbook Import
+
+```powershell
+.\tmp\route-test-venv\Scripts\python.exe tools\import_countryside_opshop_pickups_to_db.py `
+  --file "<path-to-countryside-opshop-workbook.xlsx>" `
+  --db-path "data\manual_dispatch.sqlite3"
+```
+
+- Imports every workbook sheet as a Countryside route group.
+- Imports active rows as `ON_CALL` schedules with `pickup_category = COUNTRYSIDE`.
+- Reuses duplicate OP SHOP locations by name, suburb, and street address while allowing the same location to belong to multiple route groups.
+- Makes a timestamped SQLite backup first when the target database exists.
+- Reports unresolved assigned-driver aliases without aborting the import.
+- Does not create actual pickup tasks.
+- Reruns manage workbook-backed Countryside route groups and memberships only; UI-created route groups and memberships remain office-managed.
 
 ### UI and Importer Coexistence
 
@@ -345,6 +382,7 @@ Get-ChildItem frontend -Recurse -Filter *.js | ForEach-Object { node --check $_.
 
 - `tests.test_import_regular_opshop_pickups_to_db`
 - `tests.test_import_oncall_opshop_pickups_to_db`
+- `tests.test_import_countryside_opshop_pickups_to_db`
 - `tests.test_manual_dispatch_opshop_foundation`
 - `tests.test_manual_dispatch_opshop_pickup_generation`
 - `tests.test_manual_dispatch_opshop_board_payload`
@@ -352,6 +390,7 @@ Get-ChildItem frontend -Recurse -Filter *.js | ForEach-Object { node --check $_.
 - `tests.test_manual_dispatch_opshop_pickup_list_management`
 - `tests.test_manual_dispatch_opshop_pickup_run_sheet_export`
 - `tests.test_manual_dispatch_opshop_template_management`
+- `tests.test_manual_dispatch_opshop_countryside_route_groups`
 - `tests.test_manual_dispatch_final_summary`
 - `tests.test_manual_dispatch_final_summary_export`
 - `tests.test_manual_dispatch_frontend_static_contract`

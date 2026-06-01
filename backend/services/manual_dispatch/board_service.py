@@ -36,6 +36,11 @@ class BoardService:
         )
         for pickup in oncall_pickups:
             pickup.assigned_to_locked = pickup.pickup_date < dispatch_date
+        countryside_pickups = self.repository.list_countryside_opshop_pickup_board_items(
+            dispatch_date
+        )
+        for pickup in countryside_pickups:
+            pickup.assigned_to_locked = pickup.pickup_date < dispatch_date
         assignments = [
             assignment
             for assignment in self.repository.list_assignments(dispatch_date)
@@ -75,6 +80,8 @@ class BoardService:
             assigned_opshop_pickups=assigned_pickups,
             scheduled_opshop_pickups=scheduled_pickups,
             oncall_opshop_pickups=oncall_pickups,
+            countryside_route_groups=self.repository.list_countryside_route_groups(),
+            countryside_opshop_pickups=countryside_pickups,
             opshop_regular_list_window_start=scheduled_generation.window_start,
             opshop_regular_list_window_end=scheduled_generation.window_end,
             finalized_driver_delivery_dates=finalized_driver_delivery_dates,
