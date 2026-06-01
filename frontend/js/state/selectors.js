@@ -74,8 +74,32 @@ export function getOpShopPickupByTaskId(taskId) {
   return (
     state.scheduledOpShopPickups.find((pickup) => pickup.pickup_task_id === taskId) ||
     state.oncallOpShopPickups.find((pickup) => pickup.pickup_task_id === taskId) ||
+    state.countrysideOpShopPickups.find((pickup) => pickup.pickup_task_id === taskId) ||
     state.opshopPickups.find((pickup) => pickup.pickup_task_id === taskId) ||
     state.assignedOpShopPickups.find((pickup) => pickup.pickup_task_id === taskId)
+  );
+}
+
+export function getCountrysideOpShopPickupByTaskId(taskId) {
+  return state.countrysideOpShopPickups.find(
+    (pickup) => pickup.pickup_task_id === taskId,
+  );
+}
+
+export function getCountrysideRouteGroupById(routeGroupId) {
+  return state.countrysideRouteGroups.find(
+    (routeGroup) => routeGroup.route_group_id === routeGroupId,
+  );
+}
+
+export function getCountrysideRouteGroupNameById(routeGroupId) {
+  const routeGroup = getCountrysideRouteGroupById(routeGroupId);
+  return routeGroup ? routeGroup.route_group_name : "";
+}
+
+export function getCountrysideScheduleCandidatesForRouteGroup(routeGroupId) {
+  return state.countrysideOpShopPickupScheduleCandidates.filter(
+    (candidate) => !routeGroupId || candidate.route_group_id === routeGroupId,
   );
 }
 

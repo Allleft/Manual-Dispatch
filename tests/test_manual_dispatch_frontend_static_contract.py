@@ -123,6 +123,7 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("No OP SHOP PICKUP tasks for this Regular pickup week.", task_pool_renderer)
         self.assertIn("Regular OP SHOP Pickup List", task_pool_renderer)
         self.assertIn("Oncall OP SHOP Pickup List", task_pool_renderer)
+        self.assertIn("Countryside OP SHOP Pickup List", task_pool_renderer)
         self.assertIn("No Oncall OP SHOP pickups added.", task_pool_renderer)
         self.assertIn("onOpenOncallOpShopPickupList", task_pool_renderer)
         self.assertIn("opshop-pickup-list-summary-card", task_pool_renderer)
@@ -154,6 +155,8 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("assignedOpShopPickups: payload.assigned_opshop_pickups || []", board_state_sync)
         self.assertIn("scheduledOpShopPickups: payload.scheduled_opshop_pickups || []", board_state_sync)
         self.assertIn("oncallOpShopPickups: payload.oncall_opshop_pickups || []", board_state_sync)
+        self.assertIn("countrysideOpShopPickups: payload.countryside_opshop_pickups || []", board_state_sync)
+        self.assertIn("countrysideRouteGroups: payload.countryside_route_groups || []", board_state_sync)
         self.assertIn("finalizedDriverDeliveryDates: payload.finalized_driver_delivery_dates || []", board_state_sync)
         self.assertIn("opshopRegularListWindowStart: payload.opshop_regular_list_window_start || \"\"", board_state_sync)
         self.assertIn("opshopRegularListWindowEnd: payload.opshop_regular_list_window_end || \"\"", board_state_sync)
@@ -161,6 +164,8 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("state.assignedOpShopPickups = board.assignedOpShopPickups", board_state_sync)
         self.assertIn("state.scheduledOpShopPickups = board.scheduledOpShopPickups", board_state_sync)
         self.assertIn("state.oncallOpShopPickups = board.oncallOpShopPickups", board_state_sync)
+        self.assertIn("state.countrysideOpShopPickups = board.countrysideOpShopPickups", board_state_sync)
+        self.assertIn("state.countrysideRouteGroups = board.countrysideRouteGroups", board_state_sync)
         self.assertIn("state.finalizedDriverDeliveryDates = board.finalizedDriverDeliveryDates", board_state_sync)
         self.assertIn(
             "assignment.delivery_date || assignment.dispatch_date || payload.dispatch_date || state.dispatchDate",
@@ -545,6 +550,98 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertNotIn("Trip dropdown", modal_renderer)
         self.assertIn("OP SHOP PICKUPS", final_summary_renderer)
         self.assertIn('const EMPTY_ORDER_SUMMARY_MESSAGE = "No Delivery Orders included."', final_summary_renderer)
+        self.assertNotIn("fetch(", actions)
+        self.assertNotIn("fetch(", modal_renderer)
+
+    def test_countryside_opshop_pickup_frontend_contract(self):
+        app_js = (FRONTEND_ROOT / "app.js").read_text(encoding="utf-8")
+        board_state_sync = (
+            FRONTEND_ROOT / "js" / "state" / "board-state-sync.js"
+        ).read_text(encoding="utf-8")
+        api_module = (
+            FRONTEND_ROOT / "js" / "api" / "manual-dispatch-api.js"
+        ).read_text(encoding="utf-8")
+        actions = (
+            FRONTEND_ROOT / "js" / "actions" / "opshop-countryside-pickup-actions.js"
+        ).read_text(encoding="utf-8")
+        app_state = (
+            FRONTEND_ROOT / "js" / "state" / "app-state.js"
+        ).read_text(encoding="utf-8")
+        selectors = (
+            FRONTEND_ROOT / "js" / "state" / "selectors.js"
+        ).read_text(encoding="utf-8")
+        task_pool_renderer = (
+            FRONTEND_ROOT / "js" / "render" / "task-pool-renderer.js"
+        ).read_text(encoding="utf-8")
+        modal_renderer = (
+            FRONTEND_ROOT / "js" / "render" / "opshop-countryside-pickup-list-modal-renderer.js"
+        ).read_text(encoding="utf-8")
+        trip_summary_renderer = (
+            FRONTEND_ROOT / "js" / "render" / "trip-summary-renderer.js"
+        ).read_text(encoding="utf-8")
+        styles = (FRONTEND_ROOT / "styles.css").read_text(encoding="utf-8")
+
+        self.assertIn("apiListCountrysideRouteGroups", api_module)
+        self.assertIn("apiListCountrysideOpShopPickupSchedules", api_module)
+        self.assertIn("apiApplyCountrysideOpShopPickupAssignments", api_module)
+        self.assertIn("/api/manual-dispatch/opshop-countryside-route-groups", api_module)
+        self.assertIn("/opshop-pickup-schedules", api_module)
+        self.assertIn('pickup_category: "COUNTRYSIDE"', api_module)
+        self.assertIn("/opshop-pickups/countryside-assignments/apply", api_module)
+        self.assertIn("createCountrysideOpShopPickupActions", actions)
+        self.assertIn("openCountrysideOpShopPickupList", actions)
+        self.assertIn("apiCreateOncallOpShopPickup", actions)
+        self.assertIn("apiApplyCountrysideOpShopPickupAssignments", actions)
+        self.assertIn("getVisibleCountrysidePickups()", actions)
+        self.assertIn("state.countrysideOpShopPickupAssignedDriverSelections", actions)
+        self.assertIn("selectedCountrysideRouteGroupId", app_state)
+        self.assertIn("countrysideRouteGroups", app_state)
+        self.assertIn("countrysideOpShopPickups", app_state)
+        self.assertIn("countrysideOpShopPickupScheduleCandidates", app_state)
+        self.assertIn("isCountrysideOpShopPickupListOpen", app_state)
+        self.assertIn("countrysideOpShopPickups: payload.countryside_opshop_pickups || []", board_state_sync)
+        self.assertIn("countrysideRouteGroups: payload.countryside_route_groups || []", board_state_sync)
+        self.assertIn("state.countrysideOpShopPickups = board.countrysideOpShopPickups", board_state_sync)
+        self.assertIn("state.countrysideRouteGroups = board.countrysideRouteGroups", board_state_sync)
+        self.assertIn("getCountrysideOpShopPickupByTaskId", selectors)
+        self.assertIn("getCountrysideRouteGroupById", selectors)
+        self.assertIn("getCountrysideScheduleCandidatesForRouteGroup", selectors)
+        self.assertIn("state.countrysideOpShopPickups.find", selectors)
+        self.assertIn("renderCountrysideOpShopPickupListModal", app_js)
+        self.assertIn("createCountrysideOpShopPickupActions", app_js)
+        self.assertIn(
+            "onOpenCountrysideOpShopPickupList: countrysideOpShopPickupActions.openCountrysideOpShopPickupList",
+            app_js,
+        )
+        self.assertIn("Countryside OP SHOP Pickup List", task_pool_renderer)
+        self.assertIn("No Countryside OP SHOP pickups added.", task_pool_renderer)
+        self.assertIn("onOpenCountrysideOpShopPickupList", task_pool_renderer)
+        self.assertIn("Countryside OP SHOP Pickup List", modal_renderer)
+        self.assertIn("Route Group", modal_renderer)
+        self.assertIn("Select Countryside OP SHOP template", modal_renderer)
+        self.assertIn("Select a route group first", modal_renderer)
+        self.assertIn("ON_CALL + COUNTRYSIDE", modal_renderer)
+        self.assertIn("groupPickupsByRouteGroup", modal_renderer)
+        self.assertIn("comparePickupsWithinRouteGroup", modal_renderer)
+        self.assertIn("route_group_name", modal_renderer)
+        self.assertIn("state.countrysideOpShopPickupAssignedDriverSelections[pickup.pickup_task_id]", modal_renderer)
+        self.assertIn("onOpenDetail(pickup.pickup_task_id)", modal_renderer)
+        self.assertIn("event.stopPropagation()", modal_renderer)
+        self.assertIn("(Final Summary saved)", modal_renderer)
+        self.assertIn("option.disabled = hasSavedFinalSummary", modal_renderer)
+        self.assertIn("title.textContent = formatOptional(pickup.opshop_name)", modal_renderer)
+        self.assertIn("suburb.textContent = formatOptional(pickup.suburb)", modal_renderer)
+        self.assertIn("routeGroup.textContent = `Route Group:", modal_renderer)
+        self.assertIn("note.textContent = truncateText", modal_renderer)
+        self.assertIn("Countryside", trip_summary_renderer)
+        self.assertIn("pickup.pickup_category === \"COUNTRYSIDE\"", trip_summary_renderer)
+        self.assertIn("Route Group:", trip_summary_renderer)
+        self.assertIn("opshop-route-group-list", styles)
+        self.assertIn("opshop-route-group-section", styles)
+        self.assertNotIn("localStorage", actions)
+        self.assertNotIn("sessionStorage", actions)
+        self.assertNotIn("location.hash", actions)
+        self.assertNotIn("scrollIntoView", actions)
         self.assertNotIn("fetch(", actions)
         self.assertNotIn("fetch(", modal_renderer)
 

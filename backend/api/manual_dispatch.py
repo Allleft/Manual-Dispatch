@@ -4,6 +4,7 @@ from fastapi import APIRouter, Body, HTTPException
 from fastapi.responses import Response
 
 from backend.schemas import (
+    ApplyCountrysideOpShopPickupAssignmentsRequest,
     ApplyOncallOpShopPickupAssignmentsRequest,
     ApplyWeeklyOpShopPickupAssignmentsRequest,
     AssignDriverVehicleRequest,
@@ -300,6 +301,16 @@ def apply_weekly_opshop_pickup_assignments(request: ApplyWeeklyOpShopPickupAssig
 def apply_oncall_opshop_pickup_assignments(request: ApplyOncallOpShopPickupAssignmentsRequest):
     try:
         return to_dict(service.apply_oncall_opshop_pickup_assignments(request))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.post("/opshop-pickups/countryside-assignments/apply")
+def apply_countryside_opshop_pickup_assignments(
+    request: ApplyCountrysideOpShopPickupAssignmentsRequest,
+):
+    try:
+        return to_dict(service.apply_countryside_opshop_pickup_assignments(request))
     except ValueError as error:
         raise _to_http_exception(error) from error
 

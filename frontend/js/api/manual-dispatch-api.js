@@ -166,6 +166,18 @@ export async function apiListOncallOpShopPickupSchedules() {
 }
 
 
+export async function apiListCountrysideOpShopPickupSchedules() {
+  return requestJson("/api/manual-dispatch/opshop-pickup-schedules", {
+    query: { pickup_category: "COUNTRYSIDE" },
+  });
+}
+
+
+export async function apiListCountrysideRouteGroups() {
+  return requestJson("/api/manual-dispatch/opshop-countryside-route-groups");
+}
+
+
 export async function apiListOpShopTemplates(runType, includeInactive = false) {
   return requestJson("/api/manual-dispatch/opshop-templates", {
     query: { run_type: runType, include_inactive: includeInactive },
@@ -238,6 +250,14 @@ export async function apiApplyWeeklyOpShopPickupAssignments(payload) {
 
 export async function apiApplyOncallOpShopPickupAssignments(payload) {
   return requestJson("/api/manual-dispatch/opshop-pickups/oncall-assignments/apply", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+
+export async function apiApplyCountrysideOpShopPickupAssignments(payload) {
+  return requestJson("/api/manual-dispatch/opshop-pickups/countryside-assignments/apply", {
     method: "POST",
     body: payload,
   });

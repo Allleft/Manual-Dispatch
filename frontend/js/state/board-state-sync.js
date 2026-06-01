@@ -13,6 +13,8 @@ export function normalizeBoardResponse(payload) {
     assignedOpShopPickups: payload.assigned_opshop_pickups || [],
     scheduledOpShopPickups: payload.scheduled_opshop_pickups || [],
     oncallOpShopPickups: payload.oncall_opshop_pickups || [],
+    countrysideOpShopPickups: payload.countryside_opshop_pickups || [],
+    countrysideRouteGroups: payload.countryside_route_groups || [],
     opshopRegularListWindowStart: payload.opshop_regular_list_window_start || "",
     opshopRegularListWindowEnd: payload.opshop_regular_list_window_end || "",
     driverVehicleAssignments: (payload.driver_vehicle_assignments || []).map((assignment) => ({
@@ -38,6 +40,8 @@ export function applyBoardResponse(payload, cleanupPendingSelections) {
   state.assignedOpShopPickups = board.assignedOpShopPickups;
   state.scheduledOpShopPickups = board.scheduledOpShopPickups;
   state.oncallOpShopPickups = board.oncallOpShopPickups;
+  state.countrysideOpShopPickups = board.countrysideOpShopPickups;
+  state.countrysideRouteGroups = board.countrysideRouteGroups;
   state.opshopRegularListWindowStart = board.opshopRegularListWindowStart;
   state.opshopRegularListWindowEnd = board.opshopRegularListWindowEnd;
   state.driverVehicleAssignments = board.driverVehicleAssignments;

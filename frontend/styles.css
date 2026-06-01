@@ -481,6 +481,7 @@ h1 {
 .opshop-list-summary,
 .opshop-date-card-list,
 .opshop-date-group-list,
+.opshop-route-group-list,
 .opshop-list-form {
   display: grid;
   gap: 0.8rem;
@@ -515,8 +516,36 @@ h1 {
   padding-top: 0.85rem;
 }
 
+.opshop-route-group-section {
+  display: grid;
+  gap: 0.65rem;
+  border-top: 1px solid rgba(39, 93, 69, 0.14);
+  padding-top: 0.85rem;
+}
+
 .opshop-date-group-heading {
   margin-bottom: 0;
+}
+
+.opshop-route-group-heading {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+  margin-bottom: 0;
+  color: var(--accent-strong);
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.opshop-route-group-count {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.opshop-route-group-filter {
+  max-width: 420px;
 }
 
 .opshop-date-group-toggle {
@@ -622,6 +651,13 @@ h1 {
   color: var(--muted);
   font-size: 0.86rem;
   font-weight: 700;
+  line-height: 1.35;
+}
+
+.opshop-list-item-note-preview {
+  margin-bottom: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
   line-height: 1.35;
 }
 

@@ -12,9 +12,13 @@ from backend.repositories.sqlite_manual_dispatch_repository import (
     SQLiteManualDispatchRepository,
 )
 from backend.schemas import (
+    ApplyCountrysideOpShopPickupAssignmentsRequest,
     CreateOpShopCountrysideRouteGroupRequest,
     CreateOpShopTemplateRequest,
+    CreateOpShopPickupTaskRequest,
     OpShopPickupTask,
+    RegisterOperatorAccountRequest,
+    SaveFinalTripSummaryRequest,
     UpdateOpShopCountrysideRouteGroupRequest,
 )
 from backend.services.manual_dispatch_service import ManualDispatchService
@@ -164,6 +168,91 @@ class CountrysideRouteGroupServiceTest(unittest.TestCase):
         self.assertEqual([], board.countryside_route_groups)
         self.assertEqual([], board.countryside_opshop_pickups)
 
+    def test_apply_countryside_assignments_assigns_countryside_pickups_only(self):
+        group = self.service.create_countryside_route_group(
+            CreateOpShopCountrysideRouteGroupRequest(route_group_name="Apply Route")
+        )
+        countryside_template = self._create_countryside_template(group.route_group_id)
+        countryside_task = self.service.create_oncall_opshop_pickup_task(
+            CreateOpShopPickupTaskRequest(
+                schedule_id=countryside_template.schedule_id,
+                pickup_date="2026-05-25",
+            )
+        )
+        normal_template = self.service.create_opshop_template(
+            CreateOpShopTemplateRequest(
+                run_type="ON_CALL",
+                name="Normal Oncall Shop",
+                suburb="Geelong",
+                street_address="1 Normal Road",
+                pickup_frequency="On Call",
+            )
+        )
+        normal_task = self.service.create_oncall_opshop_pickup_task(
+            CreateOpShopPickupTaskRequest(
+                schedule_id=normal_template.schedule_id,
+                pickup_date="2026-05-25",
+            )
+        )
+
+        board = self.service.apply_countryside_opshop_pickup_assignments(
+            ApplyCountrysideOpShopPickupAssignmentsRequest(
+                dispatch_date="2026-05-25",
+                assignments=[
+                    {"pickup_task_id": countryside_task.pickup_task_id, "driver_id": "D001"},
+                    {"pickup_task_id": normal_task.pickup_task_id, "driver_id": "D001"},
+                ],
+            )
+        )
+
+        updated_countryside = self.repository.get_opshop_pickup_task(
+            countryside_task.pickup_task_id
+        )
+        updated_normal = self.repository.get_opshop_pickup_task(normal_task.pickup_task_id)
+        assignment = self.repository.get_assignment(
+            "2026-05-25",
+            "OPSHOP_PICKUP",
+            countryside_task.pickup_task_id,
+        )
+
+        self.assertEqual("ASSIGNED", updated_countryside.status)
+        self.assertEqual("D001", updated_countryside.driver_id)
+        self.assertEqual("trip1", updated_countryside.trip_no)
+        self.assertEqual("ACTIVE", updated_normal.status)
+        self.assertIsNone(updated_normal.driver_id)
+        self.assertEqual("OPSHOP_PICKUP", assignment.task_type)
+        self.assertIn(
+            countryside_task.pickup_task_id,
+            [item.pickup_task_id for item in board.countryside_opshop_pickups],
+        )
+
+    def test_apply_countryside_assignments_skips_saved_summary_driver_date(self):
+        group = self.service.create_countryside_route_group(
+            CreateOpShopCountrysideRouteGroupRequest(route_group_name="Locked Route")
+        )
+        template = self._create_countryside_template(group.route_group_id)
+        task = self.service.create_oncall_opshop_pickup_task(
+            CreateOpShopPickupTaskRequest(
+                schedule_id=template.schedule_id,
+                pickup_date="2026-05-25",
+            )
+        )
+        self._save_final_summary_lock("D001", "2026-05-25")
+
+        self.service.apply_countryside_opshop_pickup_assignments(
+            ApplyCountrysideOpShopPickupAssignmentsRequest(
+                dispatch_date="2026-05-25",
+                assignments=[{"pickup_task_id": task.pickup_task_id, "driver_id": "D001"}],
+            )
+        )
+
+        updated = self.repository.get_opshop_pickup_task(task.pickup_task_id)
+        self.assertEqual("ACTIVE", updated.status)
+        self.assertIsNone(updated.driver_id)
+        self.assertIsNone(
+            self.repository.get_assignment("2026-05-25", "OPSHOP_PICKUP", task.pickup_task_id)
+        )
+
     def _create_countryside_template(self, route_group_id):
         return self.service.create_opshop_template(
             CreateOpShopTemplateRequest(
@@ -174,6 +263,31 @@ class CountrysideRouteGroupServiceTest(unittest.TestCase):
                 suburb="Euroa",
                 street_address="1 Clifton Street",
                 pickup_frequency="On Call",
+            )
+        )
+
+    def _save_final_summary_lock(self, driver_id, delivery_date):
+        account = self.service.register_operator_account(
+            RegisterOperatorAccountRequest(
+                account_name=f"Lock Tester {driver_id} {delivery_date}",
+                password="secret123",
+                confirm_password="secret123",
+            )
+        )
+        return self.service.save_final_trip_summary(
+            SaveFinalTripSummaryRequest(
+                dispatch_date="2026-05-25",
+                delivery_date=delivery_date,
+                driver_id=driver_id,
+                driver_name_snapshot=driver_id,
+                vehicle_id=None,
+                vehicle_rego_snapshot="No vehicle selected",
+                total_pallets=0,
+                total_loose_bags=0,
+                generated_at="2026-05-25T00:00:00+00:00",
+                saved_by_account_name=account.account_name,
+                saved_by_account_id=account.account_id,
+                trips=[],
             )
         )
 
@@ -235,6 +349,25 @@ class CountrysideRouteGroupRouteTest(unittest.TestCase):
             "/api/manual-dispatch/opshop-pickup-schedules",
             params={"pickup_category": "COUNTRYSIDE"},
         )
+        created_task = self.client.post(
+            "/api/manual-dispatch/opshop-pickups/oncall",
+            json={
+                "schedule_id": template.json()["schedule_id"],
+                "pickup_date": "2026-05-25",
+            },
+        )
+        applied = self.client.post(
+            "/api/manual-dispatch/opshop-pickups/countryside-assignments/apply",
+            json={
+                "dispatch_date": "2026-05-25",
+                "assignments": [
+                    {
+                        "pickup_task_id": created_task.json()["pickup_task_id"],
+                        "driver_id": "D001",
+                    }
+                ],
+            },
+        )
         disabled = self.client.post(
             f"/api/manual-dispatch/opshop-countryside-route-groups/{route_group_id}/disable"
         )
@@ -248,7 +381,13 @@ class CountrysideRouteGroupRouteTest(unittest.TestCase):
         self.assertEqual("COUNTRYSIDE", template.json()["pickup_category"])
         self.assertEqual([template.json()["schedule_id"]], [item["schedule_id"] for item in candidates.json()])
         self.assertEqual(candidates.json(), candidates_by_category.json())
-        self.assertFalse(disabled.json()["active_flag"])
+        self.assertEqual(200, created_task.status_code)
+        self.assertEqual(200, applied.status_code)
+        self.assertEqual(
+            [created_task.json()["pickup_task_id"]],
+            [item["pickup_task_id"] for item in applied.json()["countryside_opshop_pickups"]],
+        )
+        self.assertEqual(400, disabled.status_code)
         self.assertEqual([route_group_id], [item["route_group_id"] for item in inactive.json()])
 
 

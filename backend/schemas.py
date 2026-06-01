@@ -338,6 +338,12 @@ class ApplyOncallOpShopPickupAssignmentsRequest:
 
 
 @dataclass
+class ApplyCountrysideOpShopPickupAssignmentsRequest:
+    dispatch_date: str
+    assignments: List[dict] = field(default_factory=list)
+
+
+@dataclass
 class ManualDispatchBoardResponse:
     dispatch_date: str
     orders: List[Order]

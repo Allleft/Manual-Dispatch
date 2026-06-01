@@ -5,6 +5,7 @@ from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
 
 from backend.schemas import (
+    ApplyCountrysideOpShopPickupAssignmentsRequest,
     ApplyOncallOpShopPickupAssignmentsRequest,
     ApplyWeeklyOpShopPickupAssignmentsRequest,
     CreateOpShopPickupTaskRequest,
@@ -365,6 +366,64 @@ class OpShopPickupService:
             if not schedule or schedule.run_type != "ON_CALL" or not _is_active_schedule(schedule):
                 continue
             if getattr(schedule, "pickup_category", "NORMAL") != "NORMAL":
+                continue
+
+            if not driver_id:
+                self.repository.remove_assignment(
+                    request.dispatch_date,
+                    "OPSHOP_PICKUP",
+                    pickup_task_id,
+                )
+                self.repository.update_opshop_pickup_task_assignment_status(
+                    pickup_task_id,
+                    "ACTIVE",
+                    None,
+                    None,
+                )
+                continue
+            if driver_id not in driver_ids:
+                continue
+            if is_driver_delivery_date_finalized(
+                self.repository,
+                request.dispatch_date,
+                driver_id,
+                task.pickup_date,
+            ):
+                self._clear_stale_locked_assignment(request.dispatch_date, task, driver_id)
+                continue
+
+            self.repository.upsert_assignment(
+                request.dispatch_date,
+                "OPSHOP_PICKUP",
+                pickup_task_id,
+                driver_id,
+                "trip1",
+            )
+            self.repository.update_opshop_pickup_task_assignment_status(
+                pickup_task_id,
+                "ASSIGNED",
+                driver_id,
+                "trip1",
+            )
+
+    def apply_countryside_assignments(self, request):
+        request = request or ApplyCountrysideOpShopPickupAssignmentsRequest(dispatch_date="")
+        dispatch = _parse_iso_date(request.dispatch_date, "dispatch_date")
+        driver_ids = set(self.repository.list_driver_ids())
+
+        for assignment in request.assignments or []:
+            pickup_task_id = _clean_text(assignment.get("pickup_task_id"))
+            driver_id = _clean_text(assignment.get("driver_id"))
+            task = self.repository.get_opshop_pickup_task(pickup_task_id)
+            if not task or task.status in {"CANCELLED", "COMPLETED"}:
+                continue
+            pickup_date = _parse_iso_date(task.pickup_date, "pickup_date")
+            if pickup_date < dispatch:
+                continue
+            schedule = self.repository.get_opshop_pickup_schedule(task.schedule_id)
+            if not schedule or schedule.run_type != "ON_CALL" or not _is_active_schedule(schedule):
+                continue
+            if getattr(schedule, "pickup_category", "NORMAL") != "COUNTRYSIDE":
                 continue
 
             if not driver_id:

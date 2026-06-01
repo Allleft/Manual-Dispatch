@@ -58,6 +58,7 @@ function templateToForm(template) {
 
 export function createOpShopTemplateActions({
   loadBoard,
+  reloadCountrysideCandidates,
   reloadOncallCandidates,
   reloadRegularCandidates,
   renderBoard,
@@ -219,6 +220,9 @@ export function createOpShopTemplateActions({
     }
     if (state.isOncallOpShopPickupListOpen) {
       await reloadOncallCandidates();
+    }
+    if (state.isCountrysideOpShopPickupListOpen && reloadCountrysideCandidates) {
+      await reloadCountrysideCandidates();
     }
     await loadBoard(state.dispatchDate, { force: true });
   }

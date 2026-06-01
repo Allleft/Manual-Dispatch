@@ -148,6 +148,7 @@ Countryside pickup is an OP SHOP Oncall subcategory, not a new Delivery workflow
 - A single OP SHOP location can belong to multiple route groups.
 - Duplicate addresses are expected; they reuse the same `opshop_locations` row and create separate route membership schedules.
 - Countryside route groups and membership schedules are template/source data only. Importing them does not create actual pickup tasks.
+- The Countryside Pickup List lets staff filter by route group, create actual pickup tasks from Countryside templates, choose an assigned driver, and close the list to apply those assignments.
 - Countryside remains outside Delivery Order totals, vehicle capacity totals, Delivery Trip 1 / Trip 2 rows, and Delivery-style automation.
 
 ### Regular OP SHOP Pickup List
@@ -170,6 +171,15 @@ Countryside pickup is an OP SHOP Oncall subcategory, not a new Delivery workflow
 - Closing the list applies selected assignments using `trip1` internally.
 - Importing or creating an Oncall template never automatically creates an actual pickup task.
 
+### Countryside OP SHOP Pickup List
+
+- The list is request-driven like Oncall, but templates are filtered from `ON_CALL` schedules with `pickup_category = COUNTRYSIDE`.
+- Staff can filter by Countryside route group before choosing a template.
+- Add Pickup Task creates an actual `OPSHOP_PICKUP` task only when office staff select a template and pickup date.
+- Closing the list applies selected driver assignments using the same OP SHOP pickup assignment boundary as Oncall.
+- Assigned Countryside pickups appear in Driver Summary under `OP SHOP PICKUPS`, with Countryside/route group context.
+- A full Manage Countryside Routes UI and route-group-specific Run Sheet polish are not implemented in this phase.
+
 ### Driver Summary and Lock Boundary
 
 - Assigned OP SHOP pickups appear in a driver-level `OP SHOP PICKUPS` section, not inside Delivery `Trip 1` or `Trip 2`.
@@ -180,7 +190,7 @@ Countryside pickup is an OP SHOP Oncall subcategory, not a new Delivery workflow
 
 ### OP SHOP Run Sheet Export
 
-`Export OP SHOP Run Sheet` provides an independent XLSX for operational pickup work. It includes Regular and Oncall pickup data grouped for office/driver use, with unassigned visible pickups separated where applicable.
+`Export OP SHOP Run Sheet` provides an independent XLSX for operational pickup work. It includes OP SHOP pickup data grouped for office/driver use, with unassigned visible pickups separated where applicable.
 
 This export is independent from the Final Trip Summary workbook and does not turn OP SHOP pickups into Delivery rows.
 
@@ -237,8 +247,8 @@ Final Trip Summary is a saved historical snapshot for a driver, Dispatch Date, a
 | --- | --- |
 | `scheduled_opshop_pickups` | Regular list tasks for the active Regular window. |
 | `oncall_opshop_pickups` | Actual created Oncall tasks visible in the Oncall list. |
-| `countryside_route_groups` | Active Countryside route groups available for foundation/API use. |
-| `countryside_opshop_pickups` | Reserved board-ready Countryside pickup list; currently safe default data for future UI. |
+| `countryside_route_groups` | Active Countryside route groups available to the Countryside pickup list. |
+| `countryside_opshop_pickups` | Actual created Countryside pickup tasks visible in the Countryside list. |
 | `assigned_opshop_pickups` | Assigned pickup items used in Driver Summary. |
 | `opshop_regular_list_window_start` / `opshop_regular_list_window_end` | Display window for the Regular list. |
 | `finalized_driver_delivery_dates` | Saved-summary hard-lock information for frontend interaction guards. |
@@ -254,7 +264,7 @@ Final Trip Summary is a saved historical snapshot for a driver, Dispatch Date, a
 | Driver / Vehicle | `GET /api/manual-dispatch/specifications`, `POST/PATCH/DELETE /api/manual-dispatch/drivers...`, `POST/PATCH/DELETE /api/manual-dispatch/vehicles...`, `POST /api/manual-dispatch/driver-vehicle` |
 | OP SHOP Templates | `GET/POST /api/manual-dispatch/opshop-templates`, `PATCH /api/manual-dispatch/opshop-templates/{schedule_id}`, `POST /api/manual-dispatch/opshop-templates/{schedule_id}/disable` |
 | OP SHOP Countryside Route Groups | `GET/POST /api/manual-dispatch/opshop-countryside-route-groups`, `PATCH /api/manual-dispatch/opshop-countryside-route-groups/{route_group_id}`, `POST /api/manual-dispatch/opshop-countryside-route-groups/{route_group_id}/disable` |
-| OP SHOP Pickups | `GET /api/manual-dispatch/opshop-pickup-schedules`, `POST /api/manual-dispatch/opshop-pickups`, `POST /api/manual-dispatch/opshop-pickups/oncall`, `PATCH/DELETE /api/manual-dispatch/opshop-pickups/{pickup_task_id}`, `POST /api/manual-dispatch/opshop-pickups/weekly-assignments/apply`, `POST /api/manual-dispatch/opshop-pickups/oncall-assignments/apply` |
+| OP SHOP Pickups | `GET /api/manual-dispatch/opshop-pickup-schedules`, `POST /api/manual-dispatch/opshop-pickups`, `POST /api/manual-dispatch/opshop-pickups/oncall`, `PATCH/DELETE /api/manual-dispatch/opshop-pickups/{pickup_task_id}`, `POST /api/manual-dispatch/opshop-pickups/weekly-assignments/apply`, `POST /api/manual-dispatch/opshop-pickups/oncall-assignments/apply`, `POST /api/manual-dispatch/opshop-pickups/countryside-assignments/apply` |
 | Final Summaries | `POST/GET /api/manual-dispatch/final-summaries`, `GET /api/manual-dispatch/final-summaries/{summary_id}`, `GET /api/manual-dispatch/final-summary-dates` |
 | Exports | `GET /api/manual-dispatch/final-summaries/export-excel`, `GET /api/manual-dispatch/opshop-pickups/export-excel` |
 

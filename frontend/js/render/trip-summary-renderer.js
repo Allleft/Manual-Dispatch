@@ -368,6 +368,9 @@ function createAssignedOpShopPickupTask(
   const badgeRow = document.createElement("div");
   badgeRow.className = "hint-badge-row";
   badgeRow.append(createBadge("OP SHOP PICKUP", "good"));
+  if (pickup.pickup_category === "COUNTRYSIDE" || pickup.route_group_name) {
+    badgeRow.append(createBadge("Countryside"));
+  }
 
   const name = document.createElement("p");
   name.className = "assigned-opshop-name";
@@ -378,6 +381,12 @@ function createAssignedOpShopPickupTask(
   suburb.textContent = formatOptional(pickup.suburb);
 
   details.append(badgeRow, name, suburb);
+  if (pickup.route_group_name) {
+    const routeGroup = document.createElement("p");
+    routeGroup.className = "assigned-opshop-suburb";
+    routeGroup.textContent = `Route Group: ${formatOptional(pickup.route_group_name)}`;
+    details.append(routeGroup);
+  }
 
   const unassignButton = document.createElement("button");
   unassignButton.type = "button";

@@ -67,6 +67,7 @@ export function renderTaskPoolFilters({
 export function renderTaskPool({
   getPendingSelection,
   onExportOpShopRunSheet,
+  onOpenCountrysideOpShopPickupList,
   onOpenOncallOpShopPickupList,
   onOpenOpShopPickupList,
   onOpenOpShopTemplateManagement,
@@ -99,10 +100,12 @@ export function renderTaskPool({
   taskPoolList.append(
     createOpShopPickupSection({
       onExportOpShopRunSheet,
+      onOpenCountrysideOpShopPickupList,
       onOpenOncallOpShopPickupList,
       onOpenOpShopPickupList,
       onOpenOpShopTemplateManagement,
       oncallPickups: state.oncallOpShopPickups,
+      countrysidePickups: state.countrysideOpShopPickups,
       pickups: state.scheduledOpShopPickups,
     }),
   );
@@ -137,6 +140,8 @@ function createTaskPoolSection({ className, titleText }) {
 function createOpShopPickupSection({
   onExportOpShopRunSheet,
   oncallPickups,
+  countrysidePickups,
+  onOpenCountrysideOpShopPickupList,
   onOpenOncallOpShopPickupList,
   pickups,
   onOpenOpShopPickupList,
@@ -152,6 +157,12 @@ function createOpShopPickupSection({
 
   list.append(createOpShopPickupListSummaryCard(pickups, onOpenOpShopPickupList));
   list.append(createOncallOpShopPickupListSummaryCard(oncallPickups, onOpenOncallOpShopPickupList));
+  list.append(
+    createCountrysideOpShopPickupListSummaryCard(
+      countrysidePickups,
+      onOpenCountrysideOpShopPickupList,
+    ),
+  );
 
   const exportButton = document.createElement("button");
   exportButton.type = "button";
@@ -298,6 +309,51 @@ function createOncallOpShopPickupListSummaryCard(pickups, onOpenOncallOpShopPick
   openButton.type = "button";
   openButton.textContent = "Open List";
   openButton.addEventListener("click", onOpenOncallOpShopPickupList);
+
+  content.append(kicker, title, summary, meta, openButton);
+  card.append(content);
+  return card;
+}
+
+function createCountrysideOpShopPickupListSummaryCard(
+  pickups,
+  onOpenCountrysideOpShopPickupList,
+) {
+  const card = document.createElement("article");
+  card.className = "order-card opshop-pickup-list-summary-card opshop-countryside-list-summary-card";
+
+  const content = document.createElement("div");
+  content.className = "opshop-pickup-list-summary-main";
+
+  const kicker = document.createElement("p");
+  kicker.className = "compact-invoice";
+  kicker.textContent = "Countryside Routes";
+
+  const title = document.createElement("h3");
+  title.className = "compact-suburb";
+  title.textContent = "Countryside OP SHOP Pickup List";
+
+  const summary = document.createElement("p");
+  summary.className = "compact-note opshop-pickup-note";
+  summary.textContent =
+    pickups.length === 0
+      ? "No Countryside OP SHOP pickups added."
+      : `${pickups.length} Countryside pickups added.`;
+
+  const meta = document.createElement("div");
+  meta.className = "compact-meta opshop-pickup-meta";
+  meta.append(
+    createBadge(`Count: ${pickups.length}`, "good"),
+    createBadge("Route-group tasks"),
+    createBadge("ON_CALL / COUNTRYSIDE"),
+  );
+
+  const openButton = document.createElement("button");
+  openButton.type = "button";
+  openButton.textContent = "Open List";
+  openButton.disabled =
+    state.isCountrysideOpShopPickupListLoading || state.isCountrysideOpShopPickupSaving;
+  openButton.addEventListener("click", onOpenCountrysideOpShopPickupList);
 
   content.append(kicker, title, summary, meta, openButton);
   card.append(content);

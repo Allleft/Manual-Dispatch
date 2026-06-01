@@ -150,6 +150,10 @@ class ManualDispatchService:
         self.opshop_pickup_service.apply_oncall_assignments(request)
         return self.board_service.get_board(request.dispatch_date)
 
+    def apply_countryside_opshop_pickup_assignments(self, request):
+        self.opshop_pickup_service.apply_countryside_assignments(request)
+        return self.board_service.get_board(request.dispatch_date)
+
     def create_driver(self, request):
         return self.specification_service.create_driver(request)
 

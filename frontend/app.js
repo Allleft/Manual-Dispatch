@@ -6,6 +6,7 @@ import { createAssignmentActions } from "./js/actions/assignment-actions.js";
 import { createAuthActions } from "./js/actions/auth-actions.js";
 import { createFinalSummaryActions } from "./js/actions/final-summary-actions.js";
 import { createOrderActions } from "./js/actions/order-actions.js";
+import { createCountrysideOpShopPickupActions } from "./js/actions/opshop-countryside-pickup-actions.js";
 import { createOncallOpShopPickupActions } from "./js/actions/opshop-oncall-pickup-actions.js";
 import { createOpShopPickupActions } from "./js/actions/opshop-pickup-actions.js";
 import { createOpShopTemplateActions } from "./js/actions/opshop-template-actions.js";
@@ -32,6 +33,7 @@ import {
 import { renderDriverSummary as renderDriverSummaryView } from "./js/render/trip-summary-renderer.js";
 import { renderOpShopPickupDetailPopup as renderOpShopPickupDetailPopupView } from "./js/render/opshop-pickup-modal-renderer.js";
 import { renderOpShopPickupListModal as renderOpShopPickupListModalView } from "./js/render/opshop-pickup-list-modal-renderer.js";
+import { renderCountrysideOpShopPickupListModal as renderCountrysideOpShopPickupListModalView } from "./js/render/opshop-countryside-pickup-list-modal-renderer.js";
 import { renderOncallOpShopPickupListModal as renderOncallOpShopPickupListModalView } from "./js/render/opshop-oncall-pickup-list-modal-renderer.js";
 import { renderOpShopTemplateManagementModal as renderOpShopTemplateManagementModalView } from "./js/render/opshop-template-management-modal-renderer.js";
 
@@ -213,12 +215,30 @@ function renderTaskPool() {
   renderTaskPoolView({
     getPendingSelection: assignmentActions.getPendingSelection,
     onExportOpShopRunSheet: opShopPickupActions.exportOpShopRunSheet,
+    onOpenCountrysideOpShopPickupList: countrysideOpShopPickupActions.openCountrysideOpShopPickupList,
     onOpenOncallOpShopPickupList: oncallOpShopPickupActions.openOncallOpShopPickupList,
     onOpenOpShopPickupList: opShopPickupActions.openOpShopPickupList,
     onOpenOpShopTemplateManagement: opShopTemplateActions.openTemplateManagement,
     onOpenOrderDetail: orderActions.openOrderDetail,
     onPendingSelectionChange: assignmentActions.updatePendingSelection,
     onAssignTask: assignmentActions.handleAssignTask,
+  });
+}
+
+function renderCountrysideOpShopPickupListModal() {
+  renderCountrysideOpShopPickupListModalView({
+    onCancelForm: countrysideOpShopPickupActions.cancelPickupTaskForm,
+    onCloseList: countrysideOpShopPickupActions.closeCountrysideOpShopPickupList,
+    onConfirmDelete: countrysideOpShopPickupActions.handleDeletePickupTask,
+    onCreatePickup: countrysideOpShopPickupActions.handleCreatePickupTask,
+    onOpenDetail: openOpShopPickupDetail,
+    onSelectRouteGroup: countrysideOpShopPickupActions.setSelectedRouteGroup,
+    onStartAdd: countrysideOpShopPickupActions.startAddPickupTask,
+    onStartDelete: countrysideOpShopPickupActions.startDeletePickupTask,
+    onStartEdit: countrysideOpShopPickupActions.startEditPickupTask,
+    onUpdateAssignedDriver: countrysideOpShopPickupActions.updateAssignedDriverSelection,
+    onUpdateForm: countrysideOpShopPickupActions.updatePickupTaskForm,
+    onUpdatePickup: countrysideOpShopPickupActions.handleUpdatePickupTask,
   });
 }
 
@@ -798,6 +818,7 @@ function renderBoard() {
   renderAddOrderPopup();
   renderOpShopPickupListModal();
   renderOncallOpShopPickupListModal();
+  renderCountrysideOpShopPickupListModal();
   renderOpShopTemplateManagementModal();
   renderOpShopPickupDetailPopup();
   renderSpecificationModal();
@@ -843,8 +864,15 @@ const oncallOpShopPickupActions = createOncallOpShopPickupActions({
   state,
 });
 
+const countrysideOpShopPickupActions = createCountrysideOpShopPickupActions({
+  loadBoard,
+  renderBoard,
+  state,
+});
+
 const opShopTemplateActions = createOpShopTemplateActions({
   loadBoard,
+  reloadCountrysideCandidates: countrysideOpShopPickupActions.loadScheduleCandidates,
   reloadOncallCandidates: oncallOpShopPickupActions.loadScheduleCandidates,
   reloadRegularCandidates: opShopPickupActions.loadScheduleCandidates,
   renderBoard,
