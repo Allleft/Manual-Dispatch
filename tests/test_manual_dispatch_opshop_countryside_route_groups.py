@@ -22,6 +22,7 @@ from backend.schemas import (
     RegisterOperatorAccountRequest,
     SaveFinalTripSummaryRequest,
     UpdateOpShopCountrysideRouteGroupRequest,
+    UpdateOpShopPickupTaskRequest,
 )
 from backend.services.manual_dispatch_service import ManualDispatchService
 
@@ -353,6 +354,121 @@ class CountrysideRouteGroupServiceTest(unittest.TestCase):
         self.assertIsNone(updated.driver_id)
         self.assertIsNone(
             self.repository.get_assignment("2026-05-25", "OPSHOP_PICKUP", task.pickup_task_id)
+        )
+
+    def test_create_countryside_pickup_with_assigned_driver_persists_assignment(self):
+        group = self.service.create_countryside_route_group(
+            CreateOpShopCountrysideRouteGroupRequest(route_group_name="Create Assigned Route")
+        )
+        template = self._create_countryside_template(group.route_group_id)
+
+        task = self.service.create_oncall_opshop_pickup_task(
+            CreateOpShopPickupTaskRequest(
+                schedule_id=template.schedule_id,
+                pickup_date="2026-05-25",
+                assigned_driver_id="D001",
+                dispatch_date="2026-05-25",
+            )
+        )
+        board = self.service.get_board("2026-05-25")
+        assignment = self.repository.get_assignment(
+            "2026-05-25",
+            "OPSHOP_PICKUP",
+            task.pickup_task_id,
+        )
+
+        self.assertEqual("ASSIGNED", task.status)
+        self.assertEqual("D001", task.driver_id)
+        self.assertEqual("trip1", task.trip_no)
+        self.assertEqual("D001", assignment.driver_id)
+        self.assertEqual(
+            ["D001"],
+            [
+                item.assigned_driver_id
+                for item in board.countryside_opshop_pickups
+                if item.pickup_task_id == task.pickup_task_id
+            ],
+        )
+
+    def test_create_countryside_pickup_assignment_rejects_finalized_driver_date(self):
+        group = self.service.create_countryside_route_group(
+            CreateOpShopCountrysideRouteGroupRequest(route_group_name="Create Locked Route")
+        )
+        template = self._create_countryside_template(group.route_group_id)
+        self._save_final_summary_lock("D001", "2026-05-25")
+
+        with self.assertRaisesRegex(ValueError, "Final Trip Summary"):
+            self.service.create_oncall_opshop_pickup_task(
+                CreateOpShopPickupTaskRequest(
+                    schedule_id=template.schedule_id,
+                    pickup_date="2026-05-25",
+                    assigned_driver_id="D001",
+                    dispatch_date="2026-05-25",
+                )
+            )
+
+        self.assertEqual([], self.repository.list_opshop_pickup_tasks())
+
+    def test_update_countryside_assigned_pickup_date_keeps_assignment_when_unlocked(self):
+        group = self.service.create_countryside_route_group(
+            CreateOpShopCountrysideRouteGroupRequest(route_group_name="Update Date Route")
+        )
+        template = self._create_countryside_template(group.route_group_id)
+        task = self.service.create_oncall_opshop_pickup_task(
+            CreateOpShopPickupTaskRequest(
+                schedule_id=template.schedule_id,
+                pickup_date="2026-05-25",
+                assigned_driver_id="D001",
+                dispatch_date="2026-05-25",
+            )
+        )
+
+        updated = self.service.update_opshop_pickup_task(
+            task.pickup_task_id,
+            UpdateOpShopPickupTaskRequest(
+                pickup_date="2026-05-26",
+                notes="Moved by office",
+                dispatch_date="2026-05-25",
+            ),
+        )
+        assignment = self.repository.get_assignment(
+            "2026-05-25",
+            "OPSHOP_PICKUP",
+            task.pickup_task_id,
+        )
+
+        self.assertEqual("2026-05-26", updated.pickup_date)
+        self.assertEqual("ASSIGNED", updated.status)
+        self.assertEqual("D001", updated.driver_id)
+        self.assertEqual("D001", assignment.driver_id)
+
+    def test_update_countryside_assigned_pickup_date_rejects_finalized_target(self):
+        group = self.service.create_countryside_route_group(
+            CreateOpShopCountrysideRouteGroupRequest(route_group_name="Update Locked Route")
+        )
+        template = self._create_countryside_template(group.route_group_id)
+        task = self.service.create_oncall_opshop_pickup_task(
+            CreateOpShopPickupTaskRequest(
+                schedule_id=template.schedule_id,
+                pickup_date="2026-05-25",
+                assigned_driver_id="D001",
+                dispatch_date="2026-05-25",
+            )
+        )
+        self._save_final_summary_lock("D001", "2026-05-26")
+
+        with self.assertRaisesRegex(ValueError, "Final Trip Summary"):
+            self.service.update_opshop_pickup_task(
+                task.pickup_task_id,
+                UpdateOpShopPickupTaskRequest(
+                    pickup_date="2026-05-26",
+                    dispatch_date="2026-05-25",
+                ),
+            )
+
+        self.assertEqual(
+            "2026-05-25",
+            self.repository.get_opshop_pickup_task(task.pickup_task_id).pickup_date,
         )
 
     def _create_countryside_template(self, route_group_id):

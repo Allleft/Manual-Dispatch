@@ -564,6 +564,9 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         actions = (
             FRONTEND_ROOT / "js" / "actions" / "opshop-countryside-pickup-actions.js"
         ).read_text(encoding="utf-8")
+        oncall_actions = (
+            FRONTEND_ROOT / "js" / "actions" / "opshop-oncall-pickup-actions.js"
+        ).read_text(encoding="utf-8")
         app_state = (
             FRONTEND_ROOT / "js" / "state" / "app-state.js"
         ).read_text(encoding="utf-8")
@@ -575,6 +578,12 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         ).read_text(encoding="utf-8")
         modal_renderer = (
             FRONTEND_ROOT / "js" / "render" / "opshop-countryside-pickup-list-modal-renderer.js"
+        ).read_text(encoding="utf-8")
+        regular_modal_renderer = (
+            FRONTEND_ROOT / "js" / "render" / "opshop-pickup-list-modal-renderer.js"
+        ).read_text(encoding="utf-8")
+        oncall_modal_renderer = (
+            FRONTEND_ROOT / "js" / "render" / "opshop-oncall-pickup-list-modal-renderer.js"
         ).read_text(encoding="utf-8")
         trip_summary_renderer = (
             FRONTEND_ROOT / "js" / "render" / "trip-summary-renderer.js"
@@ -611,9 +620,15 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("startCreatePickupFromRouteTemplate", actions)
         self.assertIn("startMoveRouteTemplate", actions)
         self.assertIn("startRemoveRouteTemplate", actions)
+        self.assertIn("openRouteTemplateDetail", actions)
+        self.assertIn("closeRouteTemplateDetail", actions)
         self.assertIn("apiApplyCountrysideOpShopPickupAssignments", actions)
         self.assertIn("getVisibleCountrysidePickups()", actions)
         self.assertIn("state.countrysideOpShopPickupAssignedDriverSelections", actions)
+        self.assertIn('const shouldRender = field === "route_group_id" || field === "schedule_id";', actions)
+        self.assertIn("dispatch_date: state.dispatchDate", actions)
+        self.assertIn('const shouldRender = field === "schedule_id";', oncall_actions)
+        self.assertIn("dispatch_date: state.dispatchDate", oncall_actions)
         self.assertIn("selectedCountrysideRouteGroupId", app_state)
         self.assertIn("countrysideRouteGroups", app_state)
         self.assertIn("countrysideRouteMemberships", app_state)
@@ -623,6 +638,7 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("countrysideOpShopPickups", app_state)
         self.assertIn("countrysideOpShopPickupScheduleCandidates", app_state)
         self.assertIn("isCountrysideOpShopPickupListOpen", app_state)
+        self.assertIn("activeCountrysideRouteTemplateDetailId", app_state)
         self.assertIn("countrysideOpShopPickups: payload.countryside_opshop_pickups || []", board_state_sync)
         self.assertIn("countrysideRouteGroups: payload.countryside_route_groups || []", board_state_sync)
         self.assertIn("state.countrysideOpShopPickups = board.countrysideOpShopPickups", board_state_sync)
@@ -635,6 +651,14 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("createCountrysideOpShopPickupActions", app_js)
         self.assertIn(
             "onOpenCountrysideOpShopPickupList: countrysideOpShopPickupActions.openCountrysideOpShopPickupList",
+            app_js,
+        )
+        self.assertIn(
+            "onOpenRouteTemplateDetail: countrysideOpShopPickupActions.openRouteTemplateDetail",
+            app_js,
+        )
+        self.assertIn(
+            "onCloseRouteTemplateDetail: countrysideOpShopPickupActions.closeRouteTemplateDetail",
             app_js,
         )
         self.assertIn("Countryside OP SHOP Pickup List", task_pool_renderer)
@@ -660,6 +684,17 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("groupPickupsByRouteGroup", modal_renderer)
         self.assertIn("comparePickupsWithinRouteGroup", modal_renderer)
         self.assertIn("route_group_name", modal_renderer)
+        self.assertIn("createRouteTemplateDetailPanel", modal_renderer)
+        self.assertIn("Route Template Detail", modal_renderer)
+        self.assertIn("OP SHOP name", modal_renderer)
+        self.assertIn("Street address", modal_renderer)
+        self.assertIn("Default driver", modal_renderer)
+        self.assertIn("activeCountrysideRouteTemplateDetailId", modal_renderer)
+        self.assertIn("card.addEventListener(\"click\", () => onOpenRouteTemplateDetail(template))", modal_renderer)
+        self.assertIn("actions.addEventListener(\"click\", (event) => event.stopPropagation())", modal_renderer)
+        self.assertIn("card.setAttribute(\"role\", \"button\")", modal_renderer)
+        self.assertIn("card.tabIndex = 0", modal_renderer)
+        self.assertIn("root.replaceChildren()", modal_renderer)
         self.assertIn("state.countrysideOpShopPickupAssignedDriverSelections[pickup.pickup_task_id]", modal_renderer)
         self.assertIn("onOpenDetail(pickup.pickup_task_id)", modal_renderer)
         self.assertIn("event.stopPropagation()", modal_renderer)
@@ -672,6 +707,12 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("meta.textContent", modal_renderer)
         self.assertIn("notes.textContent = truncateText(template.status_notes", modal_renderer)
         self.assertIn("note.textContent = truncateText", modal_renderer)
+        self.assertIn("backdrop.addEventListener(\"click\", onCloseList)", regular_modal_renderer)
+        self.assertIn("modal.addEventListener(\"click\", (event) => event.stopPropagation())", regular_modal_renderer)
+        self.assertIn("backdrop.addEventListener(\"click\", onCloseList)", oncall_modal_renderer)
+        self.assertIn("modal.addEventListener(\"click\", (event) => event.stopPropagation())", oncall_modal_renderer)
+        self.assertIn("backdrop.addEventListener(\"click\", onCloseList)", modal_renderer)
+        self.assertIn("modal.addEventListener(\"click\", (event) => event.stopPropagation())", modal_renderer)
         self.assertIn("Countryside", trip_summary_renderer)
         self.assertIn("pickup.pickup_category === \"COUNTRYSIDE\"", trip_summary_renderer)
         self.assertIn("Route Group:", trip_summary_renderer)
@@ -679,6 +720,10 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("opshop-route-group-section", styles)
         self.assertIn("opshop-route-template-card", styles)
         self.assertIn("opshop-list-section", styles)
+        self.assertIn(".checkbox-field", styles)
+        self.assertIn("align-items: center;", styles)
+        self.assertIn(".opshop-route-template-detail-panel", styles)
+        self.assertIn(".opshop-route-template-detail-grid", styles)
         self.assertNotIn("localStorage", actions)
         self.assertNotIn("sessionStorage", actions)
         self.assertNotIn("location.hash", actions)

@@ -18,7 +18,9 @@ export function renderCountrysideOpShopPickupListModal({
   onCreateRouteGroup,
   onDisableRouteGroup,
   onMoveRouteTemplate,
+  onCloseRouteTemplateDetail,
   onOpenDetail,
+  onOpenRouteTemplateDetail,
   onRemoveRouteTemplate,
   onRenameRouteGroup,
   onSelectRouteGroup,
@@ -93,11 +95,13 @@ export function renderCountrysideOpShopPickupListModal({
       onRemoveRouteTemplate,
       onUpdateRouteTemplateForm,
     }),
+    createRouteTemplateDetailPanel({ onCloseRouteTemplateDetail }),
     createPickupGroups({ onOpenDetail, onStartEdit, onUpdateAssignedDriver }),
     createRouteTemplatesSection({
       onStartAddRouteTemplate,
       onStartCreatePickupFromRouteTemplate,
       onStartMoveRouteTemplate,
+      onOpenRouteTemplateDetail,
       onStartRemoveRouteTemplate,
     }),
   );
@@ -460,6 +464,67 @@ function createRemoveRouteTemplateConfirmation({
   return panel;
 }
 
+function createRouteTemplateDetailPanel({ onCloseRouteTemplateDetail }) {
+  if (!state.activeCountrysideRouteTemplateDetailId) {
+    return createPlaceholder();
+  }
+  const template = state.countrysideRouteMemberships.find(
+    (item) => item.schedule_id === state.activeCountrysideRouteTemplateDetailId,
+  );
+  if (!template) {
+    return createPlaceholder();
+  }
+
+  const panel = document.createElement("section");
+  panel.className = "opshop-route-template-detail-panel";
+  panel.setAttribute("aria-label", "Countryside route template detail");
+  panel.addEventListener("click", (event) => event.stopPropagation());
+
+  const header = document.createElement("div");
+  header.className = "opshop-list-section-header";
+
+  const title = document.createElement("h3");
+  title.className = "opshop-list-section-heading";
+  title.textContent = "Route Template Detail";
+
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "button-secondary";
+  close.textContent = "Close Detail";
+  close.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onCloseRouteTemplateDetail();
+  });
+
+  header.append(title, close);
+
+  const grid = document.createElement("div");
+  grid.className = "opshop-route-template-detail-grid";
+  [
+    ["OP SHOP name", template.name],
+    ["Suburb", template.suburb],
+    ["Street address", template.street_address],
+    ["Area / Region", template.area_region],
+    ["Primary contact", template.primary_contact],
+    ["Primary phone", template.primary_phone],
+    ["Secondary contact", template.secondary_contact],
+    ["Secondary phone", template.secondary_phone],
+    ["Time window", template.time_window],
+    ["Access type", template.access_type],
+    ["Key required", template.key_required ? "Yes" : "No"],
+    ["Trailer restriction", template.trailer_restriction],
+    ["Default driver", template.default_driver_name || template.default_driver_alias],
+    ["Route group", template.route_group_name || getRouteGroupName(template.route_group_id)],
+    ["Status notes", template.status_notes],
+  ].forEach(([label, value]) => {
+    grid.append(createDetailField(label, value));
+  });
+
+  panel.append(header, grid);
+  return panel;
+}
+
 function createAddForm({ onCancelForm, onCreatePickup, onUpdateForm }) {
   const form = document.createElement("form");
   form.className = "opshop-list-form";
@@ -515,7 +580,7 @@ function createEditForm({ onCancelForm, onStartDelete, onUpdateForm, onUpdatePic
       "pickup_date",
       state.countrysideOpShopPickupForm.pickup_date,
       onUpdateForm,
-      { disabled: isLocked || (pickup && pickup.status === "ASSIGNED") },
+      { disabled: isLocked },
     ),
     createDriverSelect(
       "Assigned to",
@@ -861,6 +926,20 @@ function createPlaceholder() {
   return placeholder;
 }
 
+function createDetailField(labelText, value) {
+  const field = document.createElement("div");
+  field.className = "opshop-route-template-detail-field";
+
+  const label = document.createElement("span");
+  label.textContent = labelText;
+
+  const text = document.createElement("strong");
+  text.textContent = formatOptional(value);
+
+  field.append(label, text);
+  return field;
+}
+
 function createPickupGroups({ onOpenDetail, onStartEdit, onUpdateAssignedDriver }) {
   const container = document.createElement("section");
   container.className = "opshop-list-section opshop-pickup-task-section";
@@ -919,6 +998,7 @@ function createPickupGroups({ onOpenDetail, onStartEdit, onUpdateAssignedDriver 
 }
 
 function createRouteTemplatesSection({
+  onOpenRouteTemplateDetail,
   onStartAddRouteTemplate,
   onStartCreatePickupFromRouteTemplate,
   onStartMoveRouteTemplate,
@@ -985,6 +1065,7 @@ function createRouteTemplatesSection({
   state.countrysideRouteMemberships.forEach((template) => {
     list.append(
       createRouteTemplateCard(template, {
+        onOpenRouteTemplateDetail,
         onStartCreatePickupFromRouteTemplate,
         onStartMoveRouteTemplate,
         onStartRemoveRouteTemplate,
@@ -998,6 +1079,7 @@ function createRouteTemplatesSection({
 function createRouteTemplateCard(
   template,
   {
+    onOpenRouteTemplateDetail,
     onStartCreatePickupFromRouteTemplate,
     onStartMoveRouteTemplate,
     onStartRemoveRouteTemplate,
@@ -1005,6 +1087,16 @@ function createRouteTemplateCard(
 ) {
   const card = document.createElement("article");
   card.className = "opshop-route-template-card";
+  card.tabIndex = 0;
+  card.setAttribute("role", "button");
+  card.setAttribute("aria-label", `View Countryside route template details for ${template.name || template.schedule_id}`);
+  card.addEventListener("click", () => onOpenRouteTemplateDetail(template));
+  card.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      onOpenRouteTemplateDetail(template);
+    }
+  });
 
   const main = document.createElement("div");
   main.className = "opshop-route-template-main";

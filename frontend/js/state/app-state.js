@@ -80,6 +80,7 @@ export const state = {
   countrysideRouteTemplateForm: {},
   countrysideRouteTemplateEditingScheduleId: "",
   countrysideRouteTemplateMoveTargetRouteGroupId: "",
+  activeCountrysideRouteTemplateDetailId: "",
   isCountrysideRouteTemplateSaving: false,
   selectedCountrysideRouteGroupId: "",
   opshopTemplateActiveTab: "REGULAR",

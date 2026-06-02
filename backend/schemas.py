@@ -343,12 +343,14 @@ class CreateOpShopPickupTaskRequest:
     pickup_date: Optional[str] = None
     notes: Optional[str] = None
     assigned_driver_id: Optional[str] = None
+    dispatch_date: Optional[str] = None
 
 
 @dataclass
 class UpdateOpShopPickupTaskRequest:
     pickup_date: Optional[str] = None
     notes: Optional[str] = None
+    dispatch_date: Optional[str] = None
 
 
 @dataclass

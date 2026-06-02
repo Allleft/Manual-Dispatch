@@ -317,6 +317,7 @@ export function createCountrysideOpShopPickupActions({
   }
 
   function startCreatePickupFromRouteTemplate(template) {
+    state.activeCountrysideRouteTemplateDetailId = "";
     state.countrysideOpShopPickupFormMode = "add";
     state.countrysideOpShopPickupEditingTaskId = "";
     state.countrysideOpShopPickupForm = {
@@ -334,6 +335,7 @@ export function createCountrysideOpShopPickupActions({
   }
 
   function startMoveRouteTemplate(template) {
+    state.activeCountrysideRouteTemplateDetailId = "";
     state.countrysideRouteTemplateFormMode = "move";
     state.countrysideRouteTemplateEditingScheduleId = template.schedule_id;
     state.countrysideRouteTemplateMoveTargetRouteGroupId = "";
@@ -347,6 +349,7 @@ export function createCountrysideOpShopPickupActions({
   }
 
   function startRemoveRouteTemplate(template) {
+    state.activeCountrysideRouteTemplateDetailId = "";
     state.countrysideRouteTemplateFormMode = "remove";
     state.countrysideRouteTemplateEditingScheduleId = template.schedule_id;
     state.countrysideRouteTemplateMoveTargetRouteGroupId = "";
@@ -362,6 +365,16 @@ export function createCountrysideOpShopPickupActions({
   function cancelRouteTemplateForm() {
     resetRouteTemplateForm();
     state.countrysideRouteManagementError = "";
+    renderBoard();
+  }
+
+  function openRouteTemplateDetail(template) {
+    state.activeCountrysideRouteTemplateDetailId = template.schedule_id;
+    renderBoard();
+  }
+
+  function closeRouteTemplateDetail() {
+    state.activeCountrysideRouteTemplateDetailId = "";
     renderBoard();
   }
 
@@ -455,6 +468,7 @@ export function createCountrysideOpShopPickupActions({
   }
 
   function updatePickupTaskForm(field, value) {
+    const shouldRender = field === "route_group_id" || field === "schedule_id";
     const nextForm = {
       ...state.countrysideOpShopPickupForm,
       [field]: value,
@@ -471,7 +485,9 @@ export function createCountrysideOpShopPickupActions({
       nextForm.assigned_driver_id = candidate ? candidate.default_driver_id || "" : "";
     }
     state.countrysideOpShopPickupForm = nextForm;
-    renderBoard();
+    if (shouldRender) {
+      renderBoard();
+    }
   }
 
   async function handleCreatePickupTask() {
@@ -488,6 +504,7 @@ export function createCountrysideOpShopPickupActions({
       const created = await apiCreateOncallOpShopPickup({
         schedule_id: state.countrysideOpShopPickupForm.schedule_id,
         pickup_date: state.countrysideOpShopPickupForm.pickup_date,
+        dispatch_date: state.dispatchDate,
         assigned_driver_id: selectedDriverId || null,
         notes: state.countrysideOpShopPickupForm.notes || null,
       });
@@ -523,6 +540,7 @@ export function createCountrysideOpShopPickupActions({
       const selectedDriverId = state.countrysideOpShopPickupForm.assigned_driver_id || "";
       await apiUpdateOpShopPickup(pickupTaskId, {
         pickup_date: state.countrysideOpShopPickupForm.pickup_date,
+        dispatch_date: state.dispatchDate,
         notes: state.countrysideOpShopPickupForm.notes || null,
       });
       state.countrysideOpShopPickupFormMode = "";
@@ -627,6 +645,7 @@ export function createCountrysideOpShopPickupActions({
     state.countrysideRouteTemplateForm = {};
     state.countrysideRouteTemplateEditingScheduleId = "";
     state.countrysideRouteTemplateMoveTargetRouteGroupId = "";
+    state.activeCountrysideRouteTemplateDetailId = "";
   }
 
   function createEmptyRouteTemplateForm() {
@@ -674,6 +693,8 @@ export function createCountrysideOpShopPickupActions({
     loadRouteGroups,
     loadRouteMemberships,
     loadScheduleCandidates,
+    closeRouteTemplateDetail,
+    openRouteTemplateDetail,
     openCountrysideOpShopPickupList,
     setSelectedRouteGroup,
     startAddPickupTask,

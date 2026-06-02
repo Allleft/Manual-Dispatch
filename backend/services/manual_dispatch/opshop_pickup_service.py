@@ -156,13 +156,14 @@ class OpShopPickupService:
         schedule_id = _clean_text(request.schedule_id)
         pickup_date = _parse_iso_date(request.pickup_date, "pickup_date").isoformat()
         schedule = self._get_schedulable_schedule(schedule_id)
+        self._requested_assignment_context(request, pickup_date)
 
         existing = self.repository.find_opshop_pickup_task_by_schedule_and_date(
             schedule.schedule_id,
             pickup_date,
         )
         if existing and existing.status == "CANCELLED":
-            return self.repository.upsert_opshop_pickup_task(
+            restored = self.repository.upsert_opshop_pickup_task(
                 replace(
                     existing,
                     status="ACTIVE",
@@ -174,6 +175,7 @@ class OpShopPickupService:
                     updated_at=_timestamp(),
                 )
             )
+            return self._apply_created_assignment_if_requested(restored, request)
         if existing:
             raise ValueError("OP SHOP pickup task already exists for this schedule and date")
 
@@ -193,20 +195,22 @@ class OpShopPickupService:
             created_at=timestamp,
             updated_at=timestamp,
         )
-        return self.repository.insert_opshop_pickup_task(task)
+        created = self.repository.insert_opshop_pickup_task(task)
+        return self._apply_created_assignment_if_requested(created, request)
 
     def create_oncall_opshop_pickup_task(self, request):
         request = request or CreateOpShopPickupTaskRequest()
         schedule_id = _clean_text(request.schedule_id)
         pickup_date = _parse_iso_date(request.pickup_date, "pickup_date").isoformat()
         schedule = self._get_oncall_schedule(schedule_id)
+        self._requested_assignment_context(request, pickup_date)
 
         existing = self.repository.find_opshop_pickup_task_by_schedule_and_date(
             schedule.schedule_id,
             pickup_date,
         )
         if existing and existing.status == "CANCELLED":
-            return self.repository.upsert_opshop_pickup_task(
+            restored = self.repository.upsert_opshop_pickup_task(
                 replace(
                     existing,
                     status="ACTIVE",
@@ -218,6 +222,7 @@ class OpShopPickupService:
                     updated_at=_timestamp(),
                 )
             )
+            return self._apply_created_assignment_if_requested(restored, request)
         if existing:
             raise ValueError("OP SHOP pickup task already exists for this schedule and date")
 
@@ -237,7 +242,8 @@ class OpShopPickupService:
             created_at=timestamp,
             updated_at=timestamp,
         )
-        return self.repository.insert_opshop_pickup_task(task)
+        created = self.repository.insert_opshop_pickup_task(task)
+        return self._apply_created_assignment_if_requested(created, request)
 
     def update_opshop_pickup_task(self, pickup_task_id, request):
         request = request or UpdateOpShopPickupTaskRequest()
@@ -251,16 +257,33 @@ class OpShopPickupService:
         if request.pickup_date:
             next_pickup_date = _parse_iso_date(request.pickup_date, "pickup_date").isoformat()
 
-        if task.status == "ASSIGNED" and next_pickup_date != task.pickup_date:
-            raise ValueError("Assigned OP SHOP pickup tasks cannot change pickup date")
-
-        if task.status == "ACTIVE" and next_pickup_date != task.pickup_date:
+        if next_pickup_date != task.pickup_date:
+            if task.status == "ASSIGNED":
+                schedule = self.repository.get_opshop_pickup_schedule(task.schedule_id)
+                if not schedule or getattr(schedule, "pickup_category", "NORMAL") != "COUNTRYSIDE":
+                    raise ValueError("Assigned OP SHOP pickup tasks cannot change pickup date")
             existing = self.repository.find_opshop_pickup_task_by_schedule_and_date(
                 task.schedule_id,
                 next_pickup_date,
             )
             if existing and existing.pickup_task_id != task.pickup_task_id:
                 raise ValueError("OP SHOP pickup task already exists for this schedule and date")
+            if task.status == "ASSIGNED" and task.driver_id:
+                dispatch_date = _assignment_dispatch_date_for_request(request, task)
+                if is_driver_delivery_date_finalized(
+                    self.repository,
+                    dispatch_date,
+                    task.driver_id,
+                    task.pickup_date,
+                ):
+                    raise ValueError("Final Trip Summary has already been saved for this driver and delivery date.")
+                if is_driver_delivery_date_finalized(
+                    self.repository,
+                    dispatch_date,
+                    task.driver_id,
+                    next_pickup_date,
+                ):
+                    raise ValueError("Final Trip Summary has already been saved for this driver and delivery date.")
 
         updated = replace(
             task,
@@ -269,7 +292,18 @@ class OpShopPickupService:
             notes=request.notes,
             updated_at=_timestamp(),
         )
-        return self.repository.upsert_opshop_pickup_task(updated)
+        saved = self.repository.upsert_opshop_pickup_task(updated)
+        if task.status == "ASSIGNED" and task.driver_id and next_pickup_date != task.pickup_date:
+            dispatch_date = _assignment_dispatch_date_for_request(request, task)
+            self.repository.remove_assignments_for_task("OPSHOP_PICKUP", task.pickup_task_id)
+            self.repository.upsert_assignment(
+                dispatch_date,
+                "OPSHOP_PICKUP",
+                task.pickup_task_id,
+                task.driver_id,
+                task.trip_no or "trip1",
+            )
+        return saved
 
     def delete_opshop_pickup_task(self, pickup_task_id):
         task = self.repository.get_opshop_pickup_task(pickup_task_id)
@@ -479,6 +513,48 @@ class OpShopPickupService:
             None,
         )
 
+    def _apply_created_assignment_if_requested(self, task, request):
+        driver_id, dispatch_date = self._requested_assignment_context(
+            request,
+            task.pickup_date,
+        )
+        if not driver_id:
+            return task
+
+        self.repository.upsert_assignment(
+            dispatch_date,
+            "OPSHOP_PICKUP",
+            task.pickup_task_id,
+            driver_id,
+            "trip1",
+        )
+        self.repository.update_opshop_pickup_task_assignment_status(
+            task.pickup_task_id,
+            "ASSIGNED",
+            driver_id,
+            "trip1",
+        )
+        return self.repository.get_opshop_pickup_task(task.pickup_task_id)
+
+    def _requested_assignment_context(self, request, pickup_date):
+        driver_id = _clean_text(getattr(request, "assigned_driver_id", None))
+        if not driver_id:
+            return None, None
+        if driver_id not in set(self.repository.list_driver_ids()):
+            raise ValueError("Driver does not exist")
+        dispatch_date = _parse_iso_date(
+            getattr(request, "dispatch_date", None) or pickup_date,
+            "dispatch_date",
+        ).isoformat()
+        if is_driver_delivery_date_finalized(
+            self.repository,
+            dispatch_date,
+            driver_id,
+            pickup_date,
+        ):
+            raise ValueError("Final Trip Summary has already been saved for this driver and delivery date.")
+        return driver_id, dispatch_date
+
     def _ensure_opshop_pickup_tasks_for_window(self, request, include_start_date):
         start = _parse_iso_date(request.start_date, "start_date")
         days = int(request.days or 14)
@@ -664,6 +740,13 @@ def _parse_iso_date(value, field_name):
         return date.fromisoformat(value)
     except (TypeError, ValueError) as error:
         raise ValueError(f"{field_name} must be YYYY-MM-DD") from error
+
+
+def _assignment_dispatch_date_for_request(request, task):
+    value = _clean_text(getattr(request, "dispatch_date", None))
+    if value:
+        return _parse_iso_date(value, "dispatch_date").isoformat()
+    return _parse_iso_date(task.dispatch_date or task.pickup_date, "dispatch_date").isoformat()
 
 
 def _clean_text(value):

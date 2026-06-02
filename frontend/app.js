@@ -238,6 +238,8 @@ function renderCountrysideOpShopPickupListModal() {
     onDisableRouteGroup: countrysideOpShopPickupActions.handleDisableRouteGroup,
     onMoveRouteTemplate: countrysideOpShopPickupActions.handleMoveRouteTemplate,
     onOpenDetail: openOpShopPickupDetail,
+    onOpenRouteTemplateDetail: countrysideOpShopPickupActions.openRouteTemplateDetail,
+    onCloseRouteTemplateDetail: countrysideOpShopPickupActions.closeRouteTemplateDetail,
     onRemoveRouteTemplate: countrysideOpShopPickupActions.handleRemoveRouteTemplate,
     onRenameRouteGroup: countrysideOpShopPickupActions.handleRenameRouteGroup,
     onSelectRouteGroup: countrysideOpShopPickupActions.setSelectedRouteGroup,

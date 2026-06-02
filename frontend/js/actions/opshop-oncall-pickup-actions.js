@@ -133,6 +133,7 @@ export function createOncallOpShopPickupActions({
   }
 
   function updatePickupTaskForm(field, value) {
+    const shouldRender = field === "schedule_id";
     const nextForm = {
       ...state.oncallOpShopPickupForm,
       [field]: value,
@@ -145,7 +146,9 @@ export function createOncallOpShopPickupActions({
       nextForm.assigned_driver_id = candidate ? candidate.default_driver_id || "" : "";
     }
     state.oncallOpShopPickupForm = nextForm;
-    renderBoard();
+    if (shouldRender) {
+      renderBoard();
+    }
   }
 
   async function handleCreatePickupTask() {
@@ -162,6 +165,7 @@ export function createOncallOpShopPickupActions({
       const created = await apiCreateOncallOpShopPickup({
         schedule_id: state.oncallOpShopPickupForm.schedule_id,
         pickup_date: state.oncallOpShopPickupForm.pickup_date,
+        dispatch_date: state.dispatchDate,
         assigned_driver_id: selectedDriverId || null,
         notes: state.oncallOpShopPickupForm.notes || null,
       });
@@ -197,6 +201,7 @@ export function createOncallOpShopPickupActions({
       const selectedDriverId = state.oncallOpShopPickupForm.assigned_driver_id || "";
       await apiUpdateOpShopPickup(state.oncallOpShopPickupEditingTaskId, {
         pickup_date: state.oncallOpShopPickupForm.pickup_date,
+        dispatch_date: state.dispatchDate,
         notes: state.oncallOpShopPickupForm.notes || null,
       });
       state.oncallOpShopPickupFormMode = "";
