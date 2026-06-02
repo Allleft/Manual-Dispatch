@@ -184,7 +184,7 @@ Countryside pickup is an OP SHOP Oncall subcategory, not a new Delivery workflow
 - Add Pickup Task creates an actual `OPSHOP_PICKUP` task only when office staff select a template and pickup date.
 - Closing the list applies selected driver assignments using the same OP SHOP pickup assignment boundary as Oncall.
 - Assigned Countryside pickups appear in Driver Summary under `OP SHOP PICKUPS`, with Countryside/route group context.
-- Route-group-specific Run Sheet polish is not implemented in this phase.
+- The independent OP SHOP Run Sheet export includes Countryside pickups in their own section grouped by route group.
 
 ### Driver Summary and Lock Boundary
 
@@ -196,9 +196,19 @@ Countryside pickup is an OP SHOP Oncall subcategory, not a new Delivery workflow
 
 ### OP SHOP Run Sheet Export
 
-`Export OP SHOP Run Sheet` provides an independent XLSX for operational pickup work. It includes OP SHOP pickup data grouped for office/driver use, with unassigned visible pickups separated where applicable.
+`Export OP SHOP Run Sheet` provides an independent XLSX for operational pickup work. It includes OP SHOP pickup data grouped for office/driver use, with unassigned visible pickups marked as `Unassigned`.
 
-This export is independent from the Final Trip Summary workbook and does not turn OP SHOP pickups into Delivery rows.
+The workbook keeps pickup types separate:
+
+| Section | Contents |
+| --- | --- |
+| `REGULAR OP SHOP PICKUPS` | Visible Regular pickups from the Regular list window. |
+| `ONCALL OP SHOP PICKUPS` | Ordinary Oncall pickups created by staff through Add Pickup Task. |
+| `COUNTRYSIDE OP SHOP PICKUPS` | Countryside pickups grouped under `Route Group: ...` headings. |
+
+Countryside rows remain `OPSHOP_PICKUP` tasks with `run_type = ON_CALL` and `pickup_category = COUNTRYSIDE`. They do not become Delivery rows, do not enter Delivery Trip 1 / Trip 2 tables, and do not affect Delivery totals or vehicle capacity totals.
+
+This export is independent from the Final Trip Summary workbook and does not change the saved Final Summary Excel format.
 
 ## Final Trip Summary
 

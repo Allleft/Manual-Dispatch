@@ -19,13 +19,18 @@ from backend.schemas import (
     FinalTripSummary,
     FinalTripSummaryOrderSnapshot,
     FinalTripSummaryTrip,
+    OpShopCountrysideRouteGroup,
     OpShopLocation,
     OpShopPickupSchedule,
 )
 from backend.services.final_summary_excel_export_service import build_final_summary_excel
 from backend.services.manual_dispatch_service import ManualDispatchService
 from backend.services.opshop_pickup_excel_export_service import (
+    COUNTRYSIDE_SECTION_TITLE,
+    ONCALL_SECTION_TITLE,
     OPSHOP_RUN_SHEET_HEADERS,
+    REGULAR_SECTION_TITLE,
+    UNASSIGNED_DRIVER_LABEL,
     UNASSIGNED_SECTION_TITLE,
     build_opshop_pickup_run_sheet_excel,
 )
@@ -63,9 +68,13 @@ class OpShopPickupRunSheetExportTest(unittest.TestCase):
         values = self._flat_values(workbook)
 
         self.assertIn(tuple(OPSHOP_RUN_SHEET_HEADERS), list(workbook.active.iter_rows(values_only=True)))
+        self.assertIn(REGULAR_SECTION_TITLE, values)
+        self.assertIn(ONCALL_SECTION_TITLE, values)
+        self.assertIn(COUNTRYSIDE_SECTION_TITLE, values)
         self.assertIn("John", values)
         self.assertIn("Tony", values)
-        self.assertIn(UNASSIGNED_SECTION_TITLE, values)
+        self.assertIn(UNASSIGNED_DRIVER_LABEL, values)
+        self.assertNotIn(UNASSIGNED_SECTION_TITLE, values)
         self.assertIn("Regular Aid Shop", values)
         self.assertIn("Oncall Help Shop", values)
         self.assertIn("Unassigned Goods Shop", values)
@@ -78,6 +87,85 @@ class OpShopPickupRunSheetExportTest(unittest.TestCase):
         self.assertIn("Status: Regular status note\nTask: Regular task note", values)
         self.assertNotIn("Demo Customer A", values)
         self.assertIn(unassigned.pickup_task_id, [item.pickup_task_id for item in self.service.get_board(self.dispatch_date).scheduled_opshop_pickups])
+
+    def test_export_groups_countryside_pickups_by_route_group(self):
+        self._seed_countryside_data()
+        regular = self.service.create_opshop_pickup_task(
+            self._request("SCHED-REGULAR", "2026-05-18")
+        )
+        oncall = self.service.create_oncall_opshop_pickup_task(
+            self._request("SCHED-ONCALL", "2026-05-20")
+        )
+        albury = self.service.create_oncall_opshop_pickup_task(
+            self._request("SCHED-COUNTRY-ALBURY", "2026-05-22")
+        )
+        bendigo = self.service.create_oncall_opshop_pickup_task(
+            self._request("SCHED-COUNTRY-BENDIGO", "2026-05-22")
+        )
+        self._assign(regular.pickup_task_id, "D001")
+        self._assign(oncall.pickup_task_id, "D002")
+        self._assign(albury.pickup_task_id, "D001")
+
+        workbook = self._export_workbook()
+        values = self._flat_values(workbook)
+        oncall_values = self._section_values(workbook, ONCALL_SECTION_TITLE, COUNTRYSIDE_SECTION_TITLE)
+        countryside_values = self._section_values(workbook, COUNTRYSIDE_SECTION_TITLE)
+
+        self.assertIn("Route Group: ALBURY OPSHOP", values)
+        self.assertIn("Route Group: BENDIGO & ECHUCA RUN", values)
+        self.assertLess(
+            values.index("Route Group: ALBURY OPSHOP"),
+            values.index("Route Group: BENDIGO & ECHUCA RUN"),
+        )
+        self.assertIn("ALBURY OPSHOP", countryside_values)
+        self.assertIn("BENDIGO & ECHUCA RUN", countryside_values)
+        self.assertIn("Albury Remote Shop", countryside_values)
+        self.assertIn("Bendigo Country Shop", countryside_values)
+        self.assertIn("2026-05-22", countryside_values)
+        self.assertIn("John", countryside_values)
+        self.assertIn(UNASSIGNED_DRIVER_LABEL, countryside_values)
+        self.assertNotIn("Oncall Help Shop", countryside_values)
+        self.assertNotIn("Regular Aid Shop", countryside_values)
+        self.assertNotIn("Albury Remote Shop", oncall_values)
+        self.assertNotIn("Bendigo Country Shop", oncall_values)
+
+    def test_export_does_not_modify_opshop_state(self):
+        self._seed_countryside_data()
+        task = self.service.create_oncall_opshop_pickup_task(
+            self._request("SCHED-COUNTRY-ALBURY", "2026-05-22")
+        )
+        self._assign(task.pickup_task_id, "D001")
+        board = self.service.get_board(self.dispatch_date)
+        task_count = len(self.repository.list_opshop_pickup_tasks())
+        assignment_count = len(self.repository.list_assignments(self.dispatch_date))
+
+        load_workbook(
+            BytesIO(
+                build_opshop_pickup_run_sheet_excel(
+                    board,
+                    self.dispatch_date,
+                )
+            )
+        )
+
+        self.assertEqual(task_count, len(self.repository.list_opshop_pickup_tasks()))
+        self.assertEqual(assignment_count, len(self.repository.list_assignments(self.dispatch_date)))
+
+    def test_export_includes_assigned_countryside_task_when_route_group_inactive(self):
+        self._seed_countryside_data()
+        task = self.service.create_oncall_opshop_pickup_task(
+            self._request("SCHED-COUNTRY-ALBURY", "2026-05-22")
+        )
+        self._assign(task.pickup_task_id, "D001")
+        self.repository.disable_countryside_route_group("ROUTE-ALBURY")
+
+        workbook = self._export_workbook()
+        values = self._flat_values(workbook)
+        countryside_values = self._section_values(workbook, COUNTRYSIDE_SECTION_TITLE)
+
+        self.assertIn("Route Group: ALBURY OPSHOP", values)
+        self.assertIn("Albury Remote Shop", countryside_values)
+        self.assertIn("John", countryside_values)
 
     def test_final_summary_export_stays_order_only(self):
         regular = self.service.create_opshop_pickup_task(
@@ -182,6 +270,66 @@ class OpShopPickupRunSheetExportTest(unittest.TestCase):
             self._schedule("SCHED-UNASSIGNED", "OPSHOP-UNASSIGNED", "REGULAR", "TUESDAY")
         )
 
+    def _seed_countryside_data(self):
+        self.repository.upsert_countryside_route_group(
+            self._route_group("ROUTE-BENDIGO", "BENDIGO & ECHUCA RUN", 2)
+        )
+        self.repository.upsert_countryside_route_group(
+            self._route_group("ROUTE-ALBURY", "ALBURY OPSHOP", 1)
+        )
+        self.repository.upsert_opshop_location(
+            self._location(
+                "OPSHOP-COUNTRY-BENDIGO",
+                "Bendigo Country Shop",
+                "4 Country Road",
+                "Bendigo",
+                "0400 700 004",
+                "Bendigo status note",
+            )
+        )
+        self.repository.upsert_opshop_location(
+            self._location(
+                "OPSHOP-COUNTRY-ALBURY",
+                "Albury Remote Shop",
+                "5 Border Road",
+                "Albury",
+                "0400 700 005",
+                "Albury status note",
+            )
+        )
+        self.repository.upsert_opshop_pickup_schedule(
+            self._schedule(
+                "SCHED-COUNTRY-BENDIGO",
+                "OPSHOP-COUNTRY-BENDIGO",
+                "ON_CALL",
+                None,
+                pickup_category="COUNTRYSIDE",
+                route_group_id="ROUTE-BENDIGO",
+            )
+        )
+        self.repository.upsert_opshop_pickup_schedule(
+            self._schedule(
+                "SCHED-COUNTRY-ALBURY",
+                "OPSHOP-COUNTRY-ALBURY",
+                "ON_CALL",
+                None,
+                pickup_category="COUNTRYSIDE",
+                route_group_id="ROUTE-ALBURY",
+            )
+        )
+
+    def _route_group(self, route_group_id, route_group_name, display_order):
+        return OpShopCountrysideRouteGroup(
+            route_group_id=route_group_id,
+            route_group_name=route_group_name,
+            status="Active",
+            active_flag=True,
+            display_order=display_order,
+            source_marker="TEST",
+            created_at="2026-05-18T00:00:00+00:00",
+            updated_at="2026-05-18T00:00:00+00:00",
+        )
+
     def _location(self, opshop_id, name, address, suburb, phone, status_notes):
         return OpShopLocation(
             opshop_id=opshop_id,
@@ -202,7 +350,15 @@ class OpShopPickupRunSheetExportTest(unittest.TestCase):
             updated_at="2026-05-18T00:00:00+00:00",
         )
 
-    def _schedule(self, schedule_id, opshop_id, run_type, run_day):
+    def _schedule(
+        self,
+        schedule_id,
+        opshop_id,
+        run_type,
+        run_day,
+        pickup_category="NORMAL",
+        route_group_id=None,
+    ):
         return OpShopPickupSchedule(
             schedule_id=schedule_id,
             opshop_id=opshop_id,
@@ -219,6 +375,8 @@ class OpShopPickupRunSheetExportTest(unittest.TestCase):
             review_reason=None,
             created_at="2026-05-18T00:00:00+00:00",
             updated_at="2026-05-18T00:00:00+00:00",
+            pickup_category=pickup_category,
+            route_group_id=route_group_id,
         )
 
     def _request(self, schedule_id, pickup_date):
@@ -258,6 +416,12 @@ class OpShopPickupRunSheetExportTest(unittest.TestCase):
             for row in worksheet.iter_rows(values_only=True):
                 values.extend(cell for cell in row if cell not in (None, ""))
         return values
+
+    def _section_values(self, workbook, start_marker, end_marker=None):
+        values = self._flat_values(workbook)
+        start = values.index(start_marker)
+        end = values.index(end_marker) if end_marker else len(values)
+        return values[start:end]
 
 
 @unittest.skipIf(FastAPI is None or TestClient is None, "FastAPI TestClient is not installed")
