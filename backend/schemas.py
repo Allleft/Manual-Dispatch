@@ -471,6 +471,9 @@ class FinalTripSummaryOpShopPickupSnapshot:
     trailer_restriction_snapshot: Optional[str]
     notes_snapshot: Optional[str]
     status_snapshot: str
+    pickup_category_snapshot: Optional[str] = None
+    route_group_id_snapshot: Optional[str] = None
+    route_group_name_snapshot: Optional[str] = None
 
 
 @dataclass

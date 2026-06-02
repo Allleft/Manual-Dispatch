@@ -13,6 +13,7 @@ from backend.schemas import (
     AssignDriverVehicleRequest,
     AssignTaskRequest,
     CreateOrderRequest,
+    OpShopCountrysideRouteGroup,
     OpShopLocation,
     OpShopPickupSchedule,
     OpShopPickupTask,
@@ -392,6 +393,35 @@ class ManualDispatchFinalSummaryTest(unittest.TestCase):
         self.assertIsNone(task.driver_id)
         self.assertIsNone(task.trip_no)
 
+    def test_save_and_load_countryside_opshop_summary_snapshots_category_and_route_group(self):
+        self._seed_opshop_pickup(
+            "TASK-COUNTRYSIDE-001",
+            run_type="ON_CALL",
+            pickup_category="COUNTRYSIDE",
+            route_group_id="CRG-FINAL",
+            route_group_name="Gippsland Route",
+        )
+
+        saved = self.service.save_final_trip_summary(
+            self._summary_request(
+                trips=[],
+                opshop_pickups=[
+                    self._opshop_payload("TASK-COUNTRYSIDE-001", run_type="ON_CALL")
+                ],
+                total_pallets=0,
+                total_loose_bags=0,
+            )
+        )
+        reloaded = self.service.get_final_trip_summary(saved.summary_id)
+        pickup = reloaded.opshop_pickups[0]
+
+        self.assertEqual([], reloaded.trips)
+        self.assertEqual(0, reloaded.total_pallets)
+        self.assertEqual(0, reloaded.total_loose_bags)
+        self.assertEqual("COUNTRYSIDE", pickup.pickup_category_snapshot)
+        self.assertEqual("CRG-FINAL", pickup.route_group_id_snapshot)
+        self.assertEqual("Gippsland Route", pickup.route_group_name_snapshot)
+
     def test_mixed_summary_keeps_opshop_out_of_delivery_totals_and_rows(self):
         self._assign_order("ORD-001", "D001", "trip1")
         self._seed_opshop_pickup("TASK-OPSHOP-001")
@@ -414,6 +444,41 @@ class ManualDispatchFinalSummaryTest(unittest.TestCase):
                 ).fetchall()
             ]
         self.assertEqual(["ORDER"], delivery_task_types)
+
+    def test_mixed_summary_keeps_regular_oncall_and_countryside_opshop_separate(self):
+        self._assign_order("ORD-001", "D001", "trip1")
+        self._seed_opshop_pickup("TASK-REGULAR-001")
+        self._seed_opshop_pickup(
+            "TASK-ONCALL-001",
+            run_type="ON_CALL",
+            pickup_category="NORMAL",
+        )
+        self._seed_opshop_pickup(
+            "TASK-COUNTRYSIDE-001",
+            run_type="ON_CALL",
+            pickup_category="COUNTRYSIDE",
+            route_group_id="CRG-FINAL",
+            route_group_name="Gippsland Route",
+        )
+
+        saved = self.service.save_final_trip_summary(
+            self._summary_request(
+                opshop_pickups=[
+                    self._opshop_payload("TASK-REGULAR-001"),
+                    self._opshop_payload("TASK-ONCALL-001", run_type="ON_CALL"),
+                    self._opshop_payload("TASK-COUNTRYSIDE-001", run_type="ON_CALL"),
+                ]
+            )
+        )
+
+        self.assertEqual(2, saved.total_pallets)
+        self.assertEqual(0, saved.total_loose_bags)
+        self.assertEqual(["ORD-001"], [order.task_id for order in saved.trips[0].orders])
+        self.assertEqual(
+            ["REGULAR", "ON_CALL", "COUNTRYSIDE"],
+            [pickup.pickup_category_snapshot for pickup in saved.opshop_pickups],
+        )
+        self.assertEqual("Gippsland Route", saved.opshop_pickups[2].route_group_name_snapshot)
 
     def test_save_final_summary_rejects_missing_saved_by_account_name(self):
         self._assign_order("ORD-001", "D001", "trip1")
@@ -520,7 +585,14 @@ class ManualDispatchFinalSummaryTest(unittest.TestCase):
             )
         )
 
-    def _summary_request(self, trips=None, delivery_date=None, opshop_pickups=None):
+    def _summary_request(
+        self,
+        trips=None,
+        delivery_date=None,
+        opshop_pickups=None,
+        total_pallets=2,
+        total_loose_bags=0,
+    ):
         return SaveFinalTripSummaryRequest(
             dispatch_date=self.dispatch_date,
             delivery_date=delivery_date or self.dispatch_date,
@@ -528,8 +600,8 @@ class ManualDispatchFinalSummaryTest(unittest.TestCase):
             driver_name_snapshot="John",
             vehicle_id="V002",
             vehicle_rego_snapshot="XYZ888",
-            total_pallets=2,
-            total_loose_bags=0,
+            total_pallets=total_pallets,
+            total_loose_bags=total_loose_bags,
             generated_at="2026-05-05T00:00:00Z",
             saved_by_account_name=self.account.account_name,
             saved_by_account_id=self.account.account_id,
@@ -558,7 +630,27 @@ class ManualDispatchFinalSummaryTest(unittest.TestCase):
             "note": order.note,
         }
 
-    def _seed_opshop_pickup(self, task_id):
+    def _seed_opshop_pickup(
+        self,
+        task_id,
+        run_type="REGULAR",
+        pickup_category="NORMAL",
+        route_group_id=None,
+        route_group_name=None,
+    ):
+        if route_group_id:
+            self.repository.upsert_countryside_route_group(
+                OpShopCountrysideRouteGroup(
+                    route_group_id=route_group_id,
+                    route_group_name=route_group_name or "Unknown Route Group",
+                    status="Active",
+                    active_flag=True,
+                    display_order=1,
+                    source_marker="TEST",
+                    created_at="2026-05-05T00:00:00+00:00",
+                    updated_at="2026-05-05T00:00:00+00:00",
+                )
+            )
         self.repository.upsert_opshop_location(
             OpShopLocation(
                 opshop_id="OPSHOP-FINAL",
@@ -579,12 +671,13 @@ class ManualDispatchFinalSummaryTest(unittest.TestCase):
                 updated_at="2026-05-05T00:00:00+00:00",
             )
         )
+        schedule_id = f"SCHED-{task_id}"
         self.repository.upsert_opshop_pickup_schedule(
             OpShopPickupSchedule(
-                schedule_id="SCHED-FINAL",
+                schedule_id=schedule_id,
                 opshop_id="OPSHOP-FINAL",
                 run_day="TUESDAY",
-                run_type="REGULAR",
+                run_type=run_type,
                 pickup_frequency="Weekly",
                 time_window="09:00-12:00",
                 call_before_arrival=False,
@@ -596,16 +689,18 @@ class ManualDispatchFinalSummaryTest(unittest.TestCase):
                 review_reason=None,
                 created_at="2026-05-05T00:00:00+00:00",
                 updated_at="2026-05-05T00:00:00+00:00",
+                pickup_category=pickup_category,
+                route_group_id=route_group_id,
             )
         )
         self.repository.upsert_opshop_pickup_task(
             OpShopPickupTask(
                 pickup_task_id=task_id,
-                schedule_id="SCHED-FINAL",
+                schedule_id=schedule_id,
                 opshop_id="OPSHOP-FINAL",
                 pickup_date=self.dispatch_date,
                 task_type="OPSHOP_PICKUP",
-                generated_from="REGULAR",
+                generated_from=run_type,
                 status="ASSIGNED",
                 dispatch_date=self.dispatch_date,
                 driver_id="D001",
@@ -616,7 +711,7 @@ class ManualDispatchFinalSummaryTest(unittest.TestCase):
             )
         )
 
-    def _opshop_payload(self, task_id):
+    def _opshop_payload(self, task_id, run_type="REGULAR"):
         return {
             "task_type": "OPSHOP_PICKUP",
             "pickup_task_id": task_id,
@@ -625,7 +720,7 @@ class ManualDispatchFinalSummaryTest(unittest.TestCase):
             "street_address": "1 Sydney Road",
             "area_region": "North",
             "pickup_date": self.dispatch_date,
-            "run_type": "REGULAR",
+            "run_type": run_type,
             "pickup_frequency": "Weekly",
             "time_window": "09:00-12:00",
             "primary_contact": "Mary",

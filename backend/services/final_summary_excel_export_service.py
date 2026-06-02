@@ -16,6 +16,8 @@ FINAL_SUMMARY_HEADERS = [
 ]
 OPSHOP_PICKUP_HEADERS = [
     "No.",
+    "Category",
+    "Route Group",
     "OP SHOP Name",
     "Suburb",
     "Address",
@@ -128,6 +130,8 @@ def _write_summary_sheet(worksheet, summary):
         for row_number, pickup in enumerate(opshop_pickups, start=1):
             values = [
                 row_number,
+                _format_opshop_pickup_category(pickup),
+                pickup.route_group_name_snapshot or "",
                 pickup.opshop_name_snapshot or "",
                 pickup.suburb_snapshot or "",
                 pickup.street_address_snapshot or "",
@@ -144,7 +148,7 @@ def _write_summary_sheet(worksheet, summary):
             ]
             for column_index, value in enumerate(values, start=1):
                 cell = worksheet.cell(row=row_index, column=column_index, value=value)
-                if column_index == 14:
+                if column_index == 16:
                     cell.alignment = Alignment(wrap_text=True, vertical="top")
             row_index += 1
 
@@ -201,6 +205,23 @@ def _format_estimated_distance(order):
     if distance in ("", None):
         return "Unknown"
     return float(distance)
+
+
+def _format_opshop_pickup_category(pickup):
+    category = (getattr(pickup, "pickup_category_snapshot", None) or "").strip().upper()
+    if category == "COUNTRYSIDE":
+        return "Countryside"
+    if category in {"ON_CALL", "ONCALL"}:
+        return "Oncall"
+    if category in {"REGULAR", "STANDARD"}:
+        return "Regular"
+
+    run_type = (getattr(pickup, "run_type_snapshot", None) or "").strip().upper()
+    if run_type in {"REGULAR", "STANDARD"}:
+        return "Regular"
+    if run_type == "ON_CALL":
+        return "Oncall"
+    return category
 
 
 def _pluralized_unit(unit, quantity):

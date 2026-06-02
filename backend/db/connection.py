@@ -129,6 +129,24 @@ def _ensure_manual_dispatch_columns(connection):
         "estimated_distance_km_from_warehouse_snapshot",
         "REAL",
     )
+    _ensure_column(
+        connection,
+        "final_trip_summary_opshop_pickup_rows",
+        "pickup_category_snapshot",
+        "TEXT",
+    )
+    _ensure_column(
+        connection,
+        "final_trip_summary_opshop_pickup_rows",
+        "route_group_id_snapshot",
+        "TEXT",
+    )
+    _ensure_column(
+        connection,
+        "final_trip_summary_opshop_pickup_rows",
+        "route_group_name_snapshot",
+        "TEXT",
+    )
     _ensure_column(connection, "opshop_pickup_schedules", "default_driver_id", "TEXT")
     _ensure_column(connection, "opshop_pickup_schedules", "default_driver_alias", "TEXT")
     _ensure_column(

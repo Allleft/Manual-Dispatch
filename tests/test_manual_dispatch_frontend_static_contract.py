@@ -260,6 +260,15 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertNotIn("pickup.opshop_name)", assigned_opshop_renderer)
         self.assertIn("OP SHOP PICKUPS", final_summary_renderer)
         self.assertIn("createOpShopPickupSection", final_summary_renderer)
+        self.assertIn('"Category"', final_summary_renderer)
+        self.assertIn('"Route Group"', final_summary_renderer)
+        self.assertIn("formatOpShopPickupCategory", final_summary_renderer)
+        self.assertIn("pickup.route_group_name", final_summary_renderer)
+        final_summary_opshop_section = final_summary_renderer.split(
+            "function createOpShopPickupSection",
+            1,
+        )[1].split("function formatOpShopPickupCategory", 1)[0]
+        self.assertNotIn("innerHTML", final_summary_opshop_section)
 
         final_summary_actions = (
             FRONTEND_ROOT / "js" / "actions" / "final-summary-actions.js"
@@ -272,6 +281,10 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("Assign at least one Order or OP SHOP pickup", final_summary_actions)
         self.assertIn("opshop_pickups: opshopPickups", final_summary_actions)
         self.assertIn("opshop_pickups: normalized.opshop_pickups.map", final_summary_actions)
+        self.assertIn("pickup_category: pickup.pickup_category || pickup.pickup_category_snapshot || \"\"", final_summary_actions)
+        self.assertIn("route_group_name: pickup.route_group_name || pickup.route_group_name_snapshot || \"\"", final_summary_actions)
+        self.assertIn("pickup_category_snapshot: pickup.pickup_category", final_summary_actions)
+        self.assertIn("route_group_name_snapshot: pickup.route_group_name", final_summary_actions)
         self.assertIn('state.generatedTaskKeys.add(getTaskKey("OPSHOP_PICKUP", pickup.pickup_task_id))', final_summary_actions)
         self.assertIn('task_type: "OPSHOP_PICKUP"', final_summary_actions)
         self.assertIn("task_id: pickup.pickup_task_id", final_summary_actions)

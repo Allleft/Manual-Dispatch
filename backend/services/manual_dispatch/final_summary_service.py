@@ -278,6 +278,43 @@ class FinalSummaryService:
                     "Final Summary OP SHOP pickups must match the selected delivery date"
                 )
 
+            schedule = (
+                self.repository.get_opshop_pickup_schedule(task.schedule_id)
+                if getattr(task, "schedule_id", None)
+                else None
+            )
+            run_type_snapshot = clean_optional_text(
+                pickup_snapshot.get("run_type_snapshot")
+                or pickup_snapshot.get("run_type")
+                or getattr(schedule, "run_type", None)
+            )
+            pickup_category_snapshot = self._resolve_opshop_pickup_snapshot_category(
+                pickup_snapshot,
+                run_type_snapshot,
+                schedule,
+            )
+            route_group_id_snapshot = None
+            route_group_name_snapshot = None
+            if pickup_category_snapshot == "COUNTRYSIDE":
+                route_group_id_snapshot = clean_optional_text(
+                    pickup_snapshot.get("route_group_id_snapshot")
+                    or pickup_snapshot.get("route_group_id")
+                    or getattr(schedule, "route_group_id", None)
+                )
+                route_group_name_snapshot = clean_optional_text(
+                    pickup_snapshot.get("route_group_name_snapshot")
+                    or pickup_snapshot.get("route_group_name")
+                )
+                if not route_group_name_snapshot and route_group_id_snapshot:
+                    route_group = self.repository.get_countryside_route_group(
+                        route_group_id_snapshot
+                    )
+                    route_group_name_snapshot = clean_optional_text(
+                        getattr(route_group, "route_group_name", None)
+                    )
+                    if not route_group_name_snapshot:
+                        route_group_name_snapshot = "Unknown Route Group"
+
             notes = clean_optional_text(
                 pickup_snapshot.get("notes_snapshot") or pickup_snapshot.get("notes")
             )
@@ -310,10 +347,10 @@ class FinalSummaryService:
                         or pickup_snapshot.get("area_region")
                     ),
                     "pickup_date_snapshot": delivery_date,
-                    "run_type_snapshot": clean_optional_text(
-                        pickup_snapshot.get("run_type_snapshot")
-                        or pickup_snapshot.get("run_type")
-                    ),
+                    "run_type_snapshot": run_type_snapshot,
+                    "pickup_category_snapshot": pickup_category_snapshot,
+                    "route_group_id_snapshot": route_group_id_snapshot,
+                    "route_group_name_snapshot": route_group_name_snapshot,
                     "pickup_frequency_snapshot": clean_optional_text(
                         pickup_snapshot.get("pickup_frequency_snapshot")
                         or pickup_snapshot.get("pickup_frequency")
@@ -363,3 +400,28 @@ class FinalSummaryService:
             )
 
         return normalized_rows
+
+    def _resolve_opshop_pickup_snapshot_category(self, pickup_snapshot, run_type, schedule):
+        explicit_category = clean_optional_text(
+            pickup_snapshot.get("pickup_category_snapshot")
+            or pickup_snapshot.get("pickup_category")
+        )
+        schedule_category = clean_optional_text(getattr(schedule, "pickup_category", None))
+        if (schedule_category or "").upper() == "COUNTRYSIDE":
+            return "COUNTRYSIDE"
+        category = (explicit_category or schedule_category or "").upper()
+
+        if category == "COUNTRYSIDE":
+            return "COUNTRYSIDE"
+        if category in {"REGULAR", "STANDARD"}:
+            return "REGULAR"
+        if category in {"ON_CALL", "ONCALL"}:
+            return "ON_CALL"
+
+        run_type_value = (clean_optional_text(run_type) or "").upper()
+        if run_type_value in {"REGULAR", "STANDARD"}:
+            return "REGULAR"
+        if run_type_value == "ON_CALL":
+            return "ON_CALL"
+
+        return category or None

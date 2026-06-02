@@ -317,7 +317,7 @@ function createOpShopPickupSection(pickups) {
 
   const thead = document.createElement("thead");
   const headerRow = document.createElement("tr");
-  ["No.", "OP SHOP Name", "Suburb", "Pickup Date", "Phone", "Address", "Notes"].forEach((label) => {
+  ["No.", "Category", "Route Group", "OP SHOP Name", "Suburb", "Pickup Date", "Phone", "Address", "Notes"].forEach((label) => {
     const th = document.createElement("th");
     th.scope = "col";
     th.textContent = label;
@@ -330,6 +330,8 @@ function createOpShopPickupSection(pickups) {
     const row = document.createElement("tr");
     [
       index + 1,
+      formatOpShopPickupCategory(pickup.pickup_category),
+      formatOptional(pickup.route_group_name, ""),
       formatOptional(pickup.opshop_name, ""),
       formatOptional(pickup.suburb, ""),
       formatOptional(pickup.pickup_date, ""),
@@ -347,6 +349,20 @@ function createOpShopPickupSection(pickups) {
   table.append(thead, tbody);
   section.append(heading, table);
   return section;
+}
+
+function formatOpShopPickupCategory(value) {
+  const category = String(value || "").trim().toUpperCase();
+  if (category === "COUNTRYSIDE") {
+    return "Countryside";
+  }
+  if (category === "ON_CALL" || category === "ONCALL") {
+    return "Oncall";
+  }
+  if (category === "REGULAR" || category === "STANDARD") {
+    return "Regular";
+  }
+  return formatOptional(value, "");
 }
 
 function formatProductDetails(order) {

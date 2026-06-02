@@ -1904,6 +1904,9 @@ class SQLiteManualDispatchRepository:
                         area_region_snapshot,
                         pickup_date_snapshot,
                         run_type_snapshot,
+                        pickup_category_snapshot,
+                        route_group_id_snapshot,
+                        route_group_name_snapshot,
                         pickup_frequency_snapshot,
                         time_window_snapshot,
                         primary_contact_snapshot,
@@ -1915,7 +1918,7 @@ class SQLiteManualDispatchRepository:
                         trailer_restriction_snapshot,
                         notes_snapshot,
                         status_snapshot
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         row_id,
@@ -1928,6 +1931,9 @@ class SQLiteManualDispatchRepository:
                         row.get("area_region_snapshot"),
                         row["pickup_date_snapshot"],
                         row.get("run_type_snapshot"),
+                        row.get("pickup_category_snapshot"),
+                        row.get("route_group_id_snapshot"),
+                        row.get("route_group_name_snapshot"),
                         row.get("pickup_frequency_snapshot"),
                         row.get("time_window_snapshot"),
                         row.get("primary_contact_snapshot"),
@@ -2200,6 +2206,9 @@ class SQLiteManualDispatchRepository:
             trailer_restriction_snapshot=row["trailer_restriction_snapshot"],
             notes_snapshot=row["notes_snapshot"],
             status_snapshot=row["status_snapshot"],
+            pickup_category_snapshot=_row_value(row, "pickup_category_snapshot"),
+            route_group_id_snapshot=_row_value(row, "route_group_id_snapshot"),
+            route_group_name_snapshot=_row_value(row, "route_group_name_snapshot"),
         )
 
     def _row_to_operator_account(self, row):

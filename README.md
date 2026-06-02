@@ -153,6 +153,7 @@ Countryside pickup is an OP SHOP Oncall subcategory, not a new Delivery workflow
 - Route membership changes are soft schedule/template changes. They do not delete OP SHOP locations, existing pickup tasks, assignments already captured in history, or saved Final Summary snapshots.
 - The Countryside Pickup List lets staff filter by route group, create actual pickup tasks from Countryside templates, choose an assigned driver, and close the list to apply those assignments.
 - Countryside remains outside Delivery Order totals, vehicle capacity totals, Delivery Trip 1 / Trip 2 rows, and Delivery-style automation.
+- When a Countryside pickup is captured in Final Trip Summary, its `COUNTRYSIDE` category and route group are saved as snapshot values so history does not depend on later route edits.
 
 ### Regular OP SHOP Pickup List
 
@@ -208,7 +209,7 @@ The workbook keeps pickup types separate:
 
 Countryside rows remain `OPSHOP_PICKUP` tasks with `run_type = ON_CALL` and `pickup_category = COUNTRYSIDE`. They do not become Delivery rows, do not enter Delivery Trip 1 / Trip 2 tables, and do not affect Delivery totals or vehicle capacity totals.
 
-This export is independent from the Final Trip Summary workbook and does not change the saved Final Summary Excel format.
+This export is independent from the Final Trip Summary workbook. The saved Final Summary workbook has its own separate `OP SHOP PICKUPS` section and includes Category / Route Group columns there when applicable.
 
 ## Final Trip Summary
 
@@ -225,6 +226,7 @@ Final Trip Summary is a saved historical snapshot for a driver, Dispatch Date, a
 - Generate captures current Delivery Order assignments and OP SHOP pickup assignments for the selected driver/date.
 - Delivery rows remain in `Trip 1` / `Trip 2`.
 - OP SHOP rows are captured only in the independent `OP SHOP PICKUPS` snapshot section.
+- The OP SHOP snapshot stores category context (`REGULAR`, `ON_CALL`, or `COUNTRYSIDE`) and, for Countryside pickups, the route group id/name at the time of generation.
 - Captured editable assignments are cleared from Driver Summary after generation.
 - Generated-but-unsaved previews live in frontend memory and can be lost on refresh.
 
@@ -238,6 +240,7 @@ Final Trip Summary is a saved historical snapshot for a driver, Dispatch Date, a
 ### Excel Boundary
 
 - Final Trip Summary XLSX contains Delivery trip tables and, when present, a separate `OP SHOP PICKUPS` section.
+- The Final Summary `OP SHOP PICKUPS` section includes Category and Route Group columns. Countryside rows appear as Category `Countryside` with their route group; Regular and ordinary Oncall rows keep the route group blank.
 - OP SHOP pickup rows never enter Delivery Trip 1 / Trip 2 tables.
 - OP SHOP pickups never contribute to Delivery totals.
 - The separate OP SHOP Run Sheet export remains available for pickup operations.

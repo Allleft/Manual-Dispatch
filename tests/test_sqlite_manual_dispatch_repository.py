@@ -159,6 +159,12 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
                     "SELECT name FROM sqlite_master WHERE type = 'table'"
                 ).fetchall()
             }
+            final_summary_opshop_columns = {
+                row[1]
+                for row in connection.execute(
+                    "PRAGMA table_info(final_trip_summary_opshop_pickup_rows)"
+                ).fetchall()
+            }
             opshop_schedule_columns = {
                 row[1]
                 for row in connection.execute(
@@ -180,6 +186,81 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
         self.assertIn("opshop_countryside_route_groups", final_summary_opshop_tables)
         self.assertIn("pickup_category", opshop_schedule_columns)
         self.assertIn("route_group_id", opshop_schedule_columns)
+        self.assertIn("pickup_category_snapshot", final_summary_opshop_columns)
+        self.assertIn("route_group_id_snapshot", final_summary_opshop_columns)
+        self.assertIn("route_group_name_snapshot", final_summary_opshop_columns)
+
+    def test_existing_opshop_summary_row_without_category_route_values_loads_safely(self):
+        with sqlite3.connect(self.db_path) as connection:
+            connection.execute(
+                """
+                INSERT INTO final_trip_summaries (
+                    summary_id,
+                    dispatch_date,
+                    delivery_date,
+                    driver_id,
+                    driver_name_snapshot,
+                    vehicle_id,
+                    vehicle_rego_snapshot,
+                    total_pallets,
+                    total_loose_bags,
+                    status,
+                    generated_at,
+                    saved_at,
+                    saved_by_account_name,
+                    saved_by_account_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "FTS-LEGACY",
+                    "2026-05-05",
+                    "2026-05-05",
+                    "D001",
+                    "John",
+                    None,
+                    "No vehicle selected",
+                    0,
+                    0,
+                    "SAVED",
+                    "2026-05-05T00:00:00Z",
+                    "2026-05-05T00:00:00Z",
+                    "Unknown",
+                    None,
+                ),
+            )
+            connection.execute(
+                """
+                INSERT INTO final_trip_summary_opshop_pickup_rows (
+                    row_id,
+                    summary_id,
+                    row_no,
+                    pickup_task_id_snapshot,
+                    opshop_name_snapshot,
+                    pickup_date_snapshot,
+                    run_type_snapshot,
+                    status_snapshot
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "FSO-LEGACY",
+                    "FTS-LEGACY",
+                    1,
+                    "TASK-LEGACY",
+                    "Legacy OP SHOP",
+                    "2026-05-05",
+                    "ON_CALL",
+                    "ASSIGNED",
+                ),
+            )
+            connection.commit()
+
+        summary = self.repository.get_final_trip_summary("FTS-LEGACY")
+
+        self.assertEqual(1, len(summary.opshop_pickups))
+        pickup = summary.opshop_pickups[0]
+        self.assertIsNone(pickup.pickup_category_snapshot)
+        self.assertIsNone(pickup.route_group_id_snapshot)
+        self.assertIsNone(pickup.route_group_name_snapshot)
 
     def test_assign_task_persists_assignment(self):
         self.service.assign_task(

@@ -1116,6 +1116,9 @@ class InMemoryManualDispatchRepository:
                 trailer_restriction_snapshot=row.get("trailer_restriction_snapshot"),
                 notes_snapshot=row.get("notes_snapshot"),
                 status_snapshot=row["status_snapshot"],
+                pickup_category_snapshot=row.get("pickup_category_snapshot"),
+                route_group_id_snapshot=row.get("route_group_id_snapshot"),
+                route_group_name_snapshot=row.get("route_group_name_snapshot"),
             )
             for row in opshop_rows
         ]
