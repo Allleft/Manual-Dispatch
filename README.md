@@ -151,7 +151,7 @@ Countryside pickup is an OP SHOP Oncall subcategory, not a new Delivery workflow
 - The Countryside Pickup List is also the route management entry point. There is no separate Task Pool button for managing Countryside routes.
 - Inside the Countryside list, staff can create, rename, and soft-disable route groups; add OP SHOP locations to a selected route; move a route membership to another route; or remove a membership from a route.
 - Route membership changes are soft schedule/template changes. They do not delete OP SHOP locations, existing pickup tasks, assignments already captured in history, or saved Final Summary snapshots.
-- The Countryside Pickup List lets staff filter by route group, create actual pickup tasks from Countryside templates, choose an assigned driver, and close the list to apply those assignments.
+- The Countryside Pickup List lets staff filter by route group, choose a pickup date and driver, then use `Assign Route Group` to create and assign one actual pickup task for each active route template in that route group.
 - Countryside remains outside Delivery Order totals, vehicle capacity totals, Delivery Trip 1 / Trip 2 rows, and Delivery-style automation.
 - When a Countryside pickup is captured in Final Trip Summary, its `COUNTRYSIDE` category and route group are saved as snapshot values so history does not depend on later route edits.
 
@@ -178,9 +178,11 @@ Countryside pickup is an OP SHOP Oncall subcategory, not a new Delivery workflow
 ### Countryside OP SHOP Pickup List
 
 - The list is request-driven like Oncall, but templates are filtered from `ON_CALL` schedules with `pickup_category = COUNTRYSIDE`.
-- Staff can filter by Countryside route group before choosing a template.
+- Staff must select a concrete Countryside route group before creating pickup tasks.
 - Selecting a concrete route group shows two areas: `Pickup Tasks` for actual created tasks and `Route Templates` for membership/template management.
-- `Route Templates` supports `Create Pickup Task`, `Move`, and `Remove`. The `All route groups` view shows pickup tasks but asks staff to select one route before editing templates.
+- `Assign Route Group` creates or restores one `OPSHOP_PICKUP` task per active route template for the selected pickup date, assigns those tasks to the selected driver, and uses `trip1` for compatibility with the OP SHOP assignment model.
+- `Route Templates` supports route membership detail, `Move`, and `Remove`; it does not create pickup tasks one row at a time.
+- The `All route groups` view shows pickup tasks but asks staff to select one route before assigning a route group or editing templates.
 - `New Route`, `Rename`, and `Disable` are available from the route group control inside the modal. Disabling is blocked while the route has active pickup tasks.
 - Add Pickup Task creates an actual `OPSHOP_PICKUP` task only when office staff select a template and pickup date.
 - Closing the list applies selected driver assignments using the same OP SHOP pickup assignment boundary as Oncall.
@@ -282,7 +284,7 @@ Final Trip Summary is a saved historical snapshot for a driver, Dispatch Date, a
 | Assignment | `POST /api/manual-dispatch/assign`, `POST /api/manual-dispatch/unassign` |
 | Driver / Vehicle | `GET /api/manual-dispatch/specifications`, `POST/PATCH/DELETE /api/manual-dispatch/drivers...`, `POST/PATCH/DELETE /api/manual-dispatch/vehicles...`, `POST /api/manual-dispatch/driver-vehicle` |
 | OP SHOP Templates | `GET/POST /api/manual-dispatch/opshop-templates`, `PATCH /api/manual-dispatch/opshop-templates/{schedule_id}`, `POST /api/manual-dispatch/opshop-templates/{schedule_id}/disable` |
-| OP SHOP Countryside Route Groups | `GET/POST /api/manual-dispatch/opshop-countryside-route-groups`, `PATCH /api/manual-dispatch/opshop-countryside-route-groups/{route_group_id}`, `POST /api/manual-dispatch/opshop-countryside-route-groups/{route_group_id}/disable`, `GET/POST /api/manual-dispatch/opshop-countryside-route-groups/{route_group_id}/memberships`, `POST /api/manual-dispatch/opshop-countryside-memberships/{schedule_id}/move`, `POST /api/manual-dispatch/opshop-countryside-memberships/{schedule_id}/remove` |
+| OP SHOP Countryside Route Groups | `GET/POST /api/manual-dispatch/opshop-countryside-route-groups`, `PATCH /api/manual-dispatch/opshop-countryside-route-groups/{route_group_id}`, `POST /api/manual-dispatch/opshop-countryside-route-groups/{route_group_id}/disable`, `GET/POST /api/manual-dispatch/opshop-countryside-route-groups/{route_group_id}/memberships`, `POST /api/manual-dispatch/opshop-countryside-route-groups/{route_group_id}/assign`, `POST /api/manual-dispatch/opshop-countryside-memberships/{schedule_id}/move`, `POST /api/manual-dispatch/opshop-countryside-memberships/{schedule_id}/remove` |
 | OP SHOP Pickups | `GET /api/manual-dispatch/opshop-pickup-schedules`, `POST /api/manual-dispatch/opshop-pickups`, `POST /api/manual-dispatch/opshop-pickups/oncall`, `PATCH/DELETE /api/manual-dispatch/opshop-pickups/{pickup_task_id}`, `POST /api/manual-dispatch/opshop-pickups/weekly-assignments/apply`, `POST /api/manual-dispatch/opshop-pickups/oncall-assignments/apply`, `POST /api/manual-dispatch/opshop-pickups/countryside-assignments/apply` |
 | Final Summaries | `POST/GET /api/manual-dispatch/final-summaries`, `GET /api/manual-dispatch/final-summaries/{summary_id}`, `GET /api/manual-dispatch/final-summary-dates` |
 | Exports | `GET /api/manual-dispatch/final-summaries/export-excel`, `GET /api/manual-dispatch/opshop-pickups/export-excel` |

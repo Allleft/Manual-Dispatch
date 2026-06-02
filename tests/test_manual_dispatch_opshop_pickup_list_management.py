@@ -651,6 +651,87 @@ class OpShopPickupListManagementTest(unittest.TestCase):
             self.repository.get_assignment("2026-05-18", "OPSHOP_PICKUP", task.pickup_task_id)
         )
 
+    def test_update_assigned_oncall_pickup_date_keeps_assignment_when_unlocked(self):
+        task = self.service.create_oncall_opshop_pickup_task(
+            CreateOpShopPickupTaskRequest(
+                schedule_id="SCHED-ONCALL",
+                pickup_date="2026-05-20",
+                assigned_driver_id="D001",
+                dispatch_date="2026-05-18",
+                notes="Before",
+            )
+        )
+
+        updated = self.service.update_opshop_pickup_task(
+            task.pickup_task_id,
+            UpdateOpShopPickupTaskRequest(
+                pickup_date="2026-05-21",
+                dispatch_date="2026-05-18",
+                notes="Moved",
+            ),
+        )
+        assignment = self.repository.get_assignment(
+            "2026-05-18",
+            "OPSHOP_PICKUP",
+            task.pickup_task_id,
+        )
+
+        self.assertEqual("2026-05-21", updated.pickup_date)
+        self.assertEqual("ASSIGNED", updated.status)
+        self.assertEqual("D001", updated.driver_id)
+        self.assertEqual("Moved", updated.notes)
+        self.assertEqual("D001", assignment.driver_id)
+
+    def test_update_assigned_oncall_pickup_date_rejects_duplicate_target(self):
+        first = self.service.create_oncall_opshop_pickup_task(
+            CreateOpShopPickupTaskRequest(
+                schedule_id="SCHED-ONCALL",
+                pickup_date="2026-05-20",
+                assigned_driver_id="D001",
+                dispatch_date="2026-05-18",
+            )
+        )
+        self.service.create_oncall_opshop_pickup_task(
+            CreateOpShopPickupTaskRequest(
+                schedule_id="SCHED-ONCALL",
+                pickup_date="2026-05-21",
+            )
+        )
+
+        with self.assertRaisesRegex(ValueError, "already exists"):
+            self.service.update_opshop_pickup_task(
+                first.pickup_task_id,
+                UpdateOpShopPickupTaskRequest(
+                    pickup_date="2026-05-21",
+                    dispatch_date="2026-05-18",
+                ),
+            )
+
+    def test_update_assigned_oncall_pickup_date_rejects_finalized_target(self):
+        task = self.service.create_oncall_opshop_pickup_task(
+            CreateOpShopPickupTaskRequest(
+                schedule_id="SCHED-ONCALL",
+                pickup_date="2026-05-20",
+                assigned_driver_id="D001",
+                dispatch_date="2026-05-18",
+            )
+        )
+        self._save_final_summary_lock("D001", "2026-05-21")
+
+        with self.assertRaisesRegex(ValueError, "Final Trip Summary"):
+            self.service.update_opshop_pickup_task(
+                task.pickup_task_id,
+                UpdateOpShopPickupTaskRequest(
+                    pickup_date="2026-05-21",
+                    dispatch_date="2026-05-18",
+                ),
+            )
+
+        self.assertEqual(
+            "2026-05-20",
+            self.repository.get_opshop_pickup_task(task.pickup_task_id).pickup_date,
+        )
+
     def _save_final_summary_lock(self, driver_id, delivery_date):
         account = self.service.register_operator_account(
             RegisterOperatorAccountRequest(

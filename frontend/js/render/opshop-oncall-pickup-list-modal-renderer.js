@@ -197,7 +197,7 @@ function createEditForm({ onCancelForm, onStartDelete, onUpdateForm, onUpdatePic
       "pickup_date",
       state.oncallOpShopPickupForm.pickup_date,
       onUpdateForm,
-      { disabled: isLocked || (pickup && pickup.status === "ASSIGNED") },
+      { disabled: isLocked },
     ),
     createDriverSelect(
       "Assigned to",

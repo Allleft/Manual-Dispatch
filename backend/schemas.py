@@ -372,6 +372,14 @@ class ApplyCountrysideOpShopPickupAssignmentsRequest:
 
 
 @dataclass
+class AssignCountrysideRouteGroupRequest:
+    dispatch_date: str
+    pickup_date: str
+    assigned_driver_id: str
+    notes: Optional[str] = None
+
+
+@dataclass
 class ManualDispatchBoardResponse:
     dispatch_date: str
     orders: List[Order]

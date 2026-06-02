@@ -8,6 +8,7 @@ from backend.schemas import (
     ApplyCountrysideOpShopPickupAssignmentsRequest,
     ApplyOncallOpShopPickupAssignmentsRequest,
     ApplyWeeklyOpShopPickupAssignmentsRequest,
+    AssignCountrysideRouteGroupRequest,
     CreateOpShopPickupTaskRequest,
     EnsureOpShopPickupTasksRequest,
     EnsureOpShopPickupTasksResult,
@@ -260,7 +261,7 @@ class OpShopPickupService:
         if next_pickup_date != task.pickup_date:
             if task.status == "ASSIGNED":
                 schedule = self.repository.get_opshop_pickup_schedule(task.schedule_id)
-                if not schedule or getattr(schedule, "pickup_category", "NORMAL") != "COUNTRYSIDE":
+                if not schedule or schedule.run_type != "ON_CALL":
                     raise ValueError("Assigned OP SHOP pickup tasks cannot change pickup date")
             existing = self.repository.find_opshop_pickup_task_by_schedule_and_date(
                 task.schedule_id,
@@ -513,6 +514,85 @@ class OpShopPickupService:
             None,
         )
 
+    def assign_countryside_route_group_pickups(self, route_group_id, request):
+        request = request or AssignCountrysideRouteGroupRequest(
+            dispatch_date="",
+            pickup_date="",
+            assigned_driver_id="",
+        )
+        route_group_id = _clean_text(route_group_id)
+        route_group = self.repository.get_countryside_route_group(route_group_id)
+        if not route_group:
+            raise ValueError("Countryside route group does not exist")
+        if not route_group.active_flag or _clean_status(route_group.status) != "active":
+            raise ValueError("Countryside route group is not active")
+
+        dispatch_date = _parse_iso_date(request.dispatch_date, "dispatch_date").isoformat()
+        pickup_date = _parse_iso_date(request.pickup_date, "pickup_date").isoformat()
+        driver_id = _clean_text(request.assigned_driver_id)
+        if not driver_id:
+            raise ValueError("assigned_driver_id is required")
+        if driver_id not in set(self.repository.list_driver_ids()):
+            raise ValueError("Driver does not exist")
+        if is_driver_delivery_date_finalized(
+            self.repository,
+            dispatch_date,
+            driver_id,
+            pickup_date,
+        ):
+            raise ValueError("Final Trip Summary has already been saved for this driver and delivery date.")
+
+        memberships = self._active_countryside_route_memberships(route_group_id)
+        if not memberships:
+            raise ValueError("Countryside route group has no active route templates")
+
+        schedules = []
+        for membership in memberships:
+            schedule = self.repository.get_opshop_pickup_schedule(membership.schedule_id)
+            if not schedule:
+                continue
+            existing = self.repository.find_opshop_pickup_task_by_schedule_and_date(
+                schedule.schedule_id,
+                pickup_date,
+            )
+            if existing and existing.status == "COMPLETED":
+                raise ValueError(
+                    "Completed Countryside OP SHOP pickup tasks cannot be reassigned"
+                )
+            if existing and existing.status == "ASSIGNED" and existing.driver_id:
+                if is_driver_delivery_date_finalized(
+                    self.repository,
+                    dispatch_date,
+                    existing.driver_id,
+                    existing.pickup_date,
+                ):
+                    raise ValueError(
+                        "Final Trip Summary has already been saved for this driver and delivery date."
+                    )
+            schedules.append((schedule, existing))
+
+        for schedule, existing in schedules:
+            task = self._upsert_countryside_route_group_task(
+                schedule,
+                existing,
+                pickup_date,
+                request.notes,
+            )
+            self.repository.remove_assignments_for_task("OPSHOP_PICKUP", task.pickup_task_id)
+            self.repository.upsert_assignment(
+                dispatch_date,
+                "OPSHOP_PICKUP",
+                task.pickup_task_id,
+                driver_id,
+                "trip1",
+            )
+            self.repository.update_opshop_pickup_task_assignment_status(
+                task.pickup_task_id,
+                "ASSIGNED",
+                driver_id,
+                "trip1",
+            )
+
     def _apply_created_assignment_if_requested(self, task, request):
         driver_id, dispatch_date = self._requested_assignment_context(
             request,
@@ -535,6 +615,60 @@ class OpShopPickupService:
             "trip1",
         )
         return self.repository.get_opshop_pickup_task(task.pickup_task_id)
+
+    def _active_countryside_route_memberships(self, route_group_id):
+        return [
+            template
+            for template in self.repository.list_opshop_templates(
+                "ON_CALL",
+                include_inactive=False,
+            )
+            if template.pickup_category == "COUNTRYSIDE"
+            and template.route_group_id == route_group_id
+        ]
+
+    def _upsert_countryside_route_group_task(self, schedule, existing, pickup_date, notes):
+        timestamp = _timestamp()
+        if existing and existing.status == "CANCELLED":
+            return self.repository.upsert_opshop_pickup_task(
+                replace(
+                    existing,
+                    status="ACTIVE",
+                    driver_id=None,
+                    trip_no=None,
+                    dispatch_date=pickup_date,
+                    notes=notes,
+                    generated_from="ON_CALL",
+                    updated_at=timestamp,
+                )
+            )
+        if existing:
+            return self.repository.upsert_opshop_pickup_task(
+                replace(
+                    existing,
+                    dispatch_date=pickup_date,
+                    notes=notes,
+                    generated_from="ON_CALL",
+                    updated_at=timestamp,
+                )
+            )
+
+        task = OpShopPickupTask(
+            pickup_task_id=_generated_task_id(schedule.schedule_id, pickup_date),
+            schedule_id=schedule.schedule_id,
+            opshop_id=schedule.opshop_id,
+            pickup_date=pickup_date,
+            task_type="OPSHOP_PICKUP",
+            generated_from="ON_CALL",
+            status="ACTIVE",
+            dispatch_date=pickup_date,
+            driver_id=None,
+            trip_no=None,
+            notes=notes,
+            created_at=timestamp,
+            updated_at=timestamp,
+        )
+        return self.repository.insert_opshop_pickup_task(task)
 
     def _requested_assignment_context(self, request, pickup_date):
         driver_id = _clean_text(getattr(request, "assigned_driver_id", None))

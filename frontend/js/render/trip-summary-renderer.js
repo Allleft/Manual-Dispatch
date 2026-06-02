@@ -166,13 +166,6 @@ export function renderDriverSummary({
     if (hasAssignedTasks && !hasLockedFinalSummary && !hasSavedFinalSummary) {
       header.append(generateButton);
     }
-    if (assignedOpShopPickups.length > 0) {
-      const opShopExportHint = document.createElement("p");
-      opShopExportHint.className = "vehicle-hint";
-      opShopExportHint.textContent =
-        "OP SHOP PICKUP tasks appear in a separate Final Trip Summary section and do not affect Delivery totals or trip rows.";
-      header.append(opShopExportHint);
-    }
     if (finalLockHint.textContent) {
       header.append(finalLockHint);
     }

@@ -176,6 +176,13 @@ class ManualDispatchService:
         self.opshop_pickup_service.apply_countryside_assignments(request)
         return self.board_service.get_board(request.dispatch_date)
 
+    def assign_countryside_route_group_pickups(self, route_group_id, request):
+        self.opshop_pickup_service.assign_countryside_route_group_pickups(
+            route_group_id,
+            request,
+        )
+        return self.board_service.get_board(request.dispatch_date)
+
     def create_driver(self, request):
         return self.specification_service.create_driver(request)
 

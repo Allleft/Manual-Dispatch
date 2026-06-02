@@ -2,7 +2,6 @@
 import {
   getCountrysideOpShopPickupByTaskId,
   getCountrysideRouteGroupNameById,
-  getCountrysideScheduleCandidatesForRouteGroup,
 } from "../state/selectors.js";
 import { createBadge, createOption } from "../utils/dom-utils.js";
 import { formatOptional, truncateText } from "../utils/format-utils.js";
@@ -26,7 +25,6 @@ export function renderCountrysideOpShopPickupListModal({
   onSelectRouteGroup,
   onStartAdd,
   onStartAddRouteTemplate,
-  onStartCreatePickupFromRouteTemplate,
   onStartDelete,
   onStartDisableRouteGroup,
   onStartEdit,
@@ -99,7 +97,6 @@ export function renderCountrysideOpShopPickupListModal({
     createPickupGroups({ onOpenDetail, onStartEdit, onUpdateAssignedDriver }),
     createRouteTemplatesSection({
       onStartAddRouteTemplate,
-      onStartCreatePickupFromRouteTemplate,
       onStartMoveRouteTemplate,
       onOpenRouteTemplateDetail,
       onStartRemoveRouteTemplate,
@@ -129,8 +126,12 @@ function createModalHeader({ onCloseList, onStartAdd }) {
 
   const addButton = document.createElement("button");
   addButton.type = "button";
-  addButton.textContent = "Add Pickup Task";
-  addButton.disabled = state.isCountrysideOpShopPickupSaving || state.isCountrysideOpShopPickupListLoading;
+  addButton.textContent = "Assign Route Group";
+  addButton.disabled =
+    state.isCountrysideOpShopPickupSaving ||
+    state.isCountrysideOpShopPickupListLoading ||
+    !state.selectedCountrysideRouteGroupId ||
+    state.countrysideRouteMemberships.length === 0;
   addButton.addEventListener("click", (event) => {
     event.stopPropagation();
     onStartAdd();
@@ -534,12 +535,20 @@ function createAddForm({ onCancelForm, onCreatePickup, onUpdateForm }) {
     onCreatePickup();
   });
 
+  const routeName = state.selectedCountrysideRouteGroupId
+    ? getRouteGroupName(state.selectedCountrysideRouteGroupId)
+    : "";
+  const summary = document.createElement("p");
+  summary.className = "hint-row";
+  summary.textContent = routeName
+    ? `Assign all active route templates for ${routeName} to one driver and pickup date.`
+    : "Select a route group before assigning Countryside pickups.";
+
   form.append(
-    createRouteGroupSelect(onUpdateForm),
-    createScheduleSelect(onUpdateForm),
+    summary,
     createDateInput("Pickup Date", "pickup_date", state.countrysideOpShopPickupForm.pickup_date, onUpdateForm),
     createDriverSelect(
-      "Assigned to",
+      "Assigned Driver",
       state.countrysideOpShopPickupForm.assigned_driver_id,
       (value) => onUpdateForm("assigned_driver_id", value),
       { pickupDate: state.countrysideOpShopPickupForm.pickup_date },
@@ -550,10 +559,11 @@ function createAddForm({ onCancelForm, onCreatePickup, onUpdateForm }) {
       isSubmitDisabled:
         state.isCountrysideOpShopPickupSaving ||
         !state.countrysideOpShopPickupForm.route_group_id ||
-        !state.countrysideOpShopPickupForm.schedule_id ||
-        !state.countrysideOpShopPickupForm.pickup_date,
+        !state.countrysideOpShopPickupForm.pickup_date ||
+        !state.countrysideOpShopPickupForm.assigned_driver_id ||
+        state.countrysideRouteMemberships.length === 0,
       onCancel: onCancelForm,
-      submitLabel: state.isCountrysideOpShopPickupSaving ? "Saving..." : "Save Pickup Task",
+      submitLabel: state.isCountrysideOpShopPickupSaving ? "Assigning..." : "Assign Route Group",
     }),
   );
 
@@ -670,52 +680,6 @@ function createRouteGroupSelect(onUpdateForm) {
     );
   });
   select.addEventListener("change", () => onUpdateForm("route_group_id", select.value));
-
-  label.append(select);
-  return label;
-}
-
-function createScheduleSelect(onUpdateForm) {
-  const label = document.createElement("label");
-  label.className = "form-field form-field-wide";
-  label.textContent = "Template";
-
-  const select = document.createElement("select");
-  select.name = "schedule_id";
-  select.required = true;
-  select.disabled =
-    state.isCountrysideOpShopPickupSaving ||
-    state.isCountrysideOpShopPickupListLoading ||
-    !state.countrysideOpShopPickupForm.route_group_id;
-  select.append(
-    createOption(
-      "",
-      state.countrysideOpShopPickupForm.route_group_id
-        ? "Select Countryside OP SHOP template"
-        : "Select a route group first",
-      !state.countrysideOpShopPickupForm.schedule_id,
-    ),
-  );
-  getCountrysideScheduleCandidatesForRouteGroup(
-    state.countrysideOpShopPickupForm.route_group_id,
-  ).forEach((candidate) => {
-    const text = [
-      candidate.opshop_name,
-      candidate.suburb,
-      candidate.route_group_name,
-      candidate.default_driver_name || candidate.default_driver_alias,
-    ]
-      .filter(Boolean)
-      .join(" - ");
-    select.append(
-      createOption(
-        candidate.schedule_id,
-        text,
-        state.countrysideOpShopPickupForm.schedule_id === candidate.schedule_id,
-      ),
-    );
-  });
-  select.addEventListener("change", () => onUpdateForm("schedule_id", select.value));
 
   label.append(select);
   return label;
@@ -962,7 +926,7 @@ function createPickupGroups({ onOpenDetail, onStartEdit, onUpdateAssignedDriver 
     const empty = document.createElement("p");
     empty.className = "empty-board";
     empty.textContent = state.selectedCountrysideRouteGroupId
-      ? "No actual Countryside pickup tasks have been created for this route group yet. Use Route Templates below to create one."
+      ? "No actual Countryside pickup tasks have been assigned for this route group yet. Use Assign Route Group to create and assign all route templates for a pickup date."
       : "No Countryside OP SHOP pickups added.";
     container.append(empty);
     return container;
@@ -1000,7 +964,6 @@ function createPickupGroups({ onOpenDetail, onStartEdit, onUpdateAssignedDriver 
 function createRouteTemplatesSection({
   onOpenRouteTemplateDetail,
   onStartAddRouteTemplate,
-  onStartCreatePickupFromRouteTemplate,
   onStartMoveRouteTemplate,
   onStartRemoveRouteTemplate,
 }) {
@@ -1066,7 +1029,6 @@ function createRouteTemplatesSection({
     list.append(
       createRouteTemplateCard(template, {
         onOpenRouteTemplateDetail,
-        onStartCreatePickupFromRouteTemplate,
         onStartMoveRouteTemplate,
         onStartRemoveRouteTemplate,
       }),
@@ -1080,7 +1042,6 @@ function createRouteTemplateCard(
   template,
   {
     onOpenRouteTemplateDetail,
-    onStartCreatePickupFromRouteTemplate,
     onStartMoveRouteTemplate,
     onStartRemoveRouteTemplate,
   },
@@ -1136,11 +1097,6 @@ function createRouteTemplateCard(
   actions.className = "opshop-route-template-actions";
   actions.addEventListener("click", (event) => event.stopPropagation());
   actions.append(
-    createSmallActionButton(
-      "Create Pickup Task",
-      () => onStartCreatePickupFromRouteTemplate(template),
-      { primary: true },
-    ),
     createSmallActionButton("Move", () => onStartMoveRouteTemplate(template)),
     createSmallActionButton("Remove", () => onStartRemoveRouteTemplate(template)),
   );

@@ -8,6 +8,7 @@ from backend.schemas import (
     ApplyCountrysideOpShopPickupAssignmentsRequest,
     ApplyOncallOpShopPickupAssignmentsRequest,
     ApplyWeeklyOpShopPickupAssignmentsRequest,
+    AssignCountrysideRouteGroupRequest,
     AssignDriverVehicleRequest,
     AssignTaskRequest,
     CreateOpShopCountrysideRouteGroupRequest,
@@ -354,6 +355,17 @@ def apply_countryside_opshop_pickup_assignments(
 ):
     try:
         return to_dict(service.apply_countryside_opshop_pickup_assignments(request))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.post("/opshop-pickups/countryside-route-groups/{route_group_id}/assign")
+def assign_countryside_route_group_pickups(
+    route_group_id: str,
+    request: AssignCountrysideRouteGroupRequest,
+):
+    try:
+        return to_dict(service.assign_countryside_route_group_pickups(route_group_id, request))
     except ValueError as error:
         raise _to_http_exception(error) from error
 

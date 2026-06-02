@@ -1,8 +1,8 @@
 import {
   apiAddCountrysideRouteMembership,
   apiApplyCountrysideOpShopPickupAssignments,
+  apiAssignCountrysideRouteGroup,
   apiCreateCountrysideRouteGroup,
-  apiCreateOncallOpShopPickup,
   apiDeleteOpShopPickup,
   apiDisableCountrysideRouteGroup,
   apiListCountrysideOpShopPickupSchedules,
@@ -130,8 +130,7 @@ export function createCountrysideOpShopPickupActions({
     state.countrysideOpShopPickupEditingTaskId = "";
     state.countrysideOpShopPickupForm = {
       route_group_id: state.selectedCountrysideRouteGroupId || "",
-      schedule_id: "",
-      pickup_date: "",
+      pickup_date: state.dispatchDate || "",
       assigned_driver_id: "",
       notes: "",
     };
@@ -468,21 +467,13 @@ export function createCountrysideOpShopPickupActions({
   }
 
   function updatePickupTaskForm(field, value) {
-    const shouldRender = field === "route_group_id" || field === "schedule_id";
+    const shouldRender = field === "route_group_id" || field === "pickup_date";
     const nextForm = {
       ...state.countrysideOpShopPickupForm,
       [field]: value,
     };
     if (field === "route_group_id") {
-      nextForm.schedule_id = "";
       nextForm.assigned_driver_id = "";
-    }
-    if (field === "schedule_id") {
-      const candidate = state.countrysideOpShopPickupScheduleCandidates.find(
-        (item) => item.schedule_id === value,
-      );
-      nextForm.route_group_id = candidate ? candidate.route_group_id || "" : nextForm.route_group_id;
-      nextForm.assigned_driver_id = candidate ? candidate.default_driver_id || "" : "";
     }
     state.countrysideOpShopPickupForm = nextForm;
     if (shouldRender) {
@@ -500,26 +491,23 @@ export function createCountrysideOpShopPickupActions({
     renderBoard();
 
     try {
+      const routeGroupId =
+        state.countrysideOpShopPickupForm.route_group_id ||
+        state.selectedCountrysideRouteGroupId ||
+        "";
       const selectedDriverId = state.countrysideOpShopPickupForm.assigned_driver_id || "";
-      const created = await apiCreateOncallOpShopPickup({
-        schedule_id: state.countrysideOpShopPickupForm.schedule_id,
-        pickup_date: state.countrysideOpShopPickupForm.pickup_date,
+      await apiAssignCountrysideRouteGroup(routeGroupId, {
         dispatch_date: state.dispatchDate,
-        assigned_driver_id: selectedDriverId || null,
+        pickup_date: state.countrysideOpShopPickupForm.pickup_date,
+        assigned_driver_id: selectedDriverId,
         notes: state.countrysideOpShopPickupForm.notes || null,
       });
       state.countrysideOpShopPickupFormMode = "";
       state.countrysideOpShopPickupForm = {};
       await loadBoard(state.dispatchDate, { force: true });
       initializeAssignedDriverSelections();
-      if (created && created.pickup_task_id) {
-        state.countrysideOpShopPickupAssignedDriverSelections = {
-          ...state.countrysideOpShopPickupAssignedDriverSelections,
-          [created.pickup_task_id]: selectedDriverId,
-        };
-      }
     } catch (error) {
-      state.countrysideOpShopPickupListError = `Unable to add Countryside OP SHOP pickup. ${error.message}`;
+      state.countrysideOpShopPickupListError = `Unable to assign Countryside route group. ${error.message}`;
     } finally {
       state.isCountrysideOpShopPickupSaving = false;
       renderBoard();

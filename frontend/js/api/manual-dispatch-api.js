@@ -328,6 +328,17 @@ export async function apiApplyCountrysideOpShopPickupAssignments(payload) {
 }
 
 
+export async function apiAssignCountrysideRouteGroup(routeGroupId, payload) {
+  return requestJson(
+    `/api/manual-dispatch/opshop-pickups/countryside-route-groups/${encodeURIComponent(routeGroupId)}/assign`,
+    {
+      method: "POST",
+      body: payload,
+    },
+  );
+}
+
+
 export function getOpShopPickupRunSheetExcelExportUrl(dispatchDate) {
   return getApiUrl("/api/manual-dispatch/opshop-pickups/export-excel", {
     dispatch_date: dispatchDate,
