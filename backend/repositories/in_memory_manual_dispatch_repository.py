@@ -1013,6 +1013,17 @@ class InMemoryManualDispatchRepository:
             None,
         )
 
+    def find_assignment_for_task(self, task_type, task_id):
+        return next(
+            (
+                assignment
+                for assignment in self.assignments
+                if assignment.task_type == task_type
+                and assignment.task_id == task_id
+            ),
+            None,
+        )
+
     def remove_assignment(self, dispatch_date, task_type, task_id):
         before_count = len(self.assignments)
         self.assignments = [

@@ -1,6 +1,7 @@
 from backend.schemas import ManualDriverVehicleClearResponse
 from backend.services.manual_dispatch.final_summary_lock import (
     ensure_driver_delivery_date_not_finalized,
+    is_driver_delivery_date_finalized,
 )
 from backend.services.manual_dispatch.normalization import (
     clean_optional_text,
@@ -45,6 +46,22 @@ class AssignmentService:
 
     def unassign_task(self, request):
         self.validator.validate_task_type(request.task_type)
+        assignment = self.repository.get_assignment(
+            request.dispatch_date,
+            request.task_type,
+            request.task_id,
+        )
+        if assignment:
+            delivery_date = self._get_task_delivery_date(request.task_type, request.task_id)
+            if is_driver_delivery_date_finalized(
+                self.repository,
+                request.dispatch_date,
+                assignment.driver_id,
+                delivery_date,
+            ):
+                raise ValueError(
+                    "Final Trip Summary has already been saved for this driver and delivery date."
+                )
         self.repository.remove_assignment(
             dispatch_date=request.dispatch_date,
             task_type=request.task_type,

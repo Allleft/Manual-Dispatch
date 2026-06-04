@@ -1726,6 +1726,20 @@ class SQLiteManualDispatchRepository:
             )
         return self._row_to_assignment(row) if row else None
 
+    def find_assignment_for_task(self, task_type, task_id):
+        with connect(self.db_path) as connection:
+            row = connection.execute(
+                """
+                SELECT *
+                FROM manual_dispatch_assignments
+                WHERE task_type = ? AND task_id = ?
+                ORDER BY updated_at DESC, assigned_at DESC, assignment_id DESC
+                LIMIT 1
+                """,
+                (task_type, task_id),
+            ).fetchone()
+        return self._row_to_assignment(row) if row else None
+
     def remove_assignment(self, dispatch_date, task_type, task_id):
         with connect(self.db_path) as connection:
             cursor = connection.execute(

@@ -111,6 +111,40 @@ class ManualDispatchOpShopAssignmentTest(unittest.TestCase):
         self.assertEqual([], board.opshop_pickups)
         self.assertIn("TASK-001", [item.pickup_task_id for item in board.scheduled_opshop_pickups])
 
+    def test_saved_final_summary_blocks_opshop_unassign_and_preserves_live_assignment(self):
+        self.repository.upsert_opshop_pickup_task(self._task("TASK-LOCKED"))
+        self.service.assign_task(
+            AssignTaskRequest(
+                dispatch_date="2026-05-18",
+                task_type="OPSHOP_PICKUP",
+                task_id="TASK-LOCKED",
+                driver_id="D001",
+                trip_no="trip1",
+            )
+        )
+        self._save_final_summary_lock("D001", "2026-05-20", "TASK-LOCKED")
+
+        with self.assertRaisesRegex(ValueError, "Final Trip Summary has already been saved"):
+            self.service.unassign_task(
+                UnassignTaskRequest(
+                    dispatch_date="2026-05-18",
+                    task_type="OPSHOP_PICKUP",
+                    task_id="TASK-LOCKED",
+                )
+            )
+
+        task = self.repository.get_opshop_pickup_task("TASK-LOCKED")
+        assignment = self.repository.get_assignment(
+            "2026-05-18",
+            "OPSHOP_PICKUP",
+            "TASK-LOCKED",
+        )
+        self.assertEqual("ASSIGNED", task.status)
+        self.assertEqual("D001", task.driver_id)
+        self.assertEqual("trip1", task.trip_no)
+        self.assertIsNotNone(assignment)
+        self.assertEqual("D001", assignment.driver_id)
+
     def test_delivery_order_assignment_still_works(self):
         assignment = self.service.assign_task(
             AssignTaskRequest(
@@ -229,29 +263,7 @@ class ManualDispatchOpShopAssignmentTest(unittest.TestCase):
 
     def test_saved_final_summary_blocks_direct_opshop_assignment_for_driver_pickup_date(self):
         self.repository.upsert_opshop_pickup_task(self._task("TASK-LOCKED"))
-        account = self.service.register_operator_account(
-            RegisterOperatorAccountRequest(
-                account_name="Mandy",
-                password="secret123",
-                confirm_password="secret123",
-            )
-        )
-        self.service.save_final_trip_summary(
-            SaveFinalTripSummaryRequest(
-                dispatch_date="2026-05-18",
-                delivery_date="2026-05-20",
-                driver_id="D001",
-                driver_name_snapshot="John",
-                vehicle_id=None,
-                vehicle_rego_snapshot="No vehicle selected",
-                total_pallets=0,
-                total_loose_bags=0,
-                generated_at="2026-05-18T00:00:00+00:00",
-                saved_by_account_name=account.account_name,
-                saved_by_account_id=account.account_id,
-                trips=[],
-            )
-        )
+        self._save_final_summary_lock("D001", "2026-05-20")
 
         with self.assertRaisesRegex(ValueError, "Final Trip Summary has already been saved"):
             self.service.assign_task(
@@ -287,6 +299,36 @@ class ManualDispatchOpShopAssignmentTest(unittest.TestCase):
             "task_notes": "Manual fixture",
             "status": "ASSIGNED",
         }
+
+    def _save_final_summary_lock(self, driver_id, delivery_date, pickup_task_id=None):
+        account = self.service.register_operator_account(
+            RegisterOperatorAccountRequest(
+                account_name=f"Lock Tester {driver_id} {delivery_date} {pickup_task_id or 'none'}",
+                password="secret123",
+                confirm_password="secret123",
+            )
+        )
+        return self.service.save_final_trip_summary(
+            SaveFinalTripSummaryRequest(
+                dispatch_date="2026-05-18",
+                delivery_date=delivery_date,
+                driver_id=driver_id,
+                driver_name_snapshot="John",
+                vehicle_id=None,
+                vehicle_rego_snapshot="No vehicle selected",
+                total_pallets=0,
+                total_loose_bags=0,
+                generated_at="2026-05-18T00:00:00+00:00",
+                saved_by_account_name=account.account_name,
+                saved_by_account_id=account.account_id,
+                trips=[],
+                opshop_pickups=(
+                    [self._opshop_summary_payload(pickup_task_id)]
+                    if pickup_task_id
+                    else []
+                ),
+            )
+        )
 
     def _location(self):
         return OpShopLocation(

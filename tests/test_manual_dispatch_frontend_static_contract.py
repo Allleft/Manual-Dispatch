@@ -237,7 +237,10 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("getAssignedOpShopPickupsForDriver", trip_summary_renderer)
         self.assertIn("const hasAssignedTasks = assignedOrders.length > 0 || assignedOpShopPickups.length > 0", trip_summary_renderer)
         self.assertIn("isDriverDeliveryDateFinalized", trip_summary_renderer)
-        self.assertIn("state.isSaving || state.isLoading || hasSavedFinalSummary", trip_summary_renderer)
+        self.assertIn(
+            "state.isSaving || state.isLoading || hasLockedFinalSummary || hasSavedFinalSummary",
+            trip_summary_renderer,
+        )
         self.assertIn("Final Trip Summary has been saved for this driver and delivery date.", trip_summary_renderer)
         self.assertIn("if (hasAssignedTasks && !hasLockedFinalSummary && !hasSavedFinalSummary)", trip_summary_renderer)
         self.assertIn("if (!hasAssignedTasks && !hasSavedFinalSummary)", trip_summary_renderer)

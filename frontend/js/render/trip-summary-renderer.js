@@ -93,7 +93,8 @@ export function renderDriverSummary({
     vehicleWrap.textContent = "Choose Vehicle";
 
     const vehicleSelect = document.createElement("select");
-    vehicleSelect.disabled = state.isSaving || state.isLoading || hasSavedFinalSummary;
+    vehicleSelect.disabled =
+      state.isSaving || state.isLoading || hasLockedFinalSummary || hasSavedFinalSummary;
     vehicleSelect.append(createOption("", "Select Vehicle", !selectedVehicle));
     state.vehicles.forEach((vehicle) => {
       vehicleSelect.append(

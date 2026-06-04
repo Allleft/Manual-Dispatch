@@ -253,6 +253,10 @@ class OpShopPickupService:
             raise ValueError("OP SHOP pickup task does not exist")
         if task.status in {"CANCELLED", "COMPLETED"}:
             raise ValueError("Cancelled or completed OP SHOP pickup tasks cannot be edited")
+        self._ensure_opshop_task_not_saved_locked(
+            task,
+            _assignment_dispatch_date_for_request(request, task),
+        )
 
         next_pickup_date = task.pickup_date
         if request.pickup_date:
@@ -312,6 +316,7 @@ class OpShopPickupService:
             raise ValueError("OP SHOP pickup task does not exist")
         if task.status not in {"ACTIVE", "ASSIGNED"}:
             raise ValueError("Only active or assigned OP SHOP pickup tasks can be deleted")
+        self._ensure_opshop_task_not_saved_locked(task)
 
         self.repository.remove_assignments_for_task("OPSHOP_PICKUP", task.pickup_task_id)
 
@@ -345,6 +350,8 @@ class OpShopPickupService:
             if not schedule or schedule.run_type != "REGULAR" or not _is_active_schedule(schedule):
                 continue
 
+            if self._is_opshop_task_saved_locked(task, request.dispatch_date):
+                continue
             if not driver_id:
                 self.repository.remove_assignment(
                     request.dispatch_date,
@@ -366,7 +373,6 @@ class OpShopPickupService:
                 driver_id,
                 task.pickup_date,
             ):
-                self._clear_stale_locked_assignment(request.dispatch_date, task, driver_id)
                 continue
 
             self.repository.upsert_assignment(
@@ -403,6 +409,8 @@ class OpShopPickupService:
             if getattr(schedule, "pickup_category", "NORMAL") != "NORMAL":
                 continue
 
+            if self._is_opshop_task_saved_locked(task, request.dispatch_date):
+                continue
             if not driver_id:
                 self.repository.remove_assignment(
                     request.dispatch_date,
@@ -424,7 +432,6 @@ class OpShopPickupService:
                 driver_id,
                 task.pickup_date,
             ):
-                self._clear_stale_locked_assignment(request.dispatch_date, task, driver_id)
                 continue
 
             self.repository.upsert_assignment(
@@ -461,6 +468,8 @@ class OpShopPickupService:
             if getattr(schedule, "pickup_category", "NORMAL") != "COUNTRYSIDE":
                 continue
 
+            if self._is_opshop_task_saved_locked(task, request.dispatch_date):
+                continue
             if not driver_id:
                 self.repository.remove_assignment(
                     request.dispatch_date,
@@ -482,7 +491,6 @@ class OpShopPickupService:
                 driver_id,
                 task.pickup_date,
             ):
-                self._clear_stale_locked_assignment(request.dispatch_date, task, driver_id)
                 continue
 
             self.repository.upsert_assignment(
@@ -499,19 +507,27 @@ class OpShopPickupService:
                 "trip1",
             )
 
-    def _clear_stale_locked_assignment(self, dispatch_date, task, driver_id):
-        if task.status != "ASSIGNED" or task.driver_id != driver_id:
-            return
-        self.repository.remove_assignment(
-            dispatch_date,
+    def _ensure_opshop_task_not_saved_locked(self, task, fallback_dispatch_date=None):
+        if self._is_opshop_task_saved_locked(task, fallback_dispatch_date):
+            raise ValueError("Final Trip Summary has already been saved for this driver and delivery date.")
+
+    def _is_opshop_task_saved_locked(self, task, fallback_dispatch_date=None):
+        if not task or task.status != "ASSIGNED" or not task.driver_id:
+            return False
+        assignment = self.repository.find_assignment_for_task(
             "OPSHOP_PICKUP",
             task.pickup_task_id,
         )
-        self.repository.update_opshop_pickup_task_assignment_status(
-            task.pickup_task_id,
-            "ACTIVE",
-            None,
-            None,
+        dispatch_date = (
+            assignment.dispatch_date
+            if assignment
+            else fallback_dispatch_date or task.dispatch_date or task.pickup_date
+        )
+        return is_driver_delivery_date_finalized(
+            self.repository,
+            dispatch_date,
+            task.driver_id,
+            task.pickup_date,
         )
 
     def assign_countryside_route_group_pickups(self, route_group_id, request):

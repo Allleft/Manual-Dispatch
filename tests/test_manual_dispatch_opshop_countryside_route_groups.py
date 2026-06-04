@@ -14,6 +14,7 @@ from backend.repositories.sqlite_manual_dispatch_repository import (
 from backend.schemas import (
     AddCountrysideRouteMembershipRequest,
     ApplyCountrysideOpShopPickupAssignmentsRequest,
+    AssignTaskRequest,
     AssignCountrysideRouteGroupRequest,
     CreateOpShopCountrysideRouteGroupRequest,
     CreateOpShopTemplateRequest,
@@ -356,6 +357,47 @@ class CountrysideRouteGroupServiceTest(unittest.TestCase):
         self.assertIsNone(
             self.repository.get_assignment("2026-05-25", "OPSHOP_PICKUP", task.pickup_task_id)
         )
+
+    def test_apply_countryside_assignments_preserves_saved_locked_existing_assignment(self):
+        group = self.service.create_countryside_route_group(
+            CreateOpShopCountrysideRouteGroupRequest(route_group_name="Preserved Locked Route")
+        )
+        template = self._create_countryside_template(group.route_group_id)
+        task = self.service.create_oncall_opshop_pickup_task(
+            CreateOpShopPickupTaskRequest(
+                schedule_id=template.schedule_id,
+                pickup_date="2026-05-25",
+            )
+        )
+        self.service.assign_task(
+            AssignTaskRequest(
+                dispatch_date="2026-05-25",
+                task_type="OPSHOP_PICKUP",
+                task_id=task.pickup_task_id,
+                driver_id="D001",
+                trip_no="trip1",
+            )
+        )
+        self._save_final_summary_lock("D001", "2026-05-25")
+
+        self.service.apply_countryside_opshop_pickup_assignments(
+            ApplyCountrysideOpShopPickupAssignmentsRequest(
+                dispatch_date="2026-05-25",
+                assignments=[{"pickup_task_id": task.pickup_task_id, "driver_id": ""}],
+            )
+        )
+
+        updated = self.repository.get_opshop_pickup_task(task.pickup_task_id)
+        assignment = self.repository.get_assignment(
+            "2026-05-25",
+            "OPSHOP_PICKUP",
+            task.pickup_task_id,
+        )
+        self.assertEqual("ASSIGNED", updated.status)
+        self.assertEqual("D001", updated.driver_id)
+        self.assertEqual("trip1", updated.trip_no)
+        self.assertIsNotNone(assignment)
+        self.assertEqual("D001", assignment.driver_id)
 
     def test_assign_countryside_route_group_creates_and_assigns_all_memberships(self):
         group = self.service.create_countryside_route_group(

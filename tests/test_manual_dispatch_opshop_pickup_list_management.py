@@ -497,7 +497,7 @@ class OpShopPickupListManagementTest(unittest.TestCase):
 
         self.assertEqual("D002", self.repository.get_opshop_pickup_task(task.pickup_task_id).driver_id)
 
-    def test_board_hides_and_regular_apply_clears_stale_locked_pickup_assignment(self):
+    def test_board_hides_and_regular_apply_preserves_saved_locked_pickup_assignment(self):
         task = self.service.create_opshop_pickup_task(
             CreateOpShopPickupTaskRequest(
                 schedule_id="SCHED-REGULAR",
@@ -526,16 +526,21 @@ class OpShopPickupListManagementTest(unittest.TestCase):
         self.service.apply_weekly_opshop_pickup_assignments(
             ApplyWeeklyOpShopPickupAssignmentsRequest(
                 dispatch_date="2026-05-18",
-                assignments=[{"pickup_task_id": task.pickup_task_id, "driver_id": "D001"}],
+                assignments=[{"pickup_task_id": task.pickup_task_id, "driver_id": ""}],
             )
         )
 
         updated = self.repository.get_opshop_pickup_task(task.pickup_task_id)
-        self.assertEqual("ACTIVE", updated.status)
-        self.assertIsNone(updated.driver_id)
-        self.assertIsNone(
-            self.repository.get_assignment("2026-05-18", "OPSHOP_PICKUP", task.pickup_task_id)
+        assignment = self.repository.get_assignment(
+            "2026-05-18",
+            "OPSHOP_PICKUP",
+            task.pickup_task_id,
         )
+        self.assertEqual("ASSIGNED", updated.status)
+        self.assertEqual("D001", updated.driver_id)
+        self.assertEqual("trip1", updated.trip_no)
+        self.assertIsNotNone(assignment)
+        self.assertEqual("D001", assignment.driver_id)
 
     def test_apply_oncall_assignments_assigns_visible_oncall_pickups_to_trip1(self):
         task = self.service.create_oncall_opshop_pickup_task(
@@ -651,6 +656,43 @@ class OpShopPickupListManagementTest(unittest.TestCase):
             self.repository.get_assignment("2026-05-18", "OPSHOP_PICKUP", task.pickup_task_id)
         )
 
+    def test_apply_oncall_assignments_preserves_saved_locked_existing_assignment(self):
+        task = self.service.create_oncall_opshop_pickup_task(
+            CreateOpShopPickupTaskRequest(
+                schedule_id="SCHED-ONCALL",
+                pickup_date="2026-05-20",
+            )
+        )
+        self.service.assign_task(
+            AssignTaskRequest(
+                dispatch_date="2026-05-18",
+                task_type="OPSHOP_PICKUP",
+                task_id=task.pickup_task_id,
+                driver_id="D001",
+                trip_no="trip1",
+            )
+        )
+        self._save_final_summary_lock("D001", "2026-05-20")
+
+        self.service.apply_oncall_opshop_pickup_assignments(
+            ApplyOncallOpShopPickupAssignmentsRequest(
+                dispatch_date="2026-05-18",
+                assignments=[{"pickup_task_id": task.pickup_task_id, "driver_id": ""}],
+            )
+        )
+
+        updated = self.repository.get_opshop_pickup_task(task.pickup_task_id)
+        assignment = self.repository.get_assignment(
+            "2026-05-18",
+            "OPSHOP_PICKUP",
+            task.pickup_task_id,
+        )
+        self.assertEqual("ASSIGNED", updated.status)
+        self.assertEqual("D001", updated.driver_id)
+        self.assertEqual("trip1", updated.trip_no)
+        self.assertIsNotNone(assignment)
+        self.assertEqual("D001", assignment.driver_id)
+
     def test_update_assigned_oncall_pickup_date_keeps_assignment_when_unlocked(self):
         task = self.service.create_oncall_opshop_pickup_task(
             CreateOpShopPickupTaskRequest(
@@ -731,6 +773,42 @@ class OpShopPickupListManagementTest(unittest.TestCase):
             "2026-05-20",
             self.repository.get_opshop_pickup_task(task.pickup_task_id).pickup_date,
         )
+
+    def test_saved_locked_assigned_pickup_rejects_notes_update_and_delete(self):
+        task = self.service.create_oncall_opshop_pickup_task(
+            CreateOpShopPickupTaskRequest(
+                schedule_id="SCHED-ONCALL",
+                pickup_date="2026-05-20",
+                assigned_driver_id="D001",
+                dispatch_date="2026-05-18",
+                notes="Before",
+            )
+        )
+        self._save_final_summary_lock("D001", "2026-05-20")
+
+        with self.assertRaisesRegex(ValueError, "Final Trip Summary has already been saved"):
+            self.service.update_opshop_pickup_task(
+                task.pickup_task_id,
+                UpdateOpShopPickupTaskRequest(
+                    dispatch_date="2026-05-18",
+                    notes="After",
+                ),
+            )
+        with self.assertRaisesRegex(ValueError, "Final Trip Summary has already been saved"):
+            self.service.delete_opshop_pickup_task(task.pickup_task_id)
+
+        updated = self.repository.get_opshop_pickup_task(task.pickup_task_id)
+        assignment = self.repository.get_assignment(
+            "2026-05-18",
+            "OPSHOP_PICKUP",
+            task.pickup_task_id,
+        )
+        self.assertEqual("ASSIGNED", updated.status)
+        self.assertEqual("D001", updated.driver_id)
+        self.assertEqual("trip1", updated.trip_no)
+        self.assertEqual("Before", updated.notes)
+        self.assertIsNotNone(assignment)
+        self.assertEqual("D001", assignment.driver_id)
 
     def _save_final_summary_lock(self, driver_id, delivery_date):
         account = self.service.register_operator_account(
