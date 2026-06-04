@@ -165,7 +165,7 @@ class ManualDispatchOpShopAssignmentTest(unittest.TestCase):
                 )
             )
 
-    def test_final_trip_summary_allows_opshop_only_driver_as_empty_order_summary(self):
+    def test_final_trip_summary_preserves_live_opshop_assignment_after_save(self):
         self.repository.upsert_opshop_pickup_task(self._task("TASK-001"))
         self.service.assign_task(
             AssignTaskRequest(
@@ -206,17 +206,26 @@ class ManualDispatchOpShopAssignmentTest(unittest.TestCase):
         self.assertEqual(["TASK-001"], [pickup.pickup_task_id_snapshot for pickup in summary.opshop_pickups])
         self.assertEqual(0, summary.total_pallets)
         self.assertEqual(0, summary.total_loose_bags)
-        self.assertIsNone(
-            self.repository.get_assignment(
-                "2026-05-18",
-                "OPSHOP_PICKUP",
-                "TASK-001",
-            )
+        assignment = self.repository.get_assignment(
+            "2026-05-18",
+            "OPSHOP_PICKUP",
+            "TASK-001",
         )
+        self.assertIsNotNone(assignment)
+        self.assertEqual("D001", assignment.driver_id)
+        self.assertEqual("trip1", assignment.trip_no)
         task = self.repository.get_opshop_pickup_task("TASK-001")
-        self.assertEqual("ACTIVE", task.status)
-        self.assertIsNone(task.driver_id)
-        self.assertIsNone(task.trip_no)
+        self.assertEqual("ASSIGNED", task.status)
+        self.assertEqual("D001", task.driver_id)
+        self.assertEqual("trip1", task.trip_no)
+
+        board = self.service.get_board("2026-05-18")
+        scheduled = {pickup.pickup_task_id: pickup for pickup in board.scheduled_opshop_pickups}
+        self.assertEqual([], board.assigned_opshop_pickups)
+        self.assertNotIn("TASK-001", [item.task_id for item in board.assignments])
+        self.assertEqual("D001", scheduled["TASK-001"].assigned_driver_id)
+        self.assertEqual("John", scheduled["TASK-001"].assigned_driver_name)
+        self.assertTrue(scheduled["TASK-001"].assigned_to_locked)
 
     def test_saved_final_summary_blocks_direct_opshop_assignment_for_driver_pickup_date(self):
         self.repository.upsert_opshop_pickup_task(self._task("TASK-LOCKED"))
@@ -389,6 +398,64 @@ class SQLiteManualDispatchOpShopAssignmentTest(unittest.TestCase):
         self.assertEqual([], unassigned_board.opshop_pickups)
         self.assertIn("TASK-001", [item.pickup_task_id for item in unassigned_board.scheduled_opshop_pickups])
 
+    def test_sqlite_final_summary_save_preserves_live_opshop_assignment(self):
+        self.service.assign_task(
+            AssignTaskRequest(
+                dispatch_date="2026-05-18",
+                task_type="OPSHOP_PICKUP",
+                task_id="TASK-001",
+                driver_id="D001",
+                trip_no="trip1",
+            )
+        )
+        account = self.service.register_operator_account(
+            RegisterOperatorAccountRequest(
+                account_name="Mandy",
+                password="secret123",
+                confirm_password="secret123",
+            )
+        )
+        self.service.save_final_trip_summary(
+            SaveFinalTripSummaryRequest(
+                dispatch_date="2026-05-18",
+                delivery_date="2026-05-20",
+                driver_id="D001",
+                driver_name_snapshot="John",
+                vehicle_id=None,
+                vehicle_rego_snapshot="No vehicle selected",
+                total_pallets=0,
+                total_loose_bags=0,
+                generated_at="2026-05-18T00:00:00+00:00",
+                saved_by_account_name=account.account_name,
+                saved_by_account_id=account.account_id,
+                trips=[],
+                opshop_pickups=[self._opshop_summary_payload("TASK-001")],
+            )
+        )
+
+        task = self.repository.get_opshop_pickup_task("TASK-001")
+        assignment = self.repository.get_assignment("2026-05-18", "OPSHOP_PICKUP", "TASK-001")
+        summaries = self.repository.list_final_trip_summaries("2026-05-18")
+        board = self.service.get_board("2026-05-18")
+        scheduled = {pickup.pickup_task_id: pickup for pickup in board.scheduled_opshop_pickups}
+
+        self.assertEqual("ASSIGNED", task.status)
+        self.assertEqual("D001", task.driver_id)
+        self.assertEqual("trip1", task.trip_no)
+        self.assertIsNotNone(assignment)
+        self.assertEqual("D001", assignment.driver_id)
+        self.assertEqual("trip1", assignment.trip_no)
+        self.assertEqual(["TASK-001"], [
+            pickup.pickup_task_id_snapshot
+            for summary in summaries
+            for pickup in summary.opshop_pickups
+        ])
+        self.assertEqual([], board.assigned_opshop_pickups)
+        self.assertNotIn("TASK-001", [item.task_id for item in board.assignments])
+        self.assertEqual("D001", scheduled["TASK-001"].assigned_driver_id)
+        self.assertEqual("John", scheduled["TASK-001"].assigned_driver_name)
+        self.assertTrue(scheduled["TASK-001"].assigned_to_locked)
+
     def _location(self):
         return OpShopLocation(
             opshop_id="OPSHOP-001",
@@ -425,6 +492,26 @@ class SQLiteManualDispatchOpShopAssignmentTest(unittest.TestCase):
             created_at="2026-05-19T00:00:00+00:00",
             updated_at="2026-05-19T00:00:00+00:00",
         )
+
+    def _opshop_summary_payload(self, task_id):
+        return {
+            "task_type": "OPSHOP_PICKUP",
+            "pickup_task_id": task_id,
+            "opshop_name": "Northside Op Shop",
+            "suburb": "Coburg",
+            "street_address": "1 Sydney Road",
+            "pickup_date": "2026-05-20",
+            "run_type": "REGULAR",
+            "pickup_frequency": "Weekly",
+            "time_window": "9-12",
+            "primary_contact": "Mary",
+            "primary_phone": "0400 000 001",
+            "access_type": "Rear dock",
+            "key_required": True,
+            "trailer_restriction": "Small truck only",
+            "task_notes": "SQLite fixture",
+            "status": "ASSIGNED",
+        }
 
 
 if __name__ == "__main__":

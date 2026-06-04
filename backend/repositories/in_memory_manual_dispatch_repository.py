@@ -1180,21 +1180,6 @@ class InMemoryManualDispatchRepository:
                     order.status = "FINALIZED"
                 self.remove_assignment(summary["dispatch_date"], row["task_type"], row["task_id"])
 
-        for row in opshop_rows:
-            self.remove_assignment(
-                summary["dispatch_date"],
-                "OPSHOP_PICKUP",
-                row["pickup_task_id_snapshot"],
-            )
-            task = self.get_opshop_pickup_task(row["pickup_task_id_snapshot"])
-            if task and task.status == "ASSIGNED":
-                self.update_opshop_pickup_task_assignment_status(
-                    task.pickup_task_id,
-                    "ACTIVE",
-                    None,
-                    None,
-                )
-
         return final_summary
 
     def _create_assignment_id(self):

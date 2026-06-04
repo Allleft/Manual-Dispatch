@@ -362,6 +362,13 @@ class ManualDispatchFinalSummaryTest(unittest.TestCase):
 
     def test_save_and_load_opshop_only_summary_uses_separate_snapshot_rows(self):
         self._seed_opshop_pickup("TASK-OPSHOP-001")
+        self.repository.upsert_assignment(
+            self.dispatch_date,
+            "OPSHOP_PICKUP",
+            "TASK-OPSHOP-001",
+            "D001",
+            "trip1",
+        )
 
         saved = self.service.save_final_trip_summary(
             self._summary_request(
@@ -389,9 +396,17 @@ class ManualDispatchFinalSummaryTest(unittest.TestCase):
         self.assertEqual(0, order_rows)
         self.assertEqual(1, opshop_rows)
         task = self.repository.get_opshop_pickup_task("TASK-OPSHOP-001")
-        self.assertEqual("ACTIVE", task.status)
-        self.assertIsNone(task.driver_id)
-        self.assertIsNone(task.trip_no)
+        assignment = self.repository.get_assignment(
+            self.dispatch_date,
+            "OPSHOP_PICKUP",
+            "TASK-OPSHOP-001",
+        )
+        self.assertEqual("ASSIGNED", task.status)
+        self.assertEqual("D001", task.driver_id)
+        self.assertEqual("trip1", task.trip_no)
+        self.assertIsNotNone(assignment)
+        self.assertEqual("D001", assignment.driver_id)
+        self.assertEqual("trip1", assignment.trip_no)
 
     def test_save_and_load_countryside_opshop_summary_snapshots_category_and_route_group(self):
         self._seed_opshop_pickup(

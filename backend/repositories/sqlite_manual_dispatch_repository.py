@@ -1989,29 +1989,6 @@ class SQLiteManualDispatchRepository:
                         row["status_snapshot"],
                     ),
                 )
-                connection.execute(
-                    """
-                    DELETE FROM manual_dispatch_assignments
-                    WHERE dispatch_date = ?
-                        AND task_type = 'OPSHOP_PICKUP'
-                        AND task_id = ?
-                    """,
-                    (
-                        summary["dispatch_date"],
-                        row["pickup_task_id_snapshot"],
-                    ),
-                )
-                connection.execute(
-                    """
-                    UPDATE opshop_pickup_tasks
-                    SET status = 'ACTIVE',
-                        driver_id = NULL,
-                        trip_no = NULL,
-                        updated_at = ?
-                    WHERE pickup_task_id = ? AND status = 'ASSIGNED'
-                    """,
-                    (timestamp, row["pickup_task_id_snapshot"]),
-                )
 
             connection.commit()
 
