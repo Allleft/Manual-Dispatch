@@ -1251,7 +1251,13 @@ function createAssignedToSelect(pickup, onUpdateAssignedDriver) {
     pickup.driver_id ||
     pickup.default_driver_id ||
     "";
-  select.disabled = Boolean(pickup.assigned_to_locked) || state.isCountrysideOpShopPickupSaving;
+  const finalizedDriverId = pickup.assigned_driver_id || pickup.driver_id || "";
+  const isFinalSummaryLocked = Boolean(
+    finalizedDriverId && isDriverFinalizedForPickup(finalizedDriverId, pickup.pickup_date),
+  );
+  const isLocked = Boolean(pickup.assigned_to_locked) || isFinalSummaryLocked;
+  select.disabled = isLocked || state.isCountrysideOpShopPickupSaving;
+  select.classList.toggle("opshop-assigned-to-select-locked", isFinalSummaryLocked);
   select.append(createOption("", "Unassigned", !selectedDriverId));
   state.drivers.forEach((driver) => {
     const hasSavedFinalSummary = isDriverFinalizedForPickup(driver.driver_id, pickup.pickup_date);
@@ -1272,10 +1278,14 @@ function createAssignedToSelect(pickup, onUpdateAssignedDriver) {
   select.addEventListener("keydown", (event) => event.stopPropagation());
 
   wrapper.append(select);
-  if (pickup.assigned_to_locked) {
+  if (isLocked) {
     const lock = document.createElement("span");
-    lock.className = "opshop-assigned-to-lock";
-    lock.textContent = "Past pickup date";
+    lock.className = isFinalSummaryLocked
+      ? "opshop-assigned-to-lock opshop-assigned-to-lock-finalized"
+      : "opshop-assigned-to-lock";
+    lock.textContent = isFinalSummaryLocked
+      ? "Locked - Final Trip Summary saved"
+      : "Locked - Past pickup date";
     wrapper.append(lock);
   }
   return wrapper;

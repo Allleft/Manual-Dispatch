@@ -274,6 +274,35 @@ class InMemoryManualDispatchRepository:
             reverse=True,
         )
 
+    def list_finalized_opshop_pickup_assignments(self, dispatch_date):
+        finalized = {}
+        summaries = sorted(
+            [
+                summary
+                for summary in self.final_trip_summaries
+                if summary.dispatch_date == dispatch_date and summary.status == "SAVED"
+            ],
+            key=lambda summary: (summary.saved_at or "", summary.summary_id),
+            reverse=True,
+        )
+        for summary in summaries:
+            driver = self.get_driver(summary.driver_id)
+            driver_name = driver.name if driver else summary.driver_name_snapshot
+            for pickup in summary.opshop_pickups or []:
+                pickup_task_id = pickup.pickup_task_id_snapshot
+                if not pickup_task_id or pickup_task_id in finalized:
+                    continue
+                finalized[pickup_task_id] = {
+                    "pickup_task_id": pickup_task_id,
+                    "dispatch_date": summary.dispatch_date,
+                    "delivery_date": summary.delivery_date,
+                    "driver_id": summary.driver_id,
+                    "driver_name": driver_name,
+                    "summary_id": summary.summary_id,
+                    "saved_at": summary.saved_at,
+                }
+        return finalized
+
     def has_saved_final_trip_summary(self, dispatch_date, driver_id, delivery_date=None):
         return any(
             summary.dispatch_date == dispatch_date

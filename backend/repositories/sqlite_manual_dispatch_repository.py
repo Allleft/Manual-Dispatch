@@ -256,6 +256,48 @@ class SQLiteManualDispatchRepository:
             ).fetchall()
         return [row["dispatch_date"] for row in rows]
 
+    def list_finalized_opshop_pickup_assignments(self, dispatch_date):
+        with connect(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    opshop_row.pickup_task_id_snapshot AS pickup_task_id,
+                    summary.dispatch_date,
+                    summary.delivery_date,
+                    summary.driver_id,
+                    COALESCE(driver.name, summary.driver_name_snapshot) AS driver_name,
+                    summary.summary_id,
+                    summary.saved_at
+                FROM final_trip_summary_opshop_pickup_rows opshop_row
+                JOIN final_trip_summaries summary
+                    ON summary.summary_id = opshop_row.summary_id
+                LEFT JOIN manual_drivers driver
+                    ON driver.driver_id = summary.driver_id
+                WHERE summary.dispatch_date = ?
+                    AND summary.status = 'SAVED'
+                    AND opshop_row.pickup_task_id_snapshot IS NOT NULL
+                    AND opshop_row.pickup_task_id_snapshot != ''
+                ORDER BY summary.saved_at DESC, summary.summary_id DESC, opshop_row.row_no DESC
+                """,
+                (dispatch_date,),
+            ).fetchall()
+
+        finalized = {}
+        for row in rows:
+            pickup_task_id = row["pickup_task_id"]
+            if pickup_task_id in finalized:
+                continue
+            finalized[pickup_task_id] = {
+                "pickup_task_id": pickup_task_id,
+                "dispatch_date": row["dispatch_date"],
+                "delivery_date": row["delivery_date"],
+                "driver_id": row["driver_id"],
+                "driver_name": row["driver_name"],
+                "summary_id": row["summary_id"],
+                "saved_at": row["saved_at"],
+            }
+        return finalized
+
     def has_saved_final_trip_summary(self, dispatch_date, driver_id, delivery_date=None):
         with connect(self.db_path) as connection:
             if delivery_date:

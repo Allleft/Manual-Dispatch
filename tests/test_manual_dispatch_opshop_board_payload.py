@@ -12,6 +12,7 @@ from backend.repositories.sqlite_manual_dispatch_repository import (
     SQLiteManualDispatchRepository,
 )
 from backend.schemas import (
+    OpShopCountrysideRouteGroup,
     OpShopLocation,
     OpShopPickupSchedule,
     OpShopPickupTask,
@@ -329,6 +330,72 @@ class OpShopBoardPayloadTest(unittest.TestCase):
         self.assertEqual("D001", item.default_driver_id)
         self.assertEqual("John Georgiadis", item.default_driver_name)
 
+    def test_saved_final_summary_opshop_pickups_hydrate_locked_assignments(self):
+        self.repository.upsert_opshop_pickup_schedule(
+            self._schedule("SCHED-REGULAR", run_day="THURSDAY", run_type="REGULAR")
+        )
+        self.repository.upsert_opshop_pickup_schedule(
+            self._schedule("SCHED-REGULAR-UNSAVED", run_day="THURSDAY", run_type="REGULAR")
+        )
+        self.repository.upsert_opshop_pickup_schedule(
+            self._schedule("SCHED-ONCALL", run_day=None, run_type="ON_CALL")
+        )
+        self.repository.upsert_countryside_route_group(
+            OpShopCountrysideRouteGroup(
+                route_group_id="ROUTE-001",
+                route_group_name="Country Route",
+                status="Active",
+                active_flag=True,
+                display_order=1,
+                source_marker="TEST",
+                created_at="2026-06-04T00:00:00+00:00",
+                updated_at="2026-06-04T00:00:00+00:00",
+            )
+        )
+        self.repository.upsert_opshop_pickup_schedule(
+            self._schedule(
+                "SCHED-COUNTRY",
+                run_day=None,
+                run_type="ON_CALL",
+                pickup_category="COUNTRYSIDE",
+                route_group_id="ROUTE-001",
+            )
+        )
+        self.repository.upsert_opshop_pickup_task(
+            self._task("TASK-REG", "SCHED-REGULAR", pickup_date="2026-06-04", status="ACTIVE", generated_from="REGULAR")
+        )
+        self.repository.upsert_opshop_pickup_task(
+            self._task("TASK-UNSAVED", "SCHED-REGULAR-UNSAVED", pickup_date="2026-06-04", status="ACTIVE", generated_from="REGULAR")
+        )
+        self.repository.upsert_opshop_pickup_task(
+            self._task("TASK-ONCALL", "SCHED-ONCALL", pickup_date="2026-06-04", status="ACTIVE", generated_from="ON_CALL")
+        )
+        self.repository.upsert_opshop_pickup_task(
+            self._task("TASK-COUNTRY", "SCHED-COUNTRY", pickup_date="2026-06-04", status="ACTIVE", generated_from="ON_CALL")
+        )
+        self._save_opshop_summary("D001", "TASK-REG", saved_at="2026-06-04T10:00:00+00:00")
+        self._save_opshop_summary("D002", "TASK-ONCALL", saved_at="2026-06-04T11:00:00+00:00")
+        self._save_opshop_summary("D003", "TASK-COUNTRY", saved_at="2026-06-04T12:00:00+00:00")
+
+        board = self.service.get_board("2026-06-04")
+
+        regular = {item.pickup_task_id: item for item in board.scheduled_opshop_pickups}
+        oncall = {item.pickup_task_id: item for item in board.oncall_opshop_pickups}
+        countryside = {item.pickup_task_id: item for item in board.countryside_opshop_pickups}
+        self.assertEqual("D001", regular["TASK-REG"].assigned_driver_id)
+        self.assertEqual("John", regular["TASK-REG"].assigned_driver_name)
+        self.assertEqual("D001", regular["TASK-REG"].driver_id)
+        self.assertTrue(regular["TASK-REG"].assigned_to_locked)
+        self.assertTrue(regular["TASK-REG"].is_assigned)
+        self.assertEqual("D002", oncall["TASK-ONCALL"].assigned_driver_id)
+        self.assertEqual("Tony", oncall["TASK-ONCALL"].assigned_driver_name)
+        self.assertTrue(oncall["TASK-ONCALL"].assigned_to_locked)
+        self.assertEqual("D003", countryside["TASK-COUNTRY"].assigned_driver_id)
+        self.assertEqual("David", countryside["TASK-COUNTRY"].assigned_driver_name)
+        self.assertTrue(countryside["TASK-COUNTRY"].assigned_to_locked)
+        self.assertIsNone(regular["TASK-UNSAVED"].assigned_driver_id)
+        self.assertFalse(regular["TASK-UNSAVED"].assigned_to_locked)
+
     def test_board_does_not_generate_on_call_or_review_required_schedules(self):
         self.repository.upsert_opshop_pickup_schedule(
             self._schedule("SCHED-ON-CALL", run_type="ON_CALL", pickup_frequency="Weekly")
@@ -466,6 +533,8 @@ class OpShopBoardPayloadTest(unittest.TestCase):
         default_driver_id=None,
         default_driver_alias=None,
         default_driver_name_snapshot=None,
+        pickup_category="NORMAL",
+        route_group_id=None,
     ):
         return OpShopPickupSchedule(
             schedule_id=schedule_id,
@@ -486,6 +555,8 @@ class OpShopBoardPayloadTest(unittest.TestCase):
             default_driver_id=default_driver_id,
             default_driver_alias=default_driver_alias,
             default_driver_name_snapshot=default_driver_name_snapshot,
+            pickup_category=pickup_category,
+            route_group_id=route_group_id,
         )
 
     def _task(
@@ -510,6 +581,40 @@ class OpShopBoardPayloadTest(unittest.TestCase):
             notes="Manual fixture",
             created_at="2026-05-19T00:00:00+00:00",
             updated_at="2026-05-19T00:00:00+00:00",
+        )
+
+    def _save_opshop_summary(self, driver_id, pickup_task_id, saved_at):
+        self.repository.save_final_trip_summary(
+            {
+                "dispatch_date": "2026-06-04",
+                "delivery_date": "2026-06-04",
+                "driver_id": driver_id,
+                "driver_name_snapshot": self.repository.get_driver(driver_id).name,
+                "vehicle_id": None,
+                "vehicle_rego_snapshot": "No vehicle selected",
+                "total_pallets": 0,
+                "total_loose_bags": 0,
+                "generated_at": saved_at,
+                "saved_at": saved_at,
+                "saved_by_account_name": "Tester",
+                "saved_by_account_id": "TESTER",
+            },
+            [],
+            [
+                {
+                    "row_no": 1,
+                    "pickup_task_id_snapshot": pickup_task_id,
+                    "opshop_name_snapshot": "Northside Op Shop",
+                    "suburb_snapshot": "Coburg",
+                    "street_address_snapshot": "1 Sydney Road",
+                    "area_region_snapshot": "North",
+                    "pickup_date_snapshot": "2026-06-04",
+                    "run_type_snapshot": "ON_CALL",
+                    "pickup_frequency_snapshot": "On call",
+                    "time_window_snapshot": "9-12",
+                    "status_snapshot": "ASSIGNED",
+                }
+            ],
         )
 
 

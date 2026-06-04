@@ -66,6 +66,13 @@ class BoardService:
             for summary in self.repository.list_final_trip_summaries(dispatch_date)
             if summary.status == "SAVED"
         ]
+        finalized_opshop_assignments = (
+            self.repository.list_finalized_opshop_pickup_assignments(dispatch_date)
+        )
+        self._apply_finalized_opshop_pickup_assignments(
+            [scheduled_pickups, oncall_pickups, countryside_pickups],
+            finalized_opshop_assignments,
+        )
 
         return ManualDispatchBoardResponse(
             dispatch_date=dispatch_date,
@@ -111,3 +118,19 @@ class BoardService:
                 delivery_date,
             )
         )
+
+    def _apply_finalized_opshop_pickup_assignments(self, pickup_lists, finalized_assignments):
+        for pickups in pickup_lists:
+            for pickup in pickups:
+                finalized = finalized_assignments.get(pickup.pickup_task_id)
+                if not finalized or finalized.get("delivery_date") != pickup.pickup_date:
+                    continue
+                driver_id = finalized.get("driver_id")
+                if not driver_id:
+                    continue
+                pickup.assigned_driver_id = driver_id
+                pickup.assigned_driver_name = finalized.get("driver_name") or pickup.assigned_driver_name
+                if not pickup.driver_id:
+                    pickup.driver_id = driver_id
+                pickup.is_assigned = True
+                pickup.assigned_to_locked = True
