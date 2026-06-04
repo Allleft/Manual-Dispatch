@@ -359,17 +359,11 @@ export function createFinalSummaryActions({
     clearError();
     renderBoard();
 
-    const generatedTasks = [
-      ...snapshot.trips.flatMap((trip) => trip.orders),
-      ...snapshot.opshop_pickups.map((pickup) => ({
-        task_type: "OPSHOP_PICKUP",
-        task_id: pickup.pickup_task_id,
-      })),
-    ];
+    const generatedOrderTasks = snapshot.trips.flatMap((trip) => trip.orders);
 
     try {
       await Promise.all(
-        generatedTasks.map((order) =>
+        generatedOrderTasks.map((order) =>
           apiUnassignTask({
             dispatch_date: state.dispatchDate,
             task_type: order.task_type,

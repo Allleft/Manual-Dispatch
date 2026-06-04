@@ -286,8 +286,15 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("pickup_category_snapshot: pickup.pickup_category", final_summary_actions)
         self.assertIn("route_group_name_snapshot: pickup.route_group_name", final_summary_actions)
         self.assertIn('state.generatedTaskKeys.add(getTaskKey("OPSHOP_PICKUP", pickup.pickup_task_id))', final_summary_actions)
-        self.assertIn('task_type: "OPSHOP_PICKUP"', final_summary_actions)
-        self.assertIn("task_id: pickup.pickup_task_id", final_summary_actions)
+        self.assertIn("const generatedOrderTasks = snapshot.trips.flatMap((trip) => trip.orders)", final_summary_actions)
+        self.assertIn("generatedOrderTasks.map((order) =>", final_summary_actions)
+        self.assertNotIn("const generatedTasks = [", final_summary_actions)
+        generate_summary_section = final_summary_actions.split(
+            "async function handleGenerateDriverSummary",
+            1,
+        )[1].split("function getFinalSummarySavePayload", 1)[0]
+        self.assertNotIn("snapshot.opshop_pickups.map((pickup) => ({", generate_summary_section)
+        self.assertNotIn("task_id: pickup.pickup_task_id", generate_summary_section)
         self.assertIn('import { downloadExcelResponse } from "../utils/download-utils.js"', final_summary_actions)
         self.assertIn("getExportFilename", download_utils)
         self.assertIn('!isGeneratedTask("OPSHOP_PICKUP", pickup.pickup_task_id)', selectors)
