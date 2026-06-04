@@ -2,13 +2,10 @@ import {
   apiApplyWeeklyOpShopPickupAssignments,
   apiCreateOpShopPickup,
   apiDeleteOpShopPickup,
-  apiExportOpShopPickupRunSheetExcel,
   apiListOpShopPickupSchedules,
   apiUpdateOpShopPickup,
-  formatApiErrorDetail,
 } from "../api/manual-dispatch-api.js";
 import { isGeneratedTask } from "../state/selectors.js";
-import { downloadExcelResponse } from "../utils/download-utils.js";
 import {
   initializeCollapsedPickupDateGroups,
   toggleCollapsedPickupDateGroup,
@@ -21,7 +18,6 @@ import {
 export function createOpShopPickupActions({
   loadBoard,
   renderBoard,
-  showError,
   state,
 }) {
   async function openOpShopPickupList() {
@@ -235,37 +231,6 @@ export function createOpShopPickupActions({
     restoreElementScroll(scrollSnapshot);
   }
 
-  async function exportOpShopRunSheet() {
-    if (state.isOpShopRunSheetExporting) {
-      return;
-    }
-    state.isOpShopRunSheetExporting = true;
-    renderBoard();
-
-    try {
-      const response = await apiExportOpShopPickupRunSheetExcel(state.dispatchDate);
-      if (!response.ok) {
-        let message = `Export failed with status ${response.status}`;
-        try {
-          const payload = await response.json();
-          message = formatApiErrorDetail(payload.detail) || message;
-        } catch (error) {
-          message = response.statusText || message;
-        }
-        throw new Error(message);
-      }
-      await downloadExcelResponse(
-        response,
-        `opshop-pickup-run-sheet-${state.dispatchDate}.xlsx`,
-      );
-    } catch (error) {
-      showError(`Unable to export OP SHOP Run Sheet. ${error.message}`);
-    } finally {
-      state.isOpShopRunSheetExporting = false;
-      renderBoard();
-    }
-  }
-
   function initializeAssignedDriverSelections() {
     const selections = {};
     state.scheduledOpShopPickups.forEach((pickup) => {
@@ -288,7 +253,6 @@ export function createOpShopPickupActions({
     cancelPickupTaskForm,
     closeOpShopPickupList,
     closeOpShopPickupListWithoutApply,
-    exportOpShopRunSheet,
     handleCreatePickupTask,
     handleDeletePickupTask,
     handleUpdatePickupTask,

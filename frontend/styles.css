@@ -370,10 +370,6 @@ h1 {
   max-width: none;
 }
 
-.opshop-run-sheet-export-button {
-  justify-self: start;
-}
-
 .opshop-section-actions {
   display: flex;
   flex-wrap: wrap;

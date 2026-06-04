@@ -58,7 +58,6 @@ export const state = {
   isCountrysideOpShopPickupSaving: false,
   isOpShopTemplateLoading: false,
   isOpShopTemplateSaving: false,
-  isOpShopRunSheetExporting: false,
   opshopPickupListError: "",
   oncallOpShopPickupListError: "",
   countrysideOpShopPickupListError: "",

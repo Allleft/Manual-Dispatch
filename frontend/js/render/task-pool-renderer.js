@@ -66,7 +66,6 @@ export function renderTaskPoolFilters({
 
 export function renderTaskPool({
   getPendingSelection,
-  onExportOpShopRunSheet,
   onOpenCountrysideOpShopPickupList,
   onOpenOncallOpShopPickupList,
   onOpenOpShopPickupList,
@@ -99,7 +98,6 @@ export function renderTaskPool({
 
   taskPoolList.append(
     createOpShopPickupSection({
-      onExportOpShopRunSheet,
       onOpenCountrysideOpShopPickupList,
       onOpenOncallOpShopPickupList,
       onOpenOpShopPickupList,
@@ -138,7 +136,6 @@ function createTaskPoolSection({ className, titleText }) {
 }
 
 function createOpShopPickupSection({
-  onExportOpShopRunSheet,
   oncallPickups,
   countrysidePickups,
   onOpenCountrysideOpShopPickupList,
@@ -164,15 +161,6 @@ function createOpShopPickupSection({
     ),
   );
 
-  const exportButton = document.createElement("button");
-  exportButton.type = "button";
-  exportButton.className = "button-secondary opshop-run-sheet-export-button";
-  exportButton.disabled = state.isLoading || state.isSaving || state.isOpShopRunSheetExporting;
-  exportButton.textContent = state.isOpShopRunSheetExporting
-    ? "Exporting OP SHOP Run Sheet..."
-    : "Export OP SHOP Run Sheet";
-  exportButton.addEventListener("click", onExportOpShopRunSheet);
-
   const manageButton = document.createElement("button");
   manageButton.type = "button";
   manageButton.className = "button-secondary";
@@ -182,7 +170,7 @@ function createOpShopPickupSection({
 
   const actions = document.createElement("div");
   actions.className = "opshop-section-actions";
-  actions.append(manageButton, exportButton);
+  actions.append(manageButton);
 
   section.append(actions, list);
   return section;
@@ -201,6 +189,7 @@ function createDeliveryOrderSection({
     titleText: "DELIVERY ORDERS",
   });
 
+  const filterBar = createDeliveryOrderFilterBar();
   const list = document.createElement("div");
   list.className = "task-pool-section-grid";
 
@@ -209,7 +198,7 @@ function createDeliveryOrderSection({
     emptyState.className = "empty-board";
     emptyState.textContent = "No unassigned Delivery Orders.";
     list.append(emptyState);
-    section.append(list);
+    section.append(filterBar, list);
     return section;
   }
 
@@ -218,7 +207,7 @@ function createDeliveryOrderSection({
     emptyState.className = "empty-board";
     emptyState.textContent = "No matching unassigned orders.";
     list.append(emptyState);
-    section.append(list);
+    section.append(filterBar, list);
     return section;
   }
 
@@ -231,8 +220,63 @@ function createDeliveryOrderSection({
     }));
   });
 
-  section.append(list);
+  section.append(filterBar, list);
   return section;
+}
+
+function createDeliveryOrderFilterBar() {
+  const filterBar = document.createElement("div");
+  filterBar.className = "task-filter-bar";
+  filterBar.setAttribute("aria-label", "Delivery Order search and filters");
+
+  const searchLabel = document.createElement("label");
+  searchLabel.setAttribute("for", "order-search");
+  searchLabel.textContent = "Search Orders";
+  const searchInput = document.createElement("input");
+  searchInput.id = "order-search";
+  searchInput.type = "search";
+  searchInput.placeholder = "Invoice, company, suburb, postcode, note";
+  searchLabel.append(searchInput);
+
+  const urgencyLabel = document.createElement("label");
+  urgencyLabel.setAttribute("for", "urgency-filter");
+  urgencyLabel.textContent = "Urgency";
+  const urgencySelect = document.createElement("select");
+  urgencySelect.id = "urgency-filter";
+  urgencySelect.append(
+    createOption("All", "All"),
+    createOption("Normal", "Normal"),
+    createOption("Urgent", "Urgent"),
+  );
+  urgencyLabel.append(urgencySelect);
+
+  const deliveryDateLabel = document.createElement("label");
+  deliveryDateLabel.setAttribute("for", "task-pool-delivery-date-filter");
+  deliveryDateLabel.textContent = "Delivery Date";
+  const deliveryDateInput = document.createElement("input");
+  deliveryDateInput.id = "task-pool-delivery-date-filter";
+  deliveryDateInput.type = "date";
+  deliveryDateLabel.append(deliveryDateInput);
+
+  const clearDeliveryDateButton = document.createElement("button");
+  clearDeliveryDateButton.id = "clear-task-pool-delivery-date-filter";
+  clearDeliveryDateButton.className = "button-secondary";
+  clearDeliveryDateButton.type = "button";
+  clearDeliveryDateButton.textContent = "All delivery dates";
+
+  const summary = document.createElement("p");
+  summary.id = "task-filter-summary";
+  summary.className = "filter-summary";
+  summary.setAttribute("aria-live", "polite");
+
+  filterBar.append(
+    searchLabel,
+    urgencyLabel,
+    deliveryDateLabel,
+    clearDeliveryDateButton,
+    summary,
+  );
+  return filterBar;
 }
 
 function createOpShopPickupListSummaryCard(pickups, onOpenOpShopPickupList) {
@@ -262,7 +306,6 @@ function createOpShopPickupListSummaryCard(pickups, onOpenOpShopPickupList) {
   meta.append(
     createBadge(`Count: ${pickups.length}`, "good"),
     createBadge(`Window: ${getWindowLabel()}`),
-    createBadge("ACTIVE / ASSIGNED"),
   );
 
   const openButton = document.createElement("button");
@@ -302,7 +345,6 @@ function createOncallOpShopPickupListSummaryCard(pickups, onOpenOncallOpShopPick
   meta.append(
     createBadge(`Count: ${pickups.length}`, "good"),
     createBadge("Created tasks only"),
-    createBadge("ACTIVE / ASSIGNED"),
   );
 
   const openButton = document.createElement("button");
@@ -345,7 +387,6 @@ function createCountrysideOpShopPickupListSummaryCard(
   meta.append(
     createBadge(`Count: ${pickups.length}`, "good"),
     createBadge("Route-group tasks"),
-    createBadge("ON_CALL / COUNTRYSIDE"),
   );
 
   const openButton = document.createElement("button");

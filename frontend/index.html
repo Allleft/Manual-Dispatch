@@ -37,26 +37,6 @@
             <button id="add-order-button" type="button">Add Order</button>
           </div>
         </div>
-        <div class="task-filter-bar" aria-label="Task Pool search and filters">
-          <label for="order-search">
-            Search Orders
-            <input id="order-search" type="search" placeholder="Invoice, company, suburb, postcode, note">
-          </label>
-          <label for="urgency-filter">
-            Urgency
-            <select id="urgency-filter">
-              <option value="All">All</option>
-              <option value="Normal">Normal</option>
-              <option value="Urgent">Urgent</option>
-            </select>
-          </label>
-          <label for="task-pool-delivery-date-filter">
-            Delivery Date
-            <input id="task-pool-delivery-date-filter" type="date">
-          </label>
-          <button id="clear-task-pool-delivery-date-filter" class="button-secondary" type="button">All delivery dates</button>
-          <p id="task-filter-summary" class="filter-summary" aria-live="polite"></p>
-        </div>
         <div id="task-pool-list" class="task-grid" aria-live="polite"></div>
       </section>
 

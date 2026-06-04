@@ -23,10 +23,14 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
 
     def test_task_pool_delivery_date_filter_controls_are_present(self):
         index_html = (FRONTEND_ROOT / "index.html").read_text(encoding="utf-8")
+        task_pool_renderer = (
+            FRONTEND_ROOT / "js" / "render" / "task-pool-renderer.js"
+        ).read_text(encoding="utf-8")
 
-        self.assertIn('id="task-pool-delivery-date-filter"', index_html)
-        self.assertIn('id="clear-task-pool-delivery-date-filter"', index_html)
-        self.assertIn("All delivery dates", index_html)
+        self.assertNotIn('id="task-pool-delivery-date-filter"', index_html)
+        self.assertIn('deliveryDateInput.id = "task-pool-delivery-date-filter"', task_pool_renderer)
+        self.assertIn('clearDeliveryDateButton.id = "clear-task-pool-delivery-date-filter"', task_pool_renderer)
+        self.assertIn('clearDeliveryDateButton.textContent = "All delivery dates"', task_pool_renderer)
 
     def test_order_renderers_show_delivery_date_and_edit_form_is_not_read_only(self):
         task_pool_renderer = (
@@ -302,6 +306,7 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
 
     def test_phase8_opshop_pickup_list_frontend_contract(self):
         app_js = (FRONTEND_ROOT / "app.js").read_text(encoding="utf-8")
+        index_html = (FRONTEND_ROOT / "index.html").read_text(encoding="utf-8")
         api_module = (
             FRONTEND_ROOT / "js" / "api" / "manual-dispatch-api.js"
         ).read_text(encoding="utf-8")
@@ -340,9 +345,10 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("apiApplyWeeklyOpShopPickupAssignments", actions)
         self.assertIn('!isGeneratedTask("OPSHOP_PICKUP", pickup.pickup_task_id)', actions)
         self.assertIn("state.isOpShopPickupSaving || state.isOpShopPickupListLoading", actions)
-        self.assertIn("apiExportOpShopPickupRunSheetExcel", actions)
-        self.assertIn("exportOpShopRunSheet", actions)
-        self.assertIn('import { downloadExcelResponse } from "../utils/download-utils.js"', actions)
+        self.assertNotIn("apiExportOpShopPickupRunSheetExcel", actions)
+        self.assertNotIn("exportOpShopRunSheet", actions)
+        self.assertNotIn('import { downloadExcelResponse } from "../utils/download-utils.js"', actions)
+        self.assertNotIn("isOpShopRunSheetExporting", app_state)
         self.assertIn("URL.createObjectURL(blob)", download_utils)
         self.assertIn("URL.revokeObjectURL(downloadUrl)", download_utils)
         self.assertIn("updateAssignedDriverSelection", actions)
@@ -366,12 +372,26 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("Count:", task_pool_renderer)
         self.assertIn("Window:", task_pool_renderer)
         self.assertIn("Open List", task_pool_renderer)
-        self.assertIn("Export OP SHOP Run Sheet", task_pool_renderer)
-        self.assertIn("onExportOpShopRunSheet", task_pool_renderer)
+        self.assertNotIn("Export OP SHOP Run Sheet", task_pool_renderer)
+        self.assertNotIn("Exporting OP SHOP Run Sheet", task_pool_renderer)
+        self.assertNotIn("onExportOpShopRunSheet", task_pool_renderer)
+        self.assertNotIn("ACTIVE / ASSIGNED", task_pool_renderer)
+        self.assertNotIn("ON_CALL / COUNTRYSIDE", task_pool_renderer)
+        self.assertIn("function createDeliveryOrderFilterBar", task_pool_renderer)
+        self.assertIn('filterBar.className = "task-filter-bar"', task_pool_renderer)
+        self.assertIn('searchInput.id = "order-search"', task_pool_renderer)
+        self.assertIn('urgencySelect.id = "urgency-filter"', task_pool_renderer)
+        self.assertIn('deliveryDateInput.id = "task-pool-delivery-date-filter"', task_pool_renderer)
+        self.assertIn('clearDeliveryDateButton.id = "clear-task-pool-delivery-date-filter"', task_pool_renderer)
+        self.assertIn('summary.id = "task-filter-summary"', task_pool_renderer)
+        delivery_section = task_pool_renderer.split("function createDeliveryOrderSection", 1)[1]
+        self.assertIn("const filterBar = createDeliveryOrderFilterBar();", delivery_section)
+        self.assertIn("section.append(filterBar, list);", delivery_section)
+        self.assertNotIn('class="task-filter-bar"', index_html)
         self.assertIn("opshopRegularListWindowStart", task_pool_renderer)
         self.assertIn("renderOpShopPickupListModal", app_js)
         self.assertIn("onOpenOpShopPickupList: opShopPickupActions.openOpShopPickupList", app_js)
-        self.assertIn("onExportOpShopRunSheet: opShopPickupActions.exportOpShopRunSheet", app_js)
+        self.assertNotIn("onExportOpShopRunSheet: opShopPickupActions.exportOpShopRunSheet", app_js)
         self.assertIn("onToggleDateGroup: opShopPickupActions.toggleDateGroup", app_js)
         self.assertIn("onUpdateAssignedDriver: opShopPickupActions.updateAssignedDriverSelection", app_js)
 
@@ -845,7 +865,7 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("Manage OP SHOP Templates", task_pool_renderer)
         self.assertIn("Regular OP SHOP Pickup List", task_pool_renderer)
         self.assertIn("Oncall OP SHOP Pickup List", task_pool_renderer)
-        self.assertIn("Export OP SHOP Run Sheet", task_pool_renderer)
+        self.assertNotIn("Export OP SHOP Run Sheet", task_pool_renderer)
         self.assertIn("/api/manual-dispatch/opshop-templates", api_module)
         self.assertIn("apiCreateOpShopTemplate", api_module)
         self.assertIn("apiUpdateOpShopTemplate", api_module)

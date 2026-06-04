@@ -190,31 +190,56 @@ function renderTaskPoolFilters() {
   renderTaskPoolFiltersView({
     onSearchChange: (value) => {
       state.taskPoolSearch = value;
-      renderTaskPoolFilters();
-      renderTaskPool();
+      rerenderTaskPoolAfterFilterChange();
     },
     onUrgencyChange: (value) => {
       state.urgencyFilter = value;
-      renderTaskPoolFilters();
-      renderTaskPool();
+      rerenderTaskPoolAfterFilterChange();
     },
     onDeliveryDateChange: (value) => {
       state.taskPoolDeliveryDateFilter = value;
-      renderTaskPoolFilters();
-      renderTaskPool();
+      rerenderTaskPoolAfterFilterChange();
     },
     onClearDeliveryDate: () => {
       state.taskPoolDeliveryDateFilter = "";
-      renderTaskPoolFilters();
-      renderTaskPool();
+      rerenderTaskPoolAfterFilterChange();
     },
   });
+}
+
+function rerenderTaskPoolAfterFilterChange() {
+  const activeElement = document.activeElement;
+  const activeId = activeElement?.id || "";
+  const selectionStart = typeof activeElement?.selectionStart === "number"
+    ? activeElement.selectionStart
+    : null;
+  const selectionEnd = typeof activeElement?.selectionEnd === "number"
+    ? activeElement.selectionEnd
+    : null;
+
+  renderTaskPool();
+  renderTaskPoolFilters();
+
+  if (!activeId) {
+    return;
+  }
+  const nextActiveElement = document.getElementById(activeId);
+  if (!nextActiveElement) {
+    return;
+  }
+  nextActiveElement.focus({ preventScroll: true });
+  if (
+    selectionStart !== null &&
+    selectionEnd !== null &&
+    typeof nextActiveElement.setSelectionRange === "function"
+  ) {
+    nextActiveElement.setSelectionRange(selectionStart, selectionEnd);
+  }
 }
 
 function renderTaskPool() {
   renderTaskPoolView({
     getPendingSelection: assignmentActions.getPendingSelection,
-    onExportOpShopRunSheet: opShopPickupActions.exportOpShopRunSheet,
     onOpenCountrysideOpShopPickupList: countrysideOpShopPickupActions.openCountrysideOpShopPickupList,
     onOpenOncallOpShopPickupList: oncallOpShopPickupActions.openOncallOpShopPickupList,
     onOpenOpShopPickupList: opShopPickupActions.openOpShopPickupList,
@@ -829,8 +854,8 @@ function renderOrderDetailPopup() {
 function renderBoard() {
   renderAccountStatus();
   renderBoardControls();
-  renderTaskPoolFilters();
   renderTaskPool();
+  renderTaskPoolFilters();
   renderDriverSummary();
   renderFinalTripSummaries();
   renderOrderDetailPopup();
@@ -873,7 +898,6 @@ const assignmentActions = createAssignmentActions({
 const opShopPickupActions = createOpShopPickupActions({
   loadBoard,
   renderBoard,
-  showError,
   state,
 });
 
