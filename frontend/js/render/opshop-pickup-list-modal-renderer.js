@@ -1,5 +1,8 @@
 import { state } from "../state/app-state.js";
-import { getOpShopPickupByTaskId } from "../state/selectors.js";
+import {
+  getOpShopPickupByTaskId,
+  isGeneratedTask,
+} from "../state/selectors.js";
 import {
   createBadge,
   createOption,
@@ -187,8 +190,12 @@ function createAddForm({ onCancelForm, onCreatePickup, onUpdateForm }) {
 function createEditForm({ onCancelForm, onStartDelete, onUpdateForm, onUpdatePickup }) {
   const pickup = getOpShopPickupByTaskId(state.opshopPickupEditingTaskId);
   const isAssigned = pickup && pickup.status === "ASSIGNED";
+  const lockState = getPickupLockState(
+    pickup,
+    pickup && (pickup.assigned_driver_id || pickup.driver_id || ""),
+  );
   const canDelete = Boolean(
-    pickup && ["ACTIVE", "ASSIGNED"].includes(pickup.status) && !pickup.assigned_to_locked,
+    pickup && ["ACTIVE", "ASSIGNED"].includes(pickup.status) && !lockState.isLocked,
   );
   const form = document.createElement("form");
   form.className = "opshop-list-form";
@@ -200,9 +207,11 @@ function createEditForm({ onCancelForm, onStartDelete, onUpdateForm, onUpdatePic
 
   const note = document.createElement("p");
   note.className = "hint-row";
-  note.textContent = isAssigned
-    ? "Assigned pickups can update notes only. Unassign first to change the pickup date."
-    : "Active pickups can update pickup date and notes.";
+  note.textContent = lockState.isLocked
+    ? lockState.message
+    : isAssigned
+      ? "Assigned pickups can update notes only. Unassign first to change the pickup date."
+      : "Active pickups can update pickup date and notes.";
 
   form.append(
     note,
@@ -211,12 +220,12 @@ function createEditForm({ onCancelForm, onStartDelete, onUpdateForm, onUpdatePic
       "pickup_date",
       state.opshopPickupForm.pickup_date,
       onUpdateForm,
-      { disabled: Boolean(isAssigned) },
+      { disabled: Boolean(isAssigned) || lockState.isLocked },
     ),
     createNotesInput(onUpdateForm),
     createFormActions({
       cancelLabel: "Cancel",
-      isSubmitDisabled: state.isOpShopPickupSaving,
+      isSubmitDisabled: state.isOpShopPickupSaving || lockState.isLocked,
       onCancel: onCancelForm,
       submitLabel: state.isOpShopPickupSaving ? "Saving..." : "Save Changes",
     }),
@@ -240,13 +249,19 @@ function createEditForm({ onCancelForm, onStartDelete, onUpdateForm, onUpdatePic
 
 function createDeleteConfirmation({ onCancelForm, onConfirmDelete }) {
   const pickup = getOpShopPickupByTaskId(state.opshopPickupEditingTaskId);
+  const lockState = getPickupLockState(
+    pickup,
+    pickup && (pickup.assigned_driver_id || pickup.driver_id || ""),
+  );
   const panel = document.createElement("div");
   panel.className = "opshop-delete-confirmation";
 
   const message = document.createElement("p");
-  message.textContent = `Delete ${formatOptional(pickup && pickup.opshop_name)} on ${formatOptional(
-    pickup && pickup.pickup_date,
-  )}? This marks the task as CANCELLED and removes any OP SHOP assignment.`;
+  message.textContent = lockState.isLocked
+    ? lockState.message
+    : `Delete ${formatOptional(pickup && pickup.opshop_name)} on ${formatOptional(
+        pickup && pickup.pickup_date,
+      )}? This marks the task as CANCELLED and removes any OP SHOP assignment.`;
 
   const actions = document.createElement("div");
   actions.className = "detail-actions";
@@ -254,7 +269,7 @@ function createDeleteConfirmation({ onCancelForm, onConfirmDelete }) {
   const confirm = document.createElement("button");
   confirm.type = "button";
   confirm.textContent = state.isOpShopPickupSaving ? "Deleting..." : "Delete Pickup Task";
-  confirm.disabled = state.isOpShopPickupSaving;
+  confirm.disabled = state.isOpShopPickupSaving || lockState.isLocked;
   confirm.addEventListener("click", (event) => {
     event.stopPropagation();
     onConfirmDelete();
@@ -470,6 +485,10 @@ function createPickupItem(pickup, {
   onStartEdit,
   onUpdateAssignedDriver,
 }) {
+  const lockState = getPickupLockState(
+    pickup,
+    pickup.assigned_driver_id || pickup.driver_id || "",
+  );
   const card = document.createElement("article");
   card.className = "opshop-list-item";
   card.tabIndex = 0;
@@ -510,7 +529,7 @@ function createPickupItem(pickup, {
 
   actions.append(createAssignedToSelect(pickup, onUpdateAssignedDriver));
 
-  if (!pickup.assigned_to_locked) {
+  if (!lockState.isLocked) {
     const editButton = document.createElement("button");
     editButton.type = "button";
     editButton.className = "button-secondary";
@@ -541,9 +560,16 @@ function createAssignedToSelect(pickup, onUpdateAssignedDriver) {
   const isFinalSummaryLocked = Boolean(
     selectedDriverId && isDriverFinalizedForPickup(selectedDriverId, pickup.pickup_date),
   );
-  const isLocked = Boolean(pickup.assigned_to_locked) || isFinalSummaryLocked;
+  const isGeneratedFinalSummaryLocked = isGeneratedTask("OPSHOP_PICKUP", pickup.pickup_task_id);
+  const isLocked =
+    Boolean(pickup.assigned_to_locked) ||
+    Boolean(isFinalSummaryLocked) ||
+    Boolean(isGeneratedFinalSummaryLocked);
   select.disabled = isLocked || state.isOpShopPickupSaving;
-  select.classList.toggle("opshop-assigned-to-select-locked", isFinalSummaryLocked);
+  select.classList.toggle(
+    "opshop-assigned-to-select-locked",
+    isFinalSummaryLocked || isGeneratedFinalSummaryLocked,
+  );
   select.append(createOption("", "Unassigned", !selectedDriverId));
   state.drivers.forEach((driver) => {
     const hasSavedFinalSummary = isDriverFinalizedForPickup(driver.driver_id, pickup.pickup_date);
@@ -558,6 +584,9 @@ function createAssignedToSelect(pickup, onUpdateAssignedDriver) {
   select.value = selectedDriverId;
   select.addEventListener("change", (event) => {
     event.stopPropagation();
+    if (isLocked) {
+      return;
+    }
     onUpdateAssignedDriver(pickup.pickup_task_id, select.value);
   });
   select.addEventListener("click", (event) => event.stopPropagation());
@@ -572,15 +601,47 @@ function createAssignedToSelect(pickup, onUpdateAssignedDriver) {
   }
   if (isLocked) {
     const lock = document.createElement("span");
-    lock.className = isFinalSummaryLocked
+    lock.className = isFinalSummaryLocked || isGeneratedFinalSummaryLocked
       ? "opshop-assigned-to-lock opshop-assigned-to-lock-finalized"
       : "opshop-assigned-to-lock";
     lock.textContent = isFinalSummaryLocked
       ? "Locked - Final Trip Summary saved"
-      : "Locked - Past pickup date";
+      : isGeneratedFinalSummaryLocked
+        ? "Locked - Generated in Final Trip Summary"
+        : "Locked - Past pickup date";
     wrapper.append(lock);
   }
   return wrapper;
+}
+
+function getPickupLockState(pickup, driverIdForFinalSummaryLock = "") {
+  const isFinalSummaryLocked = Boolean(
+    pickup &&
+      driverIdForFinalSummaryLock &&
+      isDriverFinalizedForPickup(driverIdForFinalSummaryLock, pickup.pickup_date),
+  );
+  const isGeneratedFinalSummaryLocked = Boolean(
+    pickup && isGeneratedTask("OPSHOP_PICKUP", pickup.pickup_task_id),
+  );
+  const isPastDateLocked = Boolean(pickup && pickup.assigned_to_locked);
+  const isLocked =
+    Boolean(isPastDateLocked) ||
+    Boolean(isFinalSummaryLocked) ||
+    Boolean(isGeneratedFinalSummaryLocked);
+  const message = isFinalSummaryLocked
+    ? "Locked - Final Trip Summary saved"
+    : isGeneratedFinalSummaryLocked
+      ? "Locked - Generated in Final Trip Summary"
+      : isPastDateLocked
+        ? "Locked - Past pickup date"
+        : "";
+  return {
+    isFinalSummaryLocked,
+    isGeneratedFinalSummaryLocked,
+    isLocked,
+    isPastDateLocked,
+    message,
+  };
 }
 
 function isDriverFinalizedForPickup(driverId, pickupDate) {
