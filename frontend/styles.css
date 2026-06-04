@@ -823,6 +823,12 @@ h1 {
   font-weight: 700;
 }
 
+.opshop-assigned-to-lock-finalized,
+.opshop-assigned-to-select-locked {
+  color: #b42318;
+  font-weight: 900;
+}
+
 .driver-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
