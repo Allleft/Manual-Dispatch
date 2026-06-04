@@ -656,7 +656,13 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         )
         self.assertIn("getVisibleCountrysidePickups()", actions)
         self.assertIn("state.countrysideOpShopPickupAssignedDriverSelections", actions)
-        self.assertIn('const shouldRender = field === "route_group_id" || field === "pickup_date";', actions)
+        pickup_form_update = actions.split("function updatePickupTaskForm", 1)[1].split(
+            "function resetPickupTaskForm",
+            1,
+        )[0]
+        self.assertIn('field === "route_group_id"', pickup_form_update)
+        self.assertIn('field === "pickup_date"', pickup_form_update)
+        self.assertIn('field === "assigned_driver_id"', pickup_form_update)
         self.assertIn("dispatch_date: state.dispatchDate", actions)
         self.assertIn("apiAssignCountrysideRouteGroup(routeGroupId", actions)
         self.assertIn("assigned_driver_id: selectedDriverId", actions)

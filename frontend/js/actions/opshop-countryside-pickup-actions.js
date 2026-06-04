@@ -467,7 +467,10 @@ export function createCountrysideOpShopPickupActions({
   }
 
   function updatePickupTaskForm(field, value) {
-    const shouldRender = field === "route_group_id" || field === "pickup_date";
+    const shouldRender =
+      field === "route_group_id" ||
+      field === "pickup_date" ||
+      field === "assigned_driver_id";
     const nextForm = {
       ...state.countrysideOpShopPickupForm,
       [field]: value,
