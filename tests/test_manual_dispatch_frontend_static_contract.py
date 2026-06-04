@@ -717,6 +717,13 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("Select a pickup date.", modal_renderer)
         self.assertIn("Select an assigned driver.", modal_renderer)
         self.assertIn("This route group has no active route templates.", modal_renderer)
+        start_disabled_reason = modal_renderer.split(
+            "function getAssignRouteGroupStartDisabledReason",
+            1,
+        )[1].split("function getAssignRouteGroupSubmitDisabledReason", 1)[0]
+        self.assertIn("!hasAnyAssignableRouteGroup()", start_disabled_reason)
+        self.assertNotIn("state.selectedCountrysideRouteGroupId", start_disabled_reason)
+        self.assertNotIn("getRouteGroupTemplateCount(state.selectedCountrysideRouteGroupId)", start_disabled_reason)
         self.assertIn("createRouteGroupSelect(onUpdateForm)", modal_renderer)
         self.assertIn("state.countrysideOpShopPickupScheduleCandidates.filter", modal_renderer)
         self.assertIn("opshop-route-assign-disabled-reason", modal_renderer)

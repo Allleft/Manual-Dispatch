@@ -868,10 +868,7 @@ function getAssignRouteGroupStartDisabledReason() {
   if (state.isCountrysideOpShopPickupListLoading) {
     return "Loading route templates.";
   }
-  if (state.selectedCountrysideRouteGroupId && getRouteGroupTemplateCount(state.selectedCountrysideRouteGroupId) === 0) {
-    return "This route group has no active route templates.";
-  }
-  if (!state.selectedCountrysideRouteGroupId && !hasAnyAssignableRouteGroup()) {
+  if (!hasAnyAssignableRouteGroup()) {
     return "No active route groups with route templates are available.";
   }
   return "";
