@@ -35,14 +35,6 @@ export function renderOncallOpShopPickupListModal({
 
   const backdrop = document.createElement("div");
   backdrop.className = "detail-backdrop opshop-pickup-list-backdrop";
-  backdrop.addEventListener("click", (event) => {
-    if (event.target !== backdrop) {
-      return;
-    }
-    event.preventDefault();
-    event.stopPropagation();
-    onCloseList();
-  });
 
   const modal = document.createElement("section");
   modal.className = "order-detail-modal opshop-pickup-list-modal opshop-oncall-pickup-list-modal";

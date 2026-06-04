@@ -52,14 +52,6 @@ export function renderCountrysideOpShopPickupListModal({
 
   const backdrop = document.createElement("div");
   backdrop.className = "detail-backdrop opshop-pickup-list-backdrop";
-  backdrop.addEventListener("click", (event) => {
-    if (event.target !== backdrop) {
-      return;
-    }
-    event.preventDefault();
-    event.stopPropagation();
-    onCloseList();
-  });
 
   const modal = document.createElement("section");
   modal.className = "order-detail-modal opshop-pickup-list-modal opshop-countryside-pickup-list-modal";
@@ -545,8 +537,9 @@ function createAddForm({ onCancelForm, onCreatePickup, onUpdateForm }) {
     onCreatePickup();
   });
 
-  const routeName = state.selectedCountrysideRouteGroupId
-    ? getRouteGroupName(state.selectedCountrysideRouteGroupId)
+  const routeGroupId = getAssignmentRouteGroupId();
+  const routeName = routeGroupId
+    ? getRouteGroupName(routeGroupId)
     : "";
   const summary = document.createElement("p");
   summary.className = "hint-row";
@@ -562,6 +555,7 @@ function createAddForm({ onCancelForm, onCreatePickup, onUpdateForm }) {
 
   form.append(
     summary,
+    createRouteGroupSelect(onUpdateForm),
     createDateInput("Pickup Date", "pickup_date", state.countrysideOpShopPickupForm.pickup_date, onUpdateForm),
     createDriverSelect(
       "Assigned Driver",
@@ -681,16 +675,18 @@ function createRouteGroupSelect(onUpdateForm) {
   select.name = "route_group_id";
   select.required = true;
   select.disabled = state.isCountrysideOpShopPickupSaving || state.isCountrysideOpShopPickupListLoading;
-  select.append(createOption("", "Select Countryside route group", !state.countrysideOpShopPickupForm.route_group_id));
+  const selectedRouteGroupId = getAssignmentRouteGroupId();
+  select.append(createOption("", "Select Countryside route group", !selectedRouteGroupId));
   state.countrysideRouteGroups.forEach((routeGroup) => {
     select.append(
       createOption(
         routeGroup.route_group_id,
         routeGroup.route_group_name,
-        state.countrysideOpShopPickupForm.route_group_id === routeGroup.route_group_id,
+        selectedRouteGroupId === routeGroup.route_group_id,
       ),
     );
   });
+  select.value = selectedRouteGroupId;
   select.addEventListener("change", () => onUpdateForm("route_group_id", select.value));
 
   label.append(select);
@@ -869,22 +865,28 @@ function createFormActions({ cancelLabel, isSubmitDisabled, onCancel, submitLabe
 }
 
 function getAssignRouteGroupStartDisabledReason() {
-  if (!state.selectedCountrysideRouteGroupId) {
-    return "Select a route group first.";
-  }
   if (state.isCountrysideOpShopPickupListLoading) {
     return "Loading route templates.";
   }
-  if (getSelectedRouteGroupTemplateCount() === 0) {
+  if (state.selectedCountrysideRouteGroupId && getRouteGroupTemplateCount(state.selectedCountrysideRouteGroupId) === 0) {
     return "This route group has no active route templates.";
+  }
+  if (!state.selectedCountrysideRouteGroupId && !hasAnyAssignableRouteGroup()) {
+    return "No active route groups with route templates are available.";
   }
   return "";
 }
 
 function getAssignRouteGroupSubmitDisabledReason() {
-  const startDisabledReason = getAssignRouteGroupStartDisabledReason();
-  if (startDisabledReason) {
-    return startDisabledReason;
+  const routeGroupId = getAssignmentRouteGroupId();
+  if (!routeGroupId) {
+    return "Select a route group.";
+  }
+  if (state.isCountrysideOpShopPickupListLoading) {
+    return "Loading route templates.";
+  }
+  if (getRouteGroupTemplateCount(routeGroupId) === 0) {
+    return "This route group has no active route templates.";
   }
   if (!state.countrysideOpShopPickupForm.pickup_date) {
     return "Select a pickup date.";
@@ -895,11 +897,21 @@ function getAssignRouteGroupSubmitDisabledReason() {
   return "";
 }
 
-function getSelectedRouteGroupTemplateCount() {
-  const routeGroupId = state.selectedCountrysideRouteGroupId;
-  if (!routeGroupId) {
-    return 0;
-  }
+function getAssignmentRouteGroupId() {
+  return (
+    state.countrysideOpShopPickupForm.route_group_id ||
+    state.selectedCountrysideRouteGroupId ||
+    ""
+  );
+}
+
+function hasAnyAssignableRouteGroup() {
+  return state.countrysideRouteGroups.some(
+    (routeGroup) => getRouteGroupTemplateCount(routeGroup.route_group_id) > 0,
+  );
+}
+
+function getRouteGroupTemplateCount(routeGroupId) {
   const loadedMembershipCount = state.countrysideRouteMemberships.filter(
     (template) => template.route_group_id === routeGroupId,
   ).length;

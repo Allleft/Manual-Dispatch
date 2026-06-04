@@ -272,7 +272,6 @@ export function createOpShopPickupActions({
       selections[pickup.pickup_task_id] =
         pickup.assigned_driver_id ||
         pickup.driver_id ||
-        pickup.default_driver_id ||
         "";
     });
     state.opshopPickupAssignedDriverSelections = selections;

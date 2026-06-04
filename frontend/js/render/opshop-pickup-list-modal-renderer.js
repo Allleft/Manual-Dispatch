@@ -40,14 +40,6 @@ export function renderOpShopPickupListModal({
 
   const backdrop = document.createElement("div");
   backdrop.className = "detail-backdrop opshop-pickup-list-backdrop";
-  backdrop.addEventListener("click", (event) => {
-    if (event.target !== backdrop) {
-      return;
-    }
-    event.preventDefault();
-    event.stopPropagation();
-    onCloseList();
-  });
 
   const modal = document.createElement("section");
   modal.className = "order-detail-modal opshop-pickup-list-modal";
@@ -129,7 +121,7 @@ function createWindowSummary() {
     createBadge(`${state.scheduledOpShopPickups.length} scheduled pickups`, "good"),
     createBadge(`Window: ${formatDateShort(start)} to ${formatDateShort(end)}`),
     createBadge("Monday-Friday week"),
-    createBadge("ACTIVE / ASSIGNED only"),
+    createBadge("ACTIVE unassigned + ASSIGNED"),
   );
   return summary;
 }
@@ -545,7 +537,6 @@ function createAssignedToSelect(pickup, onUpdateAssignedDriver) {
     state.opshopPickupAssignedDriverSelections[pickup.pickup_task_id] ||
     pickup.assigned_driver_id ||
     pickup.driver_id ||
-    pickup.default_driver_id ||
     "";
   select.disabled = Boolean(pickup.assigned_to_locked) || state.isOpShopPickupSaving;
   select.append(createOption("", "Unassigned", !selectedDriverId));
@@ -568,6 +559,12 @@ function createAssignedToSelect(pickup, onUpdateAssignedDriver) {
   select.addEventListener("keydown", (event) => event.stopPropagation());
 
   wrapper.append(select);
+  if (!selectedDriverId && (pickup.default_driver_name || pickup.default_driver_alias)) {
+    const hint = document.createElement("span");
+    hint.className = "opshop-assigned-to-hint";
+    hint.textContent = `Default: ${pickup.default_driver_name || pickup.default_driver_alias}`;
+    wrapper.append(hint);
+  }
   if (pickup.assigned_to_locked) {
     const lock = document.createElement("span");
     lock.className = "opshop-assigned-to-lock";
