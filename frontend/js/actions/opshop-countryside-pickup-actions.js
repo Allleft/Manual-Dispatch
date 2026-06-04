@@ -39,7 +39,7 @@ export function createCountrysideOpShopPickupActions({
   }
 
   async function closeCountrysideOpShopPickupList() {
-    if (state.isCountrysideOpShopPickupSaving) {
+    if (state.isCountrysideOpShopPickupSaving || state.isCountrysideOpShopPickupListLoading) {
       return;
     }
     state.isCountrysideOpShopPickupSaving = true;

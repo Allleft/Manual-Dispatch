@@ -41,7 +41,7 @@ export function createOncallOpShopPickupActions({
   }
 
   async function closeOncallOpShopPickupList() {
-    if (state.isOncallOpShopPickupSaving) {
+    if (state.isOncallOpShopPickupSaving || state.isOncallOpShopPickupListLoading) {
       return;
     }
     state.isOncallOpShopPickupSaving = true;

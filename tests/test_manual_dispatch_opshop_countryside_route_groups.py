@@ -377,16 +377,33 @@ class CountrysideRouteGroupServiceTest(unittest.TestCase):
                 street_address="2 Second Street",
             ),
         )
-
-        board = self.service.assign_countryside_route_group_pickups(
+        inactive = self.service.add_countryside_route_membership(
             group.route_group_id,
-            AssignCountrysideRouteGroupRequest(
-                dispatch_date="2026-05-25",
-                pickup_date="2026-05-27",
-                assigned_driver_id="D001",
-                notes="Whole route requested",
+            AddCountrysideRouteMembershipRequest(
+                name="Bulk Inactive Shop",
+                suburb="Euroa",
+                street_address="3 Inactive Street",
             ),
         )
+        self.service.remove_countryside_route_membership(inactive.schedule_id)
+        normal_oncall = self.service.create_opshop_template(
+            CreateOpShopTemplateRequest(
+                run_type="ON_CALL",
+                name="Bulk Normal Oncall",
+                suburb="Geelong",
+                street_address="4 Normal Road",
+                pickup_frequency="On Call",
+            )
+        )
+        request = AssignCountrysideRouteGroupRequest(
+            dispatch_date="2026-05-25",
+            pickup_date="2026-05-27",
+            assigned_driver_id="D001",
+            notes="Whole route requested",
+        )
+
+        board = self.service.assign_countryside_route_group_pickups(group.route_group_id, request)
+        second_board = self.service.assign_countryside_route_group_pickups(group.route_group_id, request)
 
         task_ids = []
         for template in [first, second]:
@@ -407,11 +424,36 @@ class CountrysideRouteGroupServiceTest(unittest.TestCase):
             self.assertEqual("D001", assignment.driver_id)
 
         self.assertEqual(2, len(task_ids))
+        self.assertEqual(2, len(self.repository.list_opshop_pickup_tasks()))
+        self.assertIsNone(
+            self.repository.find_opshop_pickup_task_by_schedule_and_date(
+                inactive.schedule_id,
+                "2026-05-27",
+            )
+        )
+        self.assertIsNone(
+            self.repository.find_opshop_pickup_task_by_schedule_and_date(
+                normal_oncall.schedule_id,
+                "2026-05-27",
+            )
+        )
+        self.assertEqual(
+            {"OPSHOP_PICKUP"},
+            {assignment.task_type for assignment in self.repository.list_assignments("2026-05-25")},
+        )
         self.assertEqual(
             set(task_ids),
             {
                 item.pickup_task_id
                 for item in board.countryside_opshop_pickups
+                if item.pickup_date == "2026-05-27"
+            },
+        )
+        self.assertEqual(
+            set(task_ids),
+            {
+                item.pickup_task_id
+                for item in second_board.assigned_opshop_pickups
                 if item.pickup_date == "2026-05-27"
             },
         )

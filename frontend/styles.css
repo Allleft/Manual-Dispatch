@@ -709,6 +709,14 @@ h1 {
   display: none;
 }
 
+.opshop-route-assign-disabled-reason {
+  max-width: 18rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
 .opshop-list-item {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

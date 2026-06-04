@@ -52,7 +52,14 @@ export function renderCountrysideOpShopPickupListModal({
 
   const backdrop = document.createElement("div");
   backdrop.className = "detail-backdrop opshop-pickup-list-backdrop";
-  backdrop.addEventListener("click", onCloseList);
+  backdrop.addEventListener("click", (event) => {
+    if (event.target !== backdrop) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    onCloseList();
+  });
 
   const modal = document.createElement("section");
   modal.className = "order-detail-modal opshop-pickup-list-modal opshop-countryside-pickup-list-modal";
@@ -124,18 +131,21 @@ function createModalHeader({ onCloseList, onStartAdd }) {
   const actions = document.createElement("div");
   actions.className = "detail-actions";
 
+  const disabledReason = getAssignRouteGroupStartDisabledReason();
   const addButton = document.createElement("button");
   addButton.type = "button";
   addButton.textContent = "Assign Route Group";
-  addButton.disabled =
-    state.isCountrysideOpShopPickupSaving ||
-    state.isCountrysideOpShopPickupListLoading ||
-    !state.selectedCountrysideRouteGroupId ||
-    state.countrysideRouteMemberships.length === 0;
+  addButton.disabled = state.isCountrysideOpShopPickupSaving || Boolean(disabledReason);
+  addButton.title = state.isCountrysideOpShopPickupSaving ? "Assigning route group." : disabledReason;
   addButton.addEventListener("click", (event) => {
     event.stopPropagation();
     onStartAdd();
   });
+
+  const disabledHint = document.createElement("span");
+  disabledHint.className = "opshop-route-assign-disabled-reason";
+  disabledHint.hidden = !addButton.disabled || state.isCountrysideOpShopPickupSaving;
+  disabledHint.textContent = disabledReason;
 
   const closeButton = document.createElement("button");
   closeButton.type = "button";
@@ -146,7 +156,7 @@ function createModalHeader({ onCloseList, onStartAdd }) {
     onCloseList();
   });
 
-  actions.append(addButton, closeButton);
+  actions.append(addButton, disabledHint, closeButton);
   header.append(titleWrap, actions);
   return header;
 }
@@ -544,6 +554,12 @@ function createAddForm({ onCancelForm, onCreatePickup, onUpdateForm }) {
     ? `Assign all active route templates for ${routeName} to one driver and pickup date.`
     : "Select a route group before assigning Countryside pickups.";
 
+  const disabledReason = getAssignRouteGroupSubmitDisabledReason();
+  const disabledHint = document.createElement("p");
+  disabledHint.className = "hint-row";
+  disabledHint.hidden = !disabledReason;
+  disabledHint.textContent = disabledReason;
+
   form.append(
     summary,
     createDateInput("Pickup Date", "pickup_date", state.countrysideOpShopPickupForm.pickup_date, onUpdateForm),
@@ -554,14 +570,10 @@ function createAddForm({ onCancelForm, onCreatePickup, onUpdateForm }) {
       { pickupDate: state.countrysideOpShopPickupForm.pickup_date },
     ),
     createNotesInput(onUpdateForm),
+    disabledHint,
     createFormActions({
       cancelLabel: "Cancel",
-      isSubmitDisabled:
-        state.isCountrysideOpShopPickupSaving ||
-        !state.countrysideOpShopPickupForm.route_group_id ||
-        !state.countrysideOpShopPickupForm.pickup_date ||
-        !state.countrysideOpShopPickupForm.assigned_driver_id ||
-        state.countrysideRouteMemberships.length === 0,
+      isSubmitDisabled: state.isCountrysideOpShopPickupSaving || Boolean(disabledReason),
       onCancel: onCancelForm,
       submitLabel: state.isCountrysideOpShopPickupSaving ? "Assigning..." : "Assign Route Group",
     }),
@@ -854,6 +866,49 @@ function createFormActions({ cancelLabel, isSubmitDisabled, onCancel, submitLabe
 
   actions.append(submit, cancel);
   return actions;
+}
+
+function getAssignRouteGroupStartDisabledReason() {
+  if (!state.selectedCountrysideRouteGroupId) {
+    return "Select a route group first.";
+  }
+  if (state.isCountrysideOpShopPickupListLoading) {
+    return "Loading route templates.";
+  }
+  if (getSelectedRouteGroupTemplateCount() === 0) {
+    return "This route group has no active route templates.";
+  }
+  return "";
+}
+
+function getAssignRouteGroupSubmitDisabledReason() {
+  const startDisabledReason = getAssignRouteGroupStartDisabledReason();
+  if (startDisabledReason) {
+    return startDisabledReason;
+  }
+  if (!state.countrysideOpShopPickupForm.pickup_date) {
+    return "Select a pickup date.";
+  }
+  if (!state.countrysideOpShopPickupForm.assigned_driver_id) {
+    return "Select an assigned driver.";
+  }
+  return "";
+}
+
+function getSelectedRouteGroupTemplateCount() {
+  const routeGroupId = state.selectedCountrysideRouteGroupId;
+  if (!routeGroupId) {
+    return 0;
+  }
+  const loadedMembershipCount = state.countrysideRouteMemberships.filter(
+    (template) => template.route_group_id === routeGroupId,
+  ).length;
+  if (loadedMembershipCount > 0) {
+    return loadedMembershipCount;
+  }
+  return state.countrysideOpShopPickupScheduleCandidates.filter(
+    (template) => template.route_group_id === routeGroupId,
+  ).length;
 }
 
 function createSmallActionButton(label, onClick, options = {}) {

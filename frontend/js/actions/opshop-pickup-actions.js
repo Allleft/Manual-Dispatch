@@ -37,7 +37,7 @@ export function createOpShopPickupActions({
   }
 
   async function closeOpShopPickupList() {
-    if (state.isOpShopPickupSaving) {
+    if (state.isOpShopPickupSaving || state.isOpShopPickupListLoading) {
       return;
     }
     state.isOpShopPickupSaving = true;

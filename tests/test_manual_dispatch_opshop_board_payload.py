@@ -303,6 +303,32 @@ class OpShopBoardPayloadTest(unittest.TestCase):
         self.assertEqual("ASSIGNED", board.scheduled_opshop_pickups[1].status)
         self.assertTrue(board.scheduled_opshop_pickups[1].is_assigned)
 
+    def test_unassigned_regular_pickup_is_visible_in_list_only(self):
+        self.repository.upsert_opshop_pickup_schedule(
+            self._schedule(
+                "SCHED-REGULAR",
+                run_type="REGULAR",
+                default_driver_id="D001",
+                default_driver_alias="John G",
+                default_driver_name_snapshot="John Georgiadis",
+            )
+        )
+        self.repository.upsert_opshop_pickup_task(
+            self._task("TASK-UNASSIGNED", "SCHED-REGULAR", pickup_date="2026-05-18", status="ACTIVE")
+        )
+
+        board = self.service.get_board("2026-05-18")
+        item = board.scheduled_opshop_pickups[0]
+
+        self.assertEqual(["TASK-UNASSIGNED"], [pickup.pickup_task_id for pickup in board.scheduled_opshop_pickups])
+        self.assertEqual([], board.assigned_opshop_pickups)
+        self.assertEqual([], board.assignments)
+        self.assertEqual("ACTIVE", item.status)
+        self.assertFalse(item.is_assigned)
+        self.assertIsNone(item.assigned_driver_id)
+        self.assertEqual("D001", item.default_driver_id)
+        self.assertEqual("John Georgiadis", item.default_driver_name)
+
     def test_board_does_not_generate_on_call_or_review_required_schedules(self):
         self.repository.upsert_opshop_pickup_schedule(
             self._schedule("SCHED-ON-CALL", run_type="ON_CALL", pickup_frequency="Weekly")
