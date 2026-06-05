@@ -225,6 +225,89 @@ class ManualDispatchFinalSummaryTest(unittest.TestCase):
             )
         )
 
+    def test_cancel_generated_summary_restores_order_assignment(self):
+        self._assign_order("ORD-001", "D001", "trip1")
+        generated = self.service.create_generated_final_trip_summary(
+            self._summary_request()
+        )
+        self.repository.remove_assignment(self.dispatch_date, "ORDER", "ORD-001")
+
+        cancelled = self.service.cancel_generated_final_trip_summary(
+            generated.summary_id
+        )
+        assignment = self.repository.get_assignment(
+            self.dispatch_date,
+            "ORDER",
+            "ORD-001",
+        )
+
+        self.assertTrue(cancelled)
+        self.assertIsNone(self.repository.get_final_trip_summary(generated.summary_id))
+        self.assertEqual("ACTIVE", self.repository.get_order("ORD-001").status)
+        self.assertIsNotNone(assignment)
+        self.assertEqual("D001", assignment.driver_id)
+        self.assertEqual("trip1", assignment.trip_no)
+
+    def test_cancel_generated_summary_preserves_opshop_assignment_and_unlocks_board(self):
+        self._assign_order("ORD-001", "D001", "trip1")
+        self._seed_opshop_pickup("OPSHOP-CANCEL-GENERATED")
+        self.repository.upsert_assignment(
+            self.dispatch_date,
+            "OPSHOP_PICKUP",
+            "OPSHOP-CANCEL-GENERATED",
+            "D001",
+            "trip1",
+        )
+        generated = self.service.create_generated_final_trip_summary(
+            self._summary_request(
+                opshop_pickups=[self._opshop_payload("OPSHOP-CANCEL-GENERATED")]
+            )
+        )
+        before_cancel = self.service.get_board(self.dispatch_date)
+        self.assertNotIn(
+            "OPSHOP-CANCEL-GENERATED",
+            [pickup.pickup_task_id for pickup in before_cancel.assigned_opshop_pickups],
+        )
+
+        self.service.cancel_generated_final_trip_summary(generated.summary_id)
+        after_cancel = self.service.get_board(self.dispatch_date)
+        task = self.repository.get_opshop_pickup_task("OPSHOP-CANCEL-GENERATED")
+
+        self.assertEqual("ASSIGNED", task.status)
+        self.assertEqual("D001", task.driver_id)
+        self.assertIsNotNone(
+            self.repository.find_assignment_for_task(
+                "OPSHOP_PICKUP",
+                "OPSHOP-CANCEL-GENERATED",
+            )
+        )
+        self.assertIn(
+            "OPSHOP-CANCEL-GENERATED",
+            [pickup.pickup_task_id for pickup in after_cancel.assigned_opshop_pickups],
+        )
+        self.assertEqual([], after_cancel.generated_final_trip_summaries)
+
+    def test_cancel_saved_summary_is_rejected_and_preserves_history(self):
+        self._assign_order("ORD-001", "D001", "trip1")
+        saved = self.service.save_final_trip_summary(self._summary_request())
+
+        with self.assertRaises(ValueError) as context:
+            self.service.cancel_generated_final_trip_summary(saved.summary_id)
+
+        self.assertIn(
+            "Only generated Final Trip Summaries can be cancelled.",
+            str(context.exception),
+        )
+        self.assertEqual(
+            [saved.summary_id],
+            [
+                summary.summary_id
+                for summary in self.service.list_final_trip_summaries(
+                    self.dispatch_date
+                )
+            ],
+        )
+
     def test_saved_summary_dates_are_listed_newest_first(self):
         self._assign_order("ORD-001", "D001", "trip1")
         self.service.save_final_trip_summary(self._summary_request())
@@ -992,6 +1075,36 @@ class ManualDispatchFinalSummaryRouteTest(unittest.TestCase):
             [generated_payload["summary_id"]],
             [item["summary_id"] for item in history_after_save.json()],
         )
+
+    def test_cancel_generated_final_summary_api_restores_order_assignment(self):
+        self._assign_order("ORD-001", "D001", "trip1")
+        generated_response = self.client.post(
+            "/api/manual-dispatch/final-summaries/generated",
+            json=self._summary_payload(),
+        )
+        generated_payload = generated_response.json()
+        self.repository.remove_assignment(self.dispatch_date, "ORDER", "ORD-001")
+
+        cancel_response = self.client.post(
+            f"/api/manual-dispatch/final-summaries/{generated_payload['summary_id']}/cancel-generated",
+        )
+        history_response = self.client.get(
+            "/api/manual-dispatch/final-summaries",
+            params={"dispatch_date": self.dispatch_date},
+        )
+        assignment = self.repository.get_assignment(
+            self.dispatch_date,
+            "ORDER",
+            "ORD-001",
+        )
+
+        self.assertEqual(200, generated_response.status_code)
+        self.assertEqual(200, cancel_response.status_code)
+        self.assertTrue(cancel_response.json()["cancelled"])
+        self.assertEqual([], history_response.json())
+        self.assertIsNotNone(assignment)
+        self.assertEqual("D001", assignment.driver_id)
+        self.assertEqual("trip1", assignment.trip_no)
 
     def test_final_summary_api_saves_opshop_snapshot_section(self):
         self.repository.upsert_opshop_location(

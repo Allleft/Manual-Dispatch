@@ -2194,6 +2194,87 @@ class SQLiteManualDispatchRepository:
 
         return self.get_final_trip_summary(summary_id)
 
+    def cancel_generated_final_trip_summary(self, summary_id):
+        timestamp = self._timestamp()
+        with connect(self.db_path) as connection:
+            summary_row = connection.execute(
+                """
+                SELECT *
+                FROM final_trip_summaries
+                WHERE summary_id = ?
+                """,
+                (summary_id,),
+            ).fetchone()
+            if not summary_row:
+                raise ValueError(f"Final Trip Summary does not exist: {summary_id}")
+            if summary_row["status"] != "GENERATED":
+                raise ValueError("Only generated Final Trip Summaries can be cancelled.")
+
+            order_rows = connection.execute(
+                """
+                SELECT trip_no, task_type, task_id
+                FROM final_trip_summary_rows
+                WHERE summary_id = ?
+                ORDER BY row_no
+                """,
+                (summary_id,),
+            ).fetchall()
+            for row in order_rows:
+                if row["task_type"] != "ORDER" or not row["task_id"]:
+                    continue
+                connection.execute(
+                    """
+                    UPDATE manual_orders
+                    SET status = 'ACTIVE'
+                    WHERE order_id = ? AND status != 'CANCELLED'
+                    """,
+                    (row["task_id"],),
+                )
+                connection.execute(
+                    """
+                    INSERT INTO manual_dispatch_assignments (
+                        assignment_id,
+                        dispatch_date,
+                        task_type,
+                        task_id,
+                        driver_id,
+                        trip_no,
+                        assigned_at,
+                        updated_at
+                    ) VALUES (?, ?, 'ORDER', ?, ?, ?, ?, ?)
+                    ON CONFLICT(dispatch_date, task_type, task_id)
+                    DO UPDATE SET
+                        driver_id = excluded.driver_id,
+                        trip_no = excluded.trip_no,
+                        updated_at = excluded.updated_at
+                    """,
+                    (
+                        self._create_assignment_id(connection),
+                        summary_row["dispatch_date"],
+                        row["task_id"],
+                        summary_row["driver_id"],
+                        row["trip_no"],
+                        timestamp,
+                        timestamp,
+                    ),
+                )
+
+            connection.execute(
+                "DELETE FROM final_trip_summary_rows WHERE summary_id = ?",
+                (summary_id,),
+            )
+            connection.execute(
+                "DELETE FROM final_trip_summary_opshop_pickup_rows WHERE summary_id = ?",
+                (summary_id,),
+            )
+            connection.execute(
+                "DELETE FROM final_trip_summaries WHERE summary_id = ?",
+                (summary_id,),
+            )
+            connection.commit()
+
+        return True
+
     def _insert_final_trip_summary_snapshot(
         self,
         connection,

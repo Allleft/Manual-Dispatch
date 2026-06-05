@@ -15,6 +15,7 @@ const EMPTY_ORDER_SUMMARY_MESSAGE = "No Delivery Orders included.";
 export function renderFinalTripSummaries({
   getUnsavedFinalSummaries,
   normalizeFinalSummary,
+  onCancelGeneratedFinalSummary,
   onHistoryDateChange,
   onLoadFinalSummaryHistory,
   onSaveAllFinalSummaries,
@@ -50,7 +51,12 @@ export function renderFinalTripSummaries({
     summaries
       .sort((first, second) => first.driver_name.localeCompare(second.driver_name))
       .forEach((summary) => {
-        finalSummaryList.append(createFinalTripSummaryCard(summary, { mode: "preview" }));
+        finalSummaryList.append(
+          createFinalTripSummaryCard(summary, {
+            mode: "preview",
+            onCancelGeneratedFinalSummary,
+          }),
+        );
       });
   }
 
@@ -208,6 +214,22 @@ function createFinalTripSummaryCard(summary, options = {}) {
   const actions = document.createElement("div");
   actions.className = "final-summary-actions";
   actions.append(createBadge(isSaved ? "Saved" : "Locked", "good"));
+  if (
+    options.mode === "preview" &&
+    summary.status === "GENERATED" &&
+    summary.summary_id &&
+    typeof options.onCancelGeneratedFinalSummary === "function"
+  ) {
+    const cancelGeneratedButton = document.createElement("button");
+    cancelGeneratedButton.type = "button";
+    cancelGeneratedButton.className = "button-secondary";
+    cancelGeneratedButton.disabled = state.isSaving || state.isLoading || state.isSavingFinalSummaries;
+    cancelGeneratedButton.textContent = "Cancel Generated Summary";
+    cancelGeneratedButton.addEventListener("click", () => {
+      options.onCancelGeneratedFinalSummary(summary.summary_id);
+    });
+    actions.append(cancelGeneratedButton);
+  }
   header.append(titleWrap, actions);
 
   const meta = document.createElement("dl");

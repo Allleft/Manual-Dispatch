@@ -486,6 +486,14 @@ def save_generated_final_trip_summary(summary_id: str, payload: dict = Body(...)
         raise _to_http_exception(error) from error
 
 
+@router.post("/final-summaries/{summary_id}/cancel-generated")
+def cancel_generated_final_trip_summary(summary_id: str):
+    try:
+        return {"cancelled": service.cancel_generated_final_trip_summary(summary_id)}
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
 @router.get("/final-summaries/{summary_id}")
 def get_final_trip_summary(summary_id: str):
     try:

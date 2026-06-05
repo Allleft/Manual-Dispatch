@@ -1,4 +1,5 @@
 import {
+  apiCancelGeneratedFinalSummary,
   apiCreateGeneratedFinalSummary,
   apiExportFinalSummariesExcel,
   apiListFinalSummaries,
@@ -188,6 +189,18 @@ export function createFinalSummaryActions({
     });
     normalized.opshop_pickups.forEach((pickup) => {
       state.generatedTaskKeys.add(getTaskKey("OPSHOP_PICKUP", pickup.pickup_task_id));
+    });
+  }
+
+  function removeGeneratedTaskKeys(summary) {
+    const normalized = normalizeFinalSummary(summary);
+    normalized.trips.forEach((trip) => {
+      trip.orders.forEach((order) => {
+        state.generatedTaskKeys.delete(getTaskKey(order.task_type, order.task_id));
+      });
+    });
+    normalized.opshop_pickups.forEach((pickup) => {
+      state.generatedTaskKeys.delete(getTaskKey("OPSHOP_PICKUP", pickup.pickup_task_id));
     });
   }
 
@@ -555,6 +568,43 @@ export function createFinalSummaryActions({
     }
   }
 
+  async function handleCancelGeneratedFinalSummary(summaryId) {
+    if (state.isSaving || state.isLoading || state.isSavingFinalSummaries) {
+      return;
+    }
+    const summary = Object.values(state.finalTripSummaries)
+      .map(normalizeFinalSummary)
+      .find((item) => item.summary_id === summaryId);
+    if (!summary || summary.status !== "GENERATED") {
+      showError("Only generated Final Trip Summaries can be cancelled.");
+      renderBoard();
+      return;
+    }
+    const confirmed = window.confirm(
+      "Cancel this generated Final Trip Summary and return its tasks to editable Trip Summary?",
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    state.isSaving = true;
+    clearError();
+    renderBoard();
+
+    try {
+      await apiCancelGeneratedFinalSummary(summaryId);
+      delete state.finalTripSummaries[getFinalSummaryKey(summary.driver_id, summary.delivery_date)];
+      removeGeneratedTaskKeys(summary);
+      state.finalSummaryGlobalSaveError = "";
+      state.finalSummaryGlobalSaveSuccess = "";
+      await loadBoard(state.dispatchDate, { force: true });
+    } catch (error) {
+      state.isSaving = false;
+      showError(`Unable to cancel generated Final Trip Summary. ${error.message}`);
+      renderBoard();
+    }
+  }
+
   async function handleLoadFinalSummaryHistory() {
     if (state.isSaving || state.isLoading || state.isHistoryLoading) {
       return;
@@ -579,6 +629,7 @@ export function createFinalSummaryActions({
 
   return {
     getUnsavedFinalSummaries,
+    handleCancelGeneratedFinalSummary,
     handleGenerateDriverSummary,
     handleLoadFinalSummaryHistory,
     handleSaveAllFinalSummaries,

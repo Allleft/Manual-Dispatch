@@ -146,6 +146,10 @@ class FinalSummaryService:
             saved_by_account.account_id,
         )
 
+    def cancel_generated_final_trip_summary(self, summary_id):
+        summary_id = clean_required_text(summary_id, "summary_id")
+        return self.repository.cancel_generated_final_trip_summary(summary_id)
+
     def list_final_trip_summaries(self, dispatch_date, delivery_date=None):
         dispatch_date = clean_required_text(dispatch_date, "dispatch_date")
         delivery_date = clean_optional_text(delivery_date)

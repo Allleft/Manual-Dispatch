@@ -375,6 +375,14 @@ export async function apiSaveGeneratedFinalSummary(summaryId, payload) {
 }
 
 
+export async function apiCancelGeneratedFinalSummary(summaryId) {
+  return requestJson(
+    `/api/manual-dispatch/final-summaries/${encodeURIComponent(summaryId)}/cancel-generated`,
+    { method: "POST" },
+  );
+}
+
+
 export async function apiListFinalSummaries(dispatchDate, deliveryDate) {
   return requestJson("/api/manual-dispatch/final-summaries", {
     query: { dispatch_date: dispatchDate, delivery_date: deliveryDate },

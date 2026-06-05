@@ -1179,6 +1179,35 @@ class InMemoryManualDispatchRepository:
         self._finalize_order_rows(summary.dispatch_date, rows)
         return summary
 
+    def cancel_generated_final_trip_summary(self, summary_id):
+        summary = self.get_final_trip_summary(summary_id)
+        if not summary:
+            raise ValueError(f"Final Trip Summary does not exist: {summary_id}")
+        if summary.status != "GENERATED":
+            raise ValueError("Only generated Final Trip Summaries can be cancelled.")
+
+        for trip in summary.trips or []:
+            for order in trip.orders or []:
+                if order.task_type != "ORDER" or not order.task_id:
+                    continue
+                existing_order = self.get_order(order.task_id)
+                if existing_order and existing_order.status != "CANCELLED":
+                    existing_order.status = "ACTIVE"
+                self.upsert_assignment(
+                    summary.dispatch_date,
+                    "ORDER",
+                    order.task_id,
+                    summary.driver_id,
+                    trip.trip_no,
+                )
+
+        self.final_trip_summaries = [
+            existing
+            for existing in self.final_trip_summaries
+            if existing.summary_id != summary_id
+        ]
+        return True
+
     def _build_final_trip_summary(self, summary, rows, opshop_rows=None, status="SAVED"):
         summary_id = self._create_final_summary_id()
         opshop_rows = opshop_rows or []

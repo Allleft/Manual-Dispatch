@@ -219,6 +219,9 @@ class ManualDispatchService:
             saved_by_account_id,
         )
 
+    def cancel_generated_final_trip_summary(self, summary_id):
+        return self.final_summary_service.cancel_generated_final_trip_summary(summary_id)
+
     def list_final_trip_summaries(self, dispatch_date, delivery_date=None):
         return self.final_summary_service.list_final_trip_summaries(
             dispatch_date,

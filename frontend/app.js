@@ -371,6 +371,7 @@ function renderFinalTripSummaries() {
   renderFinalTripSummariesView({
     getUnsavedFinalSummaries: finalSummaryActions.getUnsavedFinalSummaries,
     normalizeFinalSummary: finalSummaryActions.normalizeFinalSummary,
+    onCancelGeneratedFinalSummary: finalSummaryActions.handleCancelGeneratedFinalSummary,
     onHistoryDateChange: (historyDate) => {
       state.historyDate = historyDate;
       state.historyLoaded = false;
