@@ -376,6 +376,50 @@ Expected:
 - Exit code `2` means the database path is missing or unreadable.
 - The audit is read-only and does not backfill or change data.
 
+## Optional: Backfill Old Cleared OP SHOP Saved Assignments
+
+Use this repair tool only after reviewing the audit output. Start with `manual_dispatch_full_test.sqlite3` only. Do not apply to the real office database until the audit findings have been reviewed and a backup has been taken.
+
+Dry-run:
+
+```powershell
+$env:MANUAL_DISPATCH_DB_PATH = "C:\Users\Albert Fang\Desktop\Delivery V2\data\manual_dispatch_full_test.sqlite3"
+.\tmp\route-test-venv\Scripts\python.exe .\tools\backfill_opshop_final_summary_locks.py
+```
+
+Expected dry-run output for old cleared OP SHOP saved locks:
+
+- `WOULD_REPAIR` rows show what would be restored.
+- The database is not modified.
+- `unsafe_conflicts = 0` means the listed repair candidates are safe to apply.
+
+Before applying, backup the test DB:
+
+```powershell
+Copy-Item `
+  "C:\Users\Albert Fang\Desktop\Delivery V2\data\manual_dispatch_full_test.sqlite3" `
+  "C:\Users\Albert Fang\Desktop\Delivery V2\data\manual_dispatch_full_test.before_backfill.sqlite3"
+```
+
+Apply to the test DB only:
+
+```powershell
+.\tmp\route-test-venv\Scripts\python.exe .\tools\backfill_opshop_final_summary_locks.py --apply --yes
+```
+
+After applying, re-run the audit:
+
+```powershell
+.\tmp\route-test-venv\Scripts\python.exe .\tools\audit_opshop_final_summary_locks.py
+```
+
+Expected after a clean test backfill:
+
+- Saved OP SHOP snapshot rows should report `OK`.
+- The audit should report `issues = 0`.
+- OP SHOP pickup tasks should remain `ASSIGNED` with the saved summary driver and `trip1`.
+- OP SHOP pickup assignments should exist in `manual_dispatch_assignments`.
+
 ## Pass / Fail Notes
 
 Record any failures with:
