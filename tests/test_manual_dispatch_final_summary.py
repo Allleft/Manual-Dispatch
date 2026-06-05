@@ -4,7 +4,10 @@ import shutil
 import sqlite3
 import unittest
 import uuid
+from io import BytesIO
 from pathlib import Path
+
+from openpyxl import load_workbook
 
 from backend.repositories.sqlite_manual_dispatch_repository import (
     SQLiteManualDispatchRepository,
@@ -1165,6 +1168,128 @@ class ManualDispatchFinalSummaryRouteTest(unittest.TestCase):
         self.assertEqual("TASK-ROUTE", response.json()["opshop_pickups"][0]["pickup_task_id_snapshot"])
         self.assertEqual([], response.json()["trips"])
 
+    def test_reexport_saved_final_summary_returns_excel_without_mutating_state(self):
+        self._assign_order("ORD-001", "D001", "trip1")
+        save_response = self.client.post(
+            "/api/manual-dispatch/final-summaries",
+            json=self._summary_payload(),
+        )
+        saved_payload = save_response.json()
+        saved_summary_before = self.service.get_final_trip_summary(
+            saved_payload["summary_id"]
+        )
+        assignment_before = self.repository.get_assignment(
+            self.dispatch_date,
+            "ORDER",
+            "ORD-001",
+        )
+
+        export_response = self.client.get(
+            f"/api/manual-dispatch/final-summaries/{saved_payload['summary_id']}/export-excel",
+        )
+        saved_summary_after = self.service.get_final_trip_summary(
+            saved_payload["summary_id"]
+        )
+        history_after = self.client.get(
+            "/api/manual-dispatch/final-summaries",
+            params={"dispatch_date": self.dispatch_date},
+        ).json()
+        assignment_after = self.repository.get_assignment(
+            self.dispatch_date,
+            "ORDER",
+            "ORD-001",
+        )
+
+        self.assertEqual(200, save_response.status_code)
+        self.assertEqual(200, export_response.status_code)
+        self.assertEqual(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            export_response.headers["content-type"],
+        )
+        self.assertIn(
+            f"Final_Trip_Summary_{saved_payload['summary_id']}",
+            export_response.headers["content-disposition"],
+        )
+        self.assertEqual([saved_payload["summary_id"]], [item["summary_id"] for item in history_after])
+        self.assertEqual(saved_summary_before.saved_at, saved_summary_after.saved_at)
+        self.assertEqual(
+            saved_summary_before.saved_by_account_name,
+            saved_summary_after.saved_by_account_name,
+        )
+        self.assertEqual(
+            saved_summary_before.saved_by_account_id,
+            saved_summary_after.saved_by_account_id,
+        )
+        self.assertEqual(assignment_before, assignment_after)
+
+    def test_reexport_saved_final_summary_includes_saved_opshop_snapshot_section(self):
+        self._seed_assigned_opshop_pickup("TASK-REEXPORT")
+        payload = self._summary_payload()
+        payload["trips"] = []
+        payload["total_pallets"] = 0
+        payload["opshop_pickups"] = [
+            {
+                "task_type": "OPSHOP_PICKUP",
+                "pickup_task_id": "TASK-REEXPORT",
+                "opshop_name": "Snapshot Only OP SHOP",
+                "suburb": "Coburg",
+                "street_address": "4 Snapshot Road",
+                "pickup_date": self.dispatch_date,
+                "primary_phone": "0400 555 111",
+                "status": "ASSIGNED",
+            }
+        ]
+        save_response = self.client.post("/api/manual-dispatch/final-summaries", json=payload)
+        saved_payload = save_response.json()
+
+        export_response = self.client.get(
+            f"/api/manual-dispatch/final-summaries/{saved_payload['summary_id']}/export-excel",
+        )
+        workbook = load_workbook(BytesIO(export_response.content))
+        worksheet = workbook.active
+        values = [
+            cell.value
+            for row in worksheet.iter_rows()
+            for cell in row
+            if cell.value is not None
+        ]
+
+        self.assertEqual(200, save_response.status_code)
+        self.assertEqual(200, export_response.status_code)
+        self.assertIn("OP SHOP PICKUPS", values)
+        self.assertIn("Snapshot Only OP SHOP", values)
+        self.assertIn("No Delivery Orders included.", values)
+
+    def test_reexport_rejects_generated_final_summary(self):
+        self._assign_order("ORD-001", "D001", "trip1")
+        generated_response = self.client.post(
+            "/api/manual-dispatch/final-summaries/generated",
+            json=self._summary_payload(),
+        )
+        generated_payload = generated_response.json()
+
+        export_response = self.client.get(
+            f"/api/manual-dispatch/final-summaries/{generated_payload['summary_id']}/export-excel",
+        )
+
+        self.assertEqual(200, generated_response.status_code)
+        self.assertEqual(400, export_response.status_code)
+        self.assertIn(
+            "Only saved Final Trip Summaries can be exported.",
+            export_response.json()["detail"],
+        )
+
+    def test_reexport_rejects_missing_final_summary(self):
+        export_response = self.client.get(
+            "/api/manual-dispatch/final-summaries/FTS-MISSING/export-excel",
+        )
+
+        self.assertEqual(404, export_response.status_code)
+        self.assertIn(
+            "Final Trip Summary does not exist: FTS-MISSING",
+            export_response.json()["detail"],
+        )
+
     def _assign_order(self, order_id, driver_id, trip_no):
         return self.service.assign_task(
             AssignTaskRequest(
@@ -1173,6 +1298,45 @@ class ManualDispatchFinalSummaryRouteTest(unittest.TestCase):
                 task_id=order_id,
                 driver_id=driver_id,
                 trip_no=trip_no,
+            )
+        )
+
+    def _seed_assigned_opshop_pickup(self, pickup_task_id):
+        self.repository.upsert_opshop_location(
+            OpShopLocation(
+                opshop_id="OPSHOP-REEXPORT",
+                name="Snapshot Only OP SHOP",
+                suburb="Coburg",
+                street_address="4 Snapshot Road",
+                area_region=None,
+                primary_contact=None,
+                primary_phone="0400 555 111",
+                secondary_contact=None,
+                secondary_phone=None,
+                access_type=None,
+                key_required=False,
+                trailer_restriction=None,
+                status_notes=None,
+                is_active=True,
+                created_at="2026-05-05T00:00:00+00:00",
+                updated_at="2026-05-05T00:00:00+00:00",
+            )
+        )
+        self.repository.upsert_opshop_pickup_task(
+            OpShopPickupTask(
+                pickup_task_id=pickup_task_id,
+                schedule_id=None,
+                opshop_id="OPSHOP-REEXPORT",
+                pickup_date=self.dispatch_date,
+                task_type="OPSHOP_PICKUP",
+                generated_from="MANUAL",
+                status="ASSIGNED",
+                dispatch_date=self.dispatch_date,
+                driver_id="D001",
+                trip_no="trip1",
+                notes=None,
+                created_at="2026-05-05T00:00:00+00:00",
+                updated_at="2026-05-05T00:00:00+00:00",
             )
         )
 

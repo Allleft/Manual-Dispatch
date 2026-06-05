@@ -100,6 +100,7 @@ export const state = {
   historyDate: DEFAULT_DISPATCH_DATE,
   finalSummaryHistory: [],
   isHistoryLoading: false,
+  isReExportingFinalSummaryId: "",
   historyLoaded: false,
   historyError: "",
   isSpecificationModalOpen: false,

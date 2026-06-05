@@ -239,3 +239,8 @@ class ManualDispatchService:
 
     def get_final_trip_summary(self, summary_id):
         return self.final_summary_service.get_final_trip_summary(summary_id)
+
+    def get_saved_final_trip_summary_for_export(self, summary_id):
+        return self.final_summary_service.get_saved_final_trip_summary_for_export(
+            summary_id
+        )

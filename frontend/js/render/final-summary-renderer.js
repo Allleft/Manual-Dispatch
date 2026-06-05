@@ -16,6 +16,7 @@ export function renderFinalTripSummaries({
   getUnsavedFinalSummaries,
   normalizeFinalSummary,
   onCancelGeneratedFinalSummary,
+  onReExportFinalSummary,
   onHistoryDateChange,
   onLoadFinalSummaryHistory,
   onSaveAllFinalSummaries,
@@ -60,7 +61,7 @@ export function renderFinalTripSummaries({
       });
   }
 
-  renderFinalSummaryHistory({ normalizeFinalSummary });
+  renderFinalSummaryHistory({ normalizeFinalSummary, onReExportFinalSummary });
 }
 
 function renderFinalSummaryControls({
@@ -135,7 +136,7 @@ function renderFinalSummaryControls({
   }
 }
 
-function renderFinalSummaryHistory({ normalizeFinalSummary }) {
+function renderFinalSummaryHistory({ normalizeFinalSummary, onReExportFinalSummary }) {
   const historyList = document.querySelector("#final-summary-history-list");
   if (!historyList) {
     return;
@@ -186,7 +187,12 @@ function renderFinalSummaryHistory({ normalizeFinalSummary }) {
     .map(normalizeFinalSummary)
     .sort((first, second) => first.driver_name.localeCompare(second.driver_name))
     .forEach((summary) => {
-      historyList.append(createFinalTripSummaryCard(summary, { mode: "history" }));
+      historyList.append(
+        createFinalTripSummaryCard(summary, {
+          mode: "history",
+          onReExportFinalSummary,
+        }),
+      );
     });
 }
 
@@ -229,6 +235,29 @@ function createFinalTripSummaryCard(summary, options = {}) {
       options.onCancelGeneratedFinalSummary(summary.summary_id);
     });
     actions.append(cancelGeneratedButton);
+  }
+  if (
+    options.mode === "history" &&
+    summary.status === "SAVED" &&
+    summary.summary_id &&
+    typeof options.onReExportFinalSummary === "function"
+  ) {
+    const reExportButton = document.createElement("button");
+    reExportButton.type = "button";
+    reExportButton.className = "button-secondary";
+    reExportButton.disabled =
+      state.isSaving ||
+      state.isLoading ||
+      state.isHistoryLoading ||
+      Boolean(state.isReExportingFinalSummaryId);
+    reExportButton.textContent =
+      state.isReExportingFinalSummaryId === summary.summary_id
+        ? "Re-exporting..."
+        : "Re-export";
+    reExportButton.addEventListener("click", () => {
+      options.onReExportFinalSummary(summary.summary_id);
+    });
+    actions.append(reExportButton);
   }
   header.append(titleWrap, actions);
 

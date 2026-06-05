@@ -383,6 +383,15 @@ export async function apiCancelGeneratedFinalSummary(summaryId) {
 }
 
 
+export async function apiExportFinalSummaryExcel(summaryId) {
+  return fetch(
+    getApiUrl(
+      `/api/manual-dispatch/final-summaries/${encodeURIComponent(summaryId)}/export-excel`,
+    ),
+  );
+}
+
+
 export async function apiListFinalSummaries(dispatchDate, deliveryDate) {
   return requestJson("/api/manual-dispatch/final-summaries", {
     query: { dispatch_date: dispatchDate, delivery_date: deliveryDate },

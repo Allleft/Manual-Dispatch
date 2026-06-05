@@ -1,6 +1,7 @@
 import {
   apiCancelGeneratedFinalSummary,
   apiCreateGeneratedFinalSummary,
+  apiExportFinalSummaryExcel,
   apiExportFinalSummariesExcel,
   apiListFinalSummaries,
   apiSaveGeneratedFinalSummary,
@@ -218,6 +219,22 @@ export function createFinalSummaryActions({
     }
 
     await downloadExcelResponse(response, `final-trip-summary-${dispatchDate}.xlsx`);
+  }
+
+  async function exportSavedFinalSummaryExcel(summary) {
+    const response = await apiExportFinalSummaryExcel(summary.summary_id);
+    if (!response.ok) {
+      let message = `Export failed with status ${response.status}`;
+      try {
+        const payload = await response.json();
+        message = formatApiErrorDetail(payload.detail) || message;
+      } catch (error) {
+        message = response.statusText || message;
+      }
+      throw new Error(message);
+    }
+
+    await downloadExcelResponse(response, `final-trip-summary-${summary.summary_id}.xlsx`);
   }
 
   function buildFinalTripSummarySnapshot(driverId) {
@@ -627,11 +644,48 @@ export function createFinalSummaryActions({
     }
   }
 
+  async function handleReExportFinalSummary(summaryId) {
+    if (
+      state.isSaving ||
+      state.isLoading ||
+      state.isHistoryLoading ||
+      state.isReExportingFinalSummaryId
+    ) {
+      return;
+    }
+
+    const summary = state.finalSummaryHistory
+      .map(normalizeFinalSummary)
+      .find((item) => item.summary_id === summaryId);
+    if (!summary || summary.status !== "SAVED") {
+      state.historyError = "Only saved Final Trip Summaries can be exported.";
+      renderBoard();
+      return;
+    }
+
+    state.isReExportingFinalSummaryId = summaryId;
+    state.historyError = "";
+    state.finalSummaryGlobalSaveError = "";
+    state.finalSummaryGlobalSaveSuccess = "";
+    renderFinalTripSummaries();
+
+    try {
+      await exportSavedFinalSummaryExcel(summary);
+      state.finalSummaryGlobalSaveSuccess = `Final Trip Summary re-exported for ${summary.driver_name}.`;
+    } catch (error) {
+      state.historyError = `Unable to re-export Final Trip Summary. ${error.message}`;
+    } finally {
+      state.isReExportingFinalSummaryId = "";
+      renderFinalTripSummaries();
+    }
+  }
+
   return {
     getUnsavedFinalSummaries,
     handleCancelGeneratedFinalSummary,
     handleGenerateDriverSummary,
     handleLoadFinalSummaryHistory,
+    handleReExportFinalSummary,
     handleSaveAllFinalSummaries,
     normalizeFinalSummary,
   };

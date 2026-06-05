@@ -36,6 +36,7 @@ class ManualDispatchApiContractTest(unittest.TestCase):
             ("GET", "/api/manual-dispatch/final-summaries"),
             ("GET", "/api/manual-dispatch/final-summaries/export-excel"),
             ("GET", "/api/manual-dispatch/final-summary-dates"),
+            ("GET", "/api/manual-dispatch/final-summaries/{summary_id}/export-excel"),
             ("GET", "/api/manual-dispatch/final-summaries/{summary_id}"),
         }
 

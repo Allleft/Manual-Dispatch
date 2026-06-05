@@ -494,6 +494,26 @@ def cancel_generated_final_trip_summary(summary_id: str):
         raise _to_http_exception(error) from error
 
 
+@router.get("/final-summaries/{summary_id}/export-excel")
+def export_saved_final_trip_summary_excel(summary_id: str):
+    try:
+        summary = service.get_saved_final_trip_summary_for_export(summary_id)
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+    workbook_bytes = build_final_summary_excel(
+        [summary],
+        summary.dispatch_date,
+        summary.delivery_date,
+    )
+    filename = _final_summary_export_filename(summary)
+    return Response(
+        content=workbook_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.get("/final-summaries/{summary_id}")
 def get_final_trip_summary(summary_id: str):
     try:
@@ -537,6 +557,26 @@ def _to_http_exception(error):
     message = str(error)
     status_code = 404 if "does not exist" in message else 400
     return HTTPException(status_code=status_code, detail=message)
+
+
+def _final_summary_export_filename(summary):
+    driver_name = _safe_filename_part(summary.driver_name_snapshot or summary.driver_id)
+    return (
+        f"Final_Trip_Summary_{_safe_filename_part(summary.summary_id)}_"
+        f"{_safe_filename_part(summary.delivery_date)}_{driver_name}.xlsx"
+    )
+
+
+def _safe_filename_part(value):
+    text = str(value or "").strip() or "Summary"
+    safe_characters = []
+    for character in text:
+        if character.isalnum() or character in {"-", "_"}:
+            safe_characters.append(character)
+        elif character.isspace():
+            safe_characters.append("_")
+    safe = "".join(safe_characters).strip("_")
+    return safe or "Summary"
 
 
 def _is_env_flag_enabled(name, default=False):

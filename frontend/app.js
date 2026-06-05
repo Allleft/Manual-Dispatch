@@ -372,6 +372,7 @@ function renderFinalTripSummaries() {
     getUnsavedFinalSummaries: finalSummaryActions.getUnsavedFinalSummaries,
     normalizeFinalSummary: finalSummaryActions.normalizeFinalSummary,
     onCancelGeneratedFinalSummary: finalSummaryActions.handleCancelGeneratedFinalSummary,
+    onReExportFinalSummary: finalSummaryActions.handleReExportFinalSummary,
     onHistoryDateChange: (historyDate) => {
       state.historyDate = historyDate;
       state.historyLoaded = false;

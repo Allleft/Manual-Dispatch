@@ -173,6 +173,12 @@ class FinalSummaryService:
             raise ValueError(f"Final Trip Summary does not exist: {summary_id}")
         return summary
 
+    def get_saved_final_trip_summary_for_export(self, summary_id):
+        summary = self.get_final_trip_summary(summary_id)
+        if summary.status != "SAVED":
+            raise ValueError("Only saved Final Trip Summaries can be exported.")
+        return summary
+
     def _normalize_final_summary_rows(self, trips, delivery_date):
         if not isinstance(trips, list):
             raise ValueError("trips must be a list")
