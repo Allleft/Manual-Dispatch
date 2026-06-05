@@ -72,10 +72,92 @@ class FinalSummaryService:
         }
         return self.repository.save_final_trip_summary(summary, rows, opshop_rows)
 
+    def create_generated_final_trip_summary(self, request):
+        dispatch_date = clean_required_text(request.dispatch_date, "dispatch_date")
+        delivery_date = clean_required_text(
+            getattr(request, "delivery_date", None) or dispatch_date,
+            "delivery_date",
+        )
+        driver_id = clean_required_text(request.driver_id, "driver_id")
+        self.validator.validate_driver_exists(driver_id)
+
+        vehicle_id = clean_optional_text(request.vehicle_id)
+        if vehicle_id:
+            self.validator.validate_vehicle_exists(vehicle_id)
+
+        if self.repository.has_saved_final_trip_summary(
+            dispatch_date,
+            driver_id,
+            delivery_date,
+        ):
+            raise ValueError(
+                "Final Summary for this driver, dispatch date, and delivery date has already been saved."
+            )
+
+        rows = self._normalize_final_summary_rows(request.trips, delivery_date)
+        opshop_rows = self._normalize_final_summary_opshop_rows(
+            getattr(request, "opshop_pickups", None) or [],
+            delivery_date,
+        )
+        summary = {
+            "dispatch_date": dispatch_date,
+            "delivery_date": delivery_date,
+            "driver_id": driver_id,
+            "driver_name_snapshot": clean_required_text(
+                request.driver_name_snapshot,
+                "driver_name_snapshot",
+            ),
+            "vehicle_id": vehicle_id,
+            "vehicle_rego_snapshot": clean_optional_text(
+                request.vehicle_rego_snapshot
+            )
+            or "No vehicle selected",
+            "total_pallets": sum(row["pallet_quantity_snapshot"] for row in rows),
+            "total_loose_bags": sum(
+                row["loose_bags_quantity_snapshot"] for row in rows
+            ),
+            "generated_at": clean_optional_text(request.generated_at),
+            "saved_by_account_name": clean_optional_text(
+                request.saved_by_account_name
+            )
+            or "Generated",
+            "saved_by_account_id": request.saved_by_account_id,
+        }
+        return self.repository.create_generated_final_trip_summary(
+            summary,
+            rows,
+            opshop_rows,
+        )
+
+    def save_generated_final_trip_summary(
+        self,
+        summary_id,
+        saved_by_account_name,
+        saved_by_account_id=None,
+    ):
+        summary_id = clean_required_text(summary_id, "summary_id")
+        saved_by_account = self.validator.validate_saved_by_account(
+            saved_by_account_name,
+            saved_by_account_id,
+        )
+        return self.repository.save_generated_final_trip_summary(
+            summary_id,
+            saved_by_account.account_name,
+            saved_by_account.account_id,
+        )
+
     def list_final_trip_summaries(self, dispatch_date, delivery_date=None):
         dispatch_date = clean_required_text(dispatch_date, "dispatch_date")
         delivery_date = clean_optional_text(delivery_date)
         return self.repository.list_final_trip_summaries(dispatch_date, delivery_date)
+
+    def list_generated_final_trip_summaries(self, dispatch_date, delivery_date=None):
+        dispatch_date = clean_required_text(dispatch_date, "dispatch_date")
+        delivery_date = clean_optional_text(delivery_date)
+        return self.repository.list_generated_final_trip_summaries(
+            dispatch_date,
+            delivery_date,
+        )
 
     def list_final_summary_dates(self):
         return self.repository.list_final_summary_dates()

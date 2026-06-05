@@ -187,7 +187,7 @@ function renderFinalSummaryHistory({ normalizeFinalSummary }) {
 function createFinalTripSummaryCard(summary, options = {}) {
   const card = document.createElement("article");
   card.className = "final-summary-card";
-  const isSaved = Boolean(summary.summary_id);
+  const isSaved = summary.status === "SAVED";
 
   const header = document.createElement("div");
   header.className = "final-summary-header";

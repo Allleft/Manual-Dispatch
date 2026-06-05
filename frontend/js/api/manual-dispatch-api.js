@@ -359,6 +359,22 @@ export async function apiSaveFinalSummary(payload) {
 }
 
 
+export async function apiCreateGeneratedFinalSummary(payload) {
+  return requestJson("/api/manual-dispatch/final-summaries/generated", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+
+export async function apiSaveGeneratedFinalSummary(summaryId, payload) {
+  return requestJson(`/api/manual-dispatch/final-summaries/${encodeURIComponent(summaryId)}/save`, {
+    method: "POST",
+    body: payload,
+  });
+}
+
+
 export async function apiListFinalSummaries(dispatchDate, deliveryDate) {
   return requestJson("/api/manual-dispatch/final-summaries", {
     query: { dispatch_date: dispatchDate, delivery_date: deliveryDate },

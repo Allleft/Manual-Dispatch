@@ -262,6 +262,16 @@ class InMemoryManualDispatchRepository:
             for summary in self.final_trip_summaries
             if summary.dispatch_date == dispatch_date
             and (not delivery_date or summary.delivery_date == delivery_date)
+            and summary.status == "SAVED"
+        ]
+
+    def list_generated_final_trip_summaries(self, dispatch_date, delivery_date=None):
+        return [
+            summary
+            for summary in self.final_trip_summaries
+            if summary.dispatch_date == dispatch_date
+            and (not delivery_date or summary.delivery_date == delivery_date)
+            and summary.status == "GENERATED"
         ]
 
     def list_final_summary_dates(self):
@@ -354,6 +364,24 @@ class InMemoryManualDispatchRepository:
                 account
                 for account in self.operator_accounts
                 if account.account_id == account_id
+            ),
+            None,
+        )
+
+    def get_generated_final_trip_summary_for_driver(
+        self,
+        dispatch_date,
+        delivery_date,
+        driver_id,
+    ):
+        return next(
+            (
+                summary
+                for summary in self.final_trip_summaries
+                if summary.dispatch_date == dispatch_date
+                and summary.delivery_date == delivery_date
+                and summary.driver_id == driver_id
+                and summary.status == "GENERATED"
             ),
             None,
         )
@@ -1094,6 +1122,64 @@ class InMemoryManualDispatchRepository:
                 "Final Summary for this driver, dispatch date, and delivery date has already been saved."
             )
 
+        self._remove_generated_final_trip_summary_for_driver(
+            summary["dispatch_date"],
+            summary.get("delivery_date") or summary["dispatch_date"],
+            summary["driver_id"],
+        )
+        final_summary = self._build_final_trip_summary(summary, rows, opshop_rows, "SAVED")
+        self.final_trip_summaries.append(final_summary)
+        self._finalize_order_rows(final_summary.dispatch_date, rows)
+        return final_summary
+
+    def create_generated_final_trip_summary(self, summary, rows, opshop_rows=None):
+        if self.has_saved_final_trip_summary(
+            summary["dispatch_date"], summary["driver_id"], summary.get("delivery_date")
+        ):
+            raise ValueError(
+                "Final Summary for this driver, dispatch date, and delivery date has already been saved."
+            )
+
+        self._remove_generated_final_trip_summary_for_driver(
+            summary["dispatch_date"],
+            summary.get("delivery_date") or summary["dispatch_date"],
+            summary["driver_id"],
+        )
+        final_summary = self._build_final_trip_summary(summary, rows, opshop_rows, "GENERATED")
+        self.final_trip_summaries.append(final_summary)
+        return final_summary
+
+    def save_generated_final_trip_summary(self, summary_id, saved_by_account_name, saved_by_account_id):
+        summary = self.get_final_trip_summary(summary_id)
+        if not summary:
+            raise ValueError(f"Final Trip Summary does not exist: {summary_id}")
+        if summary.status != "GENERATED":
+            raise ValueError("Only generated Final Trip Summaries can be saved.")
+        if self.has_saved_final_trip_summary(
+            summary.dispatch_date,
+            summary.driver_id,
+            summary.delivery_date,
+        ):
+            raise ValueError(
+                "Final Summary for this driver, dispatch date, and delivery date has already been saved."
+            )
+
+        summary.status = "SAVED"
+        summary.saved_at = "in-memory"
+        summary.saved_by_account_name = saved_by_account_name or "Unknown"
+        summary.saved_by_account_id = saved_by_account_id
+        rows = [
+            {
+                "task_type": order.task_type,
+                "task_id": order.task_id,
+            }
+            for trip in summary.trips
+            for order in trip.orders
+        ]
+        self._finalize_order_rows(summary.dispatch_date, rows)
+        return summary
+
+    def _build_final_trip_summary(self, summary, rows, opshop_rows=None, status="SAVED"):
         summary_id = self._create_final_summary_id()
         opshop_rows = opshop_rows or []
         trips = []
@@ -1164,7 +1250,7 @@ class InMemoryManualDispatchRepository:
         ]
 
         saved_at = summary.get("saved_at") or summary.get("generated_at") or "in-memory"
-        final_summary = FinalTripSummary(
+        return FinalTripSummary(
             summary_id=summary_id,
             dispatch_date=summary["dispatch_date"],
             delivery_date=summary.get("delivery_date") or summary["dispatch_date"],
@@ -1174,7 +1260,7 @@ class InMemoryManualDispatchRepository:
             vehicle_rego_snapshot=summary.get("vehicle_rego_snapshot"),
             total_pallets=summary["total_pallets"],
             total_loose_bags=summary["total_loose_bags"],
-            status="SAVED",
+            status=status,
             generated_at=summary.get("generated_at") or saved_at,
             saved_at=saved_at,
             saved_by_account_name=summary.get("saved_by_account_name") or "Unknown",
@@ -1182,16 +1268,31 @@ class InMemoryManualDispatchRepository:
             trips=trips,
             opshop_pickups=opshop_pickups,
         )
-        self.final_trip_summaries.append(final_summary)
 
+    def _finalize_order_rows(self, dispatch_date, rows):
         for row in rows:
             if row["task_type"] == "ORDER":
                 order = self.get_order(row["task_id"])
                 if order and order.status == "ACTIVE":
                     order.status = "FINALIZED"
-                self.remove_assignment(summary["dispatch_date"], row["task_type"], row["task_id"])
+                self.remove_assignment(dispatch_date, row["task_type"], row["task_id"])
 
-        return final_summary
+    def _remove_generated_final_trip_summary_for_driver(
+        self,
+        dispatch_date,
+        delivery_date,
+        driver_id,
+    ):
+        self.final_trip_summaries = [
+            summary
+            for summary in self.final_trip_summaries
+            if not (
+                summary.dispatch_date == dispatch_date
+                and summary.delivery_date == delivery_date
+                and summary.driver_id == driver_id
+                and summary.status == "GENERATED"
+            )
+        ]
 
     def _create_assignment_id(self):
         assignment_id = f"A-{self._next_assignment_number:03d}"

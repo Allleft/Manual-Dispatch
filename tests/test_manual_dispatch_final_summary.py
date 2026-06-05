@@ -125,6 +125,106 @@ class ManualDispatchFinalSummaryTest(unittest.TestCase):
         self.assertEqual([saved.summary_id], [summary.summary_id for summary in summaries])
         self.assertEqual("ORD-001", detail.trips[0].orders[0].task_id)
 
+    def test_generated_summary_persists_and_filters_editable_board_after_reload(self):
+        self._assign_order("ORD-001", "D001", "trip1")
+        self._seed_opshop_pickup("OPSHOP-GENERATED")
+        self.repository.upsert_assignment(
+            self.dispatch_date,
+            "OPSHOP_PICKUP",
+            "OPSHOP-GENERATED",
+            "D001",
+            "trip1",
+        )
+
+        generated = self.service.create_generated_final_trip_summary(
+            self._summary_request(
+                opshop_pickups=[self._opshop_payload("OPSHOP-GENERATED")]
+            )
+        )
+
+        reloaded_service = ManualDispatchService(
+            SQLiteManualDispatchRepository(self.db_path)
+        )
+        board = reloaded_service.get_board(self.dispatch_date)
+
+        self.assertEqual("GENERATED", generated.status)
+        self.assertEqual(
+            [generated.summary_id],
+            [summary.summary_id for summary in board.generated_final_trip_summaries],
+        )
+        self.assertNotIn("ORD-001", [order.order_id for order in board.orders])
+        self.assertNotIn(
+            "ORD-001",
+            [
+                assignment.task_id
+                for assignment in board.assignments
+                if assignment.task_type == "ORDER"
+            ],
+        )
+        self.assertNotIn(
+            "OPSHOP-GENERATED",
+            [pickup.pickup_task_id for pickup in board.assigned_opshop_pickups],
+        )
+        task = reloaded_service.repository.get_opshop_pickup_task("OPSHOP-GENERATED")
+        self.assertEqual("ASSIGNED", task.status)
+        self.assertEqual("D001", task.driver_id)
+        self.assertIsNotNone(
+            reloaded_service.repository.find_assignment_for_task(
+                "OPSHOP_PICKUP",
+                "OPSHOP-GENERATED",
+            )
+        )
+
+    def test_save_generated_summary_converts_to_saved_without_duplicate(self):
+        self._assign_order("ORD-001", "D001", "trip1")
+        self._seed_opshop_pickup("OPSHOP-SAVE-GENERATED")
+        self.repository.upsert_assignment(
+            self.dispatch_date,
+            "OPSHOP_PICKUP",
+            "OPSHOP-SAVE-GENERATED",
+            "D001",
+            "trip1",
+        )
+        generated = self.service.create_generated_final_trip_summary(
+            self._summary_request(
+                opshop_pickups=[self._opshop_payload("OPSHOP-SAVE-GENERATED")]
+            )
+        )
+
+        saved = self.service.save_generated_final_trip_summary(
+            generated.summary_id,
+            self.account.account_name,
+            self.account.account_id,
+        )
+
+        self.assertEqual(generated.summary_id, saved.summary_id)
+        self.assertEqual("SAVED", saved.status)
+        self.assertEqual(
+            [saved.summary_id],
+            [
+                summary.summary_id
+                for summary in self.service.list_final_trip_summaries(
+                    self.dispatch_date
+                )
+            ],
+        )
+        self.assertEqual(
+            [],
+            [
+                summary.summary_id
+                for summary in self.service.list_generated_final_trip_summaries(
+                    self.dispatch_date
+                )
+            ],
+        )
+        self.assertEqual("FINALIZED", self.repository.get_order("ORD-001").status)
+        self.assertIsNotNone(
+            self.repository.find_assignment_for_task(
+                "OPSHOP_PICKUP",
+                "OPSHOP-SAVE-GENERATED",
+            )
+        )
+
     def test_saved_summary_dates_are_listed_newest_first(self):
         self._assign_order("ORD-001", "D001", "trip1")
         self.service.save_final_trip_summary(self._summary_request())
@@ -856,6 +956,42 @@ class ManualDispatchFinalSummaryRouteTest(unittest.TestCase):
         self.assertEqual(200, save_response.status_code)
         self.assertEqual(200, dates_response.status_code)
         self.assertEqual([self.dispatch_date], dates_response.json())
+
+    def test_generated_final_summary_api_is_hidden_from_history_until_saved(self):
+        self._assign_order("ORD-001", "D001", "trip1")
+        generated_response = self.client.post(
+            "/api/manual-dispatch/final-summaries/generated",
+            json=self._summary_payload(),
+        )
+        history_before_save = self.client.get(
+            "/api/manual-dispatch/final-summaries",
+            params={"dispatch_date": self.dispatch_date},
+        )
+
+        self.assertEqual(200, generated_response.status_code)
+        generated_payload = generated_response.json()
+        self.assertEqual("GENERATED", generated_payload["status"])
+        self.assertEqual(200, history_before_save.status_code)
+        self.assertEqual([], history_before_save.json())
+
+        save_response = self.client.post(
+            f"/api/manual-dispatch/final-summaries/{generated_payload['summary_id']}/save",
+            json={
+                "saved_by_account_name": self.account.account_name,
+                "saved_by_account_id": self.account.account_id,
+            },
+        )
+        history_after_save = self.client.get(
+            "/api/manual-dispatch/final-summaries",
+            params={"dispatch_date": self.dispatch_date},
+        )
+
+        self.assertEqual(200, save_response.status_code)
+        self.assertEqual("SAVED", save_response.json()["status"])
+        self.assertEqual(
+            [generated_payload["summary_id"]],
+            [item["summary_id"] for item in history_after_save.json()],
+        )
 
     def test_final_summary_api_saves_opshop_snapshot_section(self):
         self.repository.upsert_opshop_location(

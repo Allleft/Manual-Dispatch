@@ -227,7 +227,7 @@ class SQLiteManualDispatchRepository:
                     """
                     SELECT *
                     FROM final_trip_summaries
-                    WHERE dispatch_date = ? AND delivery_date = ?
+                    WHERE dispatch_date = ? AND delivery_date = ? AND status = 'SAVED'
                     ORDER BY saved_at DESC, summary_id
                     """,
                     (dispatch_date, delivery_date),
@@ -237,8 +237,32 @@ class SQLiteManualDispatchRepository:
                     """
                     SELECT *
                     FROM final_trip_summaries
-                    WHERE dispatch_date = ?
+                    WHERE dispatch_date = ? AND status = 'SAVED'
                     ORDER BY saved_at DESC, summary_id
+                    """,
+                    (dispatch_date,),
+                ).fetchall()
+        return [self._row_to_final_trip_summary(row) for row in rows]
+
+    def list_generated_final_trip_summaries(self, dispatch_date, delivery_date=None):
+        with connect(self.db_path) as connection:
+            if delivery_date:
+                rows = connection.execute(
+                    """
+                    SELECT *
+                    FROM final_trip_summaries
+                    WHERE dispatch_date = ? AND delivery_date = ? AND status = 'GENERATED'
+                    ORDER BY generated_at DESC, summary_id
+                    """,
+                    (dispatch_date, delivery_date),
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    """
+                    SELECT *
+                    FROM final_trip_summaries
+                    WHERE dispatch_date = ? AND status = 'GENERATED'
+                    ORDER BY generated_at DESC, summary_id
                     """,
                     (dispatch_date,),
                 ).fetchall()
@@ -334,6 +358,27 @@ class SQLiteManualDispatchRepository:
                 WHERE summary_id = ?
                 """,
                 (summary_id,),
+            ).fetchone()
+        return self._row_to_final_trip_summary(row) if row else None
+
+    def get_generated_final_trip_summary_for_driver(
+        self,
+        dispatch_date,
+        delivery_date,
+        driver_id,
+    ):
+        with connect(self.db_path) as connection:
+            row = connection.execute(
+                """
+                SELECT *
+                FROM final_trip_summaries
+                WHERE dispatch_date = ?
+                    AND delivery_date = ?
+                    AND driver_id = ?
+                    AND status = 'GENERATED'
+                LIMIT 1
+                """,
+                (dispatch_date, delivery_date, driver_id),
             ).fetchone()
         return self._row_to_final_trip_summary(row) if row else None
 
@@ -1841,6 +1886,13 @@ class SQLiteManualDispatchRepository:
                     "Final Summary for this driver, dispatch date, and delivery date has already been saved."
                 )
 
+            self._delete_generated_final_trip_summary_for_driver(
+                connection,
+                summary["dispatch_date"],
+                summary["delivery_date"],
+                summary["driver_id"],
+            )
+
             summary_id = self._create_final_trip_summary_id(connection)
             connection.execute(
                 """
@@ -2007,6 +2059,326 @@ class SQLiteManualDispatchRepository:
             connection.commit()
 
         return self.get_final_trip_summary(summary_id)
+
+    def create_generated_final_trip_summary(self, summary, rows, opshop_rows=None):
+        timestamp = self._timestamp()
+        opshop_rows = opshop_rows or []
+
+        with connect(self.db_path) as connection:
+            existing_saved = connection.execute(
+                """
+                SELECT 1
+                FROM final_trip_summaries
+                WHERE dispatch_date = ?
+                    AND delivery_date = ?
+                    AND driver_id = ?
+                    AND status = 'SAVED'
+                LIMIT 1
+                """,
+                (
+                    summary["dispatch_date"],
+                    summary["delivery_date"],
+                    summary["driver_id"],
+                ),
+            ).fetchone()
+            if existing_saved:
+                raise ValueError(
+                    "Final Summary for this driver, dispatch date, and delivery date has already been saved."
+                )
+
+            self._delete_generated_final_trip_summary_for_driver(
+                connection,
+                summary["dispatch_date"],
+                summary["delivery_date"],
+                summary["driver_id"],
+            )
+            summary_id = self._insert_final_trip_summary_snapshot(
+                connection,
+                summary,
+                rows,
+                opshop_rows,
+                "GENERATED",
+                timestamp,
+            )
+            connection.commit()
+
+        return self.get_final_trip_summary(summary_id)
+
+    def save_generated_final_trip_summary(
+        self,
+        summary_id,
+        saved_by_account_name,
+        saved_by_account_id,
+    ):
+        timestamp = self._timestamp()
+        with connect(self.db_path) as connection:
+            summary_row = connection.execute(
+                """
+                SELECT *
+                FROM final_trip_summaries
+                WHERE summary_id = ?
+                """,
+                (summary_id,),
+            ).fetchone()
+            if not summary_row:
+                raise ValueError(f"Final Trip Summary does not exist: {summary_id}")
+            if summary_row["status"] != "GENERATED":
+                raise ValueError("Only generated Final Trip Summaries can be saved.")
+
+            existing_saved = connection.execute(
+                """
+                SELECT 1
+                FROM final_trip_summaries
+                WHERE dispatch_date = ?
+                    AND delivery_date = ?
+                    AND driver_id = ?
+                    AND status = 'SAVED'
+                    AND summary_id != ?
+                LIMIT 1
+                """,
+                (
+                    summary_row["dispatch_date"],
+                    summary_row["delivery_date"],
+                    summary_row["driver_id"],
+                    summary_id,
+                ),
+            ).fetchone()
+            if existing_saved:
+                raise ValueError(
+                    "Final Summary for this driver, dispatch date, and delivery date has already been saved."
+                )
+
+            connection.execute(
+                """
+                UPDATE final_trip_summaries
+                SET status = 'SAVED',
+                    saved_at = ?,
+                    saved_by_account_name = ?,
+                    saved_by_account_id = ?
+                WHERE summary_id = ?
+                """,
+                (
+                    timestamp,
+                    saved_by_account_name or "Unknown",
+                    saved_by_account_id,
+                    summary_id,
+                ),
+            )
+            order_rows = connection.execute(
+                """
+                SELECT task_type, task_id
+                FROM final_trip_summary_rows
+                WHERE summary_id = ?
+                """,
+                (summary_id,),
+            ).fetchall()
+            for row in order_rows:
+                if row["task_type"] != "ORDER":
+                    continue
+                connection.execute(
+                    """
+                    UPDATE manual_orders
+                    SET status = 'FINALIZED'
+                    WHERE order_id = ? AND status = 'ACTIVE'
+                    """,
+                    (row["task_id"],),
+                )
+                connection.execute(
+                    """
+                    DELETE FROM manual_dispatch_assignments
+                    WHERE dispatch_date = ? AND task_type = 'ORDER' AND task_id = ?
+                    """,
+                    (summary_row["dispatch_date"], row["task_id"]),
+                )
+            connection.commit()
+
+        return self.get_final_trip_summary(summary_id)
+
+    def _insert_final_trip_summary_snapshot(
+        self,
+        connection,
+        summary,
+        rows,
+        opshop_rows,
+        status,
+        timestamp,
+    ):
+        summary_id = self._create_final_trip_summary_id(connection)
+        saved_at = timestamp if status == "SAVED" else (summary.get("generated_at") or timestamp)
+        connection.execute(
+            """
+            INSERT INTO final_trip_summaries (
+                summary_id,
+                dispatch_date,
+                delivery_date,
+                driver_id,
+                driver_name_snapshot,
+                vehicle_id,
+                vehicle_rego_snapshot,
+                total_pallets,
+                total_loose_bags,
+                status,
+                generated_at,
+                saved_at,
+                saved_by_account_name,
+                saved_by_account_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                summary_id,
+                summary["dispatch_date"],
+                summary["delivery_date"],
+                summary["driver_id"],
+                summary["driver_name_snapshot"],
+                summary.get("vehicle_id"),
+                summary.get("vehicle_rego_snapshot"),
+                summary["total_pallets"],
+                summary["total_loose_bags"],
+                status,
+                summary.get("generated_at") or timestamp,
+                saved_at,
+                summary.get("saved_by_account_name") or "Unknown",
+                summary.get("saved_by_account_id"),
+            ),
+        )
+
+        for row in rows:
+            row_id = self._create_final_trip_summary_row_id(connection)
+            connection.execute(
+                """
+                INSERT INTO final_trip_summary_rows (
+                    row_id,
+                    summary_id,
+                    trip_no,
+                    row_no,
+                    task_type,
+                    task_id,
+                    order_id_snapshot,
+                    invoice_number_snapshot,
+                    company_name_snapshot,
+                    suburb_snapshot,
+                    delivery_address_snapshot,
+                    product_snapshot,
+                    product_details_snapshot,
+                    estimated_distance_km_from_warehouse_snapshot,
+                    pallet_quantity_snapshot,
+                    loose_bags_quantity_snapshot,
+                    note_snapshot
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    row_id,
+                    summary_id,
+                    row["trip_no"],
+                    row["row_no"],
+                    row["task_type"],
+                    row["task_id"],
+                    row.get("order_id_snapshot"),
+                    row.get("invoice_number_snapshot"),
+                    row.get("company_name_snapshot"),
+                    row.get("suburb_snapshot"),
+                    row.get("delivery_address_snapshot"),
+                    row.get("product_snapshot"),
+                    self._serialize_product_lines(row.get("product_lines_snapshot") or []),
+                    row.get("estimated_distance_km_from_warehouse_snapshot"),
+                    row["pallet_quantity_snapshot"],
+                    row["loose_bags_quantity_snapshot"],
+                    row.get("note_snapshot"),
+                ),
+            )
+
+        for row in opshop_rows:
+            row_id = self._create_final_trip_summary_opshop_row_id(connection)
+            connection.execute(
+                """
+                INSERT INTO final_trip_summary_opshop_pickup_rows (
+                    row_id,
+                    summary_id,
+                    row_no,
+                    pickup_task_id_snapshot,
+                    opshop_name_snapshot,
+                    suburb_snapshot,
+                    street_address_snapshot,
+                    area_region_snapshot,
+                    pickup_date_snapshot,
+                    run_type_snapshot,
+                    pickup_category_snapshot,
+                    route_group_id_snapshot,
+                    route_group_name_snapshot,
+                    pickup_frequency_snapshot,
+                    time_window_snapshot,
+                    primary_contact_snapshot,
+                    primary_phone_snapshot,
+                    secondary_contact_snapshot,
+                    secondary_phone_snapshot,
+                    access_type_snapshot,
+                    key_required_snapshot,
+                    trailer_restriction_snapshot,
+                    notes_snapshot,
+                    status_snapshot
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    row_id,
+                    summary_id,
+                    row["row_no"],
+                    row["pickup_task_id_snapshot"],
+                    row["opshop_name_snapshot"],
+                    row.get("suburb_snapshot"),
+                    row.get("street_address_snapshot"),
+                    row.get("area_region_snapshot"),
+                    row["pickup_date_snapshot"],
+                    row.get("run_type_snapshot"),
+                    row.get("pickup_category_snapshot"),
+                    row.get("route_group_id_snapshot"),
+                    row.get("route_group_name_snapshot"),
+                    row.get("pickup_frequency_snapshot"),
+                    row.get("time_window_snapshot"),
+                    row.get("primary_contact_snapshot"),
+                    row.get("primary_phone_snapshot"),
+                    row.get("secondary_contact_snapshot"),
+                    row.get("secondary_phone_snapshot"),
+                    row.get("access_type_snapshot"),
+                    int(bool(row.get("key_required_snapshot"))),
+                    row.get("trailer_restriction_snapshot"),
+                    row.get("notes_snapshot"),
+                    row["status_snapshot"],
+                ),
+            )
+        return summary_id
+
+    def _delete_generated_final_trip_summary_for_driver(
+        self,
+        connection,
+        dispatch_date,
+        delivery_date,
+        driver_id,
+    ):
+        generated_rows = connection.execute(
+            """
+            SELECT summary_id
+            FROM final_trip_summaries
+            WHERE dispatch_date = ?
+                AND delivery_date = ?
+                AND driver_id = ?
+                AND status = 'GENERATED'
+            """,
+            (dispatch_date, delivery_date, driver_id),
+        ).fetchall()
+        for row in generated_rows:
+            summary_id = row["summary_id"]
+            connection.execute(
+                "DELETE FROM final_trip_summary_rows WHERE summary_id = ?",
+                (summary_id,),
+            )
+            connection.execute(
+                "DELETE FROM final_trip_summary_opshop_pickup_rows WHERE summary_id = ?",
+                (summary_id,),
+            )
+            connection.execute(
+                "DELETE FROM final_trip_summaries WHERE summary_id = ?",
+                (summary_id,),
+            )
 
     def _fetch_assignment_row(self, connection, dispatch_date, task_type, task_id):
         return connection.execute(

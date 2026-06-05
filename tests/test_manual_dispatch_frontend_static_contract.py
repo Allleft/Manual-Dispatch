@@ -280,10 +280,22 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         final_summary_actions = (
             FRONTEND_ROOT / "js" / "actions" / "final-summary-actions.js"
         ).read_text(encoding="utf-8")
+        api_module = (
+            FRONTEND_ROOT / "js" / "api" / "manual-dispatch-api.js"
+        ).read_text(encoding="utf-8")
+        board_state_sync = (
+            FRONTEND_ROOT / "js" / "state" / "board-state-sync.js"
+        ).read_text(encoding="utf-8")
         download_utils = (
             FRONTEND_ROOT / "js" / "utils" / "download-utils.js"
         ).read_text(encoding="utf-8")
+        self.assertIn("apiCreateGeneratedFinalSummary", api_module)
+        self.assertIn("apiSaveGeneratedFinalSummary", api_module)
+        self.assertIn("/api/manual-dispatch/final-summaries/generated", api_module)
+        self.assertIn("/api/manual-dispatch/final-summaries/${encodeURIComponent(summaryId)}/save", api_module)
         self.assertIn("getAssignedOpShopPickupsForDriver", final_summary_actions)
+        self.assertIn("apiCreateGeneratedFinalSummary", final_summary_actions)
+        self.assertIn("apiSaveGeneratedFinalSummary", final_summary_actions)
         self.assertIn("assignedOrders.length === 0 && assignedOpShopPickups.length === 0", final_summary_actions)
         self.assertIn("Assign at least one Order or OP SHOP pickup", final_summary_actions)
         self.assertIn("opshop_pickups: opshopPickups", final_summary_actions)
@@ -293,8 +305,9 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("pickup_category_snapshot: pickup.pickup_category", final_summary_actions)
         self.assertIn("route_group_name_snapshot: pickup.route_group_name", final_summary_actions)
         self.assertIn('state.generatedTaskKeys.add(getTaskKey("OPSHOP_PICKUP", pickup.pickup_task_id))', final_summary_actions)
-        self.assertIn("const generatedOrderTasks = snapshot.trips.flatMap((trip) => trip.orders)", final_summary_actions)
+        self.assertIn("const generatedOrderTasks = generatedSummary.trips.flatMap((trip) => trip.orders)", final_summary_actions)
         self.assertIn("generatedOrderTasks.map((order) =>", final_summary_actions)
+        self.assertIn("summary.status === \"GENERATED\"", final_summary_actions)
         self.assertNotIn("const generatedTasks = [", final_summary_actions)
         generate_summary_section = final_summary_actions.split(
             "async function handleGenerateDriverSummary",
@@ -304,6 +317,9 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertNotIn("task_id: pickup.pickup_task_id", generate_summary_section)
         self.assertIn('import { downloadExcelResponse } from "../utils/download-utils.js"', final_summary_actions)
         self.assertIn("getExportFilename", download_utils)
+        self.assertIn("generatedFinalTripSummaries: payload.generated_final_trip_summaries || []", board_state_sync)
+        self.assertIn("function applyGeneratedFinalSummaries", board_state_sync)
+        self.assertIn("state.generatedTaskKeys.add(`OPSHOP_PICKUP:${pickupTaskId}`)", board_state_sync)
         self.assertIn('!isGeneratedTask("OPSHOP_PICKUP", pickup.pickup_task_id)', selectors)
         self.assertIn("export function isDriverDeliveryDateFinalized", selectors)
 
@@ -842,7 +858,11 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("modal.addEventListener(\"click\", (event) => event.stopPropagation())", modal_renderer)
         self.assertIn("Countryside", trip_summary_renderer)
         self.assertIn("pickup.pickup_category === \"COUNTRYSIDE\"", trip_summary_renderer)
-        self.assertIn("Route Group:", trip_summary_renderer)
+        assigned_opshop_renderer = trip_summary_renderer.split(
+            "function createAssignedOpShopPickupTask",
+            1,
+        )[1]
+        self.assertNotIn("Route Group:", assigned_opshop_renderer)
         self.assertIn("opshop-route-group-list", styles)
         self.assertIn("opshop-route-group-section", styles)
         self.assertIn("opshop-route-template-card", styles)

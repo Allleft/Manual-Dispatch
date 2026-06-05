@@ -204,8 +204,29 @@ class ManualDispatchService:
     def save_final_trip_summary(self, request):
         return self.final_summary_service.save_final_trip_summary(request)
 
+    def create_generated_final_trip_summary(self, request):
+        return self.final_summary_service.create_generated_final_trip_summary(request)
+
+    def save_generated_final_trip_summary(
+        self,
+        summary_id,
+        saved_by_account_name,
+        saved_by_account_id=None,
+    ):
+        return self.final_summary_service.save_generated_final_trip_summary(
+            summary_id,
+            saved_by_account_name,
+            saved_by_account_id,
+        )
+
     def list_final_trip_summaries(self, dispatch_date, delivery_date=None):
         return self.final_summary_service.list_final_trip_summaries(
+            dispatch_date,
+            delivery_date,
+        )
+
+    def list_generated_final_trip_summaries(self, dispatch_date, delivery_date=None):
+        return self.final_summary_service.list_generated_final_trip_summaries(
             dispatch_date,
             delivery_date,
         )

@@ -427,6 +427,15 @@ def save_final_trip_summary(payload: dict = Body(...)):
         raise _to_http_exception(error) from error
 
 
+@router.post("/final-summaries/generated")
+def create_generated_final_trip_summary(payload: dict = Body(...)):
+    request = _save_final_trip_summary_request_from_payload(payload)
+    try:
+        return to_dict(service.create_generated_final_trip_summary(request))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
 @router.get("/final-summaries")
 def list_final_trip_summaries(dispatch_date: str, delivery_date: str = None):
     try:
@@ -460,6 +469,21 @@ def export_final_trip_summaries_excel(dispatch_date: str, delivery_date: str = N
 @router.get("/final-summary-dates")
 def list_final_summary_dates():
     return service.list_final_summary_dates()
+
+
+@router.post("/final-summaries/{summary_id}/save")
+def save_generated_final_trip_summary(summary_id: str, payload: dict = Body(...)):
+    payload = payload or {}
+    try:
+        return to_dict(
+            service.save_generated_final_trip_summary(
+                summary_id,
+                payload.get("saved_by_account_name"),
+                payload.get("saved_by_account_id"),
+            )
+        )
+    except ValueError as error:
+        raise _to_http_exception(error) from error
 
 
 @router.get("/final-summaries/{summary_id}")

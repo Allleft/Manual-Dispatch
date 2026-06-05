@@ -396,6 +396,7 @@ class ManualDispatchBoardResponse:
     opshop_regular_list_window_start: Optional[str] = None
     opshop_regular_list_window_end: Optional[str] = None
     finalized_driver_delivery_dates: List[dict] = field(default_factory=list)
+    generated_final_trip_summaries: List[dict] = field(default_factory=list)
 
 
 @dataclass

@@ -1,6 +1,8 @@
 import {
+  apiCreateGeneratedFinalSummary,
   apiExportFinalSummariesExcel,
   apiListFinalSummaries,
+  apiSaveGeneratedFinalSummary,
   apiSaveFinalSummary,
   apiUnassignTask,
   formatApiErrorDetail,
@@ -177,6 +179,18 @@ export function createFinalSummaryActions({
     };
   }
 
+  function addGeneratedTaskKeys(summary) {
+    const normalized = normalizeFinalSummary(summary);
+    normalized.trips.forEach((trip) => {
+      trip.orders.forEach((order) => {
+        state.generatedTaskKeys.add(getTaskKey(order.task_type, order.task_id));
+      });
+    });
+    normalized.opshop_pickups.forEach((pickup) => {
+      state.generatedTaskKeys.add(getTaskKey("OPSHOP_PICKUP", pickup.pickup_task_id));
+    });
+  }
+
   async function exportFinalSummariesExcel(dispatchDate, deliveryDate) {
     const response = await apiExportFinalSummariesExcel(dispatchDate, deliveryDate);
     if (!response.ok) {
@@ -302,7 +316,7 @@ export function createFinalSummaryActions({
       total_loose_bags: allOrders.reduce((total, order) => total + Number(order.loose_bags_quantity || 0), 0),
       saved_by_account_name: state.accountName || "",
       saved_by_account_id: state.accountId || "",
-      status: "LOCKED",
+      status: "GENERATED",
       trips,
       opshop_pickups: opshopPickups,
     };
@@ -343,25 +357,22 @@ export function createFinalSummaryActions({
       return;
     }
 
-    state.finalTripSummaries[summaryKey] = snapshot;
     state.finalSummaryGlobalSaveError = "";
     state.finalSummaryGlobalSaveSuccess = "";
-    snapshot.trips.forEach((trip) => {
-      trip.orders.forEach((order) => {
-        state.generatedTaskKeys.add(getTaskKey(order.task_type, order.task_id));
-      });
-    });
-    snapshot.opshop_pickups.forEach((pickup) => {
-      state.generatedTaskKeys.add(getTaskKey("OPSHOP_PICKUP", pickup.pickup_task_id));
-    });
-
     state.isSaving = true;
     clearError();
     renderBoard();
 
-    const generatedOrderTasks = snapshot.trips.flatMap((trip) => trip.orders);
-
     try {
+      const generatedSummary = normalizeFinalSummary(
+        await apiCreateGeneratedFinalSummary(getFinalSummarySavePayload(snapshot)),
+      );
+      state.finalTripSummaries[
+        getFinalSummaryKey(generatedSummary.driver_id, generatedSummary.delivery_date)
+      ] = generatedSummary;
+      addGeneratedTaskKeys(generatedSummary);
+
+      const generatedOrderTasks = generatedSummary.trips.flatMap((trip) => trip.orders);
       await Promise.all(
         generatedOrderTasks.map((order) =>
           apiUnassignTask({
@@ -374,7 +385,7 @@ export function createFinalSummaryActions({
       await loadBoard(state.dispatchDate);
     } catch (error) {
       state.isSaving = false;
-      showError(`Final Trip Summary was captured, but clearing editable assignments failed. ${error.message}`);
+      showError(`Unable to generate Final Trip Summary. ${error.message}`);
       renderBoard();
     }
   }
@@ -449,7 +460,7 @@ export function createFinalSummaryActions({
         summary.dispatch_date === state.dispatchDate &&
         summary.delivery_date === state.driverSummaryDeliveryDate,
       )
-      .filter((summary) => !summary.summary_id);
+      .filter((summary) => !summary.summary_id || summary.status === "GENERATED");
   }
 
   async function ensureNoDuplicateFinalSummaries(summaries) {
@@ -518,7 +529,12 @@ export function createFinalSummaryActions({
       const savedSummaries = [];
       for (const summary of unsavedSummaries) {
         const savedSummary = normalizeFinalSummary(
-          await apiSaveFinalSummary(getFinalSummarySavePayload(summary)),
+          summary.summary_id && summary.status === "GENERATED"
+            ? await apiSaveGeneratedFinalSummary(summary.summary_id, {
+                saved_by_account_name: state.accountName || summary.saved_by_account_name,
+                saved_by_account_id: state.accountId || summary.saved_by_account_id || null,
+              })
+            : await apiSaveFinalSummary(getFinalSummarySavePayload(summary)),
         );
         state.finalTripSummaries[getFinalSummaryKey(savedSummary.driver_id, savedSummary.delivery_date)] = savedSummary;
         savedSummaries.push(savedSummary);

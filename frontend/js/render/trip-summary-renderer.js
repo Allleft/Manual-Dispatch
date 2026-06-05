@@ -76,7 +76,9 @@ export function renderDriverSummary({
     const hasAssignedTasks = assignedOrders.length > 0 || assignedOpShopPickups.length > 0;
     const finalSummary = state.finalTripSummaries[getFinalSummaryKey(driver.driver_id)];
     const hasLockedFinalSummary = Boolean(finalSummary);
-    const hasUnsavedLockedFinalSummary = Boolean(finalSummary && !finalSummary.summary_id);
+    const hasUnsavedLockedFinalSummary = Boolean(
+      finalSummary && finalSummary.status !== "SAVED",
+    );
     const hasSavedFinalSummary = isDriverDeliveryDateFinalized(driver.driver_id);
     const driverTotals = calculateDriverTotals(driver.driver_id);
     const loadSummary = document.createElement("div");
@@ -375,12 +377,6 @@ function createAssignedOpShopPickupTask(
   suburb.textContent = formatOptional(pickup.suburb);
 
   details.append(badgeRow, name, suburb);
-  if (pickup.route_group_name) {
-    const routeGroup = document.createElement("p");
-    routeGroup.className = "assigned-opshop-suburb";
-    routeGroup.textContent = `Route Group: ${formatOptional(pickup.route_group_name)}`;
-    details.append(routeGroup);
-  }
 
   const unassignButton = document.createElement("button");
   unassignButton.type = "button";

@@ -19,7 +19,16 @@ class BoardService:
         scheduled_generation = self.opshop_pickup_service.ensure_regular_opshop_pickup_tasks_for_week(
             dispatch_date
         )
+        generated_summaries = self.repository.list_generated_final_trip_summaries(
+            dispatch_date
+        )
+        generated_task_keys = self._task_keys_from_final_summaries(generated_summaries)
         orders = self.repository.list_orders()
+        orders = [
+            order
+            for order in orders
+            if ("ORDER", order.order_id) not in generated_task_keys
+        ]
         for order in orders:
             order.estimated_distance_km_from_warehouse = get_estimated_distance_km(
                 order.suburb
@@ -45,6 +54,7 @@ class BoardService:
             assignment
             for assignment in self.repository.list_assignments(dispatch_date)
             if not self._is_finalized_assignment(dispatch_date, assignment)
+            and (assignment.task_type, assignment.task_id) not in generated_task_keys
         ]
         assigned_pickups = [
             pickup
@@ -57,6 +67,7 @@ class BoardService:
                 pickup.driver_id,
                 pickup.pickup_date,
             )
+            and ("OPSHOP_PICKUP", pickup.pickup_task_id) not in generated_task_keys
         ]
         finalized_driver_delivery_dates = [
             {
@@ -92,6 +103,7 @@ class BoardService:
             opshop_regular_list_window_start=scheduled_generation.window_start,
             opshop_regular_list_window_end=scheduled_generation.window_end,
             finalized_driver_delivery_dates=finalized_driver_delivery_dates,
+            generated_final_trip_summaries=generated_summaries,
         )
 
     def get_specifications(self):
@@ -134,3 +146,15 @@ class BoardService:
                     pickup.driver_id = driver_id
                 pickup.is_assigned = True
                 pickup.assigned_to_locked = True
+
+    def _task_keys_from_final_summaries(self, summaries):
+        task_keys = set()
+        for summary in summaries:
+            for trip in summary.trips or []:
+                for order in trip.orders or []:
+                    if order.task_type and order.task_id:
+                        task_keys.add((order.task_type, order.task_id))
+            for pickup in summary.opshop_pickups or []:
+                if pickup.pickup_task_id_snapshot:
+                    task_keys.add(("OPSHOP_PICKUP", pickup.pickup_task_id_snapshot))
+        return task_keys
