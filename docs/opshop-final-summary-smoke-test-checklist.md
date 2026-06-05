@@ -335,13 +335,13 @@ Expected:
 SELECT
   row_id,
   summary_id,
-  task_type_snapshot,
+  task_type,
   order_id_snapshot,
   company_name_snapshot,
   suburb_snapshot
 FROM final_trip_summary_rows
 WHERE summary_id = '<SUMMARY_ID>'
-  AND task_type_snapshot <> 'ORDER';
+  AND task_type <> 'ORDER';
 ```
 
 Expected:
