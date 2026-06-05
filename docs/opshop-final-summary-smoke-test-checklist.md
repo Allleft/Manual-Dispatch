@@ -348,6 +348,34 @@ Expected:
 
 - No rows returned.
 
+## Optional: Run OP SHOP Saved Lock Audit
+
+Use this read-only audit when validating an existing test or office SQLite database that may contain OP SHOP Final Summary rows created by older workflow versions.
+
+```powershell
+$env:MANUAL_DISPATCH_DB_PATH = "C:\Users\Albert Fang\Desktop\Delivery V2\data\manual_dispatch_full_test.sqlite3"
+.\tmp\route-test-venv\Scripts\python.exe .\tools\audit_opshop_final_summary_locks.py
+```
+
+Optional filters:
+
+```powershell
+.\tmp\route-test-venv\Scripts\python.exe .\tools\audit_opshop_final_summary_locks.py --dispatch-date "<DISPATCH_DATE>" --delivery-date "<DELIVERY_DATE>"
+```
+
+Optional JSON report:
+
+```powershell
+.\tmp\route-test-venv\Scripts\python.exe .\tools\audit_opshop_final_summary_locks.py --output-json ".\tmp\opshop-final-summary-lock-audit.json"
+```
+
+Expected:
+
+- Exit code `0` means no critical OP SHOP saved-lock mismatches were found.
+- Exit code `1` means the tool found mismatches to review manually.
+- Exit code `2` means the database path is missing or unreadable.
+- The audit is read-only and does not backfill or change data.
+
 ## Pass / Fail Notes
 
 Record any failures with:
