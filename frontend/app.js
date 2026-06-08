@@ -299,6 +299,7 @@ function renderOncallOpShopPickupListModal() {
     onToggleDateGroup: oncallOpShopPickupActions.toggleDateGroup,
     onUpdateAssignedDriver: oncallOpShopPickupActions.updateAssignedDriverSelection,
     onUpdateForm: oncallOpShopPickupActions.updatePickupTaskForm,
+    onUpdateTemplateFilter: oncallOpShopPickupActions.updateOncallTemplateFilter,
     onUpdatePickup: oncallOpShopPickupActions.handleUpdatePickupTask,
   });
 }

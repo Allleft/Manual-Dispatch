@@ -34,6 +34,7 @@ export function createOncallOpShopPickupActions({
     state.oncallOpShopPickupFormMode = "";
     state.oncallOpShopPickupEditingTaskId = "";
     state.oncallOpShopPickupForm = {};
+    state.oncallOpShopPickupTemplateFilter = "";
     initializeAssignedDriverSelections();
     initializeCollapsedDateGroups();
     renderBoard();
@@ -62,6 +63,7 @@ export function createOncallOpShopPickupActions({
       state.oncallOpShopPickupFormMode = "";
       state.oncallOpShopPickupEditingTaskId = "";
       state.oncallOpShopPickupForm = {};
+      state.oncallOpShopPickupTemplateFilter = "";
       await loadBoard(state.dispatchDate, { force: true });
     } catch (error) {
       state.oncallOpShopPickupListError = `Unable to apply Oncall OP SHOP pickup assignments. ${error.message}`;
@@ -95,6 +97,7 @@ export function createOncallOpShopPickupActions({
       assigned_driver_id: "",
       notes: "",
     };
+    state.oncallOpShopPickupTemplateFilter = "";
     state.oncallOpShopPickupListError = "";
     renderBoard();
   }
@@ -128,8 +131,35 @@ export function createOncallOpShopPickupActions({
     state.oncallOpShopPickupFormMode = "";
     state.oncallOpShopPickupEditingTaskId = "";
     state.oncallOpShopPickupForm = {};
+    state.oncallOpShopPickupTemplateFilter = "";
     state.oncallOpShopPickupListError = "";
     renderBoard();
+  }
+
+  function updateOncallTemplateFilter(value) {
+    const activeElement = document.activeElement;
+    const shouldRestoreFocus =
+      activeElement && activeElement.dataset.role === "oncall-template-filter";
+    const selectionStart = shouldRestoreFocus ? activeElement.selectionStart : null;
+    const selectionEnd = shouldRestoreFocus ? activeElement.selectionEnd : null;
+    const nextFilter = value || "";
+    const currentScheduleId = state.oncallOpShopPickupForm.schedule_id || "";
+    const selectedCandidate = state.oncallOpShopPickupScheduleCandidates.find(
+      (item) => item.schedule_id === currentScheduleId,
+    );
+
+    state.oncallOpShopPickupTemplateFilter = nextFilter;
+    if (
+      currentScheduleId &&
+      !candidateMatchesTemplateFilter(selectedCandidate, nextFilter)
+    ) {
+      state.oncallOpShopPickupForm = {
+        ...state.oncallOpShopPickupForm,
+        schedule_id: "",
+      };
+    }
+    renderBoard();
+    restoreTemplateFilterFocus(shouldRestoreFocus, selectionStart, selectionEnd);
   }
 
   function updatePickupTaskForm(field, value) {
@@ -171,6 +201,7 @@ export function createOncallOpShopPickupActions({
       });
       state.oncallOpShopPickupFormMode = "";
       state.oncallOpShopPickupForm = {};
+      state.oncallOpShopPickupTemplateFilter = "";
       await loadBoard(state.dispatchDate, { force: true });
       initializeAssignedDriverSelections();
       if (created && created.pickup_task_id) {
@@ -312,8 +343,48 @@ export function createOncallOpShopPickupActions({
     startEditPickupTask,
     toggleDateGroup,
     updateAssignedDriverSelection,
+    updateOncallTemplateFilter,
     updatePickupTaskForm,
   };
+}
+
+function candidateMatchesTemplateFilter(candidate, filterText) {
+  const filter = normalizeTemplateSearchText(filterText);
+  if (!filter) {
+    return true;
+  }
+  if (!candidate) {
+    return false;
+  }
+  return [
+    candidate.opshop_name,
+    candidate.suburb,
+    candidate.street_address,
+  ].some((value) => normalizeTemplateSearchText(value).includes(filter));
+}
+
+function normalizeTemplateSearchText(value) {
+  return String(value || "").trim().replace(/\s+/g, " ").toLocaleLowerCase();
+}
+
+function restoreTemplateFilterFocus(shouldRestoreFocus, selectionStart, selectionEnd) {
+  if (!shouldRestoreFocus) {
+    return;
+  }
+  requestAnimationFrame(() => {
+    const input = document.querySelector('[data-role="oncall-template-filter"]');
+    if (!input) {
+      return;
+    }
+    input.focus();
+    if (
+      Number.isInteger(selectionStart) &&
+      Number.isInteger(selectionEnd) &&
+      typeof input.setSelectionRange === "function"
+    ) {
+      input.setSelectionRange(selectionStart, selectionEnd);
+    }
+  });
 }
 
 function getOncallTargetWeekMonday(dispatchDateValue) {

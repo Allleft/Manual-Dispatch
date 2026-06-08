@@ -38,6 +38,7 @@ export const state = {
   opshopPickupAssignedDriverSelections: {},
   oncallOpShopPickupAssignedDriverSelections: {},
   countrysideOpShopPickupAssignedDriverSelections: {},
+  oncallOpShopPickupTemplateFilter: "",
   collapsedRegularOpShopPickupDates: {},
   collapsedOncallOpShopPickupDates: {},
   collapsedCountrysideOpShopPickupRouteGroups: {},

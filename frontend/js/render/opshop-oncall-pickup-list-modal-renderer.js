@@ -22,6 +22,7 @@ export function renderOncallOpShopPickupListModal({
   onToggleDateGroup,
   onUpdateAssignedDriver,
   onUpdateForm,
+  onUpdateTemplateFilter,
   onUpdatePickup,
 }) {
   let root = document.querySelector("#opshop-oncall-pickup-list-root");
@@ -56,6 +57,7 @@ export function renderOncallOpShopPickupListModal({
       onCreatePickup,
       onStartDelete,
       onUpdateForm,
+      onUpdateTemplateFilter,
       onUpdatePickup,
     }),
     createPickupGroups({ onOpenDetail, onStartEdit, onToggleDateGroup, onUpdateAssignedDriver }),
@@ -130,10 +132,16 @@ function createActiveForm({
   onCreatePickup,
   onStartDelete,
   onUpdateForm,
+  onUpdateTemplateFilter,
   onUpdatePickup,
 }) {
   if (state.oncallOpShopPickupFormMode === "add") {
-    return createAddForm({ onCancelForm, onCreatePickup, onUpdateForm });
+    return createAddForm({
+      onCancelForm,
+      onCreatePickup,
+      onUpdateForm,
+      onUpdateTemplateFilter,
+    });
   }
   if (state.oncallOpShopPickupFormMode === "edit") {
     return createEditForm({ onCancelForm, onStartDelete, onUpdateForm, onUpdatePickup });
@@ -147,7 +155,17 @@ function createActiveForm({
   return spacer;
 }
 
-function createAddForm({ onCancelForm, onCreatePickup, onUpdateForm }) {
+function createAddForm({
+  onCancelForm,
+  onCreatePickup,
+  onUpdateForm,
+  onUpdateTemplateFilter,
+}) {
+  const filteredCandidates = getFilteredScheduleCandidates();
+  const hasTemplateFilter = Boolean(
+    normalizeTemplateSearchText(state.oncallOpShopPickupTemplateFilter),
+  );
+  const hasNoTemplateMatches = hasTemplateFilter && filteredCandidates.length === 0;
   const form = document.createElement("form");
   form.className = "opshop-list-form";
   form.addEventListener("submit", (event) => {
@@ -157,7 +175,9 @@ function createAddForm({ onCancelForm, onCreatePickup, onUpdateForm }) {
   });
 
   form.append(
-    createScheduleSelect(onUpdateForm),
+    createTemplateFilterInput(onUpdateTemplateFilter),
+    createScheduleSelect(onUpdateForm, filteredCandidates),
+    createTemplateNoMatchesHint(hasNoTemplateMatches),
     createDateInput("Pickup Date", "pickup_date", state.oncallOpShopPickupForm.pickup_date, onUpdateForm),
     createDriverSelect(
       "Assigned to",
@@ -169,6 +189,7 @@ function createAddForm({ onCancelForm, onCreatePickup, onUpdateForm }) {
       cancelLabel: "Cancel",
       isSubmitDisabled:
         state.isOncallOpShopPickupSaving ||
+        hasNoTemplateMatches ||
         !state.oncallOpShopPickupForm.schedule_id ||
         !state.oncallOpShopPickupForm.pickup_date,
       onCancel: onCancelForm,
@@ -177,6 +198,33 @@ function createAddForm({ onCancelForm, onCreatePickup, onUpdateForm }) {
   );
 
   return form;
+}
+
+function createTemplateFilterInput(onUpdateTemplateFilter) {
+  const label = document.createElement("label");
+  label.className = "form-field form-field-wide";
+  label.textContent = "Search templates";
+
+  const input = document.createElement("input");
+  input.type = "search";
+  input.name = "template_filter";
+  input.placeholder = "Search by OP SHOP name, suburb, or address";
+  input.autocomplete = "off";
+  input.dataset.role = "oncall-template-filter";
+  input.value = state.oncallOpShopPickupTemplateFilter || "";
+  input.disabled = state.isOncallOpShopPickupSaving || state.isOncallOpShopPickupListLoading;
+  input.addEventListener("input", () => onUpdateTemplateFilter(input.value));
+
+  label.append(input);
+  return label;
+}
+
+function createTemplateNoMatchesHint(isVisible) {
+  const hint = document.createElement("p");
+  hint.className = "hint-row";
+  hint.hidden = !isVisible;
+  hint.textContent = isVisible ? "No Oncall templates match this search." : "";
+  return hint;
 }
 
 function createEditForm({ onCancelForm, onStartDelete, onUpdateForm, onUpdatePickup }) {
@@ -279,7 +327,7 @@ function createDeleteConfirmation({ onCancelForm, onConfirmDelete }) {
   return panel;
 }
 
-function createScheduleSelect(onUpdateForm) {
+function createScheduleSelect(onUpdateForm, candidates = getFilteredScheduleCandidates()) {
   const label = document.createElement("label");
   label.className = "form-field form-field-wide";
   label.textContent = "Template";
@@ -289,7 +337,7 @@ function createScheduleSelect(onUpdateForm) {
   select.required = true;
   select.disabled = state.isOncallOpShopPickupSaving || state.isOncallOpShopPickupListLoading;
   select.append(createOption("", "Select Oncall OP SHOP template", !state.oncallOpShopPickupForm.schedule_id));
-  state.oncallOpShopPickupScheduleCandidates.forEach((candidate) => {
+  candidates.forEach((candidate) => {
     const text = [
       candidate.opshop_name,
       candidate.suburb,
@@ -310,6 +358,29 @@ function createScheduleSelect(onUpdateForm) {
 
   label.append(select);
   return label;
+}
+
+function getFilteredScheduleCandidates() {
+  const filter = state.oncallOpShopPickupTemplateFilter || "";
+  return state.oncallOpShopPickupScheduleCandidates.filter((candidate) =>
+    templateMatchesFilter(candidate, filter),
+  );
+}
+
+function templateMatchesFilter(candidate, filterText) {
+  const filter = normalizeTemplateSearchText(filterText);
+  if (!filter) {
+    return true;
+  }
+  return [
+    candidate.opshop_name,
+    candidate.suburb,
+    candidate.street_address,
+  ].some((value) => normalizeTemplateSearchText(value).includes(filter));
+}
+
+function normalizeTemplateSearchText(value) {
+  return String(value || "").trim().replace(/\s+/g, " ").toLocaleLowerCase();
 }
 
 function createDateInput(labelText, field, value, onUpdateForm, options = {}) {
