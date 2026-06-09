@@ -15,6 +15,55 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         script_sources = re.findall(r"<script[^>]+src=\"([^\"]+)\"", index_html)
         self.assertEqual(["app.js"], script_sources)
 
+    def test_board_views_are_hash_routed_single_page_workflow(self):
+        index_html = (FRONTEND_ROOT / "index.html").read_text(encoding="utf-8")
+        app_js = (FRONTEND_ROOT / "app.js").read_text(encoding="utf-8")
+        app_state = (
+            FRONTEND_ROOT / "js" / "state" / "app-state.js"
+        ).read_text(encoding="utf-8")
+        nav_renderer = (
+            FRONTEND_ROOT / "js" / "render" / "board-view-navigation-renderer.js"
+        ).read_text(encoding="utf-8")
+        styles = (FRONTEND_ROOT / "styles.css").read_text(encoding="utf-8")
+        final_summary_actions = (
+            FRONTEND_ROOT / "js" / "actions" / "final-summary-actions.js"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('id="board-view-nav"', index_html)
+        self.assertIn('id="task-pool-view"', index_html)
+        self.assertIn('id="trip-summary-view"', index_html)
+        self.assertIn('id="final-summary-view"', index_html)
+        self.assertIn('id="task-pool-list"', index_html)
+        self.assertIn('id="driver-summary-list"', index_html)
+        self.assertIn('id="final-trip-summary-list"', index_html)
+        self.assertIn('id="save-final-summary-button"', index_html)
+        self.assertIn('id="history-date-select"', index_html)
+        self.assertIn('id="load-history-button"', index_html)
+        self.assertIn('id="final-summary-history-list"', index_html)
+        self.assertIn('activeBoardView: "task-pool"', app_state)
+        self.assertIn('const BOARD_VIEWS = new Set(["task-pool", "trip-summary", "final-summary"])', app_js)
+        self.assertIn("function getBoardViewFromHash()", app_js)
+        self.assertIn("function setActiveBoardView(view)", app_js)
+        self.assertIn('window.addEventListener("hashchange"', app_js)
+        self.assertIn("renderBoardViewNavigation()", app_js)
+        self.assertIn("renderVisibleBoardView()", app_js)
+        render_board = app_js.split("function renderBoard()", 1)[1].split("const authActions", 1)[0]
+        self.assertIn("renderBoardViewNavigation();", render_board)
+        self.assertIn("renderVisibleBoardView();", render_board)
+        self.assertNotIn("renderTaskPool();\n  renderTaskPoolFilters();\n  renderDriverSummary();", render_board)
+        self.assertIn("Task Pool", nav_renderer)
+        self.assertIn("Trip Summary", nav_renderer)
+        self.assertIn("Final Trip Summary", nav_renderer)
+        self.assertIn("aria-current", nav_renderer)
+        self.assertIn("aria-pressed", nav_renderer)
+        self.assertIn(".board-view {", styles)
+        self.assertIn("display: none;", styles)
+        self.assertIn(".board-view-active", styles)
+        self.assertIn(".board-view-tab-active", styles)
+        self.assertIn("setActiveBoardView = () => {}", final_summary_actions)
+        self.assertIn('setActiveBoardView("final-summary")', final_summary_actions)
+        self.assertIn('setActiveBoardView("trip-summary")', final_summary_actions)
+
     def test_driver_summary_delivery_date_control_is_present(self):
         index_html = (FRONTEND_ROOT / "index.html").read_text(encoding="utf-8")
 
@@ -1064,7 +1113,8 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         for source_path in frontend_sources:
             source = source_path.read_text(encoding="utf-8")
             self.assertNotIn("localStorage", source)
-            self.assertNotIn("location.hash", source)
+            if source_path.name != "app.js":
+                self.assertNotIn("location.hash", source)
             self.assertNotIn("scrollIntoView", source)
             self.assertNotIn("google.maps", source)
             self.assertNotIn("geolocation", source)
