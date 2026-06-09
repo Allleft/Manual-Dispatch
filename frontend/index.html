@@ -28,7 +28,9 @@
         <p id="board-error" class="board-error" aria-live="assertive" hidden></p>
       </section>
 
-      <section class="board-section task-pool" aria-labelledby="task-pool-title">
+      <nav id="board-view-nav" class="board-view-nav" aria-label="Manual dispatch workflow"></nav>
+
+      <section id="task-pool-view" class="board-section board-view board-view-active task-pool" aria-labelledby="task-pool-title">
         <div class="section-heading">
           <div>
             <h2 id="task-pool-title">Task Pool</h2>
@@ -40,7 +42,7 @@
         <div id="task-pool-list" class="task-grid" aria-live="polite"></div>
       </section>
 
-      <section class="board-section driver-summary" aria-labelledby="trip-summary-title">
+      <section id="trip-summary-view" class="board-section board-view driver-summary" aria-labelledby="trip-summary-title" hidden>
         <div class="section-heading">
           <div>
             <h2 id="trip-summary-title">Trip Summary</h2>
@@ -55,10 +57,16 @@
         <div id="driver-summary-list" class="driver-grid" aria-live="polite"></div>
       </section>
 
-      <section class="board-section final-trip-summary" aria-labelledby="final-trip-summary-title">
+      <section id="final-summary-view" class="board-section board-view final-trip-summary" aria-labelledby="final-trip-summary-title" hidden>
         <div class="section-heading">
           <div>
             <h2 id="final-trip-summary-title">Final Trip Summary</h2>
+          </div>
+          <div class="section-actions final-summary-date-controls">
+            <label for="final-summary-delivery-date">
+              Delivery Date
+              <input id="final-summary-delivery-date" type="date">
+            </label>
           </div>
         </div>
         <div class="final-summary-control-bar final-summary-controls" aria-label="Final Trip Summary controls">

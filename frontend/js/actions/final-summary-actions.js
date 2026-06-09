@@ -90,6 +90,7 @@ export function createFinalSummaryActions({
   loadFinalSummaryDates,
   renderBoard,
   renderFinalTripSummaries,
+  setActiveBoardView = () => {},
   showError,
   state,
 }) {
@@ -413,6 +414,7 @@ export function createFinalSummaryActions({
         ),
       );
       await loadBoard(state.dispatchDate);
+      setActiveBoardView("final-summary");
     } catch (error) {
       state.isSaving = false;
       showError(`Unable to generate Final Trip Summary. ${error.message}`);
@@ -615,6 +617,7 @@ export function createFinalSummaryActions({
       state.finalSummaryGlobalSaveError = "";
       state.finalSummaryGlobalSaveSuccess = "";
       await loadBoard(state.dispatchDate, { force: true });
+      setActiveBoardView("trip-summary");
     } catch (error) {
       state.isSaving = false;
       showError(`Unable to cancel generated Final Trip Summary. ${error.message}`);

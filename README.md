@@ -6,8 +6,8 @@ Manual Dispatch Board is a FastAPI, SQLite, and vanilla JavaScript application f
 
 The board is a manual office workflow:
 
-- The Task Pool is shown at the top.
-- Driver Summary and Final Trip Summary are shown below.
+- The frontend is still a single-page board, now split into three hash-based workflow views: `#task-pool`, `#trip-summary`, and `#final-summary`.
+- Staff move through `Task Pool -> Trip Summary -> Final Trip Summary` without changing backend workflow or opening separate HTML pages.
 - Dispatch Date identifies the operational dispatch session.
 - Driver Summary Delivery Date identifies which delivery or pickup day is being reviewed.
 - Delivery Orders and OP SHOP pickups share manual driver assignment infrastructure, but remain separate task types and separate summary sections.
@@ -90,17 +90,17 @@ Never commit runtime SQLite databases, backups, `.env` files, generated outputs,
 
 1. Log in.
 2. Choose the Dispatch Date for the operational board session.
-3. Review Delivery Orders in the Task Pool.
-4. Use the OP SHOP PICKUP area for Regular, Oncall, Countryside, and template management work.
+3. Use the workflow navigation tabs to switch between `Task Pool`, `Trip Summary`, and `Final Trip Summary`.
+4. In `Task Pool` (`/frontend/#task-pool`), review unassigned Delivery Orders and use the OP SHOP PICKUP area for Regular, Oncall, Countryside, and template management work.
 5. Assign Delivery Orders manually to a Driver and `trip1` or `trip2`.
 6. Assign OP SHOP pickups manually in their list modals, then close the modal to apply visible pickup assignments.
-7. Select the Driver Summary Delivery Date.
-8. Choose a vehicle for the driver/date combination.
-9. Generate Final Trip Summary to persist a `GENERATED` snapshot.
-10. Review the generated summary.
-11. If it is wrong, use `Cancel Generated Summary` to restore editable generated work.
-12. If it is correct, use Save and Export to convert the generated summary to `SAVED`, export the workbook, and hard-lock that driver/date.
-13. Later, use Final Summary History `Re-export` for saved summaries when the Excel file is needed again.
+7. In `Trip Summary` (`/frontend/#trip-summary`), select the Driver Summary Delivery Date, choose the vehicle for the driver/date combination, review Delivery trips and OP SHOP PICKUPS, then Generate Final Trip Summary.
+8. Successful Generate creates a `GENERATED` snapshot and moves the browser to `Final Trip Summary` (`/frontend/#final-summary`) for review.
+9. If the generated snapshot is wrong, use `Cancel Generated Summary`; the board returns to `Trip Summary` for editable work.
+10. If the generated snapshot is correct, use Save and Export to convert it to `SAVED`, export the workbook, and hard-lock that driver/date.
+11. Later, use Final Summary History `Re-export` for saved summaries when the Excel file is needed again.
+
+The three views are frontend-only navigation. They do not change backend routes, assignment APIs, OP SHOP locking, Final Summary snapshot semantics, or Excel export behavior.
 
 ## Delivery Order Workflow
 

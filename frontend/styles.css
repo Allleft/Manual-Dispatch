@@ -156,6 +156,49 @@ h1 {
   letter-spacing: -0.03em;
 }
 
+.board-view-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.35rem;
+  border: 1px solid rgba(39, 93, 69, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 14px 36px rgba(21, 64, 46, 0.08);
+}
+
+.board-view-tab {
+  min-height: 44px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0.75rem 1.1rem;
+  color: var(--accent-strong);
+  background: transparent;
+  box-shadow: none;
+}
+
+.board-view-tab:hover,
+.board-view-tab:focus-visible {
+  background: rgba(45, 119, 82, 0.1);
+  color: var(--ink);
+}
+
+.board-view-tab-active {
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+  font-weight: 900;
+  box-shadow: 0 12px 28px rgba(39, 93, 69, 0.2);
+}
+
+.board-view {
+  display: none;
+}
+
+.board-view-active {
+  display: block;
+}
+
 .dispatch-date-controls {
   display: grid;
   grid-template-columns: 1fr auto;
@@ -226,7 +269,8 @@ h1 {
   gap: 0.65rem;
 }
 
-.driver-summary-date-controls label {
+.driver-summary-date-controls label,
+.final-summary-date-controls label {
   display: grid;
   gap: 0.35rem;
   color: var(--muted);
@@ -236,7 +280,8 @@ h1 {
   letter-spacing: 0.08em;
 }
 
-.driver-summary-date-controls input {
+.driver-summary-date-controls input,
+.final-summary-date-controls input {
   min-height: 44px;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
@@ -1969,6 +2014,14 @@ select:disabled {
 @media (max-width: 560px) {
   .page-hero {
     padding-top: 2rem;
+  }
+
+  .board-view-nav {
+    border-radius: var(--radius-lg);
+  }
+
+  .board-view-tab {
+    flex: 1 1 100%;
   }
 
   .board-section {

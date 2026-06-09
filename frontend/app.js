@@ -31,11 +31,19 @@ import {
   renderTaskPoolFilters as renderTaskPoolFiltersView,
 } from "./js/render/task-pool-renderer.js";
 import { renderDriverSummary as renderDriverSummaryView } from "./js/render/trip-summary-renderer.js";
+import { renderBoardViewNavigation as renderBoardViewNavigationView } from "./js/render/board-view-navigation-renderer.js";
 import { renderOpShopPickupDetailPopup as renderOpShopPickupDetailPopupView } from "./js/render/opshop-pickup-modal-renderer.js";
 import { renderOpShopPickupListModal as renderOpShopPickupListModalView } from "./js/render/opshop-pickup-list-modal-renderer.js";
 import { renderCountrysideOpShopPickupListModal as renderCountrysideOpShopPickupListModalView } from "./js/render/opshop-countryside-pickup-list-modal-renderer.js";
 import { renderOncallOpShopPickupListModal as renderOncallOpShopPickupListModalView } from "./js/render/opshop-oncall-pickup-list-modal-renderer.js";
 import { renderOpShopTemplateManagementModal as renderOpShopTemplateManagementModalView } from "./js/render/opshop-template-management-modal-renderer.js";
+
+const BOARD_VIEWS = new Set(["task-pool", "trip-summary", "final-summary"]);
+const BOARD_VIEW_SECTION_IDS = {
+  "task-pool": "task-pool-view",
+  "trip-summary": "trip-summary-view",
+  "final-summary": "final-summary-view",
+};
 
 async function loadBoard(dispatchDate = state.dispatchDate, options = {}) {
   const force = Boolean(options.force);
@@ -95,7 +103,9 @@ async function loadFinalSummaryDates(options = {}) {
     state.historyError = `Unable to load Final Trip Summary dates. ${error.message}`;
   } finally {
     if (options.render !== false) {
-      renderFinalTripSummaries();
+      if (state.activeBoardView === "final-summary") {
+        renderFinalTripSummaries();
+      }
     }
   }
 }
@@ -106,6 +116,34 @@ function showError(message) {
 
 function clearError() {
   state.errorMessage = "";
+}
+
+function getBoardViewFromHash() {
+  const value = window.location.hash.replace("#", "");
+  return BOARD_VIEWS.has(value) ? value : "task-pool";
+}
+
+function setActiveBoardView(view) {
+  state.activeBoardView = BOARD_VIEWS.has(view) ? view : "task-pool";
+  const nextHash = `#${state.activeBoardView}`;
+  if (window.location.hash !== nextHash) {
+    window.location.hash = state.activeBoardView;
+    return;
+  }
+  renderBoard();
+}
+
+function initializeBoardViewRouting() {
+  state.activeBoardView = getBoardViewFromHash();
+  const expectedHash = `#${state.activeBoardView}`;
+  if (window.location.hash !== expectedHash) {
+    window.history.replaceState(null, "", expectedHash);
+  }
+
+  window.addEventListener("hashchange", () => {
+    state.activeBoardView = getBoardViewFromHash();
+    renderBoard();
+  });
 }
 
 function renderAccountStatus() {
@@ -183,6 +221,44 @@ function renderBoardControls() {
     addOrderButton.onclick = () => {
       orderActions.openAddOrder();
     };
+  }
+}
+
+function renderBoardViewNavigation() {
+  renderBoardViewNavigationView({
+    activeView: state.activeBoardView,
+    onSelectView: setActiveBoardView,
+  });
+}
+
+function updateBoardViewVisibility() {
+  Object.entries(BOARD_VIEW_SECTION_IDS).forEach(([view, sectionId]) => {
+    const section = document.getElementById(sectionId);
+    if (!section) {
+      return;
+    }
+    const isActive = view === state.activeBoardView;
+    section.hidden = !isActive;
+    section.classList.toggle("board-view-active", isActive);
+  });
+}
+
+function renderVisibleBoardView() {
+  updateBoardViewVisibility();
+
+  if (state.activeBoardView === "task-pool") {
+    renderTaskPool();
+    renderTaskPoolFilters();
+    return;
+  }
+
+  if (state.activeBoardView === "trip-summary") {
+    renderDriverSummary();
+    return;
+  }
+
+  if (state.activeBoardView === "final-summary") {
+    renderFinalTripSummaries();
   }
 }
 
@@ -361,7 +437,9 @@ function renderDriverSummary() {
       state.finalSummaryGlobalSaveError = "";
       state.finalSummaryGlobalSaveSuccess = "";
       renderDriverSummary();
-      renderFinalTripSummaries();
+      if (state.activeBoardView === "final-summary") {
+        renderFinalTripSummaries();
+      }
     },
     onVehicleChange: vehicleActions.handleVehicleChange,
     onGenerateDriverSummary: finalSummaryActions.handleGenerateDriverSummary,
@@ -375,6 +453,12 @@ function renderFinalTripSummaries() {
     getUnsavedFinalSummaries: finalSummaryActions.getUnsavedFinalSummaries,
     normalizeFinalSummary: finalSummaryActions.normalizeFinalSummary,
     onCancelGeneratedFinalSummary: finalSummaryActions.handleCancelGeneratedFinalSummary,
+    onDeliveryDateChange: (deliveryDate) => {
+      state.driverSummaryDeliveryDate = deliveryDate;
+      state.finalSummaryGlobalSaveError = "";
+      state.finalSummaryGlobalSaveSuccess = "";
+      renderFinalTripSummaries();
+    },
     onReExportFinalSummary: finalSummaryActions.handleReExportFinalSummary,
     onHistoryDateChange: (historyDate) => {
       state.historyDate = historyDate;
@@ -859,10 +943,8 @@ function renderOrderDetailPopup() {
 function renderBoard() {
   renderAccountStatus();
   renderBoardControls();
-  renderTaskPool();
-  renderTaskPoolFilters();
-  renderDriverSummary();
-  renderFinalTripSummaries();
+  renderBoardViewNavigation();
+  renderVisibleBoardView();
   renderOrderDetailPopup();
   renderAddOrderPopup();
   renderOpShopPickupListModal();
@@ -941,6 +1023,7 @@ const finalSummaryActions = createFinalSummaryActions({
   loadFinalSummaryDates,
   renderBoard,
   renderFinalTripSummaries,
+  setActiveBoardView,
   showError,
   state,
 });
@@ -954,6 +1037,7 @@ const specificationActions = createSpecificationActions({
 });
 
 authActions.restoreAccountSession();
+initializeBoardViewRouting();
 renderBoard();
 loadBoard(state.dispatchDate);
 loadFinalSummaryDates();
