@@ -269,7 +269,8 @@ h1 {
   gap: 0.65rem;
 }
 
-.driver-summary-date-controls label {
+.driver-summary-date-controls label,
+.final-summary-date-controls label {
   display: grid;
   gap: 0.35rem;
   color: var(--muted);
@@ -279,7 +280,8 @@ h1 {
   letter-spacing: 0.08em;
 }
 
-.driver-summary-date-controls input {
+.driver-summary-date-controls input,
+.final-summary-date-controls input {
   min-height: 44px;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);

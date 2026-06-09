@@ -598,14 +598,11 @@ function createAssignedToSelect(pickup, onUpdateAssignedDriver) {
   select.addEventListener("keydown", (event) => event.stopPropagation());
 
   wrapper.append(select);
-  const shouldShowDefaultHint =
-    !selectedDriverId &&
-    (pickup.default_driver_name || pickup.default_driver_alias) &&
-    !shouldUseDefaultDriverForVisiblePickup(pickup);
-  if (shouldShowDefaultHint) {
+  const defaultHintText = !selectedDriverId ? getDefaultDriverHintText(pickup) : "";
+  if (defaultHintText) {
     const hint = document.createElement("span");
     hint.className = "opshop-assigned-to-hint";
-    hint.textContent = `Default: ${pickup.default_driver_name || pickup.default_driver_alias}`;
+    hint.textContent = defaultHintText;
     wrapper.append(hint);
   }
   if (isLocked) {
@@ -633,8 +630,47 @@ function shouldUseDefaultDriverForVisiblePickup(pickup) {
   );
 }
 
+function defaultDriverExistsForVisiblePickup(pickup) {
+  return Boolean(
+    pickup &&
+      pickup.default_driver_id &&
+      state.drivers.some((driver) => driver.driver_id === pickup.default_driver_id),
+  );
+}
+
+function canUseDefaultDriverForVisiblePickup(pickup) {
+  if (!shouldUseDefaultDriverForVisiblePickup(pickup)) {
+    return false;
+  }
+  if (!defaultDriverExistsForVisiblePickup(pickup)) {
+    return false;
+  }
+  if (isDriverFinalizedForPickup(pickup.default_driver_id, pickup.pickup_date)) {
+    return false;
+  }
+  return true;
+}
+
 function getDefaultDriverIdForVisiblePickup(pickup) {
-  return shouldUseDefaultDriverForVisiblePickup(pickup) ? pickup.default_driver_id : "";
+  return canUseDefaultDriverForVisiblePickup(pickup) ? pickup.default_driver_id : "";
+}
+
+function getDefaultDriverHintText(pickup) {
+  const defaultDriverLabel = pickup.default_driver_name || pickup.default_driver_alias || "";
+  if (!defaultDriverLabel || canUseDefaultDriverForVisiblePickup(pickup)) {
+    return "";
+  }
+
+  if (shouldUseDefaultDriverForVisiblePickup(pickup)) {
+    if (!defaultDriverExistsForVisiblePickup(pickup)) {
+      return `Default: ${defaultDriverLabel} unavailable`;
+    }
+    if (isDriverFinalizedForPickup(pickup.default_driver_id, pickup.pickup_date)) {
+      return `Default: ${defaultDriverLabel} unavailable - Final Summary saved`;
+    }
+  }
+
+  return `Default: ${defaultDriverLabel}`;
 }
 
 function getPickupLockState(pickup, driverIdForFinalSummaryLock = "") {

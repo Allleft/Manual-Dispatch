@@ -24,6 +24,9 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         nav_renderer = (
             FRONTEND_ROOT / "js" / "render" / "board-view-navigation-renderer.js"
         ).read_text(encoding="utf-8")
+        final_summary_renderer = (
+            FRONTEND_ROOT / "js" / "render" / "final-summary-renderer.js"
+        ).read_text(encoding="utf-8")
         styles = (FRONTEND_ROOT / "styles.css").read_text(encoding="utf-8")
         final_summary_actions = (
             FRONTEND_ROOT / "js" / "actions" / "final-summary-actions.js"
@@ -33,6 +36,7 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn('id="task-pool-view"', index_html)
         self.assertIn('id="trip-summary-view"', index_html)
         self.assertIn('id="final-summary-view"', index_html)
+        self.assertIn('id="final-summary-delivery-date"', index_html)
         self.assertIn('id="task-pool-list"', index_html)
         self.assertIn('id="driver-summary-list"', index_html)
         self.assertIn('id="final-trip-summary-list"', index_html)
@@ -63,6 +67,10 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("setActiveBoardView = () => {}", final_summary_actions)
         self.assertIn('setActiveBoardView("final-summary")', final_summary_actions)
         self.assertIn('setActiveBoardView("trip-summary")', final_summary_actions)
+        self.assertIn("onDeliveryDateChange", final_summary_renderer)
+        self.assertIn('document.querySelector("#final-summary-delivery-date")', final_summary_renderer)
+        self.assertIn("state.driverSummaryDeliveryDate = deliveryDate", app_js)
+        self.assertIn(".final-summary-date-controls label", styles)
 
     def test_driver_summary_delivery_date_control_is_present(self):
         index_html = (FRONTEND_ROOT / "index.html").read_text(encoding="utf-8")
@@ -443,10 +451,17 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("handleUpdatePickupTask", actions)
         self.assertIn("handleDeletePickupTask", actions)
         self.assertIn("function shouldUseDefaultDriverForPickup(pickup)", actions)
+        self.assertIn("function canUseDefaultDriverForPickup(pickup)", actions)
+        self.assertIn("const existingSelections = state.opshopPickupAssignedDriverSelections || {}", actions)
+        self.assertIn("Object.prototype.hasOwnProperty.call(", actions)
+        self.assertIn("existingSelections,", actions)
+        self.assertIn("selections[pickup.pickup_task_id] = existingSelections[pickup.pickup_task_id]", actions)
+        self.assertIn("state.drivers.some", actions)
+        self.assertIn("state.finalizedDriverDeliveryDates.some", actions)
         self.assertIn("pickup.default_driver_id", actions)
         self.assertIn("pickup.pickup_date >= state.dispatchDate", actions)
         self.assertIn(
-            '(shouldUseDefaultDriverForPickup(pickup) ? pickup.default_driver_id : "")',
+            '(canUseDefaultDriverForPickup(pickup) ? pickup.default_driver_id : "")',
             actions,
         )
         self.assertIn("collapsedRegularOpShopPickupDates", app_state)
@@ -503,9 +518,13 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("state.opshopPickupAssignedDriverSelections[pickup.pickup_task_id]", modal_renderer)
         self.assertIn("getDefaultDriverIdForVisiblePickup(pickup)", modal_renderer)
         self.assertIn("function shouldUseDefaultDriverForVisiblePickup(pickup)", modal_renderer)
+        self.assertIn("function canUseDefaultDriverForVisiblePickup(pickup)", modal_renderer)
+        self.assertIn("defaultDriverExistsForVisiblePickup(pickup)", modal_renderer)
+        self.assertIn("isDriverFinalizedForPickup(pickup.default_driver_id, pickup.pickup_date)", modal_renderer)
         self.assertIn("pickup.pickup_date >= state.dispatchDate", modal_renderer)
-        self.assertIn("const shouldShowDefaultHint", modal_renderer)
-        self.assertIn("!shouldUseDefaultDriverForVisiblePickup(pickup)", modal_renderer)
+        self.assertIn("getDefaultDriverHintText(pickup)", modal_renderer)
+        self.assertIn("unavailable - Final Summary saved", modal_renderer)
+        self.assertIn("unavailable", modal_renderer)
         self.assertIn("if (leftDriverName && !rightDriverName)", modal_renderer)
         self.assertIn("if (!leftDriverName && rightDriverName)", modal_renderer)
         self.assertIn("formatDateHeading", modal_renderer)

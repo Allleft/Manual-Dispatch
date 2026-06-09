@@ -453,6 +453,12 @@ function renderFinalTripSummaries() {
     getUnsavedFinalSummaries: finalSummaryActions.getUnsavedFinalSummaries,
     normalizeFinalSummary: finalSummaryActions.normalizeFinalSummary,
     onCancelGeneratedFinalSummary: finalSummaryActions.handleCancelGeneratedFinalSummary,
+    onDeliveryDateChange: (deliveryDate) => {
+      state.driverSummaryDeliveryDate = deliveryDate;
+      state.finalSummaryGlobalSaveError = "";
+      state.finalSummaryGlobalSaveSuccess = "";
+      renderFinalTripSummaries();
+    },
     onReExportFinalSummary: finalSummaryActions.handleReExportFinalSummary,
     onHistoryDateChange: (historyDate) => {
       state.historyDate = historyDate;

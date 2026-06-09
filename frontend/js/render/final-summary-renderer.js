@@ -16,6 +16,7 @@ export function renderFinalTripSummaries({
   getUnsavedFinalSummaries,
   normalizeFinalSummary,
   onCancelGeneratedFinalSummary,
+  onDeliveryDateChange,
   onReExportFinalSummary,
   onHistoryDateChange,
   onLoadFinalSummaryHistory,
@@ -24,6 +25,7 @@ export function renderFinalTripSummaries({
 }) {
   renderFinalSummaryControls({
     getUnsavedFinalSummaries,
+    onDeliveryDateChange,
     onHistoryDateChange,
     onLoadFinalSummaryHistory,
     onSaveAllFinalSummaries,
@@ -66,12 +68,14 @@ export function renderFinalTripSummaries({
 
 function renderFinalSummaryControls({
   getUnsavedFinalSummaries,
+  onDeliveryDateChange,
   onHistoryDateChange,
   onLoadFinalSummaryHistory,
   onSaveAllFinalSummaries,
   syncHistoryDateSelection,
 }) {
   const saveButton = document.querySelector("#save-final-summary-button");
+  const deliveryDateInput = document.querySelector("#final-summary-delivery-date");
   const historyDateSelect = document.querySelector("#history-date-select");
   const loadHistoryButton = document.querySelector("#load-history-button");
   const message = document.querySelector("#final-summary-control-message");
@@ -89,6 +93,17 @@ function renderFinalSummaryControls({
       : "Save and Export";
     saveButton.onclick = () => {
       onSaveAllFinalSummaries();
+    };
+  }
+
+  if (deliveryDateInput) {
+    deliveryDateInput.value = state.driverSummaryDeliveryDate || state.dispatchDate || DEFAULT_DISPATCH_DATE;
+    deliveryDateInput.disabled =
+      state.isLoading ||
+      state.isSaving ||
+      state.isSavingFinalSummaries;
+    deliveryDateInput.onchange = () => {
+      onDeliveryDateChange(deliveryDateInput.value || state.dispatchDate || DEFAULT_DISPATCH_DATE);
     };
   }
 

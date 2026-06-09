@@ -241,13 +241,45 @@ export function createOpShopPickupActions({
     );
   }
 
+  function canUseDefaultDriverForPickup(pickup) {
+    if (!shouldUseDefaultDriverForPickup(pickup)) {
+      return false;
+    }
+
+    const defaultDriverExists = state.drivers.some(
+      (driver) => driver.driver_id === pickup.default_driver_id,
+    );
+    if (!defaultDriverExists) {
+      return false;
+    }
+
+    const hasSavedFinalSummary = state.finalizedDriverDeliveryDates.some(
+      (lockedDate) =>
+        lockedDate.driver_id === pickup.default_driver_id &&
+        lockedDate.delivery_date === pickup.pickup_date,
+    );
+
+    return !hasSavedFinalSummary;
+  }
+
   function initializeAssignedDriverSelections() {
+    const existingSelections = state.opshopPickupAssignedDriverSelections || {};
     const selections = {};
     state.scheduledOpShopPickups.forEach((pickup) => {
+      const hasExistingSelection = Object.prototype.hasOwnProperty.call(
+        existingSelections,
+        pickup.pickup_task_id,
+      );
+
+      if (hasExistingSelection) {
+        selections[pickup.pickup_task_id] = existingSelections[pickup.pickup_task_id];
+        return;
+      }
+
       selections[pickup.pickup_task_id] =
         pickup.assigned_driver_id ||
         pickup.driver_id ||
-        (shouldUseDefaultDriverForPickup(pickup) ? pickup.default_driver_id : "") ||
+        (canUseDefaultDriverForPickup(pickup) ? pickup.default_driver_id : "") ||
         "";
     });
     state.opshopPickupAssignedDriverSelections = selections;
