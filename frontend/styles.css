@@ -538,6 +538,9 @@ h1 {
   padding: 0.45rem;
   background: #fff;
   box-shadow: var(--shadow-sm);
+  overscroll-behavior: contain;
+  pointer-events: auto;
+  touch-action: pan-y;
 }
 
 .opshop-template-picker-option {
@@ -553,6 +556,8 @@ h1 {
   color: var(--ink);
   background: rgba(245, 248, 243, 0.82);
   text-align: left;
+  pointer-events: auto;
+  touch-action: manipulation;
   transition:
     background 0.16s ease,
     border-color 0.16s ease,

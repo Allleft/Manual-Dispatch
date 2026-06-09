@@ -180,12 +180,16 @@ export function createOncallOpShopPickupActions({
   }
 
   function setOncallTemplatePickerOpen(isOpen) {
+    const nextOpen = Boolean(isOpen);
+    if (state.isOncallOpShopPickupTemplatePickerOpen === nextOpen) {
+      return;
+    }
     const activeElement = document.activeElement;
     const shouldRestoreFocus =
       activeElement && activeElement.dataset.role === "oncall-template-filter";
     const selectionStart = shouldRestoreFocus ? activeElement.selectionStart : null;
     const selectionEnd = shouldRestoreFocus ? activeElement.selectionEnd : null;
-    state.isOncallOpShopPickupTemplatePickerOpen = Boolean(isOpen);
+    state.isOncallOpShopPickupTemplatePickerOpen = nextOpen;
     renderBoard();
     restoreTemplateFilterFocus(shouldRestoreFocus, selectionStart, selectionEnd);
   }

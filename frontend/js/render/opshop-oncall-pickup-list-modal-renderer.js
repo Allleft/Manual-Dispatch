@@ -237,7 +237,7 @@ function createTemplatePicker({
   );
 
   const input = document.createElement("input");
-  input.type = "search";
+  input.type = "text";
   input.className = "opshop-template-picker-input";
   input.classList.toggle(
     "opshop-template-picker-input-selected",
@@ -325,8 +325,14 @@ function createTemplatePickerResults(listId, candidates, onSelectTemplate) {
       option.append(selectedMark);
     }
 
+    option.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      onSelectTemplate(candidate.schedule_id);
+    });
     option.addEventListener("mousedown", (event) => {
       event.preventDefault();
+      event.stopPropagation();
     });
     option.addEventListener("click", (event) => {
       event.preventDefault();
