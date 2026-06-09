@@ -227,7 +227,7 @@ function createTemplatePicker({
   onUpdateTemplateFilter,
 }) {
   const label = document.createElement("label");
-  label.className = "form-field form-field-wide opshop-template-picker-field";
+  label.className = "form-field form-field-wide opshop-template-picker opshop-template-picker-field";
   label.textContent = "Template";
 
   const pickerId = "oncall-opshop-template-picker-list";
@@ -238,6 +238,11 @@ function createTemplatePicker({
 
   const input = document.createElement("input");
   input.type = "search";
+  input.className = "opshop-template-picker-input";
+  input.classList.toggle(
+    "opshop-template-picker-input-selected",
+    Boolean(state.oncallOpShopPickupForm.schedule_id),
+  );
   input.name = "template_filter";
   input.placeholder = "Search or select Oncall OP SHOP template";
   input.autocomplete = "off";
@@ -269,7 +274,7 @@ function createTemplatePicker({
   } else if (isExpanded && hasNoTemplateMatches) {
     const empty = document.createElement("div");
     empty.id = pickerId;
-    empty.className = "opshop-template-picker-results";
+    empty.className = "opshop-template-picker-results opshop-template-picker-menu";
     empty.setAttribute("role", "listbox");
     label.append(empty);
   }
@@ -279,19 +284,47 @@ function createTemplatePicker({
 function createTemplatePickerResults(listId, candidates, onSelectTemplate) {
   const list = document.createElement("div");
   list.id = listId;
-  list.className = "opshop-template-picker-results";
+  list.className = "opshop-template-picker-results opshop-template-picker-menu";
   list.setAttribute("role", "listbox");
 
   candidates.forEach((candidate) => {
+    const isSelected = state.oncallOpShopPickupForm.schedule_id === candidate.schedule_id;
     const option = document.createElement("button");
     option.type = "button";
     option.className = "opshop-template-picker-option";
+    option.classList.toggle("opshop-template-picker-option-selected", isSelected);
     option.setAttribute("role", "option");
-    option.setAttribute(
-      "aria-selected",
-      String(state.oncallOpShopPickupForm.schedule_id === candidate.schedule_id),
-    );
-    option.textContent = formatScheduleCandidateOptionText(candidate);
+    option.setAttribute("aria-selected", String(isSelected));
+    option.title = formatScheduleCandidateOptionText(candidate);
+
+    const text = document.createElement("span");
+    text.className = "opshop-template-picker-option-text";
+
+    const main = document.createElement("span");
+    main.className = "opshop-template-picker-option-main";
+    main.textContent = candidate.opshop_name || "Unnamed OP SHOP template";
+
+    const meta = document.createElement("span");
+    meta.className = "opshop-template-picker-option-meta";
+    meta.textContent = [
+      candidate.suburb,
+      candidate.street_address,
+      candidate.run_day || "Gavin",
+      candidate.default_driver_name || candidate.default_driver_alias,
+    ]
+      .filter(Boolean)
+      .join(" - ");
+
+    text.append(main, meta);
+    option.append(text);
+
+    if (isSelected) {
+      const selectedMark = document.createElement("span");
+      selectedMark.className = "opshop-template-picker-selected-mark";
+      selectedMark.textContent = "Selected";
+      option.append(selectedMark);
+    }
+
     option.addEventListener("mousedown", (event) => {
       event.preventDefault();
     });
@@ -307,7 +340,7 @@ function createTemplatePickerResults(listId, candidates, onSelectTemplate) {
 
 function createTemplateNoMatchesHint(isVisible) {
   const hint = document.createElement("p");
-  hint.className = "hint-row";
+  hint.className = "hint-row opshop-template-picker-empty";
   hint.hidden = !isVisible;
   hint.textContent = isVisible ? "No Oncall templates match this search." : "";
   return hint;

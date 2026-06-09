@@ -505,34 +505,115 @@ h1 {
   grid-column: 1 / -1;
 }
 
+.opshop-template-picker,
 .opshop-template-picker-field {
   position: relative;
+  width: 100%;
 }
 
-.opshop-template-picker-results {
+.opshop-template-picker-input {
+  width: 100%;
+  transition:
+    background 0.16s ease,
+    border-color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.opshop-template-picker-input-selected {
+  border-color: rgba(39, 93, 69, 0.56);
+  background: rgba(223, 238, 229, 0.62);
+  box-shadow: 0 0 0 3px rgba(39, 93, 69, 0.11);
+}
+
+.opshop-template-picker-results,
+.opshop-template-picker-menu {
   display: grid;
-  max-height: 240px;
-  overflow: auto;
-  border: 1px solid rgba(39, 93, 69, 0.18);
+  gap: 0.4rem;
+  max-height: 320px;
+  margin-top: 0.45rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border: 1px solid rgba(39, 93, 69, 0.26);
   border-radius: var(--radius-sm);
-  background: var(--field);
+  padding: 0.45rem;
+  background: #fff;
   box-shadow: var(--shadow-sm);
 }
 
 .opshop-template-picker-option {
-  min-height: 0;
-  border-radius: 0;
-  padding: 0.65rem 0.75rem;
+  display: flex;
+  width: 100%;
+  min-height: 48px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border: 1px solid rgba(39, 93, 69, 0.14);
+  border-radius: var(--radius-sm);
+  padding: 0.72rem 0.78rem;
   color: var(--ink);
-  background: transparent;
+  background: rgba(245, 248, 243, 0.82);
   text-align: left;
+  transition:
+    background 0.16s ease,
+    border-color 0.16s ease,
+    box-shadow 0.16s ease,
+    color 0.16s ease;
+}
+
+.opshop-template-picker-option-text {
+  display: grid;
+  min-width: 0;
+  gap: 0.18rem;
+}
+
+.opshop-template-picker-option-main {
+  color: var(--ink);
+  font-size: 0.94rem;
+  font-weight: 900;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.opshop-template-picker-option-meta {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 750;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.opshop-template-picker-selected-mark {
+  flex: 0 0 auto;
+  border: 1px solid rgba(39, 93, 69, 0.24);
+  border-radius: 999px;
+  padding: 0.18rem 0.5rem;
+  color: var(--accent-strong);
+  background: #fff;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .opshop-template-picker-option:hover,
-.opshop-template-picker-option:focus-visible,
-.opshop-template-picker-option[aria-selected="true"] {
+.opshop-template-picker-option:focus-visible {
   color: var(--accent-strong);
+  border-color: rgba(39, 93, 69, 0.44);
   background: var(--accent-soft);
+  box-shadow: 0 8px 20px rgba(39, 93, 69, 0.12);
+}
+
+.opshop-template-picker-option-selected,
+.opshop-template-picker-option[aria-selected="true"] {
+  border-color: rgba(39, 93, 69, 0.58);
+  color: var(--accent-strong);
+  background: rgba(223, 238, 229, 0.92);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.opshop-template-picker-empty {
+  color: var(--muted);
+  font-weight: 750;
 }
 
 .opshop-date-group {

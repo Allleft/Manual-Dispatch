@@ -94,6 +94,7 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         final_summary_renderer = (
             FRONTEND_ROOT / "js" / "render" / "final-summary-renderer.js"
         ).read_text(encoding="utf-8")
+        styles = (FRONTEND_ROOT / "styles.css").read_text(encoding="utf-8")
 
         self.assertIn('productDetailButton.textContent = "Product Detail"', order_modal_renderer)
         self.assertIn('title.textContent = "Product Details"', order_modal_renderer)
@@ -564,6 +565,7 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         final_summary_renderer = (
             FRONTEND_ROOT / "js" / "render" / "final-summary-renderer.js"
         ).read_text(encoding="utf-8")
+        styles = (FRONTEND_ROOT / "styles.css").read_text(encoding="utf-8")
 
         self.assertIn("apiListOncallOpShopPickupSchedules", api_module)
         self.assertIn("apiCreateOncallOpShopPickup", api_module)
@@ -629,12 +631,28 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("Notes", modal_renderer)
         self.assertIn("createTemplatePicker", modal_renderer)
         self.assertIn("opshop-template-picker-field", modal_renderer)
+        self.assertIn("opshop-template-picker-input", modal_renderer)
+        self.assertIn("opshop-template-picker-input-selected", modal_renderer)
+        self.assertIn("opshop-template-picker-menu", modal_renderer)
         self.assertIn("opshop-template-picker-results", modal_renderer)
         self.assertIn("opshop-template-picker-option", modal_renderer)
+        self.assertIn("opshop-template-picker-option-selected", modal_renderer)
+        self.assertIn("opshop-template-picker-option-main", modal_renderer)
+        self.assertIn("opshop-template-picker-option-meta", modal_renderer)
+        self.assertIn("opshop-template-picker-selected-mark", modal_renderer)
+        self.assertIn("opshop-template-picker-empty", modal_renderer)
+        self.assertIn('selectedMark.textContent = "Selected"', modal_renderer)
         self.assertIn("Search or select Oncall OP SHOP template", modal_renderer)
         self.assertIn('input.setAttribute("role", "combobox")', modal_renderer)
         self.assertIn('input.setAttribute("aria-expanded", String(isExpanded))', modal_renderer)
         self.assertIn('input.setAttribute("aria-controls", pickerId)', modal_renderer)
+        self.assertIn('option.setAttribute("aria-selected", String(isSelected))', modal_renderer)
+        self.assertIn("option.type = \"button\"", modal_renderer)
+        self.assertIn("opshop-template-picker-option-selected", styles)
+        self.assertIn(".opshop-template-picker-option:hover", styles)
+        self.assertIn(".opshop-template-picker-option:focus-visible", styles)
+        self.assertIn("max-height: 320px;", styles)
+        self.assertIn("overflow-y: auto;", styles)
         self.assertIn("onSelectTemplate(filteredCandidates[0].schedule_id)", modal_renderer)
         self.assertIn("onUpdateTemplateFilter", modal_renderer)
         self.assertIn("onSetTemplatePickerOpen", modal_renderer)
