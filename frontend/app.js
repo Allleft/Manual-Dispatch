@@ -293,6 +293,8 @@ function renderOncallOpShopPickupListModal() {
     onConfirmDelete: oncallOpShopPickupActions.handleDeletePickupTask,
     onCreatePickup: oncallOpShopPickupActions.handleCreatePickupTask,
     onOpenDetail: openOpShopPickupDetail,
+    onSelectTemplate: oncallOpShopPickupActions.selectOncallPickupTemplate,
+    onSetTemplatePickerOpen: oncallOpShopPickupActions.setOncallTemplatePickerOpen,
     onStartAdd: oncallOpShopPickupActions.startAddPickupTask,
     onStartDelete: oncallOpShopPickupActions.startDeletePickupTask,
     onStartEdit: oncallOpShopPickupActions.startEditPickupTask,

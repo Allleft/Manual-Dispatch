@@ -34,7 +34,7 @@ export function createOncallOpShopPickupActions({
     state.oncallOpShopPickupFormMode = "";
     state.oncallOpShopPickupEditingTaskId = "";
     state.oncallOpShopPickupForm = {};
-    state.oncallOpShopPickupTemplateFilter = "";
+    resetTemplatePicker();
     initializeAssignedDriverSelections();
     initializeCollapsedDateGroups();
     renderBoard();
@@ -63,7 +63,7 @@ export function createOncallOpShopPickupActions({
       state.oncallOpShopPickupFormMode = "";
       state.oncallOpShopPickupEditingTaskId = "";
       state.oncallOpShopPickupForm = {};
-      state.oncallOpShopPickupTemplateFilter = "";
+      resetTemplatePicker();
       await loadBoard(state.dispatchDate, { force: true });
     } catch (error) {
       state.oncallOpShopPickupListError = `Unable to apply Oncall OP SHOP pickup assignments. ${error.message}`;
@@ -97,7 +97,7 @@ export function createOncallOpShopPickupActions({
       assigned_driver_id: "",
       notes: "",
     };
-    state.oncallOpShopPickupTemplateFilter = "";
+    resetTemplatePicker();
     state.oncallOpShopPickupListError = "";
     renderBoard();
   }
@@ -131,7 +131,7 @@ export function createOncallOpShopPickupActions({
     state.oncallOpShopPickupFormMode = "";
     state.oncallOpShopPickupEditingTaskId = "";
     state.oncallOpShopPickupForm = {};
-    state.oncallOpShopPickupTemplateFilter = "";
+    resetTemplatePicker();
     state.oncallOpShopPickupListError = "";
     renderBoard();
   }
@@ -147,17 +147,45 @@ export function createOncallOpShopPickupActions({
     const selectedCandidate = state.oncallOpShopPickupScheduleCandidates.find(
       (item) => item.schedule_id === currentScheduleId,
     );
+    const selectedCandidateText = getOncallTemplateDisplayText(selectedCandidate);
 
     state.oncallOpShopPickupTemplateFilter = nextFilter;
+    state.isOncallOpShopPickupTemplatePickerOpen = true;
     if (
       currentScheduleId &&
-      !candidateMatchesTemplateFilter(selectedCandidate, nextFilter)
+      normalizeTemplateSearchText(nextFilter) !== normalizeTemplateSearchText(selectedCandidateText)
     ) {
       state.oncallOpShopPickupForm = {
         ...state.oncallOpShopPickupForm,
         schedule_id: "",
       };
     }
+    renderBoard();
+    restoreTemplateFilterFocus(shouldRestoreFocus, selectionStart, selectionEnd);
+  }
+
+  function selectOncallPickupTemplate(scheduleId) {
+    const candidate = state.oncallOpShopPickupScheduleCandidates.find(
+      (item) => item.schedule_id === scheduleId,
+    );
+    state.oncallOpShopPickupForm = {
+      ...state.oncallOpShopPickupForm,
+      schedule_id: candidate ? candidate.schedule_id : "",
+      pickup_date: getDefaultPickupDateForCandidate(candidate),
+      assigned_driver_id: candidate ? candidate.default_driver_id || "" : "",
+    };
+    state.oncallOpShopPickupTemplateFilter = getOncallTemplateDisplayText(candidate);
+    state.isOncallOpShopPickupTemplatePickerOpen = false;
+    renderBoard();
+  }
+
+  function setOncallTemplatePickerOpen(isOpen) {
+    const activeElement = document.activeElement;
+    const shouldRestoreFocus =
+      activeElement && activeElement.dataset.role === "oncall-template-filter";
+    const selectionStart = shouldRestoreFocus ? activeElement.selectionStart : null;
+    const selectionEnd = shouldRestoreFocus ? activeElement.selectionEnd : null;
+    state.isOncallOpShopPickupTemplatePickerOpen = Boolean(isOpen);
     renderBoard();
     restoreTemplateFilterFocus(shouldRestoreFocus, selectionStart, selectionEnd);
   }
@@ -201,7 +229,7 @@ export function createOncallOpShopPickupActions({
       });
       state.oncallOpShopPickupFormMode = "";
       state.oncallOpShopPickupForm = {};
-      state.oncallOpShopPickupTemplateFilter = "";
+      resetTemplatePicker();
       await loadBoard(state.dispatchDate, { force: true });
       initializeAssignedDriverSelections();
       if (created && created.pickup_task_id) {
@@ -298,6 +326,11 @@ export function createOncallOpShopPickupActions({
     restoreElementScroll(scrollSnapshot);
   }
 
+  function resetTemplatePicker() {
+    state.oncallOpShopPickupTemplateFilter = "";
+    state.isOncallOpShopPickupTemplatePickerOpen = false;
+  }
+
   function initializeAssignedDriverSelections() {
     const selections = {};
     state.oncallOpShopPickups.forEach((pickup) => {
@@ -338,6 +371,8 @@ export function createOncallOpShopPickupActions({
     handleUpdatePickupTask,
     loadScheduleCandidates,
     openOncallOpShopPickupList,
+    selectOncallPickupTemplate,
+    setOncallTemplatePickerOpen,
     startAddPickupTask,
     startDeletePickupTask,
     startEditPickupTask,
@@ -346,6 +381,20 @@ export function createOncallOpShopPickupActions({
     updateOncallTemplateFilter,
     updatePickupTaskForm,
   };
+}
+
+function getOncallTemplateDisplayText(candidate) {
+  if (!candidate) {
+    return "";
+  }
+  return [
+    candidate.opshop_name,
+    candidate.suburb,
+    candidate.run_day || "Gavin",
+    candidate.default_driver_name || candidate.default_driver_alias,
+  ]
+    .filter(Boolean)
+    .join(" - ");
 }
 
 function candidateMatchesTemplateFilter(candidate, filterText) {

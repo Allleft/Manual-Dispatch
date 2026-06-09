@@ -16,6 +16,8 @@ export function renderOncallOpShopPickupListModal({
   onConfirmDelete,
   onCreatePickup,
   onOpenDetail,
+  onSelectTemplate,
+  onSetTemplatePickerOpen,
   onStartAdd,
   onStartDelete,
   onStartEdit,
@@ -55,6 +57,8 @@ export function renderOncallOpShopPickupListModal({
       onCancelForm,
       onConfirmDelete,
       onCreatePickup,
+      onSelectTemplate,
+      onSetTemplatePickerOpen,
       onStartDelete,
       onUpdateForm,
       onUpdateTemplateFilter,
@@ -130,6 +134,8 @@ function createActiveForm({
   onCancelForm,
   onConfirmDelete,
   onCreatePickup,
+  onSelectTemplate,
+  onSetTemplatePickerOpen,
   onStartDelete,
   onUpdateForm,
   onUpdateTemplateFilter,
@@ -139,6 +145,8 @@ function createActiveForm({
     return createAddForm({
       onCancelForm,
       onCreatePickup,
+      onSelectTemplate,
+      onSetTemplatePickerOpen,
       onUpdateForm,
       onUpdateTemplateFilter,
     });
@@ -158,6 +166,8 @@ function createActiveForm({
 function createAddForm({
   onCancelForm,
   onCreatePickup,
+  onSelectTemplate,
+  onSetTemplatePickerOpen,
   onUpdateForm,
   onUpdateTemplateFilter,
 }) {
@@ -166,17 +176,30 @@ function createAddForm({
     normalizeTemplateSearchText(state.oncallOpShopPickupTemplateFilter),
   );
   const hasNoTemplateMatches = hasTemplateFilter && filteredCandidates.length === 0;
+  const isSubmitDisabled =
+    state.isOncallOpShopPickupSaving ||
+    hasNoTemplateMatches ||
+    !state.oncallOpShopPickupForm.schedule_id ||
+    !state.oncallOpShopPickupForm.pickup_date;
   const form = document.createElement("form");
   form.className = "opshop-list-form";
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     event.stopPropagation();
+    if (isSubmitDisabled) {
+      return;
+    }
     onCreatePickup();
   });
 
   form.append(
-    createTemplateFilterInput(onUpdateTemplateFilter),
-    createScheduleSelect(onUpdateForm, filteredCandidates),
+    createTemplatePicker({
+      filteredCandidates,
+      hasNoTemplateMatches,
+      onSelectTemplate,
+      onSetTemplatePickerOpen,
+      onUpdateTemplateFilter,
+    }),
     createTemplateNoMatchesHint(hasNoTemplateMatches),
     createDateInput("Pickup Date", "pickup_date", state.oncallOpShopPickupForm.pickup_date, onUpdateForm),
     createDriverSelect(
@@ -187,11 +210,7 @@ function createAddForm({
     createNotesInput(onUpdateForm),
     createFormActions({
       cancelLabel: "Cancel",
-      isSubmitDisabled:
-        state.isOncallOpShopPickupSaving ||
-        hasNoTemplateMatches ||
-        !state.oncallOpShopPickupForm.schedule_id ||
-        !state.oncallOpShopPickupForm.pickup_date,
+      isSubmitDisabled,
       onCancel: onCancelForm,
       submitLabel: state.isOncallOpShopPickupSaving ? "Saving..." : "Save Pickup Task",
     }),
@@ -200,23 +219,90 @@ function createAddForm({
   return form;
 }
 
-function createTemplateFilterInput(onUpdateTemplateFilter) {
+function createTemplatePicker({
+  filteredCandidates,
+  hasNoTemplateMatches,
+  onSelectTemplate,
+  onSetTemplatePickerOpen,
+  onUpdateTemplateFilter,
+}) {
   const label = document.createElement("label");
-  label.className = "form-field form-field-wide";
-  label.textContent = "Search templates";
+  label.className = "form-field form-field-wide opshop-template-picker-field";
+  label.textContent = "Template";
+
+  const pickerId = "oncall-opshop-template-picker-list";
+  const isDisabled = state.isOncallOpShopPickupSaving || state.isOncallOpShopPickupListLoading;
+  const isExpanded = Boolean(
+    state.isOncallOpShopPickupTemplatePickerOpen && !isDisabled,
+  );
 
   const input = document.createElement("input");
   input.type = "search";
   input.name = "template_filter";
-  input.placeholder = "Search by OP SHOP name, suburb, or address";
+  input.placeholder = "Search or select Oncall OP SHOP template";
   input.autocomplete = "off";
+  input.setAttribute("role", "combobox");
+  input.setAttribute("aria-expanded", String(isExpanded));
+  input.setAttribute("aria-controls", pickerId);
+  input.setAttribute("aria-autocomplete", "list");
   input.dataset.role = "oncall-template-filter";
   input.value = state.oncallOpShopPickupTemplateFilter || "";
-  input.disabled = state.isOncallOpShopPickupSaving || state.isOncallOpShopPickupListLoading;
+  input.disabled = isDisabled;
+  input.addEventListener("focus", () => onSetTemplatePickerOpen(true));
+  input.addEventListener("click", () => onSetTemplatePickerOpen(true));
   input.addEventListener("input", () => onUpdateTemplateFilter(input.value));
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      onSetTemplatePickerOpen(false);
+      return;
+    }
+    if (event.key === "Enter" && isExpanded && filteredCandidates.length > 0) {
+      event.preventDefault();
+      onSelectTemplate(filteredCandidates[0].schedule_id);
+    }
+  });
 
   label.append(input);
+  if (isExpanded && filteredCandidates.length > 0) {
+    label.append(createTemplatePickerResults(pickerId, filteredCandidates, onSelectTemplate));
+  } else if (isExpanded && hasNoTemplateMatches) {
+    const empty = document.createElement("div");
+    empty.id = pickerId;
+    empty.className = "opshop-template-picker-results";
+    empty.setAttribute("role", "listbox");
+    label.append(empty);
+  }
   return label;
+}
+
+function createTemplatePickerResults(listId, candidates, onSelectTemplate) {
+  const list = document.createElement("div");
+  list.id = listId;
+  list.className = "opshop-template-picker-results";
+  list.setAttribute("role", "listbox");
+
+  candidates.forEach((candidate) => {
+    const option = document.createElement("button");
+    option.type = "button";
+    option.className = "opshop-template-picker-option";
+    option.setAttribute("role", "option");
+    option.setAttribute(
+      "aria-selected",
+      String(state.oncallOpShopPickupForm.schedule_id === candidate.schedule_id),
+    );
+    option.textContent = formatScheduleCandidateOptionText(candidate);
+    option.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+    });
+    option.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      onSelectTemplate(candidate.schedule_id);
+    });
+    list.append(option);
+  });
+  return list;
 }
 
 function createTemplateNoMatchesHint(isVisible) {
@@ -327,44 +413,22 @@ function createDeleteConfirmation({ onCancelForm, onConfirmDelete }) {
   return panel;
 }
 
-function createScheduleSelect(onUpdateForm, candidates = getFilteredScheduleCandidates()) {
-  const label = document.createElement("label");
-  label.className = "form-field form-field-wide";
-  label.textContent = "Template";
-
-  const select = document.createElement("select");
-  select.name = "schedule_id";
-  select.required = true;
-  select.disabled = state.isOncallOpShopPickupSaving || state.isOncallOpShopPickupListLoading;
-  select.append(createOption("", "Select Oncall OP SHOP template", !state.oncallOpShopPickupForm.schedule_id));
-  candidates.forEach((candidate) => {
-    const text = [
-      candidate.opshop_name,
-      candidate.suburb,
-      candidate.run_day || "Gavin",
-      candidate.default_driver_name || candidate.default_driver_alias,
-    ]
-      .filter(Boolean)
-      .join(" - ");
-    select.append(
-      createOption(
-        candidate.schedule_id,
-        text,
-        state.oncallOpShopPickupForm.schedule_id === candidate.schedule_id,
-      ),
-    );
-  });
-  select.addEventListener("change", () => onUpdateForm("schedule_id", select.value));
-
-  label.append(select);
-  return label;
-}
-
 function getFilteredScheduleCandidates() {
   const filter = state.oncallOpShopPickupTemplateFilter || "";
   return state.oncallOpShopPickupScheduleCandidates.filter((candidate) =>
     templateMatchesFilter(candidate, filter),
   );
+}
+
+function formatScheduleCandidateOptionText(candidate) {
+  return [
+    candidate.opshop_name,
+    candidate.suburb,
+    candidate.run_day || "Gavin",
+    candidate.default_driver_name || candidate.default_driver_alias,
+  ]
+    .filter(Boolean)
+    .join(" - ");
 }
 
 function templateMatchesFilter(candidate, filterText) {

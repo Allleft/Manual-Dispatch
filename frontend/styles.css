@@ -505,6 +505,36 @@ h1 {
   grid-column: 1 / -1;
 }
 
+.opshop-template-picker-field {
+  position: relative;
+}
+
+.opshop-template-picker-results {
+  display: grid;
+  max-height: 240px;
+  overflow: auto;
+  border: 1px solid rgba(39, 93, 69, 0.18);
+  border-radius: var(--radius-sm);
+  background: var(--field);
+  box-shadow: var(--shadow-sm);
+}
+
+.opshop-template-picker-option {
+  min-height: 0;
+  border-radius: 0;
+  padding: 0.65rem 0.75rem;
+  color: var(--ink);
+  background: transparent;
+  text-align: left;
+}
+
+.opshop-template-picker-option:hover,
+.opshop-template-picker-option:focus-visible,
+.opshop-template-picker-option[aria-selected="true"] {
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+}
+
 .opshop-date-group {
   display: grid;
   gap: 0.65rem;
