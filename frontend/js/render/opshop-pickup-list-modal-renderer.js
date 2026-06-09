@@ -552,11 +552,16 @@ function createAssignedToSelect(pickup, onUpdateAssignedDriver) {
   wrapper.textContent = "Assigned to";
 
   const select = document.createElement("select");
-  const selectedDriverId =
-    state.opshopPickupAssignedDriverSelections[pickup.pickup_task_id] ||
-    pickup.assigned_driver_id ||
-    pickup.driver_id ||
-    "";
+  const hasSelection = Object.prototype.hasOwnProperty.call(
+    state.opshopPickupAssignedDriverSelections,
+    pickup.pickup_task_id,
+  );
+  const selectedDriverId = hasSelection
+    ? state.opshopPickupAssignedDriverSelections[pickup.pickup_task_id]
+    : pickup.assigned_driver_id ||
+      pickup.driver_id ||
+      getDefaultDriverIdForVisiblePickup(pickup) ||
+      "";
   const isFinalSummaryLocked = Boolean(
     selectedDriverId && isDriverFinalizedForPickup(selectedDriverId, pickup.pickup_date),
   );
@@ -593,7 +598,11 @@ function createAssignedToSelect(pickup, onUpdateAssignedDriver) {
   select.addEventListener("keydown", (event) => event.stopPropagation());
 
   wrapper.append(select);
-  if (!selectedDriverId && (pickup.default_driver_name || pickup.default_driver_alias)) {
+  const shouldShowDefaultHint =
+    !selectedDriverId &&
+    (pickup.default_driver_name || pickup.default_driver_alias) &&
+    !shouldUseDefaultDriverForVisiblePickup(pickup);
+  if (shouldShowDefaultHint) {
     const hint = document.createElement("span");
     hint.className = "opshop-assigned-to-hint";
     hint.textContent = `Default: ${pickup.default_driver_name || pickup.default_driver_alias}`;
@@ -612,6 +621,20 @@ function createAssignedToSelect(pickup, onUpdateAssignedDriver) {
     wrapper.append(lock);
   }
   return wrapper;
+}
+
+function shouldUseDefaultDriverForVisiblePickup(pickup) {
+  return Boolean(
+    pickup &&
+    pickup.default_driver_id &&
+    pickup.pickup_date &&
+    state.dispatchDate &&
+    pickup.pickup_date >= state.dispatchDate,
+  );
+}
+
+function getDefaultDriverIdForVisiblePickup(pickup) {
+  return shouldUseDefaultDriverForVisiblePickup(pickup) ? pickup.default_driver_id : "";
 }
 
 function getPickupLockState(pickup, driverIdForFinalSummaryLock = "") {

@@ -442,6 +442,13 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("handleCreatePickupTask", actions)
         self.assertIn("handleUpdatePickupTask", actions)
         self.assertIn("handleDeletePickupTask", actions)
+        self.assertIn("function shouldUseDefaultDriverForPickup(pickup)", actions)
+        self.assertIn("pickup.default_driver_id", actions)
+        self.assertIn("pickup.pickup_date >= state.dispatchDate", actions)
+        self.assertIn(
+            '(shouldUseDefaultDriverForPickup(pickup) ? pickup.default_driver_id : "")',
+            actions,
+        )
         self.assertIn("collapsedRegularOpShopPickupDates", app_state)
         self.assertIn("initializeCollapsedPickupDateGroups", actions)
         self.assertIn("toggleCollapsedPickupDateGroup", actions)
@@ -492,7 +499,13 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("compareText(left.suburb, right.suburb)", modal_renderer)
         self.assertIn("compareText(left.opshop_name, right.opshop_name)", modal_renderer)
         self.assertIn("compareText(left.pickup_task_id, right.pickup_task_id)", modal_renderer)
+        self.assertIn("const hasSelection = Object.prototype.hasOwnProperty.call", modal_renderer)
         self.assertIn("state.opshopPickupAssignedDriverSelections[pickup.pickup_task_id]", modal_renderer)
+        self.assertIn("getDefaultDriverIdForVisiblePickup(pickup)", modal_renderer)
+        self.assertIn("function shouldUseDefaultDriverForVisiblePickup(pickup)", modal_renderer)
+        self.assertIn("pickup.pickup_date >= state.dispatchDate", modal_renderer)
+        self.assertIn("const shouldShowDefaultHint", modal_renderer)
+        self.assertIn("!shouldUseDefaultDriverForVisiblePickup(pickup)", modal_renderer)
         self.assertIn("if (leftDriverName && !rightDriverName)", modal_renderer)
         self.assertIn("if (!leftDriverName && rightDriverName)", modal_renderer)
         self.assertIn("formatDateHeading", modal_renderer)

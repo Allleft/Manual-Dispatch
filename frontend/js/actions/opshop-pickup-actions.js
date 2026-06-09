@@ -231,12 +231,23 @@ export function createOpShopPickupActions({
     restoreElementScroll(scrollSnapshot);
   }
 
+  function shouldUseDefaultDriverForPickup(pickup) {
+    return Boolean(
+      pickup &&
+      pickup.default_driver_id &&
+      pickup.pickup_date &&
+      state.dispatchDate &&
+      pickup.pickup_date >= state.dispatchDate,
+    );
+  }
+
   function initializeAssignedDriverSelections() {
     const selections = {};
     state.scheduledOpShopPickups.forEach((pickup) => {
       selections[pickup.pickup_task_id] =
         pickup.assigned_driver_id ||
         pickup.driver_id ||
+        (shouldUseDefaultDriverForPickup(pickup) ? pickup.default_driver_id : "") ||
         "";
     });
     state.opshopPickupAssignedDriverSelections = selections;
