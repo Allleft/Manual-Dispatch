@@ -528,14 +528,14 @@ h1 {
 .opshop-template-picker-results,
 .opshop-template-picker-menu {
   display: grid;
-  gap: 0.4rem;
+  gap: 0.5rem;
   max-height: 320px;
   margin-top: 0.45rem;
   overflow-x: hidden;
   overflow-y: auto;
   border: 1px solid rgba(39, 93, 69, 0.26);
   border-radius: var(--radius-sm);
-  padding: 0.45rem;
+  padding: 0.62rem 0.75rem 0.8rem;
   background: #fff;
   box-shadow: var(--shadow-sm);
   overscroll-behavior: contain;
@@ -546,13 +546,13 @@ h1 {
 .opshop-template-picker-option {
   display: flex;
   width: 100%;
-  min-height: 48px;
+  min-height: 68px;
   align-items: flex-start;
   justify-content: space-between;
   gap: 0.75rem;
   border: 1px solid rgba(39, 93, 69, 0.14);
   border-radius: var(--radius-sm);
-  padding: 0.72rem 0.78rem;
+  padding: 0.86rem 1rem 1rem;
   color: var(--ink);
   background: rgba(245, 248, 243, 0.82);
   text-align: left;
@@ -568,7 +568,7 @@ h1 {
 .opshop-template-picker-option-text {
   display: grid;
   min-width: 0;
-  gap: 0.18rem;
+  gap: 0.38rem;
 }
 
 .opshop-template-picker-option-main {
@@ -583,7 +583,7 @@ h1 {
   color: var(--muted);
   font-size: 0.8rem;
   font-weight: 750;
-  line-height: 1.35;
+  line-height: 1.42;
   overflow-wrap: anywhere;
 }
 
