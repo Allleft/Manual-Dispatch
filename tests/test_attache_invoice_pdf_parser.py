@@ -9,16 +9,27 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
     def test_snap_pack_bag_invoice(self):
         parsed = parse_attache_invoice_text(
             """
-            Tax Invoice 182438
-            Invoice Date: 20/03/2026
-            Company: SNAP PACK
-            Phone: 0422275484
-            Delivery Address: B8/2A WESTALL ROAD, HALLMARK BUSINESS CENTRE
-            Suburb: SPRINGVALE
-            Postcode: 3171
+            Invoice No
+              182438
+            Order No Date
+            20/03/26 SNASPR 20032026
+            Invoice to:
+            SNAP PACK
+            B8/2A WESTALL ROAD
+            SPRINGVALE 3171
+            Deliver to:
+            SNAP PACK
             DELIVERY BETWEEN 7:00 AM - 12:00PM
-            RSING PURE WHITE SINGLET 100KG 10 BAG10
-            CT25 COLOR TSHIRT RAGS 25KG 5 BAG5
+            B8/2A WESTALL ROAD SPRINGVALE
+            Tax Invoice
+            0422275484
+            HALLMARK BUSINESS CENTRE
+            3171
+            DELIVERY BETWEEN 7:00 AM - 12:00PM
+            RPWSING 24.50 KG 100 PURE WHITE SINGLET 2.450 269.50 245.00
+            BAG10 0.00 10 PLASTIC BAG 10 kg 0.000 0.00 0.00
+            RSING 4.13 KG 25 COLOR TSHIRT RAGS 1.650 45.38 41.25
+            BAG5 0.00 5 PLASTIC BAG 5 kg 0.000 0.00 0.00
             GST 12.00
             """,
             source_filename="182438.pdf",
@@ -50,16 +61,25 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
     def test_coringle_furniture_mixed_pallet_and_bag_invoice(self):
         parsed = parse_attache_invoice_text(
             """
-            Invoice No: 183075
-            Invoice Date: 21/04/2026
-            Company: Coringle Furniture
-            Phone: 9870 3900
-            Delivery Address: 13-16 Summer Ln
-            Suburb: Ringwood
-            Postcode: 3134
-            RPWSING PURE WHITE SINGLET 300KG 30 BAG10
-            FIN-3PLY FINESSE-3PLY T/PAPER 180 SHTSx72ROLLS 3 BAG
-            PAL PALLET 1
+            Invoice No
+              183075
+            Order No Date
+            21/04/26 CORRIN 40
+            Invoice to:
+            Coringle Furniture
+            13-16 Summer Ln
+            Ringwood 3134
+            Deliver to:
+            Coringle Furniture
+            13-16 Summer Ln
+            Ringwood
+            Tax Invoice
+            9870 3900
+            3134
+            RPWSING 81.00 KG 300 PURE WHITE SINGLET 2.700 891.00 810.00
+            BAG10 0.00 30 PLASTIC BAG 10 kg 0.000 0.00 0.00
+            FIN-3PLY 12.00 BAG 3 FINESSE-3PLY T/PAPER 180 SHTSx72ROLLS 40.000 132.00 120.00
+            PAL 2.50 PLT 1 PALLET 25.000 27.50 25.00
             FUEL LEVY CHARGE 1 DELIVERY
             """,
             source_filename="183075.pdf",
@@ -89,17 +109,27 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
     def test_tutt_bryant_palletized_bag10_is_not_loose_bag(self):
         parsed = parse_attache_invoice_text(
             """
-            Invoice No: 183077
-            Invoice Date: 21/04/2026
-            Company: BT EQUIPMENT trading as Tutt Bryant
-            Phone: 9554 0300
-            Delivery Address: 80-86 FRANKSTON-DANDENONG ROAD
-            Suburb: DANDENONG
-            Postcode: 3175
-            Order No: PO000008304
+            Date
+            21/04/26
+            Invoice No
+              183077 BTEDANR
+            Invoice to:
+            BT EQUIPMENT trading as Tutt Bryant
+            80-86 FRANKSTON DANDENONG ROAD
+            DANDENONG 3175
+            Order No
+            PO000008304
+            Deliver to:
+            BT EQUIPMENT trading as Tutt Bryant
+            80-86 FRANKSTON-DANDENONG ROAD
+            DANDENONG
             NO VAN, MUST BE TRUCK DELIVERY
-            CTRAG COLOR TSHIRT RAGS 200KG 20 BAG10
-            PAL PALLET 1
+            3175
+            9554 0300
+            Tax Invoice
+            RSING 385.00 35.00 0.00 KG 1.750 COLOR TSHIRT RAGS 200
+            BAG10 0.00 0.00 0.00 0.000 PLASTIC BAG 10 kg 20
+            PAL 27.50 2.50 0.00 PLT 25.000 PALLET 1
             Total Amount 123.45
             """,
             source_filename="183077.pdf",
@@ -124,15 +154,24 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
     def test_desi_dhaba_opens_instruction(self):
         parsed = parse_attache_invoice_text(
             """
-            Invoice No: 183080
-            Invoice Date: 21/04/2026
-            Company: DESI DHABA CRAIGIEBURN
-            Phone: 0402 848 618
-            Delivery Address: 340 CRAIGIEBURN ROAD
-            Suburb: CRAIGIEBURN
-            Postcode: 3064
+            Invoice No
+              183080
+            Order No Date
+            21/04/26 DESCRA 21042026
+            Invoice to:
+            DESI DHABA CRAIGIEBURN
+            340 CRAIGIEBURN ROAD
+            CRAIGIEBURN 3064
+            Deliver to:
+            DESI DHABA CRAIGIEBURN
+            340 CRAIGIEBURN ROAD
+            CRAIGIEBURN
+            Tax Invoice
+            0402 848 618
             OPENS 11AM
-            WS11 WHITE SHEETING #11S 50KG 5 BAG10
+            3064
+            RWSHEET 12.75 KG 50 WHITE SHEETING #11S 2.550 140.25 127.50
+            BAG10 0.00 5 PLASTIC BAG 10 kg 0.000 0.00 0.00
             """,
             source_filename="183080.pdf",
         )
@@ -156,15 +195,24 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
     def test_pakenham_accident_repair_opens_instruction(self):
         parsed = parse_attache_invoice_text(
             """
-            Invoice No: 183081
-            Invoice Date: 21/04/2026
-            Company: PAKENHAM ACCIDENT REPAIR
-            Phone: 59412772
-            Delivery Address: 21 BALD HILL ROAD
-            Suburb: PAKENHAM
-            Postcode: 3810
+            Invoice No
+              183081
+            Order No Date
+            21/04/26 PAKPAK21 21042026
+            Invoice to:
+            PAKENHAM ACCIDENT REPAIR
+            21 BALD HILL ROAD
+            PAKENHAM 3810
+            Deliver to:
+            PAKENHAM ACCIDENT REPAIR
+            21 BALD HILL ROAD
+            PAKENHAM
+            Tax Invoice
+            59412772
             OPENS 8AM
-            CTRAG COLOR TSHIRT RAGS 60KG 6 BAG10
+            3810
+            RSING 10.50 KG 60 COLOR TSHIRT RAGS 1.750 115.50 105.00
+            BAG10 0.00 6 PLASTIC BAG 10 kg 0.000 0.00 0.00
             """,
             source_filename="183081.pdf",
         )

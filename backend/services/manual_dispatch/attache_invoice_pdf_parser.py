@@ -23,6 +23,21 @@ ACCOUNTING_NOISE_PATTERNS = (
 
 IGNORED_PRODUCT_CODES = {"DEL", "DELIVERY", "FUEL"}
 PACKAGING_UNITS = {"BAG10", "BAG5"}
+STOP_BLOCK_MARKERS = (
+    "ABN",
+    "Amt+GST",
+    "Code Description",
+    "Deliver to:",
+    "Disc Price",
+    "Email:",
+    "Invoice to:",
+    "Phone:",
+    "Price Per Net",
+    "Tax Invoice",
+    "Total",
+    "UNIT ",
+    "web:",
+)
 PRODUCT_LINE_PATTERN = re.compile(
     r"^(?P<code>[A-Z0-9#-]+)\s+(?P<name>.+?)\s+(?P<quantity>\d+)\s+"
     r"(?P<unit>PALLETS?|PAL|BAG10|BAG5|BAGS?|DELIVERY)\b",
@@ -73,14 +88,15 @@ def parse_attache_invoice_text(text, source_filename="invoice.txt"):
         delivery_date = (invoice_date + timedelta(days=1)).isoformat()
 
     time_instruction, start_time, end_time = _parse_time_instruction(full_text)
-    customer_code = _find_regex(full_text, r"Customer Code\s*[:#]?\s*([A-Z0-9-]+)")
-    order_no = _find_regex(full_text, r"(?:Order No|PO No|Purchase Order)\s*[:#]?\s*([A-Z0-9-]+)")
+    customer_code = _parse_customer_code(lines)
+    order_no = _parse_order_no(lines)
+    customer_profile = _parse_customer_profile(lines)
 
-    company_name = _find_field(lines, ("Company", "Customer", "Deliver To", "Delivery To"))
-    phone = _find_field(lines, ("Phone", "Tel", "Telephone"))
-    delivery_address = _find_field(lines, ("Delivery Address", "Address"))
-    suburb = _find_field(lines, ("Suburb",))
-    postcode = _find_field(lines, ("Postcode", "Post Code"))
+    company_name = customer_profile.get("company_name") or _find_field(lines, ("Company",))
+    phone = customer_profile.get("phone") or _find_field(lines, ("Phone", "Tel", "Telephone"))
+    delivery_address = customer_profile.get("delivery_address") or _find_field(lines, ("Delivery Address", "Address"))
+    suburb = customer_profile.get("suburb") or _find_field(lines, ("Suburb",))
+    postcode = customer_profile.get("postcode") or _find_field(lines, ("Postcode", "Post Code"))
 
     if delivery_address and (not suburb or not postcode):
         delivery_address, inferred_suburb, inferred_postcode = _split_address(delivery_address)
@@ -171,6 +187,201 @@ def _find_regex(text, pattern):
     return clean_optional_text(match.group(1)) if match else None
 
 
+def _parse_customer_code(lines):
+    inline = _find_regex("\n".join(lines), r"Customer Code\s*[:#]?\s*([A-Z0-9-]+)")
+    if inline:
+        return inline
+    for index, line in enumerate(lines):
+        if line.upper().startswith("ORDER NO DATE") and index + 1 < len(lines):
+            parts = lines[index + 1].split()
+            if len(parts) >= 2:
+                return clean_optional_text(parts[1])
+    return None
+
+
+def _parse_order_no(lines):
+    inline = _find_regex(
+        "\n".join(lines),
+        r"(?:Order No|PO No|Purchase Order)\s*[:#]\s*([A-Z0-9-]+)",
+    )
+    if inline:
+        return inline
+    for index, line in enumerate(lines):
+        if line.strip().upper() == "ORDER NO" and index + 1 < len(lines):
+            candidate = clean_optional_text(lines[index + 1])
+            if candidate and not _looks_like_date(candidate):
+                return candidate.split()[0]
+    return None
+
+
+def _parse_customer_profile(lines):
+    invoice_block = _collect_block(lines, "Invoice to:")
+    delivery_block = _collect_block(lines, "Deliver to:")
+    tax_window = _collect_tax_invoice_window(lines)
+
+    invoice_profile = _profile_from_address_block(invoice_block)
+    delivery_profile = _profile_from_address_block(delivery_block)
+
+    profile = invoice_profile
+    if delivery_profile.get("delivery_address") and delivery_profile.get("postcode"):
+        profile = delivery_profile
+
+    phone = _find_phone(delivery_block) or _find_phone(tax_window)
+    postcode = profile.get("postcode") or _find_postcode(tax_window)
+    extra_address_lines = [
+        line
+        for line in tax_window
+        if not _find_phone([line])
+        and not _is_postcode_line(line)
+        and not _parse_time_instruction(line)[0]
+        and not _is_stop_marker(line)
+    ]
+
+    address_lines = [profile.get("delivery_address")] if profile.get("delivery_address") else []
+    address_lines.extend(line for line in extra_address_lines if line not in address_lines)
+
+    return {
+        "company_name": profile.get("company_name"),
+        "delivery_address": ", ".join(address_lines) if address_lines else None,
+        "suburb": profile.get("suburb"),
+        "postcode": postcode,
+        "phone": phone,
+    }
+
+
+def _collect_block(lines, header):
+    header_upper = header.upper()
+    block = []
+    collecting = False
+    for line in lines:
+        if line.upper() == header_upper:
+            collecting = True
+            continue
+        if not collecting:
+            continue
+        if _is_stop_marker(line):
+            break
+        block.append(line)
+    return block
+
+
+def _collect_tax_invoice_window(lines):
+    window = []
+    collecting = False
+    for line in lines:
+        if line.upper() == "TAX INVOICE":
+            collecting = True
+            continue
+        if not collecting:
+            continue
+        if line.upper().startswith("PRICE PER NET") or line.upper().startswith("AMT+GST"):
+            break
+        window.append(line)
+    return window
+
+
+def _is_stop_marker(line):
+    upper = str(line or "").upper()
+    return any(upper.startswith(marker.upper()) for marker in STOP_BLOCK_MARKERS)
+
+
+def _profile_from_address_block(block):
+    content = [
+        line
+        for line in block
+        if line
+        and not _parse_time_instruction(line)[0]
+        and not _find_phone([line])
+        and not _is_operational_instruction(line)
+    ]
+    if not content:
+        return {}
+
+    company_name = content[0]
+    postcode = _find_postcode(content)
+    suburb = None
+    address_lines = []
+    for line in content[1:]:
+        if _is_postcode_line(line):
+            continue
+        suburb_postcode_match = re.match(r"^(.+?)\s+(\d{4})$", line)
+        if suburb_postcode_match:
+            suburb = suburb_postcode_match.group(1).strip()
+            postcode = postcode or suburb_postcode_match.group(2)
+            continue
+        if postcode and not suburb and _looks_like_suburb_line(line):
+            suburb = line
+            continue
+        address_lines.append(line)
+
+    if not suburb and address_lines:
+        address_line, inferred_suburb, inferred_postcode = _split_address(address_lines[-1])
+        if inferred_suburb:
+            address_lines[-1] = address_line
+            suburb = inferred_suburb
+            postcode = postcode or inferred_postcode
+
+    return {
+        "company_name": clean_optional_text(company_name),
+        "delivery_address": clean_optional_text(", ".join(address_lines)),
+        "suburb": clean_optional_text(suburb),
+        "postcode": clean_optional_text(postcode),
+    }
+
+
+def _find_phone(lines):
+    for line in lines:
+        stripped = line.strip()
+        if stripped.upper().startswith("PHONE:"):
+            continue
+        digits = re.sub(r"\D", "", stripped)
+        if len(digits) >= 8 and re.fullmatch(r"[()0-9 +.-]+", stripped):
+            return clean_optional_text(stripped)
+    return None
+
+
+def _find_postcode(lines):
+    for line in lines:
+        if _is_postcode_line(line):
+            return line.strip()
+        match = re.search(r"\b(\d{4})\b", line)
+        if match:
+            return match.group(1)
+    return None
+
+
+def _is_postcode_line(line):
+    return bool(re.fullmatch(r"\d{4}", str(line or "").strip()))
+
+
+def _looks_like_date(value):
+    return bool(
+        re.match(
+            r"^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b",
+            str(value or "").strip(),
+        )
+    )
+
+
+def _looks_like_suburb_line(line):
+    text = str(line or "").strip()
+    return bool(text) and not any(character.isdigit() for character in text)
+
+
+def _is_operational_instruction(line):
+    upper = str(line or "").upper()
+    return any(
+        marker in upper
+        for marker in (
+            "NO VAN",
+            "MUST BE TRUCK",
+            "EMAIL INVOICE",
+            "CREDIT CARD",
+            "PRE PAYMENT",
+        )
+    )
+
+
 def _parse_delivery_date(text):
     raw_date = _find_regex(
         text,
@@ -251,49 +462,75 @@ def _split_address(value):
 
 
 def _parse_product_lines(lines):
-    raw_products = []
+    kg_products = []
+    bag_products = []
     pallet_quantity = 0
+    last_kg_product = None
     for line in lines:
         if _is_noise_line(line):
             continue
-        pallet_match = re.match(r"^(?:PAL|PALLET)\s+(?:PALLET\s+)?(\d+)\b", line, re.IGNORECASE)
-        if pallet_match:
-            pallet_quantity += int(pallet_match.group(1))
-            continue
-        match = PRODUCT_LINE_PATTERN.match(line)
-        if not match:
-            continue
-
-        code = match.group("code").upper()
+        code = _line_code(line)
         if code in IGNORED_PRODUCT_CODES:
             continue
-        unit = match.group("unit").upper()
-        if unit.startswith("DEL"):
+        if code == "PAL":
+            pallet_quantity += _parse_pallet_quantity(line)
             continue
-        raw_products.append(
-            {
-                "code": code,
-                "name": _clean_product_name(match.group("name")),
-                "quantity": int(match.group("quantity")),
-                "unit": unit,
-            }
-        )
+        if code in PACKAGING_UNITS:
+            if last_kg_product:
+                last_kg_product["bag_quantity"] = _parse_packaging_quantity(line)
+            continue
 
-    loose_bags_quantity = 0
+        kg_product = _parse_kg_product_line(line)
+        if kg_product:
+            kg_products.append(kg_product)
+            last_kg_product = kg_product
+            continue
+
+        bag_product = _parse_real_bag_product_line(line)
+        if bag_product:
+            bag_products.append(bag_product)
+            last_kg_product = None
+            continue
+
+        legacy_product = _parse_legacy_product_line(line)
+        if legacy_product:
+            unit = legacy_product["unit"]
+            if unit in {"PAL", "PALLET", "PALLETS"}:
+                pallet_quantity += legacy_product["quantity"]
+                kg_products.append(
+                    {
+                        "name": legacy_product["name"],
+                        "bag_quantity": legacy_product["quantity"],
+                    }
+                )
+            elif unit in PACKAGING_UNITS:
+                if last_kg_product:
+                    last_kg_product["bag_quantity"] = legacy_product["quantity"]
+                else:
+                    kg_products.append(
+                        {
+                            "name": legacy_product["name"],
+                            "bag_quantity": legacy_product["quantity"],
+                        }
+                    )
+                    last_kg_product = kg_products[-1]
+            elif unit in {"BAG", "BAGS"}:
+                bag_products.append(legacy_product)
+            continue
+
     product_lines = []
-    for product in raw_products:
-        unit = product["unit"]
-        if unit in {"PAL", "PALLET", "PALLETS"}:
-            quantity = product["quantity"]
-            pallet_quantity += quantity
-            product_lines.append(_product_line(product["name"], quantity, "PALLETS"))
-            continue
-
-        if unit in PACKAGING_UNITS and pallet_quantity > 0:
+    loose_bags_quantity = 0
+    for product in kg_products:
+        if pallet_quantity > 0:
             product_lines.append(_product_line(product["name"], pallet_quantity, "PALLETS"))
             continue
+        bag_quantity = product.get("bag_quantity") or 0
+        if bag_quantity > 0:
+            loose_bags_quantity += bag_quantity
+            product_lines.append(_product_line(product["name"], bag_quantity, "BAGS"))
 
-        if unit in PACKAGING_UNITS or unit in {"BAG", "BAGS"}:
+    for product in bag_products:
+        if product["quantity"] > 0:
             loose_bags_quantity += product["quantity"]
             product_lines.append(_product_line(product["name"], product["quantity"], "BAGS"))
 
@@ -302,6 +539,106 @@ def _parse_product_lines(lines):
         "loose_bags_quantity": loose_bags_quantity,
         "product_lines": _dedupe_product_lines(product_lines),
     }
+
+
+def _line_code(line):
+    parts = str(line or "").strip().split()
+    return parts[0].upper() if parts else ""
+
+
+def _parse_pallet_quantity(line):
+    match = re.search(r"\bPLT\s+(\d+)(?!\.)\b", line, re.IGNORECASE)
+    if match:
+        return int(match.group(1))
+    match = re.search(r"\bPALLET\s+(\d+)\s*$", line, re.IGNORECASE)
+    if match:
+        return int(match.group(1))
+    numbers = re.findall(r"\b\d+\b", line)
+    return int(numbers[-1]) if numbers else 0
+
+
+def _parse_packaging_quantity(line):
+    mcc_match = re.match(
+        r"^BAG\d+\s+(?:[\d.]+\s+)*?(\d+)\s+PLASTIC",
+        line,
+        re.IGNORECASE,
+    )
+    if mcc_match:
+        return int(mcc_match.group(1))
+    smiths_match = re.search(r"PLASTIC BAG\s+\d+\s*kg\s+(\d+)\s*$", line, re.IGNORECASE)
+    if smiths_match:
+        return int(smiths_match.group(1))
+    numbers = re.findall(r"\b\d+\b", line)
+    return int(numbers[-1]) if numbers else 0
+
+
+def _parse_kg_product_line(line):
+    parts = str(line or "").split()
+    upper_parts = [part.upper() for part in parts]
+    if "KG" not in upper_parts:
+        return None
+    kg_index = upper_parts.index("KG")
+    after = parts[kg_index + 1 :]
+    if len(after) < 2:
+        return None
+
+    if _is_integer(after[0]):
+        weight = after[0]
+        name_tokens = _strip_trailing_numeric_tokens(after[1:])
+    else:
+        if not _is_decimal(after[0]):
+            return None
+        weight = after[-1] if _is_integer(after[-1]) else ""
+        name_tokens = after[1:-1] if weight else after[1:]
+        name_tokens = _strip_trailing_numeric_tokens(name_tokens)
+
+    name = _clean_product_name(" ".join(name_tokens + ([f"{weight}KG"] if weight else [])))
+    return {"name": name, "bag_quantity": 0} if name else None
+
+
+def _parse_real_bag_product_line(line):
+    parts = str(line or "").split()
+    upper_parts = [part.upper() for part in parts]
+    if "BAG" not in upper_parts:
+        return None
+    bag_index = upper_parts.index("BAG")
+    if bag_index + 2 >= len(parts) or not _is_integer(parts[bag_index + 1]):
+        return None
+    quantity = int(parts[bag_index + 1])
+    name_tokens = _strip_trailing_numeric_tokens(parts[bag_index + 2 :])
+    name = _clean_product_name(" ".join(name_tokens))
+    return {"name": name, "quantity": quantity, "unit": "BAGS"} if name else None
+
+
+def _parse_legacy_product_line(line):
+    match = PRODUCT_LINE_PATTERN.match(line)
+    if not match:
+        return None
+    return {
+        "code": match.group("code").upper(),
+        "name": _clean_product_name(match.group("name")),
+        "quantity": int(match.group("quantity")),
+        "unit": match.group("unit").upper(),
+    }
+
+
+def _strip_trailing_numeric_tokens(tokens):
+    cleaned = list(tokens)
+    while cleaned and (_is_decimal(cleaned[-1]) or _is_money(cleaned[-1])):
+        cleaned.pop()
+    return cleaned
+
+
+def _is_integer(value):
+    return bool(re.fullmatch(r"\d+", str(value or "")))
+
+
+def _is_decimal(value):
+    return bool(re.fullmatch(r"\d+(?:\.\d+)?", str(value or "").replace(",", "")))
+
+
+def _is_money(value):
+    return bool(re.fullmatch(r"\$?\d[\d,]*(?:\.\d+)?", str(value or "")))
 
 
 def _product_line(name, quantity, unit):
