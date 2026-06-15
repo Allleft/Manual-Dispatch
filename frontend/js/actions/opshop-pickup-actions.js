@@ -26,7 +26,7 @@ export function createOpShopPickupActions({
     state.opshopPickupFormMode = "";
     state.opshopPickupEditingTaskId = "";
     state.opshopPickupForm = {};
-    initializeAssignedDriverSelections();
+    initializeAssignedDriverSelections({ preserveExisting: false });
     initializeCollapsedDateGroups();
     renderBoard();
     await loadScheduleCandidates();
@@ -151,7 +151,7 @@ export function createOpShopPickupActions({
       state.opshopPickupFormMode = "";
       state.opshopPickupForm = {};
       await loadBoard(state.dispatchDate, { force: true });
-      initializeAssignedDriverSelections();
+      initializeAssignedDriverSelections({ preserveExisting: true });
     } catch (error) {
       state.opshopPickupListError = `Unable to add OP SHOP pickup. ${error.message}`;
     } finally {
@@ -178,7 +178,7 @@ export function createOpShopPickupActions({
       state.opshopPickupEditingTaskId = "";
       state.opshopPickupForm = {};
       await loadBoard(state.dispatchDate, { force: true });
-      initializeAssignedDriverSelections();
+      initializeAssignedDriverSelections({ preserveExisting: true });
     } catch (error) {
       state.opshopPickupListError = `Unable to update OP SHOP pickup. ${error.message}`;
     } finally {
@@ -202,7 +202,7 @@ export function createOpShopPickupActions({
       state.opshopPickupEditingTaskId = "";
       state.opshopPickupForm = {};
       await loadBoard(state.dispatchDate, { force: true });
-      initializeAssignedDriverSelections();
+      initializeAssignedDriverSelections({ preserveExisting: true });
     } catch (error) {
       state.opshopPickupListError = `Unable to delete OP SHOP pickup. ${error.message}`;
     } finally {
@@ -262,8 +262,8 @@ export function createOpShopPickupActions({
     return !hasSavedFinalSummary;
   }
 
-  function initializeAssignedDriverSelections() {
-    const existingSelections = state.opshopPickupAssignedDriverSelections || {};
+  function initializeAssignedDriverSelections({ preserveExisting = false } = {}) {
+    const existingSelections = preserveExisting ? state.opshopPickupAssignedDriverSelections || {} : {};
     const selections = {};
     state.scheduledOpShopPickups.forEach((pickup) => {
       const hasExistingSelection = Object.prototype.hasOwnProperty.call(

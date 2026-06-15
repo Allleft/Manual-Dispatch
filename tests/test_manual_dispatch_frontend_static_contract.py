@@ -452,7 +452,22 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("handleDeletePickupTask", actions)
         self.assertIn("function shouldUseDefaultDriverForPickup(pickup)", actions)
         self.assertIn("function canUseDefaultDriverForPickup(pickup)", actions)
-        self.assertIn("const existingSelections = state.opshopPickupAssignedDriverSelections || {}", actions)
+        self.assertIn(
+            "function initializeAssignedDriverSelections({ preserveExisting = false } = {})",
+            actions,
+        )
+        self.assertIn(
+            "preserveExisting ? state.opshopPickupAssignedDriverSelections || {} : {}",
+            actions,
+        )
+        self.assertIn(
+            "initializeAssignedDriverSelections({ preserveExisting: false })",
+            actions,
+        )
+        self.assertIn(
+            "initializeAssignedDriverSelections({ preserveExisting: true })",
+            actions,
+        )
         self.assertIn("Object.prototype.hasOwnProperty.call(", actions)
         self.assertIn("existingSelections,", actions)
         self.assertIn("selections[pickup.pickup_task_id] = existingSelections[pickup.pickup_task_id]", actions)
@@ -461,7 +476,7 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("pickup.default_driver_id", actions)
         self.assertIn("pickup.pickup_date >= state.dispatchDate", actions)
         self.assertIn(
-            '(canUseDefaultDriverForPickup(pickup) ? pickup.default_driver_id : "")',
+            "canUseDefaultDriverForPickup(pickup) ? pickup.default_driver_id : \"\"",
             actions,
         )
         self.assertIn("collapsedRegularOpShopPickupDates", app_state)
