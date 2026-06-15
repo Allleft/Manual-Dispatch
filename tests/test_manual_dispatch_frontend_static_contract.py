@@ -144,6 +144,39 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         field_positions = [shared_grid_source.index(f'"{label}"') for label in field_labels]
         self.assertEqual(sorted(field_positions), field_positions)
 
+    def test_attache_invoice_pdf_import_frontend_contract(self):
+        app_js = (FRONTEND_ROOT / "app.js").read_text(encoding="utf-8")
+        task_pool_renderer = (
+            FRONTEND_ROOT / "js" / "render" / "task-pool-renderer.js"
+        ).read_text(encoding="utf-8")
+        api_module = (
+            FRONTEND_ROOT / "js" / "api" / "manual-dispatch-api.js"
+        ).read_text(encoding="utf-8")
+        app_state = (
+            FRONTEND_ROOT / "js" / "state" / "app-state.js"
+        ).read_text(encoding="utf-8")
+        actions = (
+            FRONTEND_ROOT / "js" / "actions" / "attache-invoice-import-actions.js"
+        ).read_text(encoding="utf-8")
+        renderer = (
+            FRONTEND_ROOT / "js" / "render" / "attache-invoice-import-modal-renderer.js"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("Import Attache Invoices", task_pool_renderer)
+        self.assertIn("onOpenAttacheInvoiceImport", task_pool_renderer)
+        self.assertIn("createAttacheInvoiceImportActions", app_js)
+        self.assertIn("renderAttacheInvoiceImportModal", app_js)
+        self.assertIn("isAttacheInvoiceImportOpen", app_state)
+        self.assertIn("/api/manual-dispatch/orders/import-attache-pdf-preview", api_module)
+        self.assertIn("/api/manual-dispatch/orders/import-attache-pdf-commit", api_module)
+        self.assertIn("new FormData()", api_module)
+        self.assertIn("apiPreviewAttacheInvoicePdfImport", actions)
+        self.assertIn("apiCommitAttacheInvoicePdfImport", actions)
+        self.assertIn("Preview Import", renderer)
+        self.assertIn("Confirm Import", renderer)
+        self.assertIn('fileInput.accept = "application/pdf,.pdf"', renderer)
+        self.assertIn("row.is_duplicate", renderer)
+
     def test_phase16_product_detail_controls_are_present(self):
         order_modal_renderer = (
             FRONTEND_ROOT / "js" / "render" / "order-modal-renderer.js"
@@ -509,7 +542,7 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn('clearDeliveryDateButton.id = "clear-task-pool-delivery-date-filter"', task_pool_renderer)
         self.assertIn('summary.id = "task-filter-summary"', task_pool_renderer)
         delivery_section = task_pool_renderer.split("function createDeliveryOrderSection", 1)[1]
-        self.assertIn("const filterBar = createDeliveryOrderFilterBar();", delivery_section)
+        self.assertIn("const filterBar = createDeliveryOrderFilterBar({ onOpenAttacheInvoiceImport });", delivery_section)
         self.assertIn("section.append(filterBar, list);", delivery_section)
         self.assertNotIn('class="task-filter-bar"', index_html)
         self.assertIn("opshopRegularListWindowStart", task_pool_renderer)

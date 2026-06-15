@@ -74,6 +74,27 @@ async function requestJson(path, options = {}) {
 }
 
 
+async function requestFormData(path, formData, options = {}) {
+  const response = await fetch(getApiUrl(path, options.query), {
+    method: options.method || "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    let message = `Request failed with status ${response.status}`;
+    try {
+      const payload = await response.json();
+      message = formatApiErrorDetail(payload.detail) || message;
+    } catch (error) {
+      message = response.statusText || message;
+    }
+    throw new Error(message);
+  }
+
+  return response.json();
+}
+
+
 export async function apiGetBoard(dispatchDate) {
   return requestJson("/api/manual-dispatch/board", {
     query: { dispatch_date: dispatchDate },
@@ -148,6 +169,23 @@ export async function apiUpdateOrder(orderId, payload) {
 export async function apiCancelOrder(orderId) {
   return requestJson(`/api/manual-dispatch/orders/${encodeURIComponent(orderId)}/cancel`, {
     method: "POST",
+  });
+}
+
+
+export async function apiPreviewAttacheInvoicePdfImport(files) {
+  const formData = new FormData();
+  Array.from(files || []).forEach((file) => {
+    formData.append("files", file);
+  });
+  return requestFormData("/api/manual-dispatch/orders/import-attache-pdf-preview", formData);
+}
+
+
+export async function apiCommitAttacheInvoicePdfImport(payload) {
+  return requestJson("/api/manual-dispatch/orders/import-attache-pdf-commit", {
+    method: "POST",
+    body: payload,
   });
 }
 

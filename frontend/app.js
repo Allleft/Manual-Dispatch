@@ -3,6 +3,7 @@
   apiListFinalSummaryDates,
 } from "./js/api/manual-dispatch-api.js";
 import { createAssignmentActions } from "./js/actions/assignment-actions.js";
+import { createAttacheInvoiceImportActions } from "./js/actions/attache-invoice-import-actions.js";
 import { createAuthActions } from "./js/actions/auth-actions.js";
 import { createFinalSummaryActions } from "./js/actions/final-summary-actions.js";
 import { createOrderActions } from "./js/actions/order-actions.js";
@@ -26,6 +27,7 @@ import {
   renderAddOrderPopup as renderAddOrderPopupView,
   renderOrderDetailPopup as renderOrderDetailPopupView,
 } from "./js/render/order-modal-renderer.js";
+import { renderAttacheInvoiceImportModal as renderAttacheInvoiceImportModalView } from "./js/render/attache-invoice-import-modal-renderer.js";
 import {
   renderTaskPool as renderTaskPoolView,
   renderTaskPoolFilters as renderTaskPoolFiltersView,
@@ -320,6 +322,7 @@ function renderTaskPool() {
     onOpenOncallOpShopPickupList: oncallOpShopPickupActions.openOncallOpShopPickupList,
     onOpenOpShopPickupList: opShopPickupActions.openOpShopPickupList,
     onOpenOpShopTemplateManagement: opShopTemplateActions.openTemplateManagement,
+    onOpenAttacheInvoiceImport: attacheInvoiceImportActions.openImportModal,
     onOpenOrderDetail: orderActions.openOrderDetail,
     onPendingSelectionChange: assignmentActions.updatePendingSelection,
     onAssignTask: assignmentActions.handleAssignTask,
@@ -940,6 +943,18 @@ function renderOrderDetailPopup() {
       orderActions.updateProductLine("edit", index, field, value),
   });
 }
+
+function renderAttacheInvoiceImportModal() {
+  renderAttacheInvoiceImportModalView({
+    onClose: attacheInvoiceImportActions.closeImportModal,
+    onCommit: attacheInvoiceImportActions.commitImport,
+    onPreview: attacheInvoiceImportActions.previewImport,
+    onToggleRow: attacheInvoiceImportActions.togglePreviewRow,
+    onUpdateFiles: attacheInvoiceImportActions.updateFiles,
+    onUpdateRow: attacheInvoiceImportActions.updatePreviewRow,
+  });
+}
+
 function renderBoard() {
   renderAccountStatus();
   renderBoardControls();
@@ -947,6 +962,7 @@ function renderBoard() {
   renderVisibleBoardView();
   renderOrderDetailPopup();
   renderAddOrderPopup();
+  renderAttacheInvoiceImportModal();
   renderOpShopPickupListModal();
   renderOncallOpShopPickupListModal();
   renderCountrysideOpShopPickupListModal();
@@ -969,6 +985,12 @@ const orderActions = createOrderActions({
   renderBoard,
   renderOrderDetailPopup,
   showError,
+  state,
+});
+
+const attacheInvoiceImportActions = createAttacheInvoiceImportActions({
+  loadBoard,
+  renderAttacheInvoiceImportModal,
   state,
 });
 

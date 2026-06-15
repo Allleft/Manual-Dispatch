@@ -1,6 +1,8 @@
 import os
+from hashlib import sha1
+from typing import List
 
-from fastapi import APIRouter, Body, HTTPException
+from fastapi import APIRouter, Body, File, HTTPException, UploadFile
 from fastapi.responses import Response
 
 from backend.schemas import (
@@ -11,6 +13,8 @@ from backend.schemas import (
     AssignCountrysideRouteGroupRequest,
     AssignDriverVehicleRequest,
     AssignTaskRequest,
+    AttacheInvoicePdfPreviewResponse,
+    CommitAttacheInvoicePdfImportRequest,
     CreateOpShopCountrysideRouteGroupRequest,
     CreateDriverRequest,
     CreateOrderRequest,
@@ -38,6 +42,10 @@ from backend.repositories.sqlite_manual_dispatch_repository import (
 from backend.services.excel_export_service import build_manual_dispatch_excel
 from backend.services.final_summary_excel_export_service import build_final_summary_excel
 from backend.services.manual_dispatch_service import ManualDispatchService
+from backend.services.manual_dispatch.attache_invoice_pdf_parser import (
+    parse_attache_invoice_pdf_bytes,
+    with_duplicate_warning,
+)
 from backend.services.opshop_pickup_excel_export_service import (
     build_opshop_pickup_run_sheet_excel,
 )
@@ -130,6 +138,85 @@ def create_order(request: CreateOrderRequest):
         return to_dict(service.create_order(request))
     except ValueError as error:
         raise _to_http_exception(error) from error
+
+
+@router.post("/orders/import-attache-pdf-preview")
+async def preview_attache_invoice_pdf_import(files: List[UploadFile] = File(...)):
+    rows = []
+    existing_invoice_numbers = _existing_invoice_numbers()
+
+    for uploaded_file in files:
+        filename = uploaded_file.filename or "invoice.pdf"
+        try:
+            parsed = parse_attache_invoice_pdf_bytes(
+                await uploaded_file.read(),
+                source_filename=filename,
+            )
+            if parsed.invoice_number and parsed.invoice_number in existing_invoice_numbers:
+                parsed = with_duplicate_warning(parsed)
+            rows.append(parsed)
+        except ValueError as error:
+            rows.append(
+                _failed_attache_preview_row(
+                    filename,
+                    str(error),
+                )
+            )
+
+    return to_dict(AttacheInvoicePdfPreviewResponse(rows=rows))
+
+
+@router.post("/orders/import-attache-pdf-commit")
+def commit_attache_invoice_pdf_import(request: CommitAttacheInvoicePdfImportRequest):
+    created_orders = []
+    skipped_rows = []
+    existing_invoice_numbers = _existing_invoice_numbers()
+
+    for row in request.rows or []:
+        row_id = row.row_id or row.invoice_number or row.source_filename or "row"
+        if not row.selected:
+            skipped_rows.append({"row_id": row_id, "reason": "Row was not selected for import."})
+            continue
+        if not row.importable or row.is_duplicate:
+            skipped_rows.append({"row_id": row_id, "reason": "Row is not importable."})
+            continue
+        if row.invoice_number and row.invoice_number in existing_invoice_numbers:
+            skipped_rows.append({"row_id": row_id, "reason": "Duplicate invoice number already exists."})
+            continue
+
+        try:
+            created = service.create_order(
+                CreateOrderRequest(
+                    invoice_number=row.invoice_number,
+                    company_name=row.company_name,
+                    phone=row.phone,
+                    delivery_address=row.delivery_address,
+                    suburb=row.suburb,
+                    postcode=row.postcode,
+                    delivery_date=row.delivery_date,
+                    zone=row.zone,
+                    urgency=row.urgency,
+                    preferred_driver_id=row.preferred_driver_id,
+                    pallet_quantity=row.pallet_quantity,
+                    loose_bags_quantity=row.loose_bags_quantity,
+                    start_time=row.start_time,
+                    end_time=row.end_time,
+                    note=row.note,
+                    product_lines=row.product_lines,
+                )
+            )
+            created_orders.append(to_dict(created))
+            if created.invoice_number:
+                existing_invoice_numbers.add(created.invoice_number)
+        except ValueError as error:
+            skipped_rows.append({"row_id": row_id, "reason": str(error)})
+
+    return {
+        "created_orders": created_orders,
+        "skipped_rows": skipped_rows,
+        "imported_count": len(created_orders),
+        "skipped_count": len(skipped_rows),
+    }
 
 
 @router.patch("/orders/{order_id}")
@@ -557,6 +644,26 @@ def _to_http_exception(error):
     message = str(error)
     status_code = 404 if "does not exist" in message else 400
     return HTTPException(status_code=status_code, detail=message)
+
+
+def _existing_invoice_numbers():
+    return {
+        order.invoice_number
+        for order in service.repository.list_orders()
+        if order.invoice_number
+    }
+
+
+def _failed_attache_preview_row(source_filename, message):
+    from backend.schemas import AttacheInvoicePdfPreviewItem
+
+    return AttacheInvoicePdfPreviewItem(
+        row_id=f"ATTACHE-FAILED-{sha1(source_filename.encode('utf-8')).hexdigest()[:12]}",
+        source_filename=source_filename,
+        warnings=[message],
+        importable=False,
+        selected=False,
+    )
 
 
 def _final_summary_export_filename(summary):

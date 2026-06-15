@@ -89,28 +89,27 @@ class ManualDispatchProductDetailsTest(unittest.TestCase):
         self.assertEqual("BAGS", board_order.product_lines[0].unit)
         self.assertEqual(5, board_order.product_lines[0].quantity)
 
-    def test_rejects_mixed_product_detail_units(self):
-        with self.assertRaisesRegex(
-            ValueError,
-            "Product detail lines in one Order must use the same unit",
-        ):
-            self.service.create_order(
-                self._create_request(
-                    pallet_quantity=5,
-                    product_lines=[
-                        {
-                            "product_name": "colour singlet 10kg",
-                            "quantity": 3,
-                            "unit": "PALLETS",
-                        },
-                        {
-                            "product_name": "pure white singlet 10kg",
-                            "quantity": 2,
-                            "unit": "BAGS",
-                        },
-                    ],
-                )
+    def test_allows_mixed_product_detail_units_when_load_is_mixed(self):
+        created = self.service.create_order(
+            self._create_request(
+                pallet_quantity=5,
+                loose_bags_quantity=2,
+                product_lines=[
+                    {
+                        "product_name": "colour singlet 10kg",
+                        "quantity": 3,
+                        "unit": "PALLETS",
+                    },
+                    {
+                        "product_name": "pure white singlet 10kg",
+                        "quantity": 2,
+                        "unit": "BAGS",
+                    },
+                ],
             )
+        )
+
+        self.assertEqual(["PALLETS", "BAGS"], [line.unit for line in created.product_lines])
 
     def test_rejects_product_detail_unit_that_conflicts_with_order_load_unit(self):
         with self.assertRaisesRegex(

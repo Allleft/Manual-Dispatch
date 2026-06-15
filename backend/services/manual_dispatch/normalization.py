@@ -47,7 +47,7 @@ def quantity_or_default(value, field_name):
 
 def load_unit_for_quantities(pallet_quantity, loose_bags_quantity):
     if pallet_quantity > 0 and loose_bags_quantity > 0:
-        raise ValueError("Order must use either Pallets or Bags, not both")
+        return "MIXED"
     if pallet_quantity > 0:
         return "PALLETS"
     if loose_bags_quantity > 0:
@@ -62,7 +62,6 @@ def normalize_product_detail_lines(product_lines, load_unit, field_name="product
         raise ValueError(f"{field_name} must be a list")
 
     normalized_lines = []
-    shared_unit = None
     for index, line in enumerate(product_lines, start=1):
         if not isinstance(line, dict):
             raise ValueError(f"{field_name} item {index} must be an object")
@@ -85,10 +84,6 @@ def normalize_product_detail_lines(product_lines, load_unit, field_name="product
         if unit not in VALID_PRODUCT_DETAIL_UNITS:
             raise ValueError(f"{field_name} item {index} unit must be PALLETS or BAGS")
 
-        if shared_unit and shared_unit != unit:
-            raise ValueError("Product detail lines in one Order must use the same unit")
-        shared_unit = unit
-
         normalized_lines.append(
             ProductDetailLine(
                 product_name=product_name,
@@ -99,9 +94,12 @@ def normalize_product_detail_lines(product_lines, load_unit, field_name="product
 
     if normalized_lines and not load_unit:
         raise ValueError("Product detail unit must align with the Order pallet or bag quantity")
-    if normalized_lines and shared_unit != load_unit:
+    if (
+        normalized_lines
+        and load_unit != "MIXED"
+        and any(line.unit != load_unit for line in normalized_lines)
+    ):
         raise ValueError("Product detail unit must align with the Order pallet or bag quantity")
-
     return normalized_lines
 
 

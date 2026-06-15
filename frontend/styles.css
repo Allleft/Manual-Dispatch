@@ -2169,3 +2169,46 @@ select:disabled {
   max-height: min(760px, calc(100vh - 2rem));
   overflow: auto;
 }
+
+.attache-import-modal {
+  width: min(1280px, calc(100vw - 2rem));
+}
+
+.attache-import-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  margin: 0 0 1rem;
+}
+
+.attache-import-preview {
+  display: grid;
+  gap: 1rem;
+}
+
+.attache-import-table-wrap {
+  overflow: auto;
+  max-height: min(54vh, 560px);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+}
+
+.attache-import-table {
+  min-width: 1500px;
+}
+
+.attache-import-table textarea {
+  min-width: 220px;
+  min-height: 5rem;
+}
+
+.attache-import-table input,
+.attache-import-table textarea {
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.attache-import-row-warning {
+  background: #fff7ed;
+}

@@ -108,7 +108,7 @@ The three views are frontend-only navigation. They do not change backend routes,
 | --- | --- |
 | Task Pool | Shows active unassigned Delivery Orders; search, urgency, and Delivery Date filters change display only. |
 | Add / Edit / Cancel | Active Orders can be added and edited; Cancel is a soft removal from normal workflow. |
-| Product Details | Orders may contain product lines; one Order uses Pallets or Bags, never both. |
+| Product Details | Orders may contain product lines with Pallets, Bags, or mixed pallet + loose-bag loads. |
 | Assign / Unassign | Staff manually assign an Order to a Driver and `trip1` or `trip2`, or return it to the Task Pool. |
 | Delivery Date | Driver Summary filters assigned Delivery Orders by the selected Delivery Date. |
 | Trip Display | Delivery Orders remain inside Driver Summary `Trip 1` and `Trip 2` sections. |
@@ -117,6 +117,17 @@ The three views are frontend-only navigation. They do not change backend routes,
 | Totals | Pallet, loose-bag, and capacity totals count Delivery Orders only. |
 
 Delivery assignment remains entirely manual. OP SHOP work is not stored as a Delivery Order and does not change Delivery totals.
+
+### Attache Invoice PDF Import
+
+`Import Attache Invoices` in the Delivery Orders area lets office staff upload one or more text-based Attache invoice PDFs, preview parsed Delivery Orders, correct fields, and then confirm import.
+
+- Preview is required before import; PDF upload does not write to the database by itself.
+- The preview highlights duplicate invoice numbers already present in Manual Dispatch and leaves duplicate rows unselected / not importable by default.
+- Staff can edit delivery date, time window, phone, address, suburb, postcode, pallet quantity, loose-bag quantity, and notes before confirming.
+- Confirm Import creates standard Delivery Orders through the same `CreateOrderRequest` path as manual entry, so imported Orders appear in the Task Pool like normal Delivery Orders.
+- Product lines use the existing `product_name`, `quantity`, and `unit` fields only; invoice accounting lines, GST, totals, and payment details are not imported as delivery product lines.
+- PDF import does not change OP SHOP workflows, Driver Summary OP SHOP sections, generated/saved Final Summary locking, or Final Summary Excel semantics.
 
 ## OP SHOP Pickup Workflow
 
@@ -308,7 +319,7 @@ Final Trip Summary is a historical snapshot for a driver, Dispatch Date, and Dri
 | --- | --- |
 | Board / Delivery Export | `GET /api/manual-dispatch/board`, `GET /api/manual-dispatch/export-excel` |
 | Auth | `POST /api/manual-dispatch/auth/register`, `POST /api/manual-dispatch/auth/login`, `POST /api/manual-dispatch/auth/reset-password` |
-| Orders | `POST /api/manual-dispatch/orders`, `PATCH /api/manual-dispatch/orders/{order_id}`, `POST /api/manual-dispatch/orders/{order_id}/cancel` |
+| Orders | `POST /api/manual-dispatch/orders`, `POST /api/manual-dispatch/orders/import-attache-pdf-preview`, `POST /api/manual-dispatch/orders/import-attache-pdf-commit`, `PATCH /api/manual-dispatch/orders/{order_id}`, `POST /api/manual-dispatch/orders/{order_id}/cancel` |
 | Assignment | `POST /api/manual-dispatch/assign`, `POST /api/manual-dispatch/unassign` |
 | Driver / Vehicle | `GET /api/manual-dispatch/specifications`, `POST/PATCH/DELETE /api/manual-dispatch/drivers...`, `POST/PATCH/DELETE /api/manual-dispatch/vehicles...`, `POST /api/manual-dispatch/driver-vehicle` |
 | OP SHOP Templates | `GET/POST /api/manual-dispatch/opshop-templates`, `PATCH /api/manual-dispatch/opshop-templates/{schedule_id}`, `POST /api/manual-dispatch/opshop-templates/{schedule_id}/disable` |

@@ -600,6 +600,70 @@ class UpdateOrderRequest:
 
 
 @dataclass
+class AttacheInvoicePdfPreviewItem:
+    row_id: str
+    source_filename: str
+    invoice_number: Optional[str] = None
+    invoice_date: Optional[str] = None
+    customer_code: Optional[str] = None
+    order_no: Optional[str] = None
+    company_name: Optional[str] = None
+    phone: Optional[str] = None
+    delivery_address: Optional[str] = None
+    suburb: Optional[str] = None
+    postcode: Optional[str] = None
+    delivery_date: Optional[str] = None
+    zone: Optional[str] = None
+    urgency: Optional[str] = "Normal"
+    preferred_driver_id: Optional[str] = None
+    pallet_quantity: int = 0
+    loose_bags_quantity: int = 0
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    note: Optional[str] = None
+    product_lines: List[dict] = field(default_factory=list)
+    warnings: List[str] = field(default_factory=list)
+    is_duplicate: bool = False
+    importable: bool = True
+    selected: bool = True
+
+
+@dataclass
+class AttacheInvoicePdfPreviewResponse:
+    rows: List[AttacheInvoicePdfPreviewItem]
+
+
+@dataclass
+class CommitAttacheInvoicePdfImportRow:
+    row_id: Optional[str] = None
+    source_filename: Optional[str] = None
+    selected: bool = True
+    importable: bool = True
+    is_duplicate: bool = False
+    invoice_number: Optional[str] = None
+    company_name: Optional[str] = None
+    phone: Optional[str] = None
+    delivery_address: Optional[str] = None
+    suburb: Optional[str] = None
+    postcode: Optional[str] = None
+    delivery_date: Optional[str] = None
+    zone: Optional[str] = None
+    urgency: Optional[str] = "Normal"
+    preferred_driver_id: Optional[str] = None
+    pallet_quantity: Optional[int] = 0
+    loose_bags_quantity: Optional[int] = 0
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    note: Optional[str] = None
+    product_lines: Optional[List[dict]] = None
+
+
+@dataclass
+class CommitAttacheInvoicePdfImportRequest:
+    rows: List[CommitAttacheInvoicePdfImportRow] = field(default_factory=list)
+
+
+@dataclass
 class CreateDriverRequest:
     name: Optional[str] = None
     license_no: Optional[str] = None

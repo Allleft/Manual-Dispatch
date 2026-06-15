@@ -70,6 +70,7 @@ export function renderTaskPool({
   onOpenOncallOpShopPickupList,
   onOpenOpShopPickupList,
   onOpenOpShopTemplateManagement,
+  onOpenAttacheInvoiceImport,
   onOpenOrderDetail,
   onPendingSelectionChange,
   onAssignTask,
@@ -113,6 +114,7 @@ export function renderTaskPool({
       filteredOrders,
       getPendingSelection,
       onAssignTask,
+      onOpenAttacheInvoiceImport,
       onOpenOrderDetail,
       onPendingSelectionChange,
       unassignedOrders,
@@ -180,6 +182,7 @@ function createDeliveryOrderSection({
   filteredOrders,
   getPendingSelection,
   onAssignTask,
+  onOpenAttacheInvoiceImport,
   onOpenOrderDetail,
   onPendingSelectionChange,
   unassignedOrders,
@@ -189,7 +192,7 @@ function createDeliveryOrderSection({
     titleText: "DELIVERY ORDERS",
   });
 
-  const filterBar = createDeliveryOrderFilterBar();
+  const filterBar = createDeliveryOrderFilterBar({ onOpenAttacheInvoiceImport });
   const list = document.createElement("div");
   list.className = "task-pool-section-grid";
 
@@ -224,7 +227,7 @@ function createDeliveryOrderSection({
   return section;
 }
 
-function createDeliveryOrderFilterBar() {
+function createDeliveryOrderFilterBar({ onOpenAttacheInvoiceImport }) {
   const filterBar = document.createElement("div");
   filterBar.className = "task-filter-bar";
   filterBar.setAttribute("aria-label", "Delivery Order search and filters");
@@ -264,6 +267,13 @@ function createDeliveryOrderFilterBar() {
   clearDeliveryDateButton.type = "button";
   clearDeliveryDateButton.textContent = "All delivery dates";
 
+  const importButton = document.createElement("button");
+  importButton.className = "button-secondary";
+  importButton.type = "button";
+  importButton.textContent = "Import Attache Invoices";
+  importButton.disabled = state.isLoading || state.isSaving;
+  importButton.addEventListener("click", onOpenAttacheInvoiceImport);
+
   const summary = document.createElement("p");
   summary.id = "task-filter-summary";
   summary.className = "filter-summary";
@@ -274,6 +284,7 @@ function createDeliveryOrderFilterBar() {
     urgencyLabel,
     deliveryDateLabel,
     clearDeliveryDateButton,
+    importButton,
     summary,
   );
   return filterBar;

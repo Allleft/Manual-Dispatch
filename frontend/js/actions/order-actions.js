@@ -55,18 +55,9 @@ export function createOrderActions({
   }
 
   function updateAddOrderForm(field, value) {
-    const nextForm = {
+    state.addOrderForm = {
       ...state.addOrderForm,
       [field]: value,
-    };
-    if (field === "pallet_quantity" && Number(value || 0) > 0) {
-      nextForm.loose_bags_quantity = "0";
-    }
-    if (field === "loose_bags_quantity" && Number(value || 0) > 0) {
-      nextForm.pallet_quantity = "0";
-    }
-    state.addOrderForm = {
-      ...nextForm,
     };
   }
 
@@ -119,18 +110,9 @@ export function createOrderActions({
   }
 
   function updateOrderEditForm(field, value) {
-    const nextForm = {
+    state.orderEditForm = {
       ...state.orderEditForm,
       [field]: value,
-    };
-    if (field === "pallet_quantity" && Number(value || 0) > 0) {
-      nextForm.loose_bags_quantity = "0";
-    }
-    if (field === "loose_bags_quantity" && Number(value || 0) > 0) {
-      nextForm.pallet_quantity = "0";
-    }
-    state.orderEditForm = {
-      ...nextForm,
     };
   }
 
@@ -314,11 +296,7 @@ export function createOrderActions({
   }
 
   function getLoadExclusivityError(form) {
-    const pallets = Number(form.pallet_quantity || 0);
-    const looseBags = Number(form.loose_bags_quantity || 0);
-    return pallets > 0 && looseBags > 0
-      ? "Order must use either Pallets or Bags, not both."
-      : "";
+    return "";
   }
 
   return {

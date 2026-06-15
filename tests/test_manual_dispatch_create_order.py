@@ -75,14 +75,13 @@ class ManualDispatchCreateOrderTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.service.create_order(self._request(loose_bags_quantity=-1))
 
-    def test_mixed_pallet_and_bag_quantities_are_rejected(self):
-        with self.assertRaisesRegex(
-            ValueError,
-            "Order must use either Pallets or Bags, not both",
-        ):
-            self.service.create_order(
-                self._request(pallet_quantity=2, loose_bags_quantity=1)
-            )
+    def test_mixed_pallet_and_bag_quantities_are_allowed(self):
+        created = self.service.create_order(
+            self._request(pallet_quantity=2, loose_bags_quantity=1)
+        )
+
+        self.assertEqual(2, created.pallet_quantity)
+        self.assertEqual(1, created.loose_bags_quantity)
 
     def test_missing_suburb_is_rejected(self):
         with self.assertRaises(ValueError):

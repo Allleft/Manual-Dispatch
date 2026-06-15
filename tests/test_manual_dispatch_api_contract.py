@@ -39,6 +39,8 @@ class ManualDispatchApiContractTest(unittest.TestCase):
             ("POST", "/api/manual-dispatch/unassign"),
             ("POST", "/api/manual-dispatch/driver-vehicle"),
             ("POST", "/api/manual-dispatch/orders"),
+            ("POST", "/api/manual-dispatch/orders/import-attache-pdf-preview"),
+            ("POST", "/api/manual-dispatch/orders/import-attache-pdf-commit"),
             ("PATCH", "/api/manual-dispatch/orders/{order_id}"),
             ("POST", "/api/manual-dispatch/orders/{order_id}/cancel"),
             ("GET", "/api/manual-dispatch/opshop-pickups/export-excel"),

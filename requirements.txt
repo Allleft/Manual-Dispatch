@@ -1,3 +1,5 @@
 fastapi
 uvicorn
 openpyxl
+pypdf
+python-multipart

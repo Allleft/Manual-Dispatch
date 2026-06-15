@@ -577,7 +577,7 @@ function createProductLineEditor({
 
   const helper = document.createElement("p");
   helper.className = "compact-note";
-  helper.textContent = "Each Order can use Pallets or Bags, never both. Product lines must match that load unit.";
+  helper.textContent = "Product lines must use PALLETS or BAGS and match the Order load quantities.";
 
   section.append(heading, helper);
 
