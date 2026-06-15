@@ -2,14 +2,18 @@ import unittest
 
 try:
     from backend.main import app
+    from backend.api.manual_dispatch import router as manual_dispatch_router
 except (ImportError, ModuleNotFoundError, RuntimeError):
     app = None
+    manual_dispatch_router = None
 
 
 class ManualDispatchApiContractTest(unittest.TestCase):
     def setUp(self):
         if app is None:
             self.skipTest("FastAPI app could not be imported")
+        if manual_dispatch_router is None:
+            self.skipTest("Manual Dispatch router could not be imported")
 
     def test_manual_dispatch_routes_remain_available(self):
         expected_routes = {
@@ -40,6 +44,18 @@ class ManualDispatchApiContractTest(unittest.TestCase):
             ("GET", "/api/manual-dispatch/final-summaries/{summary_id}"),
         }
 
+        router_routes = {
+            (method, route.path)
+            for route in manual_dispatch_router.routes
+            for method in getattr(route, "methods", set())
+        }
+        missing_from_router = expected_routes - router_routes
+        self.assertFalse(
+            missing_from_router,
+            f"Manual Dispatch router is missing expected routes: {sorted(missing_from_router)}. "
+            f"Actual router routes: {sorted(router_routes)}",
+        )
+
         actual_routes = {
             (method, route.path)
             for route in app.routes
@@ -47,7 +63,12 @@ class ManualDispatchApiContractTest(unittest.TestCase):
             if route.path.startswith("/api/manual-dispatch")
         }
 
-        self.assertFalse(expected_routes - actual_routes)
+        missing_from_app = expected_routes - actual_routes
+        self.assertFalse(
+            missing_from_app,
+            f"backend.main app did not include expected Manual Dispatch routes: "
+            f"{sorted(missing_from_app)}. Actual app Manual Dispatch routes: {sorted(actual_routes)}",
+        )
 
     def test_health_route_remains_available(self):
         actual_routes = {
