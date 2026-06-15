@@ -1,21 +1,30 @@
+import importlib
 import unittest
 
-try:
-    from backend.main import app
-    from backend.api.manual_dispatch import router as manual_dispatch_router
-except (ImportError, ModuleNotFoundError, RuntimeError):
-    app = None
-    manual_dispatch_router = None
+
+def load_fresh_main_app():
+    try:
+        import backend.main as main_module
+    except (ImportError, ModuleNotFoundError, RuntimeError) as error:
+        raise unittest.SkipTest("FastAPI app could not be imported") from error
+
+    main_module = importlib.reload(main_module)
+    return main_module.app
+
+
+def load_manual_dispatch_router():
+    try:
+        from backend.api.manual_dispatch import router
+    except (ImportError, ModuleNotFoundError, RuntimeError) as error:
+        raise unittest.SkipTest("Manual Dispatch router could not be imported") from error
+
+    return router
 
 
 class ManualDispatchApiContractTest(unittest.TestCase):
-    def setUp(self):
-        if app is None:
-            self.skipTest("FastAPI app could not be imported")
-        if manual_dispatch_router is None:
-            self.skipTest("Manual Dispatch router could not be imported")
-
     def test_manual_dispatch_routes_remain_available(self):
+        manual_dispatch_router = load_manual_dispatch_router()
+        fresh_app = load_fresh_main_app()
         expected_routes = {
             ("GET", "/api/manual-dispatch/board"),
             ("GET", "/api/manual-dispatch/specifications"),
@@ -58,7 +67,7 @@ class ManualDispatchApiContractTest(unittest.TestCase):
 
         actual_routes = {
             (method, route.path)
-            for route in app.routes
+            for route in fresh_app.routes
             for method in getattr(route, "methods", set())
             if route.path.startswith("/api/manual-dispatch")
         }
@@ -71,9 +80,10 @@ class ManualDispatchApiContractTest(unittest.TestCase):
         )
 
     def test_health_route_remains_available(self):
+        fresh_app = load_fresh_main_app()
         actual_routes = {
             (method, route.path)
-            for route in app.routes
+            for route in fresh_app.routes
             for method in getattr(route, "methods", set())
         }
 
