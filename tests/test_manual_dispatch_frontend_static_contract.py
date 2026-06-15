@@ -172,9 +172,19 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("new FormData()", api_module)
         self.assertIn("apiPreviewAttacheInvoicePdfImport", actions)
         self.assertIn("apiCommitAttacheInvoicePdfImport", actions)
+        update_files_body = actions.split("function updateFiles(files)", 1)[1].split(
+            "async function previewImport",
+            1,
+        )[0]
+        self.assertIn("state.attacheInvoiceImportFiles = Array.from(files || [])", update_files_body)
+        self.assertIn("renderAttacheInvoiceImportModal();", update_files_body)
         self.assertIn("Preview Import", renderer)
         self.assertIn("Confirm Import", renderer)
         self.assertIn('fileInput.accept = "application/pdf,.pdf"', renderer)
+        self.assertIn("createSelectedFileFeedback", renderer)
+        self.assertIn("1 file selected:", renderer)
+        self.assertIn("files selected", renderer)
+        self.assertIn('feedback.setAttribute("aria-live", "polite")', renderer)
         self.assertIn("row.is_duplicate", renderer)
 
     def test_phase16_product_detail_controls_are_present(self):

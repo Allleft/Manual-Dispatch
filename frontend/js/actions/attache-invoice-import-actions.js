@@ -33,6 +33,7 @@ export function createAttacheInvoiceImportActions({
     state.attacheInvoiceImportFiles = Array.from(files || []);
     state.attacheInvoiceImportError = "";
     state.attacheInvoiceImportSuccess = "";
+    renderAttacheInvoiceImportModal();
   }
 
   async function previewImport() {

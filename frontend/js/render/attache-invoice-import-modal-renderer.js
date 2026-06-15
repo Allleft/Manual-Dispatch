@@ -79,6 +79,8 @@ export function renderAttacheInvoiceImportModal({
   fileInput.disabled = state.isAttacheInvoiceImportPreviewing || state.isAttacheInvoiceImportCommitting;
   fileInput.addEventListener("change", () => onUpdateFiles(fileInput.files));
 
+  const selectedFiles = createSelectedFileFeedback();
+
   const previewButton = document.createElement("button");
   previewButton.type = "button";
   previewButton.textContent = state.isAttacheInvoiceImportPreviewing ? "Previewing..." : "Preview Import";
@@ -87,7 +89,7 @@ export function renderAttacheInvoiceImportModal({
     || state.isAttacheInvoiceImportCommitting
     || state.attacheInvoiceImportFiles.length === 0;
   previewButton.addEventListener("click", onPreview);
-  controls.append(fileInput, previewButton);
+  controls.append(fileInput, selectedFiles, previewButton);
 
   const error = document.createElement("p");
   error.className = "board-error";
@@ -106,6 +108,24 @@ export function renderAttacheInvoiceImportModal({
   }));
   backdrop.append(modal);
   root.append(backdrop);
+}
+
+
+function createSelectedFileFeedback() {
+  const selectedFiles = state.attacheInvoiceImportFiles || [];
+  const feedback = document.createElement("p");
+  feedback.className = "compact-note";
+  feedback.setAttribute("aria-live", "polite");
+  if (selectedFiles.length === 0) {
+    feedback.textContent = "No PDF files selected.";
+    return feedback;
+  }
+  if (selectedFiles.length === 1) {
+    feedback.textContent = `1 file selected: ${selectedFiles[0].name}`;
+    return feedback;
+  }
+  feedback.textContent = `${selectedFiles.length} files selected`;
+  return feedback;
 }
 
 
