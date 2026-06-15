@@ -499,7 +499,7 @@ def _parse_product_lines(lines):
                 pallet_quantity += legacy_product["quantity"]
                 kg_products.append(
                     {
-                        "name": legacy_product["name"],
+                        "name": _strip_trailing_order_weight(legacy_product["name"]),
                         "bag_quantity": legacy_product["quantity"],
                     }
                 )
@@ -509,7 +509,7 @@ def _parse_product_lines(lines):
                 else:
                     kg_products.append(
                         {
-                            "name": legacy_product["name"],
+                            "name": _strip_trailing_order_weight(legacy_product["name"]),
                             "bag_quantity": legacy_product["quantity"],
                         }
                     )
@@ -592,7 +592,7 @@ def _parse_kg_product_line(line):
         name_tokens = after[1:-1] if weight else after[1:]
         name_tokens = _strip_trailing_numeric_tokens(name_tokens)
 
-    name = _clean_product_name(" ".join(name_tokens + ([f"{weight}KG"] if weight else [])))
+    name = _strip_trailing_order_weight(" ".join(name_tokens))
     return {"name": name, "bag_quantity": 0} if name else None
 
 
@@ -652,6 +652,11 @@ def _product_line(name, quantity, unit):
 def _clean_product_name(value):
     name = re.sub(r"\s+", " ", str(value or "").strip())
     return name
+
+
+def _strip_trailing_order_weight(value):
+    name = _clean_product_name(value)
+    return re.sub(r"\s+\d+\s*KG$", "", name, flags=re.IGNORECASE)
 
 
 def _dedupe_product_lines(product_lines):

@@ -45,12 +45,12 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
         self.assertEqual(
             [
                 {
-                    "product_name": "PURE WHITE SINGLET 100KG",
+                    "product_name": "PURE WHITE SINGLET",
                     "quantity": 10,
                     "unit": "BAGS",
                 },
                 {
-                    "product_name": "COLOR TSHIRT RAGS 25KG",
+                    "product_name": "COLOR TSHIRT RAGS",
                     "quantity": 5,
                     "unit": "BAGS",
                 },
@@ -93,7 +93,7 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
         self.assertEqual(
             [
                 {
-                    "product_name": "PURE WHITE SINGLET 300KG",
+                    "product_name": "PURE WHITE SINGLET",
                     "quantity": 1,
                     "unit": "PALLETS",
                 },
@@ -143,7 +143,7 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
         self.assertEqual(
             [
                 {
-                    "product_name": "COLOR TSHIRT RAGS 200KG",
+                    "product_name": "COLOR TSHIRT RAGS",
                     "quantity": 1,
                     "unit": "PALLETS",
                 }
@@ -184,7 +184,7 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
         self.assertEqual(
             [
                 {
-                    "product_name": "WHITE SHEETING #11S 50KG",
+                    "product_name": "WHITE SHEETING #11S",
                     "quantity": 5,
                     "unit": "BAGS",
                 }
@@ -224,7 +224,7 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
         self.assertEqual(
             [
                 {
-                    "product_name": "COLOR TSHIRT RAGS 60KG",
+                    "product_name": "COLOR TSHIRT RAGS",
                     "quantity": 6,
                     "unit": "BAGS",
                 }
