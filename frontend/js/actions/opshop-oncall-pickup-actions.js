@@ -195,7 +195,7 @@ export function createOncallOpShopPickupActions({
   }
 
   function updatePickupTaskForm(field, value) {
-    const shouldRender = field === "schedule_id";
+    const shouldRender = ["schedule_id", "pickup_date"].includes(field);
     const nextForm = {
       ...state.oncallOpShopPickupForm,
       [field]: value,
@@ -356,7 +356,7 @@ export function createOncallOpShopPickupActions({
 
   function getDefaultPickupDateForCandidate(candidate) {
     if (!candidate || !candidate.run_day || !(candidate.run_day in WEEKDAY_OFFSETS)) {
-      return "";
+      return state.dispatchDate || "";
     }
     const monday = getOncallTargetWeekMonday(state.dispatchDate);
     if (!monday) {
