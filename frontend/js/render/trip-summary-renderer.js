@@ -299,7 +299,6 @@ function createOpShopPickupEntries(driverId, assignedOpShopPickups) {
       if (isCountrysideRouteGroupPickup(pickup)) {
         const groupKey = [
           assignment.trip_no || "",
-          pickup.pickup_date || "",
           pickup.route_group_id,
         ].join("|");
         if (!routeGroups.has(groupKey)) {
@@ -334,44 +333,17 @@ function isCountrysideRouteGroupPickup(pickup) {
 
 function createAssignedCountrysideRouteGroup(
   group,
-  { onOpenOpShopPickupDetail, onUnassign },
+  handlers,
 ) {
-  const row = document.createElement("article");
-  row.className = "assigned-task assigned-opshop-task assigned-opshop-route-group-task";
+  const section = document.createElement("section");
+  section.className = "assigned-opshop-route-group";
 
-  const details = document.createElement("div");
+  const header = document.createElement("header");
+  header.className = "assigned-opshop-route-group-header";
 
-  const badgeRow = document.createElement("div");
-  badgeRow.className = "hint-badge-row";
-  badgeRow.append(createBadge("OP SHOP PICKUP", "good"), createBadge("Countryside"));
-
-  const title = document.createElement("p");
-  title.className = "assigned-opshop-name";
+  const title = document.createElement("h5");
+  title.className = "assigned-opshop-route-group-title";
   title.textContent = `Countryside Route Group: ${formatOptional(group.routeGroupName)}`;
-
-  const list = document.createElement("ul");
-  list.className = "assigned-opshop-route-group-list";
-  group.pickups.forEach((pickup) => {
-    const item = document.createElement("li");
-    const detailButton = document.createElement("button");
-    detailButton.type = "button";
-    detailButton.className = "assigned-opshop-route-group-item";
-    detailButton.textContent = [
-      pickup.opshop_name || pickup.pickup_task_id,
-      pickup.suburb,
-      pickup.pickup_date,
-    ]
-      .filter(Boolean)
-      .join(" - ");
-    detailButton.addEventListener("click", (event) => {
-      event.stopPropagation();
-      onOpenOpShopPickupDetail(pickup.pickup_task_id);
-    });
-    item.append(detailButton);
-    list.append(item);
-  });
-
-  details.append(badgeRow, title, list);
 
   const unassignButton = document.createElement("button");
   unassignButton.type = "button";
@@ -379,8 +351,8 @@ function createAssignedCountrysideRouteGroup(
   unassignButton.disabled =
     state.isSaving ||
     state.isLoading ||
-    group.pickups.some((pickup) =>
-      isDriverDeliveryDateFinalized(group.assignments[0]?.driver_id || "", pickup.pickup_date),
+    group.pickups.some((pickup, index) =>
+      isDriverDeliveryDateFinalized(group.assignments[index]?.driver_id || "", pickup.pickup_date),
     );
   unassignButton.textContent = state.isSaving ? "Saving..." : "Unassign Route Group";
   unassignButton.addEventListener("click", (event) => {
@@ -388,14 +360,26 @@ function createAssignedCountrysideRouteGroup(
     if (unassignButton.disabled) {
       return;
     }
-    onUnassign(
+    handlers.onUnassign(
       "OPSHOP_PICKUP",
       group.assignments.map((assignment) => assignment.task_id),
     );
   });
 
-  row.append(details, unassignButton);
-  return row;
+  header.append(title, unassignButton);
+
+  const cardList = document.createElement("div");
+  cardList.className = "assigned-opshop-route-group-card-list";
+  group.pickups.forEach((pickup, index) => {
+    cardList.append(
+      createAssignedOpShopPickupTask(group.assignments[index], pickup, handlers, {
+        showUnassignButton: false,
+      }),
+    );
+  });
+
+  section.append(header, cardList);
+  return section;
 }
 
 function createAssignedTask(assignment, order, { onOpenOrderDetail, onUnassign }) {
@@ -450,6 +434,7 @@ function createAssignedOpShopPickupTask(
   assignment,
   pickup,
   { onOpenOpShopPickupDetail, onUnassign },
+  { showUnassignButton = true } = {},
 ) {
   const row = document.createElement("article");
   row.className = "assigned-task assigned-opshop-task";
@@ -487,16 +472,18 @@ function createAssignedOpShopPickupTask(
 
   details.append(badgeRow, name, suburb);
 
-  const unassignButton = document.createElement("button");
-  unassignButton.type = "button";
-  unassignButton.className = "button-secondary";
-  unassignButton.disabled = state.isSaving || state.isLoading;
-  unassignButton.textContent = state.isSaving ? "Saving..." : "Unassign";
-  unassignButton.addEventListener("click", (event) => {
-    event.stopPropagation();
-    onUnassign(assignment.task_type, assignment.task_id);
-  });
-
-  row.append(details, unassignButton);
+  row.append(details);
+  if (showUnassignButton) {
+    const unassignButton = document.createElement("button");
+    unassignButton.type = "button";
+    unassignButton.className = "button-secondary";
+    unassignButton.disabled = state.isSaving || state.isLoading;
+    unassignButton.textContent = state.isSaving ? "Saving..." : "Unassign";
+    unassignButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      onUnassign(assignment.task_type, assignment.task_id);
+    });
+    row.append(unassignButton);
+  }
   return row;
 }
