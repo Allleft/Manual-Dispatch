@@ -175,11 +175,11 @@ function createAddForm({
   const hasTemplateFilter = Boolean(
     normalizeTemplateSearchText(state.oncallOpShopPickupTemplateFilter),
   );
-  const hasNoTemplateMatches = hasTemplateFilter && filteredCandidates.length === 0;
+  const selectedScheduleId = state.oncallOpShopPickupForm.schedule_id || "";
+  const hasNoTemplateMatches = !selectedScheduleId && hasTemplateFilter && filteredCandidates.length === 0;
   const isSubmitDisabled =
     state.isOncallOpShopPickupSaving ||
-    hasNoTemplateMatches ||
-    !state.oncallOpShopPickupForm.schedule_id ||
+    !selectedScheduleId ||
     !state.oncallOpShopPickupForm.pickup_date;
   const form = document.createElement("form");
   form.className = "opshop-list-form";
@@ -476,9 +476,13 @@ function templateMatchesFilter(candidate, filterText) {
     return true;
   }
   return [
+    formatScheduleCandidateOptionText(candidate),
     candidate.opshop_name,
     candidate.suburb,
     candidate.street_address,
+    candidate.run_day,
+    candidate.default_driver_name,
+    candidate.default_driver_alias,
   ].some((value) => normalizeTemplateSearchText(value).includes(filter));
 }
 

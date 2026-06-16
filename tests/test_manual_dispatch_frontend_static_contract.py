@@ -821,8 +821,18 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("candidate.opshop_name", modal_renderer)
         self.assertIn("candidate.suburb", modal_renderer)
         self.assertIn("candidate.street_address", modal_renderer)
+        self.assertIn("candidate.run_day", modal_renderer)
+        self.assertIn("candidate.default_driver_name", modal_renderer)
+        self.assertIn("candidate.default_driver_alias", modal_renderer)
+        self.assertIn("formatScheduleCandidateOptionText(candidate)", modal_renderer)
         self.assertIn("No Oncall templates match this search.", modal_renderer)
-        self.assertIn("hasNoTemplateMatches ||", modal_renderer)
+        self.assertIn("const selectedScheduleId = state.oncallOpShopPickupForm.schedule_id || \"\";", modal_renderer)
+        self.assertIn(
+            "const hasNoTemplateMatches = !selectedScheduleId && hasTemplateFilter && filteredCandidates.length === 0;",
+            modal_renderer,
+        )
+        self.assertIn("!selectedScheduleId ||", modal_renderer)
+        self.assertNotIn("hasNoTemplateMatches ||", modal_renderer)
         self.assertNotIn("createScheduleSelect", modal_renderer)
         self.assertNotIn('label.textContent = "Search templates"', modal_renderer)
         self.assertNotIn('select.name = "schedule_id"', modal_renderer)
