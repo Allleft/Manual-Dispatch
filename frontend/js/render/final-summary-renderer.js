@@ -46,10 +46,13 @@ export function renderFinalTripSummaries({
     );
 
   if (summaries.length === 0) {
-    const emptyState = document.createElement("p");
-    emptyState.className = "empty-board";
-    emptyState.textContent = "No generated Final Trip Summary previews for this delivery date.";
-    finalSummaryList.append(emptyState);
+    finalSummaryList.append(
+      createDashboardEmptyState({
+        title: "No generated Final Trip Summary previews yet",
+        message: "Click Generate in Trip Summary to create a locked preview for this delivery date.",
+        tone: "blue",
+      }),
+    );
   } else {
     summaries
       .sort((first, second) => first.driver_name.localeCompare(second.driver_name))
@@ -160,10 +163,12 @@ function renderFinalSummaryHistory({ normalizeFinalSummary, onReExportFinalSumma
   historyList.innerHTML = "";
 
   if (state.isHistoryLoading) {
-    const loadingState = document.createElement("p");
-    loadingState.className = "empty-board";
-    loadingState.textContent = "Loading saved Final Trip Summary history...";
-    historyList.append(loadingState);
+    historyList.append(
+      createDashboardEmptyState({
+        title: "Loading saved Final Trip Summary history...",
+        message: "Please wait while saved summaries are loaded.",
+      }),
+    );
     return;
   }
 
@@ -176,18 +181,22 @@ function renderFinalSummaryHistory({ normalizeFinalSummary, onReExportFinalSumma
   }
 
   if (!state.historyLoaded) {
-    const prompt = document.createElement("p");
-    prompt.className = "empty-board";
-    prompt.textContent = "Choose a History Date and click Load History to view saved Final Trip Summaries.";
-    historyList.append(prompt);
+    historyList.append(
+      createDashboardEmptyState({
+        title: "No saved Final Trip Summary loaded",
+        message: "Choose a History Date and click Load History to view saved Final Trip Summaries.",
+      }),
+    );
     return;
   }
 
   if (state.finalSummaryHistory.length === 0) {
-    const emptyState = document.createElement("p");
-    emptyState.className = "empty-board";
-    emptyState.textContent = `No saved Final Trip Summaries found for ${state.historyDate}.`;
-    historyList.append(emptyState);
+    historyList.append(
+      createDashboardEmptyState({
+        title: "No saved Final Trip Summaries found for this date",
+        message: `Choose a different history date or generate a new Final Trip Summary.`,
+      }),
+    );
     return;
   }
 
@@ -209,6 +218,24 @@ function renderFinalSummaryHistory({ normalizeFinalSummary, onReExportFinalSumma
         }),
       );
     });
+}
+
+function createDashboardEmptyState({ title, message, tone = "green" }) {
+  const emptyState = document.createElement("div");
+  emptyState.className = `empty-board dashboard-empty-state dashboard-empty-state-${tone}`;
+
+  const icon = document.createElement("span");
+  icon.className = "dashboard-empty-state-icon";
+  icon.setAttribute("aria-hidden", "true");
+
+  const titleElement = document.createElement("h4");
+  titleElement.textContent = title;
+
+  const messageElement = document.createElement("p");
+  messageElement.textContent = message;
+
+  emptyState.append(icon, titleElement, messageElement);
+  return emptyState;
 }
 
 function createFinalTripSummaryCard(summary, options = {}) {
