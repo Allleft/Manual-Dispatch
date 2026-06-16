@@ -129,10 +129,14 @@ function createTaskPoolSection({ className, titleText }) {
   const heading = document.createElement("div");
   heading.className = "task-pool-section-heading";
 
+  const icon = document.createElement("span");
+  icon.className = "task-pool-section-icon";
+  icon.setAttribute("aria-hidden", "true");
+
   const title = document.createElement("h3");
   title.textContent = titleText;
 
-  heading.append(title);
+  heading.append(icon, title);
   section.append(heading);
   return section;
 }
@@ -268,7 +272,7 @@ function createDeliveryOrderFilterBar({ onOpenAttacheInvoiceImport }) {
   clearDeliveryDateButton.textContent = "All delivery dates";
 
   const importButton = document.createElement("button");
-  importButton.className = "button-secondary";
+  importButton.className = "button-secondary button-delivery-action";
   importButton.type = "button";
   importButton.textContent = "Import Attache Invoices";
   importButton.disabled = state.isLoading || state.isSaving;
@@ -292,10 +296,14 @@ function createDeliveryOrderFilterBar({ onOpenAttacheInvoiceImport }) {
 
 function createOpShopPickupListSummaryCard(pickups, onOpenOpShopPickupList) {
   const card = document.createElement("article");
-  card.className = "order-card opshop-pickup-list-summary-card";
+  card.className = "order-card opshop-pickup-list-summary-card opshop-regular-list-summary-card";
 
   const content = document.createElement("div");
   content.className = "opshop-pickup-list-summary-main";
+
+  const icon = document.createElement("span");
+  icon.className = "opshop-summary-card-icon";
+  icon.setAttribute("aria-hidden", "true");
 
   const kicker = document.createElement("p");
   kicker.className = "compact-invoice";
@@ -324,7 +332,7 @@ function createOpShopPickupListSummaryCard(pickups, onOpenOpShopPickupList) {
   openButton.textContent = "Open List";
   openButton.addEventListener("click", onOpenOpShopPickupList);
 
-  content.append(kicker, title, summary, meta, openButton);
+  content.append(icon, kicker, title, summary, meta, openButton);
   card.append(content);
   return card;
 }
@@ -335,6 +343,10 @@ function createOncallOpShopPickupListSummaryCard(pickups, onOpenOncallOpShopPick
 
   const content = document.createElement("div");
   content.className = "opshop-pickup-list-summary-main";
+
+  const icon = document.createElement("span");
+  icon.className = "opshop-summary-card-icon";
+  icon.setAttribute("aria-hidden", "true");
 
   const kicker = document.createElement("p");
   kicker.className = "compact-invoice";
@@ -363,7 +375,7 @@ function createOncallOpShopPickupListSummaryCard(pickups, onOpenOncallOpShopPick
   openButton.textContent = "Open List";
   openButton.addEventListener("click", onOpenOncallOpShopPickupList);
 
-  content.append(kicker, title, summary, meta, openButton);
+  content.append(icon, kicker, title, summary, meta, openButton);
   card.append(content);
   return card;
 }
@@ -377,6 +389,10 @@ function createCountrysideOpShopPickupListSummaryCard(
 
   const content = document.createElement("div");
   content.className = "opshop-pickup-list-summary-main";
+
+  const icon = document.createElement("span");
+  icon.className = "opshop-summary-card-icon";
+  icon.setAttribute("aria-hidden", "true");
 
   const kicker = document.createElement("p");
   kicker.className = "compact-invoice";
@@ -407,7 +423,7 @@ function createCountrysideOpShopPickupListSummaryCard(
     state.isCountrysideOpShopPickupListLoading || state.isCountrysideOpShopPickupSaving;
   openButton.addEventListener("click", onOpenCountrysideOpShopPickupList);
 
-  content.append(kicker, title, summary, meta, openButton);
+  content.append(icon, kicker, title, summary, meta, openButton);
   card.append(content);
   return card;
 }

@@ -70,15 +70,37 @@
           </div>
         </div>
         <div class="final-summary-control-bar final-summary-controls" aria-label="Final Trip Summary controls">
+          <div class="final-summary-panel-heading">
+            <span class="final-summary-panel-icon" aria-hidden="true"></span>
+            <div>
+              <h3>Save and Export Final Summary</h3>
+              <p>Generate the Final Trip Summary for this delivery date and export it.</p>
+            </div>
+          </div>
           <div class="final-summary-save-controls">
             <button id="save-final-summary-button" class="button-secondary" type="button">Save and Export</button>
           </div>
           <p id="final-summary-control-message" class="board-status" aria-live="polite" hidden></p>
         </div>
-        <div id="final-trip-summary-list" class="final-summary-grid" aria-live="polite"></div>
+        <section class="final-summary-preview-panel" aria-labelledby="final-summary-preview-title">
+          <div class="final-summary-panel-heading">
+            <span class="final-summary-panel-icon final-summary-panel-icon-preview" aria-hidden="true"></span>
+            <div>
+              <h3 id="final-summary-preview-title">Generated Final Trip Summary Previews</h3>
+              <p>Review generated Final Trip Summaries for this delivery date before saving and exporting.</p>
+            </div>
+          </div>
+          <div id="final-trip-summary-list" class="final-summary-grid" aria-live="polite"></div>
+        </section>
         <div class="final-history-panel" aria-labelledby="final-history-title">
           <div class="final-history-heading">
-            <h3 id="final-history-title">Saved Final Trip Summary History</h3>
+            <div class="final-summary-panel-heading">
+              <span class="final-summary-panel-icon final-summary-panel-icon-history" aria-hidden="true"></span>
+              <div>
+                <h3 id="final-history-title">Saved Final Trip Summary History</h3>
+                <p>View and load previously saved Final Trip Summaries.</p>
+              </div>
+            </div>
             <div class="final-summary-history-controls">
               <label for="history-date-select">
                 History Date
