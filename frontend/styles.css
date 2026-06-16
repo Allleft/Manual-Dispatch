@@ -45,6 +45,14 @@ textarea {
   font: inherit;
 }
 
+.ui-icon {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 1.05rem;
+  height: 1.05rem;
+  color: currentColor;
+}
+
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
@@ -439,21 +447,10 @@ h1 {
   box-shadow: 0 12px 24px rgba(39, 93, 69, 0.18);
 }
 
-.task-pool-section-icon::before {
+.task-pool-section-icon .ui-icon {
+  width: 22px;
+  height: 22px;
   color: #fff;
-  content: "APP";
-  font-size: 0.62rem;
-  font-weight: 900;
-  letter-spacing: 0.04em;
-  line-height: 1;
-}
-
-.task-pool-section-opshop .task-pool-section-icon::before {
-  content: "BAG";
-}
-
-.task-pool-section-delivery .task-pool-section-icon::before {
-  content: "BOX";
 }
 
 .task-pool-section-grid {
@@ -531,6 +528,14 @@ h1 {
   margin-bottom: 0.25rem;
 }
 
+.opshop-section-actions .button-secondary,
+.button-delivery-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+}
+
 .opshop-pickup-list-summary-main {
   display: grid;
   gap: 0.72rem;
@@ -573,33 +578,30 @@ h1 {
     rgba(223, 238, 229, 0.8);
 }
 
-.opshop-summary-card-icon::before {
+.opshop-summary-card-icon .ui-icon {
+  width: 21px;
+  height: 21px;
   color: var(--accent-strong);
-  content: "OP";
-  font-size: 0.72rem;
-  font-weight: 900;
-  letter-spacing: 0.04em;
-}
-
-.opshop-regular-list-summary-card .opshop-summary-card-icon::before {
-  content: "REG";
-}
-
-.opshop-oncall-list-summary-card .opshop-summary-card-icon::before {
-  content: "CALL";
-  font-size: 0.62rem;
-}
-
-.opshop-countryside-list-summary-card .opshop-summary-card-icon::before {
-  content: "TREE";
-  font-size: 0.62rem;
 }
 
 .opshop-pickup-list-summary-card button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
   width: 100%;
   color: #fff;
   background: linear-gradient(135deg, var(--accent), var(--accent-strong));
   box-shadow: 0 12px 24px rgba(39, 93, 69, 0.16);
+}
+
+.opshop-open-list-button {
+  justify-content: space-between;
+}
+
+.opshop-open-list-button .ui-icon {
+  width: 1.05rem;
+  height: 1.05rem;
+  color: currentColor;
 }
 
 .opshop-pickup-list-modal {
@@ -1495,9 +1497,10 @@ select:disabled {
   gap: 0.72rem;
 }
 
-.driver-card h3::before {
-  display: inline-grid;
-  place-items: center;
+.driver-card-name-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex: 0 0 auto;
   width: 34px;
   height: 34px;
@@ -1505,10 +1508,11 @@ select:disabled {
   border-radius: 999px;
   color: var(--delivery-strong);
   background: var(--delivery-soft);
-  content: "DR";
-  font-size: 0.62rem;
-  font-weight: 900;
-  letter-spacing: 0.04em;
+}
+
+.driver-card-name-icon .ui-icon {
+  width: 18px;
+  height: 18px;
 }
 
 .vehicle-select {
@@ -1584,19 +1588,21 @@ select:disabled {
   text-transform: uppercase;
 }
 
-.trip-group h4::before {
-  display: inline-grid;
-  place-items: center;
+.trip-group-heading-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 34px;
   height: 34px;
   border-radius: 9px;
   color: #fff;
   background: linear-gradient(135deg, var(--delivery), var(--delivery-strong));
-  content: "BOX";
-  font-size: 0.58rem;
-  font-weight: 900;
-  letter-spacing: 0.04em;
   box-shadow: 0 10px 20px rgba(31, 101, 232, 0.16);
+}
+
+.trip-group-heading-icon .ui-icon {
+  width: 18px;
+  height: 18px;
 }
 
 .trip-summary {
@@ -1649,12 +1655,10 @@ select:disabled {
   background: var(--accent-soft);
 }
 
-.dashboard-empty-state-icon::before {
+.dashboard-empty-state-icon .ui-icon {
+  width: 24px;
+  height: 24px;
   color: var(--accent-strong);
-  content: "DOC";
-  font-size: 0.68rem;
-  font-weight: 900;
-  letter-spacing: 0.04em;
 }
 
 .dashboard-empty-state-blue {
@@ -1666,10 +1670,8 @@ select:disabled {
   background: var(--delivery-soft);
 }
 
-.dashboard-empty-state-blue .dashboard-empty-state-icon::before {
+.dashboard-empty-state-blue .dashboard-empty-state-icon .ui-icon {
   color: var(--delivery);
-  content: "VIEW";
-  font-size: 0.62rem;
 }
 
 .dashboard-empty-state h4,
@@ -1758,10 +1760,9 @@ select:disabled {
   color: var(--accent);
 }
 
-.assigned-opshop-pickups-section h4::before {
+.assigned-opshop-pickups-section .trip-group-heading-icon {
   background: linear-gradient(135deg, var(--accent), var(--accent-strong));
   box-shadow: 0 10px 20px rgba(39, 93, 69, 0.16);
-  content: "BAG";
 }
 
 .assigned-opshop-pickups-section .assigned-task {
@@ -1794,11 +1795,31 @@ select:disabled {
 }
 
 .assigned-opshop-route-group-title {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
   margin: 0;
   color: var(--ink);
   font-size: 0.98rem;
   font-weight: 900;
   line-height: 1.2;
+}
+
+.assigned-opshop-route-group-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+}
+
+.assigned-opshop-route-group-icon .ui-icon {
+  width: 17px;
+  height: 17px;
 }
 
 .assigned-opshop-route-group-card-list {
@@ -1890,12 +1911,10 @@ select:disabled {
     var(--accent-soft);
 }
 
-.final-summary-panel-icon::before {
+.final-summary-panel-icon .ui-icon {
+  width: 22px;
+  height: 22px;
   color: var(--accent-strong);
-  content: "DOC";
-  font-size: 0.68rem;
-  font-weight: 900;
-  letter-spacing: 0.04em;
 }
 
 .final-summary-panel-icon-preview {
@@ -1904,15 +1923,8 @@ select:disabled {
     var(--delivery-soft);
 }
 
-.final-summary-panel-icon-preview::before {
+.final-summary-panel-icon-preview .ui-icon {
   color: var(--delivery);
-  content: "VIEW";
-  font-size: 0.62rem;
-}
-
-.final-summary-panel-icon-history::before {
-  content: "HIST";
-  font-size: 0.62rem;
 }
 
 .final-summary-save-controls,

@@ -22,6 +22,7 @@ import {
   formatOptional,
   formatOrderLoadQuantity,
 } from "../utils/format-utils.js";
+import { createIcon } from "../utils/icon-utils.js";
 
 export function renderDriverSummary({
   onDeliveryDateChange,
@@ -60,7 +61,11 @@ export function renderDriverSummary({
     header.className = "driver-card-header";
 
     const name = document.createElement("h3");
-    name.textContent = driver.name;
+    const driverIcon = document.createElement("span");
+    driverIcon.className = "driver-card-name-icon";
+    driverIcon.setAttribute("aria-hidden", "true");
+    driverIcon.append(createIcon("user"));
+    name.append(driverIcon, document.createTextNode(driver.name));
 
     const driverBadges = document.createElement("div");
     driverBadges.className = "hint-badge-row";
@@ -228,7 +233,7 @@ function createTripGroup(driverId, tripNo, title, handlers) {
   group.className = "trip-group";
 
   const heading = document.createElement("h4");
-  heading.textContent = title;
+  heading.append(createTripHeadingIcon("box"), document.createTextNode(title));
 
   const tripTotals = calculateTripTotals(driverId, tripNo);
   const tripSummary = document.createElement("p");
@@ -265,7 +270,7 @@ function createOpShopPickupGroup(driverId, assignedOpShopPickups, handlers) {
   group.className = "trip-group assigned-opshop-pickups-section";
 
   const heading = document.createElement("h4");
-  heading.textContent = "OP SHOP PICKUPS";
+  heading.append(createTripHeadingIcon("bag"), document.createTextNode("OP SHOP PICKUPS"));
 
   const summary = document.createElement("p");
   summary.className = "trip-summary";
@@ -343,7 +348,14 @@ function createAssignedCountrysideRouteGroup(
 
   const title = document.createElement("h5");
   title.className = "assigned-opshop-route-group-title";
-  title.textContent = `Countryside Route Group: ${formatOptional(group.routeGroupName)}`;
+  const routeGroupIcon = document.createElement("span");
+  routeGroupIcon.className = "assigned-opshop-route-group-icon";
+  routeGroupIcon.setAttribute("aria-hidden", "true");
+  routeGroupIcon.append(createIcon("tree"));
+  title.append(
+    routeGroupIcon,
+    document.createTextNode(`Countryside Route Group: ${formatOptional(group.routeGroupName)}`),
+  );
 
   const unassignButton = document.createElement("button");
   unassignButton.type = "button";
@@ -380,6 +392,14 @@ function createAssignedCountrysideRouteGroup(
 
   section.append(header, cardList);
   return section;
+}
+
+function createTripHeadingIcon(name) {
+  const icon = document.createElement("span");
+  icon.className = "trip-group-heading-icon";
+  icon.setAttribute("aria-hidden", "true");
+  icon.append(createIcon(name));
+  return icon;
 }
 
 function createAssignedTask(assignment, order, { onOpenOrderDetail, onUnassign }) {

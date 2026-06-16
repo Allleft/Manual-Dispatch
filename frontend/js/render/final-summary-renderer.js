@@ -9,6 +9,7 @@ import {
   formatOrderLoadQuantity,
   formatProductDetailLine,
 } from "../utils/format-utils.js";
+import { createIcon } from "../utils/icon-utils.js";
 
 const EMPTY_ORDER_SUMMARY_MESSAGE = "No Delivery Orders included.";
 
@@ -77,6 +78,8 @@ function renderFinalSummaryControls({
   onSaveAllFinalSummaries,
   syncHistoryDateSelection,
 }) {
+  hydrateFinalSummaryPanelIcons();
+
   const saveButton = document.querySelector("#save-final-summary-button");
   const deliveryDateInput = document.querySelector("#final-summary-delivery-date");
   const historyDateSelect = document.querySelector("#history-date-select");
@@ -167,6 +170,7 @@ function renderFinalSummaryHistory({ normalizeFinalSummary, onReExportFinalSumma
       createDashboardEmptyState({
         title: "Loading saved Final Trip Summary history...",
         message: "Please wait while saved summaries are loaded.",
+        iconName: "history",
       }),
     );
     return;
@@ -185,6 +189,7 @@ function renderFinalSummaryHistory({ normalizeFinalSummary, onReExportFinalSumma
       createDashboardEmptyState({
         title: "No saved Final Trip Summary loaded",
         message: "Choose a History Date and click Load History to view saved Final Trip Summaries.",
+        iconName: "calendar",
       }),
     );
     return;
@@ -195,6 +200,7 @@ function renderFinalSummaryHistory({ normalizeFinalSummary, onReExportFinalSumma
       createDashboardEmptyState({
         title: "No saved Final Trip Summaries found for this date",
         message: `Choose a different history date or generate a new Final Trip Summary.`,
+        iconName: "calendar",
       }),
     );
     return;
@@ -220,13 +226,14 @@ function renderFinalSummaryHistory({ normalizeFinalSummary, onReExportFinalSumma
     });
 }
 
-function createDashboardEmptyState({ title, message, tone = "green" }) {
+function createDashboardEmptyState({ title, message, tone = "green", iconName = "document" }) {
   const emptyState = document.createElement("div");
   emptyState.className = `empty-board dashboard-empty-state dashboard-empty-state-${tone}`;
 
   const icon = document.createElement("span");
   icon.className = "dashboard-empty-state-icon";
   icon.setAttribute("aria-hidden", "true");
+  icon.append(createIcon(iconName));
 
   const titleElement = document.createElement("h4");
   titleElement.textContent = title;
@@ -236,6 +243,25 @@ function createDashboardEmptyState({ title, message, tone = "green" }) {
 
   emptyState.append(icon, titleElement, messageElement);
   return emptyState;
+}
+
+function hydrateFinalSummaryPanelIcons() {
+  setDecorativeIcon(
+    ".final-summary-panel-icon:not(.final-summary-panel-icon-preview):not(.final-summary-panel-icon-history)",
+    "document",
+  );
+  setDecorativeIcon(".final-summary-panel-icon-preview", "eye");
+  setDecorativeIcon(".final-summary-panel-icon-history", "history");
+}
+
+function setDecorativeIcon(selector, iconName) {
+  const icon = document.querySelector(selector);
+  if (!icon || icon.dataset.iconHydrated === iconName) {
+    return;
+  }
+  icon.innerHTML = "";
+  icon.append(createIcon(iconName));
+  icon.dataset.iconHydrated = iconName;
 }
 
 function createFinalTripSummaryCard(summary, options = {}) {

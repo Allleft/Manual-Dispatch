@@ -14,6 +14,7 @@ import {
   isUrgent,
   truncateText,
 } from "../utils/format-utils.js";
+import { createIcon } from "../utils/icon-utils.js";
 
 export function renderTaskPoolFilters({
   onSearchChange,
@@ -122,7 +123,7 @@ export function renderTaskPool({
   );
 }
 
-function createTaskPoolSection({ className, titleText }) {
+function createTaskPoolSection({ className, iconName, titleText }) {
   const section = document.createElement("section");
   section.className = `task-pool-section ${className}`;
 
@@ -132,6 +133,7 @@ function createTaskPoolSection({ className, titleText }) {
   const icon = document.createElement("span");
   icon.className = "task-pool-section-icon";
   icon.setAttribute("aria-hidden", "true");
+  icon.append(createIcon(iconName || "list"));
 
   const title = document.createElement("h3");
   title.textContent = titleText;
@@ -152,6 +154,7 @@ function createOpShopPickupSection({
 }) {
   const section = createTaskPoolSection({
     className: "task-pool-section-opshop",
+    iconName: "bag",
     titleText: "OP SHOP PICKUP",
   });
 
@@ -170,7 +173,7 @@ function createOpShopPickupSection({
   const manageButton = document.createElement("button");
   manageButton.type = "button";
   manageButton.className = "button-secondary";
-  manageButton.textContent = "Manage OP SHOP Templates";
+  manageButton.append(createIcon("list"), document.createTextNode("Manage OP SHOP Templates"));
   manageButton.disabled = state.isLoading || state.isSaving;
   manageButton.addEventListener("click", onOpenOpShopTemplateManagement);
 
@@ -193,6 +196,7 @@ function createDeliveryOrderSection({
 }) {
   const section = createTaskPoolSection({
     className: "task-pool-section-delivery",
+    iconName: "box",
     titleText: "DELIVERY ORDERS",
   });
 
@@ -274,7 +278,7 @@ function createDeliveryOrderFilterBar({ onOpenAttacheInvoiceImport }) {
   const importButton = document.createElement("button");
   importButton.className = "button-secondary button-delivery-action";
   importButton.type = "button";
-  importButton.textContent = "Import Attache Invoices";
+  importButton.append(createIcon("cloud-upload"), document.createTextNode("Import Attache Invoices"));
   importButton.disabled = state.isLoading || state.isSaving;
   importButton.addEventListener("click", onOpenAttacheInvoiceImport);
 
@@ -304,6 +308,7 @@ function createOpShopPickupListSummaryCard(pickups, onOpenOpShopPickupList) {
   const icon = document.createElement("span");
   icon.className = "opshop-summary-card-icon";
   icon.setAttribute("aria-hidden", "true");
+  icon.append(createIcon("calendar"));
 
   const kicker = document.createElement("p");
   kicker.className = "compact-invoice";
@@ -329,7 +334,8 @@ function createOpShopPickupListSummaryCard(pickups, onOpenOpShopPickupList) {
 
   const openButton = document.createElement("button");
   openButton.type = "button";
-  openButton.textContent = "Open List";
+  openButton.className = "opshop-open-list-button";
+  openButton.append(document.createTextNode("Open List"), createIcon("arrow-right"));
   openButton.addEventListener("click", onOpenOpShopPickupList);
 
   content.append(icon, kicker, title, summary, meta, openButton);
@@ -347,6 +353,7 @@ function createOncallOpShopPickupListSummaryCard(pickups, onOpenOncallOpShopPick
   const icon = document.createElement("span");
   icon.className = "opshop-summary-card-icon";
   icon.setAttribute("aria-hidden", "true");
+  icon.append(createIcon("phone"));
 
   const kicker = document.createElement("p");
   kicker.className = "compact-invoice";
@@ -372,7 +379,8 @@ function createOncallOpShopPickupListSummaryCard(pickups, onOpenOncallOpShopPick
 
   const openButton = document.createElement("button");
   openButton.type = "button";
-  openButton.textContent = "Open List";
+  openButton.className = "opshop-open-list-button";
+  openButton.append(document.createTextNode("Open List"), createIcon("arrow-right"));
   openButton.addEventListener("click", onOpenOncallOpShopPickupList);
 
   content.append(icon, kicker, title, summary, meta, openButton);
@@ -393,6 +401,7 @@ function createCountrysideOpShopPickupListSummaryCard(
   const icon = document.createElement("span");
   icon.className = "opshop-summary-card-icon";
   icon.setAttribute("aria-hidden", "true");
+  icon.append(createIcon("tree"));
 
   const kicker = document.createElement("p");
   kicker.className = "compact-invoice";
@@ -418,7 +427,8 @@ function createCountrysideOpShopPickupListSummaryCard(
 
   const openButton = document.createElement("button");
   openButton.type = "button";
-  openButton.textContent = "Open List";
+  openButton.className = "opshop-open-list-button";
+  openButton.append(document.createTextNode("Open List"), createIcon("arrow-right"));
   openButton.disabled =
     state.isCountrysideOpShopPickupListLoading || state.isCountrysideOpShopPickupSaving;
   openButton.addEventListener("click", onOpenCountrysideOpShopPickupList);
