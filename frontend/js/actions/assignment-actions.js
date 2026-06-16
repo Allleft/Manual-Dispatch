@@ -97,18 +97,28 @@ export function createAssignmentActions({
     if (state.isSaving) {
       return;
     }
+    const taskIds = Array.isArray(taskId) ? taskId : [taskId];
+    if (taskIds.length === 0) {
+      return;
+    }
 
     state.isSaving = true;
     clearError();
     renderBoard();
 
     try {
-      await apiUnassignTask({
-        dispatch_date: state.dispatchDate,
-        task_type: taskType,
-        task_id: taskId,
+      await Promise.all(
+        taskIds.map((currentTaskId) =>
+          apiUnassignTask({
+            dispatch_date: state.dispatchDate,
+            task_type: taskType,
+            task_id: currentTaskId,
+          }),
+        ),
+      );
+      taskIds.forEach((currentTaskId) => {
+        updatePendingSelection(taskType, currentTaskId, { driver_id: "", trip_no: "trip1" });
       });
-      updatePendingSelection(taskType, taskId, { driver_id: "", trip_no: "trip1" });
       await loadBoard(state.dispatchDate);
     } catch (error) {
       state.isSaving = false;

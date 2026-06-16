@@ -274,19 +274,128 @@ function createOpShopPickupGroup(driverId, assignedOpShopPickups, handlers) {
   const taskList = document.createElement("div");
   taskList.className = "assigned-task-list";
 
-  getAssignmentsForDriver(driverId)
-    .filter((assignment) => assignment.task_type === "OPSHOP_PICKUP")
-    .forEach((assignment) => {
-      const pickup = assignedOpShopPickups.find(
-        (item) => item.pickup_task_id === assignment.task_id,
-      );
-      if (pickup) {
-        taskList.append(createAssignedOpShopPickupTask(assignment, pickup, handlers));
-      }
-    });
+  createOpShopPickupEntries(driverId, assignedOpShopPickups).forEach((entry) => {
+    if (entry.type === "route-group") {
+      taskList.append(createAssignedCountrysideRouteGroup(entry.group, handlers));
+      return;
+    }
+    taskList.append(createAssignedOpShopPickupTask(entry.assignment, entry.pickup, handlers));
+  });
 
   group.append(heading, summary, taskList);
   return group;
+}
+
+function createOpShopPickupEntries(driverId, assignedOpShopPickups) {
+  const entries = [];
+  const routeGroups = new Map();
+  getAssignmentsForDriver(driverId)
+    .filter((assignment) => assignment.task_type === "OPSHOP_PICKUP")
+    .forEach((assignment) => {
+      const pickup = assignedOpShopPickups.find((item) => item.pickup_task_id === assignment.task_id);
+      if (!pickup) {
+        return;
+      }
+      if (isCountrysideRouteGroupPickup(pickup)) {
+        const groupKey = [
+          assignment.trip_no || "",
+          pickup.pickup_date || "",
+          pickup.route_group_id,
+        ].join("|");
+        if (!routeGroups.has(groupKey)) {
+          const group = {
+            assignments: [],
+            pickupDate: pickup.pickup_date || "",
+            pickups: [],
+            routeGroupId: pickup.route_group_id,
+            routeGroupName: pickup.route_group_name || pickup.route_group_id,
+            tripNo: assignment.trip_no || "",
+          };
+          routeGroups.set(groupKey, group);
+          entries.push({ type: "route-group", group });
+        }
+        const group = routeGroups.get(groupKey);
+        group.assignments.push(assignment);
+        group.pickups.push(pickup);
+        return;
+      }
+      entries.push({ type: "pickup", assignment, pickup });
+    });
+  return entries;
+}
+
+function isCountrysideRouteGroupPickup(pickup) {
+  return Boolean(
+    pickup &&
+    pickup.pickup_category === "COUNTRYSIDE" &&
+    pickup.route_group_id,
+  );
+}
+
+function createAssignedCountrysideRouteGroup(
+  group,
+  { onOpenOpShopPickupDetail, onUnassign },
+) {
+  const row = document.createElement("article");
+  row.className = "assigned-task assigned-opshop-task assigned-opshop-route-group-task";
+
+  const details = document.createElement("div");
+
+  const badgeRow = document.createElement("div");
+  badgeRow.className = "hint-badge-row";
+  badgeRow.append(createBadge("OP SHOP PICKUP", "good"), createBadge("Countryside"));
+
+  const title = document.createElement("p");
+  title.className = "assigned-opshop-name";
+  title.textContent = `Countryside Route Group: ${formatOptional(group.routeGroupName)}`;
+
+  const list = document.createElement("ul");
+  list.className = "assigned-opshop-route-group-list";
+  group.pickups.forEach((pickup) => {
+    const item = document.createElement("li");
+    const detailButton = document.createElement("button");
+    detailButton.type = "button";
+    detailButton.className = "assigned-opshop-route-group-item";
+    detailButton.textContent = [
+      pickup.opshop_name || pickup.pickup_task_id,
+      pickup.suburb,
+      pickup.pickup_date,
+    ]
+      .filter(Boolean)
+      .join(" - ");
+    detailButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      onOpenOpShopPickupDetail(pickup.pickup_task_id);
+    });
+    item.append(detailButton);
+    list.append(item);
+  });
+
+  details.append(badgeRow, title, list);
+
+  const unassignButton = document.createElement("button");
+  unassignButton.type = "button";
+  unassignButton.className = "button-secondary";
+  unassignButton.disabled =
+    state.isSaving ||
+    state.isLoading ||
+    group.pickups.some((pickup) =>
+      isDriverDeliveryDateFinalized(group.assignments[0]?.driver_id || "", pickup.pickup_date),
+    );
+  unassignButton.textContent = state.isSaving ? "Saving..." : "Unassign Route Group";
+  unassignButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    if (unassignButton.disabled) {
+      return;
+    }
+    onUnassign(
+      "OPSHOP_PICKUP",
+      group.assignments.map((assignment) => assignment.task_id),
+    );
+  });
+
+  row.append(details, unassignButton);
+  return row;
 }
 
 function createAssignedTask(assignment, order, { onOpenOrderDetail, onUnassign }) {

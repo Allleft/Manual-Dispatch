@@ -1426,6 +1426,37 @@ select:disabled {
   text-transform: uppercase;
 }
 
+.assigned-opshop-route-group-task {
+  align-items: flex-start;
+}
+
+.assigned-opshop-route-group-list {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.25rem 0 0;
+  padding-left: 1rem;
+}
+
+.assigned-opshop-route-group-item {
+  border: 0;
+  padding: 0;
+  color: var(--accent-strong);
+  background: transparent;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: left;
+  cursor: pointer;
+}
+
+.assigned-opshop-route-group-item:hover,
+.assigned-opshop-route-group-item:focus-visible {
+  color: var(--ink);
+  outline: none;
+  text-decoration: underline;
+}
+
 .assigned-pallet {
   margin-bottom: 0;
   color: var(--muted);
