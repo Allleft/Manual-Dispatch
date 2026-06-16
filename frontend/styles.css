@@ -1,10 +1,10 @@
 :root {
   --ink: #17211d;
   --muted: #66736d;
-  --paper: #fbf7ef;
+  --paper: #ffffff;
   --panel: #ffffff;
   --line: #d9dfd7;
-  --field: #f5f8f3;
+  --field: #f8faf8;
   --accent: #275d45;
   --accent-strong: #173f30;
   --accent-soft: #dfeee5;
@@ -17,9 +17,9 @@
   --delivery-strong: #1344a3;
   --delivery-soft: #eaf2ff;
   --delivery-line: #b7d0ff;
-  --shadow: 0 22px 58px rgba(37, 55, 45, 0.13);
-  --shadow-soft: 0 16px 38px rgba(37, 55, 45, 0.08);
-  --shadow-card: 0 12px 30px rgba(37, 55, 45, 0.08);
+  --shadow: 0 18px 48px rgba(23, 33, 29, 0.08);
+  --shadow-soft: 0 14px 34px rgba(23, 33, 29, 0.06);
+  --shadow-card: 0 12px 28px rgba(23, 33, 29, 0.055);
   --radius-xl: 28px;
   --radius-lg: 24px;
   --radius-md: 16px;
@@ -35,9 +35,7 @@ body {
   margin: 0;
   color: var(--ink);
   font-family: "Aptos", "Segoe UI", sans-serif;
-  background:
-    radial-gradient(circle at 16% 10%, rgba(223, 238, 229, 0.95), transparent 30rem),
-    linear-gradient(135deg, #fbf7ef 0%, #eef4ea 54%, #f8f2e7 100%);
+  background: var(--paper);
 }
 
 button,
@@ -62,7 +60,7 @@ textarea:focus-visible {
   gap: 1.5rem;
   max-width: 1540px;
   margin: 0 auto;
-  padding: 2.25rem 1.5rem 1.15rem;
+  padding: 1.55rem 1.5rem 0.85rem;
 }
 
 .eyebrow,
@@ -85,8 +83,8 @@ p {
 
 h1 {
   max-width: 720px;
-  margin-bottom: 0.6rem;
-  font-size: clamp(2.1rem, 5vw, 4.2rem);
+  margin-bottom: 0.42rem;
+  font-size: clamp(2rem, 4.6vw, 3.8rem);
   line-height: 0.95;
   letter-spacing: -0.06em;
 }
@@ -95,8 +93,8 @@ h1 {
   max-width: 640px;
   margin-bottom: 0;
   color: var(--muted);
-  font-size: 1.05rem;
-  line-height: 1.6;
+  font-size: 1rem;
+  line-height: 1.5;
 }
 
 .phase-badge {
@@ -129,7 +127,7 @@ h1 {
 
 .board-shell {
   display: grid;
-  gap: 1.25rem;
+  gap: 1rem;
   max-width: 1540px;
   margin: 0 auto;
   padding: 0 1.5rem 3rem;
@@ -142,21 +140,19 @@ h1 {
 }
 
 .board-section {
-  border: 1px solid rgba(39, 93, 69, 0.14);
+  border: 1px solid rgba(23, 33, 29, 0.1);
   border-radius: var(--radius-xl);
   padding: 1.35rem;
-  background: rgba(255, 255, 255, 0.84);
+  background: #fff;
   box-shadow: var(--shadow);
   backdrop-filter: blur(14px);
 }
 
 .task-pool,
 .final-trip-summary {
-  border-color: rgba(39, 93, 69, 0.12);
+  border-color: rgba(23, 33, 29, 0.1);
   padding: clamp(1.25rem, 2.5vw, 1.65rem);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.88)),
-    radial-gradient(circle at top right, rgba(223, 238, 229, 0.46), transparent 28rem);
+  background: #fff;
 }
 
 .board-controls {
@@ -164,9 +160,7 @@ h1 {
   grid-template-columns: minmax(0, 1fr) minmax(280px, 420px);
   align-items: end;
   gap: 1rem;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.84)),
-    radial-gradient(circle at top left, rgba(223, 238, 229, 0.58), transparent 24rem);
+  background: #fff;
 }
 
 .board-controls h2 {
@@ -182,10 +176,10 @@ h1 {
   align-items: center;
   justify-content: center;
   padding: 0.42rem;
-  border: 1px solid rgba(39, 93, 69, 0.14);
+  border: 1px solid rgba(23, 33, 29, 0.1);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: 0 16px 42px rgba(21, 64, 46, 0.08);
+  background: #fff;
+  box-shadow: 0 14px 34px rgba(23, 33, 29, 0.06);
 }
 
 .board-view-tab {
@@ -315,14 +309,13 @@ h1 {
   display: grid;
   grid-template-columns: minmax(220px, 1fr) minmax(160px, 220px) minmax(160px, 220px) auto auto;
   align-items: end;
-  gap: 0.75rem;
+  gap: 0.65rem;
   margin-bottom: 1rem;
   border: 1px solid rgba(31, 101, 232, 0.14);
   border-radius: var(--radius-md);
-  padding: 1rem;
+  padding: 0.82rem 0.9rem;
   background:
-    linear-gradient(180deg, rgba(248, 251, 255, 0.96), rgba(234, 242, 255, 0.62)),
-    radial-gradient(circle at top left, rgba(31, 101, 232, 0.08), transparent 18rem);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 251, 255, 0.96));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
 }
 
@@ -408,10 +401,10 @@ h1 {
   grid-column: 1 / -1;
   display: grid;
   gap: 1.05rem;
-  border: 1px solid rgba(39, 93, 69, 0.14);
+  border: 1px solid rgba(23, 33, 29, 0.09);
   border-radius: var(--radius-xl);
   padding: clamp(1rem, 2vw, 1.35rem);
-  background: rgba(255, 255, 255, 0.84);
+  background: #fff;
   box-shadow: var(--shadow-soft);
 }
 
@@ -474,15 +467,13 @@ h1 {
 .task-pool-section-opshop {
   border-color: rgba(39, 93, 69, 0.18);
   background:
-    linear-gradient(180deg, rgba(247, 252, 248, 0.94), rgba(255, 255, 255, 0.88)),
-    radial-gradient(circle at top left, rgba(223, 238, 229, 0.75), transparent 22rem);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(250, 253, 251, 0.98));
 }
 
 .task-pool-section-delivery {
   border-color: rgba(31, 101, 232, 0.18);
   background:
-    linear-gradient(180deg, rgba(248, 251, 255, 0.96), rgba(255, 255, 255, 0.9)),
-    radial-gradient(circle at top left, rgba(234, 242, 255, 0.86), transparent 24rem);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(248, 251, 255, 0.98));
 }
 
 .task-pool-section-delivery .task-pool-section-heading h3 {
@@ -497,7 +488,7 @@ h1 {
 .opshop-pickup-card {
   border-color: rgba(39, 93, 69, 0.24);
   background:
-    linear-gradient(180deg, rgba(223, 238, 229, 0.55), rgba(255, 255, 255, 0.94));
+    linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(250, 253, 251, 0.97));
 }
 
 .opshop-pickup-card:hover,
@@ -553,7 +544,7 @@ h1 {
   border-radius: var(--radius-lg);
   padding: 1rem;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(250, 253, 250, 0.94));
+    linear-gradient(180deg, #fff, rgba(250, 253, 251, 0.96));
   box-shadow: var(--shadow-card);
 }
 
@@ -578,8 +569,8 @@ h1 {
   height: 42px;
   border-radius: 999px;
   background:
-    linear-gradient(135deg, rgba(39, 93, 69, 0.16), rgba(39, 93, 69, 0.06)),
-    var(--accent-soft);
+    linear-gradient(135deg, rgba(39, 93, 69, 0.14), rgba(39, 93, 69, 0.04)),
+    rgba(223, 238, 229, 0.8);
 }
 
 .opshop-summary-card-icon::before {
@@ -1536,12 +1527,12 @@ select:disabled {
 
 .vehicle-status {
   color: var(--delivery-strong);
-  background: var(--delivery-soft);
+  background: rgba(234, 242, 255, 0.72);
   font-weight: 800;
 }
 
 .vehicle-capacity {
-  background: rgba(234, 242, 255, 0.72);
+  background: rgba(248, 251, 255, 0.78);
 }
 
 .vehicle-hint {
@@ -1760,7 +1751,7 @@ select:disabled {
 .assigned-opshop-pickups-section {
   border-color: rgba(39, 93, 69, 0.22);
   background:
-    linear-gradient(180deg, rgba(247, 252, 248, 0.96), rgba(255, 255, 255, 0.9));
+    linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(250, 253, 251, 0.97));
 }
 
 .assigned-opshop-pickups-section h4 {
@@ -1791,7 +1782,7 @@ select:disabled {
   border-radius: var(--radius-md);
   padding: 0.8rem;
   background:
-    linear-gradient(180deg, rgba(223, 238, 229, 0.54), rgba(247, 252, 248, 0.78));
+    linear-gradient(180deg, rgba(250, 253, 251, 0.98), rgba(255, 255, 255, 0.96));
 }
 
 .assigned-opshop-route-group-header {
@@ -1844,7 +1835,7 @@ select:disabled {
   border-radius: var(--radius-lg);
   padding: 1rem;
   background:
-    linear-gradient(180deg, rgba(247, 252, 248, 0.96), rgba(255, 255, 255, 0.92));
+    linear-gradient(180deg, #fff, rgba(250, 253, 251, 0.96));
   box-shadow: var(--shadow-card);
 }
 
@@ -1855,14 +1846,14 @@ select:disabled {
   border: 1px solid rgba(39, 93, 69, 0.16);
   border-radius: var(--radius-lg);
   padding: 1rem;
-  background: rgba(255, 255, 255, 0.9);
+  background: #fff;
   box-shadow: var(--shadow-card);
 }
 
 .final-summary-preview-panel {
   border-color: rgba(31, 101, 232, 0.22);
   background:
-    linear-gradient(180deg, rgba(248, 251, 255, 0.96), rgba(255, 255, 255, 0.9));
+    linear-gradient(180deg, #fff, rgba(248, 251, 255, 0.96));
 }
 
 .final-summary-panel-heading {
