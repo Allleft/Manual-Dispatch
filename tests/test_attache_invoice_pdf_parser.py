@@ -10,38 +10,34 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
         parsed = parse_attache_invoice_text(
             """
             Invoice No
-            181486
-            Order No Date
-            04/02/26 KINCHE89 002848
-
-            Invoice to:
-            B.S.L. WIPERS (VIC) PTY LTD
-            98-102 HUME HIGHWAY
-            SOMERTON VIC 3062
-
-            Deliver to:
-            KING PIN PRODUCTS
-            9 PARK RD
-            CHELTENHAM 3192
-
-            Tax Invoice
-            9583 5333
-            Invoice No
-            181486
-            Customer Code
+             181486
+            Customer
+            Code
             KINCHE89
             Date
             04/02/26
+            Invoice to:
             Order No
             002848
             KING PIN PRODUCTS
             9 PARK RD
             CHELTENHAM 3192
+            DiscPricePerTotal
+            Deliver to:
+            KING PIN PRODUCTS
+            9 PARK RD
+            CHELTENHAM
+            9583 5333
+            3192
             B.S.L. WIPERS (VIC) PTY LTD
-            98-102 HUME HIGHWAY
-            SOMERTON VIC 3062
-            RPWSING 24.50 KG 100 PURE WHITE SINGLET 2.450 269.50 245.00
-            BAG10 0.00 10 PLASTIC BAG 10 kg 0.000 0.00 0.00
+            email: admin@teamsaustralia.com.au
+            98-102 HUME HIGHWAY, SOMERTON VIC 3062
+            Amt+GST
+            Phone: (03) 9930 7740
+            RSING 200COLOR TSHIRT RAGS 385.0035.000.001.750KG
+            BAG10 20PLASTIC BAG 10 kg 0.000.000.000.000
+            PAL 1PALLET 27.502.500.0025.000PLT
+            DEL 1DELIVERY /FUEL LEVY CHARGE 9.350.850.008.500DEL
             """,
             source_filename="181486.pdf",
         )
@@ -50,9 +46,11 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
         self.assertEqual("KING PIN PRODUCTS", parsed.company_name)
         self.assertEqual("9 PARK RD", parsed.delivery_address)
         self.assertEqual("CHELTENHAM", parsed.suburb)
+        self.assertEqual("9583 5333", parsed.phone)
         self.assertEqual("3192", parsed.postcode)
         self.assertEqual("2026-02-05", parsed.delivery_date)
         self.assertIn("Order No: 002848", parsed.note)
+        self.assertNotEqual("(03) 9930 7740", parsed.phone)
 
         excluded_fragments = [
             "KING PIN PRODUCTS",
@@ -62,9 +60,11 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
             "Customer Code",
             "Date",
             "Order No",
-            "B.S.L. WIPERS",
-            "98-102 HUME HIGHWAY",
+            "B.S.L.",
+            "WIPERS",
+            "98-102",
             "SOMERTON",
+            "98-102 HUME HIGHWAY",
         ]
         for fragment in excluded_fragments:
             self.assertNotIn(fragment, parsed.delivery_address)

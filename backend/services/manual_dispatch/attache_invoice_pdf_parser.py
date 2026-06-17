@@ -38,6 +38,15 @@ STOP_BLOCK_MARKERS = (
     "UNIT ",
     "web:",
 )
+SUPPLIER_ISSUER_MARKERS = (
+    "B S L WIPERS",
+    "BSL WIPERS",
+    "MCC RAGMAN",
+    "MELBOURNE CLEANING CLOTHS",
+    "SMITHS RAGS",
+    "98 102 HUME HIGHWAY",
+    "SOMERTON VIC 3062",
+)
 PRODUCT_LINE_PATTERN = re.compile(
     r"^(?P<code>[A-Z0-9#-]+)\s+(?P<name>.+?)\s+(?P<quantity>\d+)\s+"
     r"(?P<unit>PALLETS?|PAL|BAG10|BAG5|BAGS?|DELIVERY)\b",
@@ -281,6 +290,7 @@ def _profile_from_address_block(block):
         and not _parse_time_instruction(line)[0]
         and not _find_phone([line])
         and not _is_operational_instruction(line)
+        and not _is_supplier_or_issuer_line(line)
     ]
     if not content:
         return {}
@@ -290,16 +300,24 @@ def _profile_from_address_block(block):
     suburb = None
     address_lines = []
     for line in content[1:]:
+        if _is_supplier_or_issuer_line(line):
+            break
         if _is_postcode_line(line):
+            if address_lines and suburb:
+                break
             continue
         suburb_postcode_match = re.match(r"^(.+?)\s+(\d{4})$", line)
         if suburb_postcode_match:
             suburb = suburb_postcode_match.group(1).strip()
             postcode = postcode or suburb_postcode_match.group(2)
+            if address_lines:
+                break
             continue
         if postcode and not suburb and _looks_like_suburb_line(line):
             suburb = line
             continue
+        if postcode and suburb and address_lines:
+            break
         address_lines.append(line)
 
     if not suburb and address_lines:
@@ -326,6 +344,16 @@ def _find_phone(lines):
         if len(digits) >= 8 and re.fullmatch(r"[()0-9 +.-]+", stripped):
             return clean_optional_text(stripped)
     return None
+
+
+def _is_supplier_or_issuer_line(line):
+    text = str(line or "").strip()
+    upper = text.upper()
+    if upper.startswith(("ABN", "EMAIL:", "WEB:")):
+        return True
+    normalized = re.sub(r"[^A-Z0-9]+", " ", upper)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return any(marker in normalized for marker in SUPPLIER_ISSUER_MARKERS)
 
 
 def _find_postcode(lines):
