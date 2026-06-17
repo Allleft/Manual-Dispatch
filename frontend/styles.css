@@ -3322,3 +3322,267 @@ select:disabled {
     min-width: 0;
   }
 }
+
+/* Targeted modal accent refinements */
+.modal-shell {
+  --modal-accent: var(--accent);
+  --modal-accent-strong: var(--accent-strong);
+  --modal-accent-soft: var(--accent-soft);
+  --modal-accent-border: rgba(39, 93, 69, 0.16);
+  --modal-accent-muted: #556862;
+}
+
+.modal-accent-blue {
+  --modal-accent: #2563eb;
+  --modal-accent-strong: #0f56d9;
+  --modal-accent-soft: #eef5ff;
+  --modal-accent-border: rgba(37, 99, 235, 0.2);
+  --modal-accent-muted: #53647d;
+}
+
+.modal-accent-neutral {
+  --modal-accent: var(--accent);
+  --modal-accent-strong: #0f5d43;
+  --modal-accent-soft: #eef8f2;
+  --modal-accent-border: rgba(39, 93, 69, 0.15);
+  --modal-accent-muted: #53635d;
+}
+
+.modal-shell .modal-eyebrow,
+.modal-shell .modal-eyebrow .ui-icon {
+  color: var(--modal-accent-strong);
+}
+
+.detail-backdrop .modal-shell button:not(.button-secondary):not(.button-danger):not(.button-link),
+.detail-backdrop .modal-primary-button {
+  background: linear-gradient(135deg, var(--modal-accent), var(--modal-accent-strong));
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--modal-accent) 22%, transparent);
+}
+
+.detail-backdrop .modal-shell .button-secondary,
+.detail-backdrop .modal-secondary-button {
+  border-color: var(--modal-accent-border);
+  color: var(--modal-accent-strong);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), var(--modal-accent-soft));
+}
+
+.detail-backdrop .modal-shell .button-danger,
+.detail-backdrop .modal-danger-button {
+  border-color: rgba(180, 35, 24, 0.2);
+  color: #9f1f18;
+  background: linear-gradient(180deg, #fff7f5, #ffe7e2);
+}
+
+.modal-shell .form-field {
+  color: var(--modal-accent-muted);
+}
+
+.modal-shell .form-field input,
+.modal-shell .form-field select,
+.modal-shell .form-field textarea {
+  border-color: var(--modal-accent-border);
+}
+
+.modal-shell .modal-date-field input,
+.modal-shell .form-field input[type="date"],
+.modal-shell .form-field input[type="time"] {
+  border-color: color-mix(in srgb, var(--modal-accent) 34%, transparent);
+  color: var(--modal-accent-strong);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), var(--modal-accent-soft));
+  font-weight: 850;
+}
+
+.modal-field-card.is-date {
+  border-color: color-mix(in srgb, var(--modal-accent, var(--accent)) 30%, transparent);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), var(--modal-accent-soft, var(--accent-soft)));
+}
+
+.modal-field-card.is-date .modal-field-icon {
+  color: var(--modal-accent-strong, var(--accent-strong));
+  background: color-mix(in srgb, var(--modal-accent-soft, var(--accent-soft)) 82%, white);
+}
+
+.modal-date-value {
+  color: var(--modal-accent-strong, var(--accent-strong));
+  font-weight: 900;
+}
+
+.modal-accent-blue .detail-field,
+.modal-accent-blue .modal-field-card {
+  border-color: rgba(37, 99, 235, 0.14);
+}
+
+.modal-accent-blue .detail-field-icon {
+  color: var(--modal-accent-strong);
+  background: var(--modal-accent-soft);
+}
+
+.modal-accent-blue .detail-field dt,
+.modal-accent-blue .detail-field-content dt {
+  color: #53647d;
+}
+
+.modal-accent-blue .product-detail-panel,
+.modal-accent-blue .product-line-editor {
+  border-color: rgba(37, 99, 235, 0.15);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(245, 249, 255, 0.96));
+}
+
+.modal-accent-blue .product-line-heading h3,
+.modal-accent-blue .product-detail-panel h3 {
+  color: var(--modal-accent-strong);
+}
+
+.modal-accent-blue .empty-trip,
+.modal-accent-blue .empty-board {
+  border-color: rgba(37, 99, 235, 0.2);
+  background: rgba(245, 249, 255, 0.8);
+}
+
+.attache-import-modal .attache-import-controls,
+.attache-import-modal .attache-import-table-wrap {
+  border-color: rgba(37, 99, 235, 0.16);
+  background: rgba(245, 249, 255, 0.78);
+}
+
+.opshop-list-item-date,
+.opshop-route-group-name {
+  border: 1px solid rgba(39, 93, 69, 0.14);
+  border-radius: 999px;
+  padding: 0.24rem 0.58rem;
+  color: var(--accent-strong);
+  background: rgba(237, 248, 242, 0.86);
+  font-weight: 850;
+}
+
+.opshop-list-item-date .ui-icon,
+.opshop-date-group-label .ui-icon {
+  color: var(--accent-strong);
+  stroke-width: 2.35;
+}
+
+.opshop-date-group-toggle {
+  border-color: rgba(39, 93, 69, 0.16);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(239, 249, 244, 0.72));
+}
+
+.opshop-date-group-title {
+  color: var(--accent-strong);
+  font-weight: 950;
+}
+
+.opshop-date-group-count {
+  color: #596961;
+  font-weight: 850;
+}
+
+.specification-modal {
+  width: min(1160px, calc(100vw - 3rem));
+  max-width: min(1160px, calc(100vw - 3rem));
+  max-height: calc(100dvh - 3rem);
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  border-color: var(--modal-accent-border);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(252, 254, 253, 0.98));
+}
+
+.specification-modal .detail-header {
+  position: sticky;
+  top: 0;
+  z-index: 8;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  margin: -0.25rem 0 1rem;
+  padding: 0.25rem 0 0.9rem;
+  border-bottom: 1px solid rgba(39, 93, 69, 0.08);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.92));
+  backdrop-filter: blur(8px);
+}
+
+.specification-modal .spec-tabs {
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+}
+
+.specification-modal .spec-tab {
+  min-height: 42px;
+  border-color: rgba(39, 93, 69, 0.17);
+  border-radius: 999px;
+  color: var(--accent-strong);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(238, 248, 242, 0.88));
+  font-weight: 950;
+}
+
+.specification-modal .spec-tab-active {
+  color: #fff;
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+}
+
+.specification-modal .spec-section-heading {
+  margin-bottom: 0.1rem;
+}
+
+.specification-modal .spec-section-heading button {
+  min-height: 44px;
+}
+
+.specification-modal .spec-form {
+  border-color: rgba(39, 93, 69, 0.13);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(249, 253, 250, 0.94));
+}
+
+.specification-modal .spec-table-wrap {
+  max-height: min(58dvh, 560px);
+  min-height: 220px;
+  overflow: auto;
+  border-color: rgba(39, 93, 69, 0.14);
+  border-radius: 18px;
+  box-shadow: 0 12px 30px rgba(23, 33, 29, 0.035);
+}
+
+.specification-modal .spec-table {
+  min-width: 1040px;
+}
+
+.specification-modal .spec-table th {
+  color: var(--accent-strong);
+  background: #eef8f2;
+}
+
+.specification-modal .spec-table td {
+  padding: 0.58rem 0.7rem;
+  color: var(--ink);
+  word-break: break-word;
+}
+
+.specification-modal .spec-actions {
+  flex-wrap: nowrap;
+}
+
+.specification-modal input[type="checkbox"] {
+  accent-color: var(--accent-strong);
+}
+
+@media (max-width: 560px) {
+  .specification-modal {
+    width: min(100%, calc(100vw - 1rem));
+    max-height: calc(100dvh - 1rem);
+  }
+
+  .specification-modal .spec-table-wrap {
+    max-height: min(55dvh, 520px);
+  }
+}

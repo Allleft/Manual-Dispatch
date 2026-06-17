@@ -49,10 +49,13 @@ export function setButtonContent(button, label, iconName = "", options = {}) {
 
 export function createDetailField(label, value) {
   const field = document.createElement("div");
-  field.className = "detail-field";
+  field.className = "detail-field modal-field-card";
+  if (isDateDetailLabel(label)) {
+    field.classList.add("is-date");
+  }
 
   const icon = document.createElement("span");
-  icon.className = "detail-field-icon";
+  icon.className = "detail-field-icon modal-field-icon";
   icon.append(createIcon(getDetailFieldIconName(label)));
 
   const content = document.createElement("span");
@@ -62,11 +65,22 @@ export function createDetailField(label, value) {
   labelElement.textContent = label;
 
   const valueElement = document.createElement("dd");
+  valueElement.className = isDateDetailLabel(label) ? "modal-date-value" : "";
   valueElement.textContent = formatOptional(value);
 
   content.append(labelElement, valueElement);
   field.append(icon, content);
   return field;
+}
+
+function isDateDetailLabel(label) {
+  const normalized = String(label || "").toLowerCase();
+  return (
+    normalized.includes("date") ||
+    normalized.includes("day") ||
+    normalized.includes("time") ||
+    normalized.includes("window")
+  );
 }
 
 function getDetailFieldIconName(label) {

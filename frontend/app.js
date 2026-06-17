@@ -19,6 +19,10 @@ import {
   formatOptional,
 } from "./js/utils/format-utils.js";
 import {
+  createModalKicker,
+  setButtonContent,
+} from "./js/utils/dom-utils.js";
+import {
   renderAccountStatus as renderAccountStatusView,
   renderAuthGate as renderAuthGateView,
 } from "./js/render/auth-renderer.js";
@@ -508,7 +512,7 @@ function renderSpecificationShell() {
   backdrop.className = "detail-backdrop";
 
   const card = document.createElement("section");
-  card.className = "detail-card specification-modal";
+  card.className = "detail-card order-detail-modal specification-modal modal-shell modal-accent-neutral";
   card.setAttribute("role", "dialog");
   card.setAttribute("aria-modal", "true");
   card.setAttribute("aria-labelledby", "specification-title");
@@ -520,9 +524,7 @@ function renderSpecificationShell() {
   header.className = "detail-header";
 
   const titleWrap = document.createElement("div");
-  const kicker = document.createElement("p");
-  kicker.className = "section-kicker";
-  kicker.textContent = "Manual master data";
+  const kicker = createModalKicker("MANUAL MASTER DATA", "truck");
 
   const title = document.createElement("h2");
   title.id = "specification-title";
@@ -531,8 +533,8 @@ function renderSpecificationShell() {
 
   const closeButton = document.createElement("button");
   closeButton.type = "button";
-  closeButton.className = "detail-close";
-  closeButton.textContent = "Close";
+  closeButton.className = "button-secondary detail-close";
+  setButtonContent(closeButton, "Close", "x", { iconAfter: true });
   closeButton.addEventListener("click", specificationActions.closeSpecificationModal);
   header.append(titleWrap, closeButton);
 
@@ -547,7 +549,7 @@ function renderSpecificationShell() {
     button.type = "button";
     button.className =
       state.specificationActiveTab === tab.id ? "spec-tab spec-tab-active" : "spec-tab";
-    button.textContent = tab.label;
+    setButtonContent(button, tab.label);
     button.addEventListener("click", () => {
       setSpecificationTab(tab.id);
     });
@@ -648,15 +650,15 @@ function createDriverSpecificationSection() {
   const section = document.createElement("section");
   section.className = "spec-section";
 
-const heading = document.createElement("div");
-heading.className = "spec-section-heading";
-const addButton = document.createElement("button");
-addButton.type = "button";
-addButton.textContent = "Add Driver";
-addButton.disabled = state.specificationSaving;
-addButton.addEventListener("click", specificationActions.startAddDriverSpecification);
-heading.append(addButton);
-section.append(heading);
+  const heading = document.createElement("div");
+  heading.className = "spec-section-heading";
+  const addButton = document.createElement("button");
+  addButton.type = "button";
+  setButtonContent(addButton, "Add Driver", "plus");
+  addButton.disabled = state.specificationSaving;
+  addButton.addEventListener("click", specificationActions.startAddDriverSpecification);
+  heading.append(addButton);
+  section.append(heading);
 
   if (state.driverSpecificationForm) {
     section.append(createDriverSpecificationForm());
@@ -684,7 +686,7 @@ section.append(heading);
     const row = document.createElement("tr");
     row.append(
       createAvailabilityCell(driver.is_available, (checked, checkbox) =>
-      specificationActions.handleToggleDriverAvailability(driver, checked, checkbox),
+        specificationActions.handleToggleDriverAvailability(driver, checked, checkbox),
       ),
       createTextCell(driver.driver_id),
       createTextCell(driver.name),
@@ -711,15 +713,15 @@ function createVehicleSpecificationSection() {
   const section = document.createElement("section");
   section.className = "spec-section";
 
-const heading = document.createElement("div");
-heading.className = "spec-section-heading";
-const addButton = document.createElement("button");
-addButton.type = "button";
-addButton.textContent = "Add Vehicle";
-addButton.disabled = state.specificationSaving;
-addButton.addEventListener("click", specificationActions.startAddVehicleSpecification);
-heading.append(addButton);
-section.append(heading);
+  const heading = document.createElement("div");
+  heading.className = "spec-section-heading";
+  const addButton = document.createElement("button");
+  addButton.type = "button";
+  setButtonContent(addButton, "Add Vehicle", "plus");
+  addButton.disabled = state.specificationSaving;
+  addButton.addEventListener("click", specificationActions.startAddVehicleSpecification);
+  heading.append(addButton);
+  section.append(heading);
 
   if (state.vehicleSpecificationForm) {
     section.append(createVehicleSpecificationForm());
@@ -746,7 +748,7 @@ section.append(heading);
     const row = document.createElement("tr");
     row.append(
       createAvailabilityCell(vehicle.is_available, (checked, checkbox) =>
-      specificationActions.handleToggleVehicleAvailability(vehicle, checked, checkbox),
+        specificationActions.handleToggleVehicleAvailability(vehicle, checked, checkbox),
       ),
       createTextCell(vehicle.vehicle_id),
       createTextCell(vehicle.rego),
@@ -854,12 +856,12 @@ function createSpecFormActions(cancelHandler) {
   actions.className = "spec-form-actions";
   const saveButton = document.createElement("button");
   saveButton.type = "submit";
-  saveButton.textContent = state.specificationSaving ? "Saving..." : "Save";
+  setButtonContent(saveButton, state.specificationSaving ? "Saving..." : "Save", "plus");
   saveButton.disabled = state.specificationSaving;
   const cancelButton = document.createElement("button");
   cancelButton.type = "button";
   cancelButton.className = "button-secondary";
-  cancelButton.textContent = "Cancel";
+  setButtonContent(cancelButton, "Cancel", "x", { iconAfter: true });
   cancelButton.disabled = state.specificationSaving;
   cancelButton.addEventListener("click", cancelHandler);
   actions.append(saveButton, cancelButton);
@@ -905,8 +907,8 @@ function createActionsCell(actions) {
   actions.forEach((action) => {
     const button = document.createElement("button");
     button.type = "button";
-    button.className = "button-secondary";
-    button.textContent = action.label;
+    button.className = action.label === "Delete" ? "button-danger" : "button-secondary";
+    setButtonContent(button, action.label, action.label === "Delete" ? "trash" : "pencil");
     button.disabled = state.specificationSaving;
     button.addEventListener("click", action.handler);
     wrap.append(button);

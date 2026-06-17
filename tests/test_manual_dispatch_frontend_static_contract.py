@@ -188,6 +188,46 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn('feedback.setAttribute("aria-live", "polite")', renderer)
         self.assertIn("row.is_duplicate", renderer)
 
+    def test_modal_accent_visual_contracts_are_present(self):
+        app_js = (FRONTEND_ROOT / "app.js").read_text(encoding="utf-8")
+        order_modal_renderer = (
+            FRONTEND_ROOT / "js" / "render" / "order-modal-renderer.js"
+        ).read_text(encoding="utf-8")
+        attache_renderer = (
+            FRONTEND_ROOT / "js" / "render" / "attache-invoice-import-modal-renderer.js"
+        ).read_text(encoding="utf-8")
+        dom_utils = (
+            FRONTEND_ROOT / "js" / "utils" / "dom-utils.js"
+        ).read_text(encoding="utf-8")
+        styles = (FRONTEND_ROOT / "styles.css").read_text(encoding="utf-8")
+
+        self.assertIn("modal-shell modal-accent-blue", order_modal_renderer)
+        self.assertIn("modal-date-field", order_modal_renderer)
+        self.assertIn("function isDateOrTimeField", order_modal_renderer)
+        self.assertIn("modal-shell modal-accent-blue", attache_renderer)
+        self.assertIn("modal-field-card", dom_utils)
+        self.assertIn("isDateDetailLabel", dom_utils)
+        self.assertIn("modal-date-value", dom_utils)
+        self.assertIn('createModalKicker("MANUAL MASTER DATA", "truck")', app_js)
+        self.assertIn("modal-shell modal-accent-neutral", app_js)
+        self.assertIn('setButtonContent(closeButton, "Close", "x", { iconAfter: true })', app_js)
+        self.assertIn('setButtonContent(addButton, "Add Driver", "plus")', app_js)
+        self.assertIn('setButtonContent(addButton, "Add Vehicle", "plus")', app_js)
+        self.assertIn('button.className = action.label === "Delete" ? "button-danger" : "button-secondary"', app_js)
+        self.assertIn(
+            'setButtonContent(button, action.label, action.label === "Delete" ? "trash" : "pencil")',
+            app_js,
+        )
+        self.assertIn(".modal-accent-blue", styles)
+        self.assertIn(".modal-accent-neutral", styles)
+        self.assertIn(".modal-field-card.is-date", styles)
+        self.assertIn(".modal-date-value", styles)
+        self.assertIn(".modal-accent-blue .detail-field-icon", styles)
+        self.assertIn(".opshop-list-item-date", styles)
+        self.assertIn(".specification-modal .spec-table-wrap", styles)
+        self.assertIn(".specification-modal .spec-tab-active", styles)
+        self.assertIn(".specification-modal .spec-table th", styles)
+
     def test_phase16_product_detail_controls_are_present(self):
         order_modal_renderer = (
             FRONTEND_ROOT / "js" / "render" / "order-modal-renderer.js"

@@ -44,7 +44,7 @@ export function renderAttacheInvoiceImportModal({
   backdrop.className = "detail-backdrop";
 
   const modal = document.createElement("article");
-  modal.className = "order-detail-modal attache-import-modal";
+  modal.className = "order-detail-modal attache-import-modal modal-shell modal-accent-blue";
   modal.setAttribute("role", "dialog");
   modal.setAttribute("aria-modal", "true");
   modal.setAttribute("aria-labelledby", "attache-import-title");

@@ -34,7 +34,7 @@ export function renderAddOrderPopup({
   backdrop.className = "detail-backdrop";
 
   const modal = document.createElement("article");
-  modal.className = "order-detail-modal";
+  modal.className = "order-detail-modal modal-shell modal-accent-blue";
   modal.setAttribute("role", "dialog");
   modal.setAttribute("aria-modal", "true");
   modal.setAttribute("aria-labelledby", "add-order-title");
@@ -190,7 +190,7 @@ export function renderOrderDetailPopup({
   backdrop.className = "detail-backdrop";
 
   const modal = document.createElement("article");
-  modal.className = "order-detail-modal";
+  modal.className = "order-detail-modal modal-shell modal-accent-blue";
   modal.setAttribute("role", "dialog");
   modal.setAttribute("aria-modal", "true");
   modal.setAttribute("aria-labelledby", "order-detail-title");
@@ -287,6 +287,9 @@ export function renderOrderDetailPopup({
 function createAddOrderField(label, field, options = {}) {
   const wrapper = document.createElement("label");
   wrapper.className = options.wide ? "form-field form-field-wide" : "form-field";
+  if (isDateOrTimeField(options)) {
+    wrapper.classList.add("modal-date-field");
+  }
   wrapper.textContent = label;
 
   const input = document.createElement(options.multiline ? "textarea" : "input");
@@ -334,6 +337,9 @@ function createAddOrderSelect(label, field, options, handlers) {
 function createOrderEditField(label, field, options = {}) {
   const wrapper = document.createElement("label");
   wrapper.className = options.wide ? "form-field form-field-wide" : "form-field";
+  if (isDateOrTimeField(options)) {
+    wrapper.classList.add("modal-date-field");
+  }
   wrapper.textContent = label;
 
   const input = document.createElement(options.multiline ? "textarea" : "input");
@@ -621,6 +627,10 @@ function createProductLineInput(label, field, line, index, options) {
   });
   wrapper.append(input);
   return wrapper;
+}
+
+function isDateOrTimeField(options = {}) {
+  return options.type === "date" || options.type === "time";
 }
 
 function createProductLineUnitSelect(line, index, onUpdateProductLine) {
