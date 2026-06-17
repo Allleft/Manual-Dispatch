@@ -4,8 +4,14 @@ import {
   getCountrysideRouteGroupNameById,
   isGeneratedTask,
 } from "../state/selectors.js";
-import { createBadge, createOption } from "../utils/dom-utils.js";
+import {
+  createBadge,
+  createModalKicker,
+  createOption,
+  setButtonContent,
+} from "../utils/dom-utils.js";
 import { formatOptional, truncateText } from "../utils/format-utils.js";
+import { createIcon } from "../utils/icon-utils.js";
 
 export function renderCountrysideOpShopPickupListModal({
   onCancelForm,
@@ -112,9 +118,7 @@ function createModalHeader({ onCloseList, onStartAdd }) {
   header.className = "detail-header";
 
   const titleWrap = document.createElement("div");
-  const kicker = document.createElement("p");
-  kicker.className = "section-kicker";
-  kicker.textContent = "OP SHOP PICKUP";
+  const kicker = createModalKicker("OP SHOP PICKUP", "bag");
 
   const title = document.createElement("h2");
   title.id = "opshop-countryside-pickup-list-title";
@@ -127,7 +131,7 @@ function createModalHeader({ onCloseList, onStartAdd }) {
   const disabledReason = getAssignRouteGroupStartDisabledReason();
   const addButton = document.createElement("button");
   addButton.type = "button";
-  addButton.textContent = "Assign Route Group";
+  setButtonContent(addButton, "Assign Route Group", "users");
   addButton.disabled = state.isCountrysideOpShopPickupSaving || Boolean(disabledReason);
   addButton.title = state.isCountrysideOpShopPickupSaving ? "Assigning route group." : disabledReason;
   addButton.addEventListener("click", (event) => {
@@ -143,7 +147,7 @@ function createModalHeader({ onCloseList, onStartAdd }) {
   const closeButton = document.createElement("button");
   closeButton.type = "button";
   closeButton.className = "button-secondary detail-close";
-  closeButton.textContent = "Close";
+  setButtonContent(closeButton, "Close", "x", { iconAfter: true });
   closeButton.addEventListener("click", (event) => {
     event.stopPropagation();
     onCloseList();
@@ -494,7 +498,7 @@ function createRouteTemplateDetailPanel({ onCloseRouteTemplateDetail }) {
   const close = document.createElement("button");
   close.type = "button";
   close.className = "button-secondary";
-  close.textContent = "Close Detail";
+  setButtonContent(close, "Close Detail", "x", { iconAfter: true });
   close.addEventListener("click", (event) => {
     event.preventDefault();
     event.stopPropagation();
@@ -622,7 +626,7 @@ function createEditForm({ onCancelForm, onStartDelete, onUpdateForm, onUpdatePic
     const deleteButton = document.createElement("button");
     deleteButton.type = "button";
     deleteButton.className = "button-secondary";
-    deleteButton.textContent = "Delete Pickup Task";
+    setButtonContent(deleteButton, "Delete Pickup Task", "trash");
     deleteButton.disabled = state.isCountrysideOpShopPickupSaving;
     deleteButton.addEventListener("click", (event) => {
       event.stopPropagation();
@@ -655,7 +659,12 @@ function createDeleteConfirmation({ onCancelForm, onConfirmDelete }) {
 
   const confirm = document.createElement("button");
   confirm.type = "button";
-  confirm.textContent = state.isCountrysideOpShopPickupSaving ? "Deleting..." : "Delete Pickup Task";
+  confirm.className = "button-danger";
+  setButtonContent(
+    confirm,
+    state.isCountrysideOpShopPickupSaving ? "Deleting..." : "Delete Pickup Task",
+    "trash",
+  );
   confirm.disabled = state.isCountrysideOpShopPickupSaving || lockState.isLocked;
   confirm.addEventListener("click", (event) => {
     event.stopPropagation();
@@ -665,7 +674,7 @@ function createDeleteConfirmation({ onCancelForm, onConfirmDelete }) {
   const cancel = document.createElement("button");
   cancel.type = "button";
   cancel.className = "button-secondary";
-  cancel.textContent = "Cancel";
+  setButtonContent(cancel, "Cancel", "x", { iconAfter: true });
   cancel.disabled = state.isCountrysideOpShopPickupSaving;
   cancel.addEventListener("click", (event) => {
     event.stopPropagation();
@@ -858,13 +867,13 @@ function createFormActions({ cancelLabel, isSubmitDisabled, onCancel, submitLabe
 
   const submit = document.createElement("button");
   submit.type = "submit";
-  submit.textContent = submitLabel;
+  setButtonContent(submit, submitLabel, "plus");
   submit.disabled = isSubmitDisabled;
 
   const cancel = document.createElement("button");
   cancel.type = "button";
   cancel.className = "button-secondary";
-  cancel.textContent = cancelLabel;
+  setButtonContent(cancel, cancelLabel, "x", { iconAfter: true });
   cancel.disabled = state.isCountrysideOpShopPickupSaving;
   cancel.addEventListener("click", (event) => {
     event.stopPropagation();
@@ -935,7 +944,7 @@ function createSmallActionButton(label, onClick, options = {}) {
   const button = document.createElement("button");
   button.type = "button";
   button.className = options.primary ? "" : "button-secondary";
-  button.textContent = label;
+  setButtonContent(button, label, getActionIconName(label));
   button.disabled =
     Boolean(options.disabled) ||
     state.isCountrysideRouteTemplateSaving ||
@@ -969,14 +978,48 @@ function createDetailField(labelText, value) {
   const field = document.createElement("div");
   field.className = "opshop-route-template-detail-field";
 
+  const icon = document.createElement("span");
+  icon.className = "detail-field-icon";
+  icon.append(createIcon(getRouteTemplateDetailIconName(labelText)));
+
+  const content = document.createElement("span");
+  content.className = "detail-field-content";
+
   const label = document.createElement("span");
   label.textContent = labelText;
 
   const text = document.createElement("strong");
   text.textContent = formatOptional(value);
 
-  field.append(label, text);
+  content.append(label, text);
+  field.append(icon, content);
   return field;
+}
+
+function getRouteTemplateDetailIconName(labelText) {
+  const normalized = String(labelText || "").toLowerCase();
+  if (normalized.includes("phone")) {
+    return "phone";
+  }
+  if (normalized.includes("address") || normalized.includes("suburb") || normalized.includes("area") || normalized.includes("route")) {
+    return "location";
+  }
+  if (normalized.includes("contact") || normalized.includes("driver")) {
+    return "user";
+  }
+  if (normalized.includes("time")) {
+    return "calendar";
+  }
+  if (normalized.includes("access") || normalized.includes("key")) {
+    return "key";
+  }
+  if (normalized.includes("trailer")) {
+    return "truck";
+  }
+  if (normalized.includes("op shop")) {
+    return "store";
+  }
+  return "document";
 }
 
 function createPickupGroups({ onOpenDetail, onStartEdit, onUpdateAssignedDriver }) {
@@ -1054,7 +1097,7 @@ function createRouteTemplatesSection({
 
   const addButton = document.createElement("button");
   addButton.type = "button";
-  addButton.textContent = "Add OP SHOP to this route";
+  setButtonContent(addButton, "Add OP SHOP to this route", "plus");
   addButton.disabled =
     !state.selectedCountrysideRouteGroupId ||
     state.isCountrysideRouteTemplateSaving ||
@@ -1134,6 +1177,10 @@ function createRouteTemplateCard(
     }
   });
 
+  const icon = document.createElement("span");
+  icon.className = "opshop-list-item-icon opshop-route-template-icon";
+  icon.append(createIcon("store"));
+
   const main = document.createElement("div");
   main.className = "opshop-route-template-main";
 
@@ -1176,7 +1223,7 @@ function createRouteTemplateCard(
     createSmallActionButton("Remove", () => onStartRemoveRouteTemplate(template)),
   );
 
-  card.append(main, actions);
+  card.append(icon, main, actions);
   return card;
 }
 
@@ -1198,6 +1245,10 @@ function createPickupItem(pickup, { onOpenDetail, onStartEdit, onUpdateAssignedD
     }
   });
 
+  const icon = document.createElement("span");
+  icon.className = "opshop-list-item-icon";
+  icon.append(createIcon("store"));
+
   const body = document.createElement("div");
   body.className = "opshop-list-item-body";
 
@@ -1213,11 +1264,17 @@ function createPickupItem(pickup, { onOpenDetail, onStartEdit, onUpdateAssignedD
 
   const routeGroup = document.createElement("span");
   routeGroup.className = "opshop-list-item-date opshop-route-group-name";
-  routeGroup.textContent = `Route Group: ${formatOptional(pickup.route_group_name || getRouteGroupName(pickup.route_group_id))}`;
+  routeGroup.append(
+    createIcon("route"),
+    document.createTextNode(`Route Group: ${formatOptional(pickup.route_group_name || getRouteGroupName(pickup.route_group_id))}`),
+  );
 
   const pickupDate = document.createElement("span");
   pickupDate.className = "opshop-list-item-date";
-  pickupDate.textContent = `Pickup Date: ${formatOptional(pickup.pickup_date)}`;
+  pickupDate.append(
+    createIcon("calendar"),
+    document.createTextNode(`Pickup Date: ${formatOptional(pickup.pickup_date)}`),
+  );
 
   meta.append(suburb, routeGroup, pickupDate);
   body.append(title, meta);
@@ -1241,7 +1298,7 @@ function createPickupItem(pickup, { onOpenDetail, onStartEdit, onUpdateAssignedD
     const editButton = document.createElement("button");
     editButton.type = "button";
     editButton.className = "button-secondary";
-    editButton.textContent = "Edit";
+    setButtonContent(editButton, "Edit", "pencil");
     editButton.disabled = state.isCountrysideOpShopPickupSaving;
     editButton.addEventListener("click", (event) => {
       event.stopPropagation();
@@ -1250,8 +1307,25 @@ function createPickupItem(pickup, { onOpenDetail, onStartEdit, onUpdateAssignedD
     actions.append(editButton);
   }
 
-  card.append(body, actions);
+  card.append(icon, body, actions);
   return card;
+}
+
+function getActionIconName(label) {
+  const normalized = String(label || "").toLowerCase();
+  if (normalized.includes("remove") || normalized.includes("delete") || normalized.includes("disable")) {
+    return "trash";
+  }
+  if (normalized.includes("rename") || normalized.includes("edit") || normalized.includes("save")) {
+    return "pencil";
+  }
+  if (normalized.includes("move")) {
+    return "chevron-up";
+  }
+  if (normalized.includes("route") || normalized.includes("assign")) {
+    return "route";
+  }
+  return "plus";
 }
 
 function createAssignedToSelect(pickup, onUpdateAssignedDriver) {

@@ -1,6 +1,10 @@
 import { getOpShopPickupByTaskId } from "../state/selectors.js";
 import { state } from "../state/app-state.js";
-import { createDetailField } from "../utils/dom-utils.js";
+import {
+  createDetailField,
+  createModalKicker,
+  setButtonContent,
+} from "../utils/dom-utils.js";
 import { formatOptional } from "../utils/format-utils.js";
 
 export function renderOpShopPickupDetailPopup({ onCloseOpShopPickupDetail }) {
@@ -44,9 +48,7 @@ export function renderOpShopPickupDetailPopup({ onCloseOpShopPickupDetail }) {
   header.className = "detail-header";
 
   const titleWrap = document.createElement("div");
-  const kicker = document.createElement("p");
-  kicker.className = "section-kicker";
-  kicker.textContent = "OP SHOP PICKUP";
+  const kicker = createModalKicker("OP SHOP PICKUP", "bag");
 
   const title = document.createElement("h2");
   title.id = "opshop-pickup-detail-title";
@@ -57,7 +59,7 @@ export function renderOpShopPickupDetailPopup({ onCloseOpShopPickupDetail }) {
   const closeButton = document.createElement("button");
   closeButton.type = "button";
   closeButton.className = "button-secondary detail-close";
-  closeButton.textContent = "Close";
+  setButtonContent(closeButton, "Close", "x", { iconAfter: true });
   closeButton.addEventListener("click", onCloseOpShopPickupDetail);
 
   header.append(titleWrap, closeButton);

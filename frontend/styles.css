@@ -2822,3 +2822,503 @@ select:disabled {
 .attache-import-row-warning {
   background: #fff7ed;
 }
+
+/* Modal design system */
+.detail-backdrop {
+  place-items: center;
+  align-items: center;
+  padding: clamp(1rem, 3vw, 2rem);
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.2), transparent 32rem),
+    rgba(19, 29, 26, 0.48);
+  backdrop-filter: blur(12px) saturate(0.92);
+}
+
+.order-detail-modal {
+  width: min(1180px, calc(100vw - 3rem));
+  max-height: calc(100dvh - 3rem);
+  overflow: auto;
+  border: 1px solid rgba(39, 93, 69, 0.15);
+  border-radius: 24px;
+  padding: clamp(1.2rem, 2.4vw, 1.9rem);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(252, 254, 253, 0.98));
+  box-shadow:
+    0 32px 90px rgba(14, 24, 20, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  scrollbar-color: rgba(23, 63, 48, 0.42) transparent;
+  scrollbar-width: thin;
+}
+
+.order-detail-modal:not(.specification-modal) {
+  max-height: calc(100dvh - 3rem);
+}
+
+.opshop-pickup-list-modal,
+.opshop-template-modal,
+.attache-import-modal {
+  width: min(1280px, calc(100vw - 3rem));
+}
+
+.opshop-detail-modal {
+  width: min(1160px, calc(100vw - 3rem));
+}
+
+.auth-modal {
+  width: min(540px, calc(100vw - 3rem));
+}
+
+.detail-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 1.2rem;
+  margin-bottom: clamp(1rem, 2vw, 1.45rem);
+}
+
+.detail-header h2 {
+  color: var(--ink);
+  font-size: clamp(2rem, 4vw, 2.75rem);
+  font-weight: 950;
+  line-height: 0.98;
+  letter-spacing: -0.065em;
+}
+
+.modal-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--accent-strong);
+  font-size: 0.82rem;
+  font-weight: 950;
+  letter-spacing: 0.18em;
+}
+
+.modal-eyebrow .ui-icon {
+  width: 1rem;
+  height: 1rem;
+  stroke-width: 2.3;
+}
+
+.detail-actions,
+.form-actions {
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.detail-backdrop button,
+.detail-backdrop .button-secondary,
+.detail-backdrop .button-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.48rem;
+  min-height: 44px;
+  border-radius: 12px;
+  padding: 0 1rem;
+  font-weight: 900;
+  line-height: 1;
+  box-shadow: 0 10px 24px rgba(39, 93, 69, 0.08);
+}
+
+.detail-backdrop button .ui-icon,
+.detail-backdrop .button-secondary .ui-icon,
+.detail-backdrop .button-danger .ui-icon {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
+.detail-backdrop button:not(.button-secondary):not(.button-danger):not(.button-link) {
+  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+}
+
+.detail-backdrop .button-secondary,
+.detail-backdrop .detail-close {
+  border: 1px solid rgba(39, 93, 69, 0.18);
+  color: var(--accent-strong);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(237, 248, 242, 0.92));
+  box-shadow: 0 8px 20px rgba(39, 93, 69, 0.06);
+}
+
+.detail-backdrop .button-danger {
+  border: 1px solid rgba(180, 35, 24, 0.18);
+  color: #9f1f18;
+  background: linear-gradient(180deg, #fff7f5, #ffe5df);
+  box-shadow: 0 8px 20px rgba(180, 35, 24, 0.06);
+}
+
+.detail-close {
+  min-width: 112px;
+}
+
+.opshop-list-summary {
+  grid-template-columns: repeat(auto-fit, minmax(0, max-content));
+  gap: 0.85rem;
+  margin-bottom: 0.25rem;
+}
+
+.hint-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 38px;
+  border: 1px solid rgba(39, 93, 69, 0.13);
+  border-radius: 999px;
+  padding: 0.4rem 0.9rem;
+  color: var(--accent-strong);
+  background:
+    linear-gradient(180deg, rgba(246, 251, 248, 0.96), rgba(234, 246, 239, 0.86));
+  font-size: 0.84rem;
+  font-weight: 900;
+}
+
+.opshop-list-form,
+.opshop-delete-confirmation,
+.opshop-route-template-detail-panel,
+.opshop-template-form,
+.product-detail-panel,
+.product-line-editor {
+  border: 1px solid rgba(39, 93, 69, 0.14);
+  border-radius: 18px;
+  padding: clamp(0.9rem, 1.7vw, 1.25rem);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(249, 253, 250, 0.95));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+.form-field {
+  gap: 0.45rem;
+  color: #556862;
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
+.form-field input,
+.form-field select,
+.form-field textarea,
+.opshop-template-form input,
+.opshop-template-form select {
+  min-height: 48px;
+  border-color: rgba(23, 63, 48, 0.15);
+  border-radius: 14px;
+  padding: 0 0.95rem;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.form-field textarea {
+  min-height: 132px;
+  padding: 0.85rem 0.95rem;
+}
+
+.detail-grid,
+.opshop-route-template-detail-grid {
+  gap: 0.9rem;
+}
+
+.detail-field,
+.opshop-route-template-detail-field {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.85rem;
+  min-height: 72px;
+  border: 1px solid rgba(39, 93, 69, 0.12);
+  border-radius: 16px;
+  padding: 0.85rem 1rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(250, 253, 251, 0.96));
+  box-shadow: 0 8px 22px rgba(23, 33, 29, 0.025);
+}
+
+.detail-field-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+}
+
+.detail-field-icon .ui-icon {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.detail-field-content,
+.opshop-route-template-detail-field .detail-field-content {
+  display: grid;
+  min-width: 0;
+  gap: 0.2rem;
+}
+
+.detail-field dt,
+.opshop-route-template-detail-field span:not(.detail-field-icon):not(.detail-field-content) {
+  color: #5e6d68;
+  font-size: 0.76rem;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+}
+
+.detail-field dd,
+.opshop-route-template-detail-field strong {
+  color: var(--ink);
+  font-size: 1rem;
+  font-weight: 850;
+  line-height: 1.35;
+}
+
+.opshop-detail-section h3,
+.opshop-list-section-heading {
+  color: var(--accent-strong);
+  font-size: 1.14rem;
+  font-weight: 950;
+  letter-spacing: -0.025em;
+}
+
+.opshop-date-group {
+  gap: 0.75rem;
+  border-top: 1px solid rgba(39, 93, 69, 0.11);
+  padding-top: 0.95rem;
+}
+
+.opshop-date-group-toggle {
+  min-height: 62px;
+  border-color: rgba(39, 93, 69, 0.13);
+  border-radius: 14px;
+  padding: 0.82rem 1.05rem;
+  background:
+    linear-gradient(180deg, rgba(250, 253, 251, 0.95), rgba(239, 249, 244, 0.72));
+}
+
+.opshop-date-group-title,
+.opshop-date-group-label,
+.opshop-date-group-state,
+.opshop-list-item-date,
+.opshop-route-group-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.opshop-date-group-label {
+  color: var(--accent-strong);
+  font-size: 1.18rem;
+  font-weight: 950;
+  letter-spacing: -0.035em;
+}
+
+.opshop-date-group-label .ui-icon,
+.opshop-list-item-date .ui-icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+.opshop-date-group-state {
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.opshop-date-group-state .ui-icon {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+.opshop-list-item {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.85rem;
+  border-color: rgba(39, 93, 69, 0.12);
+  border-radius: 14px;
+  padding: 0.9rem 1rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(250, 253, 251, 0.94));
+  box-shadow: 0 10px 26px rgba(23, 33, 29, 0.035);
+}
+
+.opshop-list-item-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  color: var(--accent-strong);
+  background:
+    linear-gradient(180deg, rgba(237, 248, 242, 1), rgba(223, 238, 229, 0.82));
+}
+
+.opshop-list-item-icon .ui-icon {
+  width: 1.2rem;
+  height: 1.2rem;
+}
+
+.opshop-list-item-body h4 {
+  color: var(--ink);
+  font-size: 1.02rem;
+  font-weight: 950;
+  letter-spacing: -0.025em;
+}
+
+.opshop-list-item-suburb {
+  padding: 0.22rem 0.65rem;
+  background: rgba(223, 238, 229, 0.82);
+  font-weight: 950;
+}
+
+.opshop-list-item-actions {
+  display: grid;
+  grid-auto-flow: column;
+  align-items: end;
+  gap: 0.65rem;
+}
+
+.opshop-assigned-to-field {
+  min-width: 240px;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.opshop-assigned-to-field select {
+  min-height: 48px;
+  border-radius: 13px;
+  background: #fff;
+}
+
+.empty-board,
+.empty-trip {
+  border: 1px dashed rgba(39, 93, 69, 0.18);
+  border-radius: 16px;
+  padding: 1rem 1.2rem;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.opshop-route-management-bar {
+  align-items: end;
+  gap: 0.9rem;
+}
+
+.opshop-route-management-actions,
+.opshop-route-template-actions {
+  gap: 0.65rem;
+}
+
+.opshop-route-template-card {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.95rem;
+  border-color: rgba(39, 93, 69, 0.12);
+  border-radius: 16px;
+  padding: 1rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(250, 253, 251, 0.94));
+  box-shadow: 0 10px 26px rgba(23, 33, 29, 0.035);
+}
+
+.opshop-route-template-main h4 {
+  color: var(--ink);
+  font-size: 1.05rem;
+  font-weight: 950;
+}
+
+.opshop-route-template-main p {
+  line-height: 1.35;
+}
+
+.opshop-route-template-notes {
+  color: #394943;
+  font-weight: 850;
+}
+
+.opshop-template-item {
+  border-radius: 16px;
+  padding: 1rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(250, 253, 251, 0.94));
+}
+
+.opshop-template-picker-input {
+  padding-left: 1rem;
+}
+
+.opshop-template-picker-menu {
+  border-radius: 16px;
+}
+
+.attache-import-controls {
+  border: 1px solid rgba(39, 93, 69, 0.12);
+  border-radius: 16px;
+  padding: 0.9rem;
+  background: rgba(250, 253, 251, 0.9);
+}
+
+@media (max-width: 900px) {
+  .detail-header,
+  .opshop-route-management-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-actions,
+  .form-actions {
+    justify-content: flex-start;
+  }
+
+  .opshop-list-item,
+  .opshop-route-template-card {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .opshop-list-item-actions,
+  .opshop-route-template-actions {
+    grid-column: 1 / -1;
+    grid-auto-flow: row;
+    grid-template-columns: repeat(auto-fit, minmax(150px, max-content));
+    justify-content: start;
+  }
+}
+
+@media (max-width: 560px) {
+  .detail-backdrop {
+    padding: 0.5rem;
+  }
+
+  .order-detail-modal,
+  .opshop-pickup-list-modal,
+  .opshop-template-modal,
+  .attache-import-modal,
+  .opshop-detail-modal {
+    width: min(100%, calc(100vw - 1rem));
+    max-height: calc(100dvh - 1rem);
+    border-radius: 20px;
+    padding: 1rem;
+  }
+
+  .detail-header h2 {
+    font-size: clamp(1.65rem, 10vw, 2.25rem);
+  }
+
+  .detail-grid,
+  .opshop-route-template-detail-grid,
+  .opshop-template-form,
+  .opshop-list-form {
+    grid-template-columns: 1fr;
+  }
+
+  .opshop-list-item,
+  .opshop-route-template-card {
+    grid-template-columns: 1fr;
+  }
+
+  .opshop-list-item-icon,
+  .opshop-route-template-icon {
+    width: 42px;
+    height: 42px;
+  }
+
+  .opshop-assigned-to-field {
+    min-width: 0;
+  }
+}

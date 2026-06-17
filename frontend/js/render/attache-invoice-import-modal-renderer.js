@@ -1,4 +1,8 @@
 import { state } from "../state/app-state.js";
+import {
+  createModalKicker,
+  setButtonContent,
+} from "../utils/dom-utils.js";
 import { formatOptional } from "../utils/format-utils.js";
 
 
@@ -49,9 +53,7 @@ export function renderAttacheInvoiceImportModal({
   const header = document.createElement("div");
   header.className = "detail-header";
   const titleWrap = document.createElement("div");
-  const kicker = document.createElement("p");
-  kicker.className = "section-kicker";
-  kicker.textContent = "Delivery Order import";
+  const kicker = createModalKicker("Delivery Order import", "cloud-upload");
   const title = document.createElement("h2");
   title.id = "attache-import-title";
   title.textContent = "Import Attache Invoices";
@@ -60,7 +62,7 @@ export function renderAttacheInvoiceImportModal({
   const closeButton = document.createElement("button");
   closeButton.type = "button";
   closeButton.className = "button-secondary detail-close";
-  closeButton.textContent = "Close";
+  setButtonContent(closeButton, "Close", "x", { iconAfter: true });
   closeButton.disabled = state.isAttacheInvoiceImportPreviewing || state.isAttacheInvoiceImportCommitting;
   closeButton.addEventListener("click", onClose);
   header.append(titleWrap, closeButton);
@@ -83,7 +85,11 @@ export function renderAttacheInvoiceImportModal({
 
   const previewButton = document.createElement("button");
   previewButton.type = "button";
-  previewButton.textContent = state.isAttacheInvoiceImportPreviewing ? "Previewing..." : "Preview Import";
+  setButtonContent(
+    previewButton,
+    state.isAttacheInvoiceImportPreviewing ? "Previewing..." : "Preview Import",
+    "eye",
+  );
   previewButton.disabled =
     state.isAttacheInvoiceImportPreviewing
     || state.isAttacheInvoiceImportCommitting
@@ -159,7 +165,11 @@ function createPreviewTable({ onCommit, onToggleRow, onUpdateRow }) {
   actions.className = "form-actions";
   const commitButton = document.createElement("button");
   commitButton.type = "button";
-  commitButton.textContent = state.isAttacheInvoiceImportCommitting ? "Importing..." : "Confirm Import";
+  setButtonContent(
+    commitButton,
+    state.isAttacheInvoiceImportCommitting ? "Importing..." : "Confirm Import",
+    "cloud-upload",
+  );
   commitButton.disabled = state.isAttacheInvoiceImportCommitting || selectedCount === 0;
   commitButton.addEventListener("click", onCommit);
   actions.append(commitButton);

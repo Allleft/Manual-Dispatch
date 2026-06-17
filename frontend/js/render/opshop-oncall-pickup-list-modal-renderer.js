@@ -3,8 +3,14 @@ import {
   getOpShopPickupByTaskId,
   isGeneratedTask,
 } from "../state/selectors.js";
-import { createBadge, createOption } from "../utils/dom-utils.js";
+import {
+  createBadge,
+  createModalKicker,
+  createOption,
+  setButtonContent,
+} from "../utils/dom-utils.js";
 import { formatOptional } from "../utils/format-utils.js";
+import { createIcon } from "../utils/icon-utils.js";
 import {
   getDateGroupCollapsed,
   getDateGroupListId,
@@ -76,9 +82,7 @@ function createModalHeader({ onCloseList, onStartAdd }) {
   header.className = "detail-header";
 
   const titleWrap = document.createElement("div");
-  const kicker = document.createElement("p");
-  kicker.className = "section-kicker";
-  kicker.textContent = "OP SHOP PICKUP";
+  const kicker = createModalKicker("OP SHOP PICKUP", "bag");
 
   const title = document.createElement("h2");
   title.id = "opshop-oncall-pickup-list-title";
@@ -90,7 +94,7 @@ function createModalHeader({ onCloseList, onStartAdd }) {
 
   const addButton = document.createElement("button");
   addButton.type = "button";
-  addButton.textContent = "Add Pickup Task";
+  setButtonContent(addButton, "Add Pickup Task", "plus");
   addButton.disabled = state.isOncallOpShopPickupSaving || state.isOncallOpShopPickupListLoading;
   addButton.addEventListener("click", (event) => {
     event.stopPropagation();
@@ -100,7 +104,7 @@ function createModalHeader({ onCloseList, onStartAdd }) {
   const closeButton = document.createElement("button");
   closeButton.type = "button";
   closeButton.className = "button-secondary detail-close";
-  closeButton.textContent = "Close";
+  setButtonContent(closeButton, "Close", "x", { iconAfter: true });
   closeButton.addEventListener("click", (event) => {
     event.stopPropagation();
     onCloseList();
@@ -397,7 +401,7 @@ function createEditForm({ onCancelForm, onStartDelete, onUpdateForm, onUpdatePic
     const deleteButton = document.createElement("button");
     deleteButton.type = "button";
     deleteButton.className = "button-secondary";
-    deleteButton.textContent = "Delete Pickup Task";
+    setButtonContent(deleteButton, "Delete Pickup Task", "trash");
     deleteButton.disabled = state.isOncallOpShopPickupSaving;
     deleteButton.addEventListener("click", (event) => {
       event.stopPropagation();
@@ -430,7 +434,8 @@ function createDeleteConfirmation({ onCancelForm, onConfirmDelete }) {
 
   const confirm = document.createElement("button");
   confirm.type = "button";
-  confirm.textContent = state.isOncallOpShopPickupSaving ? "Deleting..." : "Delete Pickup Task";
+  confirm.className = "button-danger";
+  setButtonContent(confirm, state.isOncallOpShopPickupSaving ? "Deleting..." : "Delete Pickup Task", "trash");
   confirm.disabled = state.isOncallOpShopPickupSaving || lockState.isLocked;
   confirm.addEventListener("click", (event) => {
     event.stopPropagation();
@@ -440,7 +445,7 @@ function createDeleteConfirmation({ onCancelForm, onConfirmDelete }) {
   const cancel = document.createElement("button");
   cancel.type = "button";
   cancel.className = "button-secondary";
-  cancel.textContent = "Cancel";
+  setButtonContent(cancel, "Cancel", "x", { iconAfter: true });
   cancel.disabled = state.isOncallOpShopPickupSaving;
   cancel.addEventListener("click", (event) => {
     event.stopPropagation();
@@ -547,13 +552,13 @@ function createFormActions({ cancelLabel, isSubmitDisabled, onCancel, submitLabe
 
   const submit = document.createElement("button");
   submit.type = "submit";
-  submit.textContent = submitLabel;
+  setButtonContent(submit, submitLabel, "plus");
   submit.disabled = isSubmitDisabled;
 
   const cancel = document.createElement("button");
   cancel.type = "button";
   cancel.className = "button-secondary";
-  cancel.textContent = cancelLabel;
+  setButtonContent(cancel, cancelLabel, "x", { iconAfter: true });
   cancel.disabled = state.isOncallOpShopPickupSaving;
   cancel.addEventListener("click", (event) => {
     event.stopPropagation();
@@ -639,7 +644,8 @@ function createDateGroupToggle({
   });
 
   const label = document.createElement("span");
-  label.textContent = formatDateHeading(pickupDate);
+  label.className = "opshop-date-group-label";
+  label.append(createIcon("calendar"), document.createTextNode(formatDateHeading(pickupDate)));
 
   const count = document.createElement("span");
   count.className = "opshop-date-group-count";
@@ -647,9 +653,13 @@ function createDateGroupToggle({
 
   const stateLabel = document.createElement("span");
   stateLabel.className = "opshop-date-group-state";
-  stateLabel.textContent = collapsed ? "Collapsed" : "Expanded";
+  stateLabel.append(
+    document.createTextNode(collapsed ? "Collapsed" : "Expanded"),
+    createIcon(collapsed ? "chevron-down" : "chevron-up"),
+  );
 
   const title = document.createElement("span");
+  title.className = "opshop-date-group-title";
   title.append(label, count);
   toggle.append(title, stateLabel);
   return toggle;
@@ -673,6 +683,10 @@ function createPickupItem(pickup, { onOpenDetail, onStartEdit, onUpdateAssignedD
     }
   });
 
+  const icon = document.createElement("span");
+  icon.className = "opshop-list-item-icon";
+  icon.append(createIcon("store"));
+
   const body = document.createElement("div");
   body.className = "opshop-list-item-body";
 
@@ -688,7 +702,10 @@ function createPickupItem(pickup, { onOpenDetail, onStartEdit, onUpdateAssignedD
 
   const pickupDate = document.createElement("span");
   pickupDate.className = "opshop-list-item-date";
-  pickupDate.textContent = `Pickup Date: ${formatOptional(pickup.pickup_date)}`;
+  pickupDate.append(
+    createIcon("calendar"),
+    document.createTextNode(`Pickup Date: ${formatOptional(pickup.pickup_date)}`),
+  );
 
   meta.append(suburb, pickupDate);
   body.append(title, meta);
@@ -704,7 +721,7 @@ function createPickupItem(pickup, { onOpenDetail, onStartEdit, onUpdateAssignedD
     const editButton = document.createElement("button");
     editButton.type = "button";
     editButton.className = "button-secondary";
-    editButton.textContent = "Edit";
+    setButtonContent(editButton, "Edit", "pencil");
     editButton.disabled = state.isOncallOpShopPickupSaving;
     editButton.addEventListener("click", (event) => {
       event.stopPropagation();
@@ -713,7 +730,7 @@ function createPickupItem(pickup, { onOpenDetail, onStartEdit, onUpdateAssignedD
     actions.append(editButton);
   }
 
-  card.append(body, actions);
+  card.append(icon, body, actions);
   return card;
 }
 

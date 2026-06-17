@@ -1,5 +1,10 @@
 import { state } from "../state/app-state.js";
-import { createBadge, createOption } from "../utils/dom-utils.js";
+import {
+  createBadge,
+  createModalKicker,
+  createOption,
+  setButtonContent,
+} from "../utils/dom-utils.js";
 import { formatOptional } from "../utils/format-utils.js";
 
 
@@ -56,9 +61,7 @@ function createHeader(onClose, onStartAdd) {
   const header = document.createElement("div");
   header.className = "detail-header";
   const titleWrap = document.createElement("div");
-  const kicker = document.createElement("p");
-  kicker.className = "section-kicker";
-  kicker.textContent = "OP SHOP PICKUP";
+  const kicker = createModalKicker("OP SHOP PICKUP", "bag");
   const title = document.createElement("h2");
   title.id = "opshop-template-title";
   title.textContent = "OP SHOP Template Management";
@@ -68,13 +71,13 @@ function createHeader(onClose, onStartAdd) {
   actions.className = "detail-actions";
   const add = document.createElement("button");
   add.type = "button";
-  add.textContent = "Add Template";
+  setButtonContent(add, "Add Template", "plus");
   add.disabled = state.isOpShopTemplateSaving;
   add.addEventListener("click", onStartAdd);
   const close = document.createElement("button");
   close.type = "button";
   close.className = "button-secondary";
-  close.textContent = "Close";
+  setButtonContent(close, "Close", "x", { iconAfter: true });
   close.addEventListener("click", onClose);
   actions.append(add, close);
   header.append(titleWrap, actions);
@@ -210,14 +213,14 @@ function createTemplateList({ onStartDisable, onStartEdit }) {
     const edit = document.createElement("button");
     edit.type = "button";
     edit.className = "button-secondary";
-    edit.textContent = "Edit";
+    setButtonContent(edit, "Edit", "pencil");
     edit.addEventListener("click", () => onStartEdit(template));
     actions.append(edit);
     if (template.active_flag) {
       const disable = document.createElement("button");
       disable.type = "button";
       disable.className = "button-secondary";
-      disable.textContent = "Disable";
+      setButtonContent(disable, "Disable", "trash");
       disable.addEventListener("click", () => onStartDisable(template));
       actions.append(disable);
     }
@@ -276,13 +279,13 @@ function createActions(submitLabel, onSubmit, onCancel) {
   actions.className = "detail-actions opshop-template-form-actions";
   const submit = document.createElement("button");
   submit.type = "button";
-  submit.textContent = state.isOpShopTemplateSaving ? "Saving..." : submitLabel;
+  setButtonContent(submit, state.isOpShopTemplateSaving ? "Saving..." : submitLabel, "pencil");
   submit.disabled = state.isOpShopTemplateSaving;
   submit.addEventListener("click", onSubmit);
   const cancel = document.createElement("button");
   cancel.type = "button";
   cancel.className = "button-secondary";
-  cancel.textContent = "Cancel";
+  setButtonContent(cancel, "Cancel", "x", { iconAfter: true });
   cancel.disabled = state.isOpShopTemplateSaving;
   cancel.addEventListener("click", onCancel);
   actions.append(submit, cancel);

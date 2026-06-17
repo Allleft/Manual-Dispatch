@@ -1,7 +1,10 @@
 import { state } from "../state/app-state.js";
 import { getOrderByTaskId } from "../state/selectors.js";
 import {
+  createDetailField,
+  createModalKicker,
   createOption,
+  setButtonContent,
 } from "../utils/dom-utils.js";
 import {
   formatOptional,
@@ -41,9 +44,7 @@ export function renderAddOrderPopup({
   header.className = "detail-header";
 
   const titleWrap = document.createElement("div");
-  const kicker = document.createElement("p");
-  kicker.className = "section-kicker";
-  kicker.textContent = "Manual entry";
+  const kicker = createModalKicker("Manual entry", "document");
 
   const title = document.createElement("h2");
   title.id = "add-order-title";
@@ -54,7 +55,7 @@ export function renderAddOrderPopup({
   const closeButton = document.createElement("button");
   closeButton.type = "button";
   closeButton.className = "button-secondary detail-close";
-  closeButton.textContent = "Cancel";
+  setButtonContent(closeButton, "Cancel", "x", { iconAfter: true });
   closeButton.disabled = state.isSaving;
   closeButton.addEventListener("click", onCloseAddOrder);
 
@@ -128,13 +129,13 @@ export function renderAddOrderPopup({
   const cancelButton = document.createElement("button");
   cancelButton.type = "button";
   cancelButton.className = "button-secondary";
-  cancelButton.textContent = "Cancel";
+  setButtonContent(cancelButton, "Cancel", "x", { iconAfter: true });
   cancelButton.disabled = state.isSaving;
   cancelButton.addEventListener("click", onCloseAddOrder);
 
   const saveButton = document.createElement("button");
   saveButton.type = "submit";
-  saveButton.textContent = state.isSaving ? "Saving..." : "Save Order";
+  setButtonContent(saveButton, state.isSaving ? "Saving..." : "Save Order", "plus");
   saveButton.disabled = state.isSaving;
 
   actions.append(cancelButton, saveButton);
@@ -199,9 +200,7 @@ export function renderOrderDetailPopup({
   header.className = "detail-header";
 
   const titleWrap = document.createElement("div");
-  const kicker = document.createElement("p");
-  kicker.className = "section-kicker";
-  kicker.textContent = "Order details";
+  const kicker = createModalKicker("ORDER DETAILS", "document");
 
   const title = document.createElement("h2");
   title.id = "order-detail-title";
@@ -212,7 +211,7 @@ export function renderOrderDetailPopup({
   const closeButton = document.createElement("button");
   closeButton.type = "button";
   closeButton.className = "button-secondary detail-close";
-  closeButton.textContent = "Close";
+  setButtonContent(closeButton, "Close", "x", { iconAfter: true });
   closeButton.addEventListener("click", onCloseOrderDetail);
 
   const headerActions = document.createElement("div");
@@ -222,18 +221,18 @@ export function renderOrderDetailPopup({
     const productDetailButton = document.createElement("button");
     productDetailButton.type = "button";
     productDetailButton.className = "button-secondary";
-    productDetailButton.textContent = "Product Detail";
+    setButtonContent(productDetailButton, "Product Detail", "list");
     productDetailButton.addEventListener("click", onToggleProductDetail);
 
     const editButton = document.createElement("button");
     editButton.type = "button";
-    editButton.textContent = "Edit";
+    setButtonContent(editButton, "Edit", "pencil");
     editButton.addEventListener("click", () => onStartOrderEdit(order));
 
     const cancelButton = document.createElement("button");
     cancelButton.type = "button";
     cancelButton.className = "button-danger";
-    cancelButton.textContent = state.isSaving ? "Cancelling..." : "Cancel Order";
+    setButtonContent(cancelButton, state.isSaving ? "Cancelling..." : "Cancel Order", "trash");
     cancelButton.disabled = state.isSaving;
     cancelButton.addEventListener("click", () => onCancelOrder(order.order_id));
 
@@ -380,37 +379,16 @@ function createOrderEditSelect(label, field, options, handlers) {
 }
 
 function createOrderReadOnlyField(label, field, formState, options = {}) {
-  const wrapper = document.createElement("label");
-  wrapper.className = options.wide ? "form-field form-field-wide" : "form-field";
-  wrapper.textContent = label;
-
-  const input = document.createElement(options.multiline ? "textarea" : "input");
-  input.name = `readonly_${field}`;
-  input.value = formState[field] ?? "";
-  input.disabled = true;
-  input.readOnly = true;
-  if (!options.multiline) {
-    input.type = options.type || "text";
+  const fieldCard = createDetailField(label, formState[field]);
+  if (options.wide) {
+    fieldCard.classList.add("form-field-wide");
   }
-
-  wrapper.append(input);
-  return wrapper;
+  return fieldCard;
 }
 
 function createOrderReadOnlySelect(label, field, formState, options) {
-  const wrapper = document.createElement("label");
-  wrapper.className = "form-field";
-  wrapper.textContent = label;
-
-  const select = document.createElement("select");
-  select.name = `readonly_${field}`;
-  select.disabled = true;
-  options.forEach((option) => {
-    select.append(createOption(option.value, option.label, formState[field] === option.value));
-  });
-
-  wrapper.append(select);
-  return wrapper;
+  const selected = options.find((option) => option.value === formState[field]);
+  return createDetailField(label, selected ? selected.label : formState[field]);
 }
 
 function createOrderReadOnlyLayout(formState) {
@@ -499,13 +477,13 @@ function createOrderEditForm(order, handlers) {
   const cancelButton = document.createElement("button");
   cancelButton.type = "button";
   cancelButton.className = "button-secondary";
-  cancelButton.textContent = "Cancel Edit";
+  setButtonContent(cancelButton, "Cancel Edit", "x", { iconAfter: true });
   cancelButton.disabled = state.isSaving;
   cancelButton.addEventListener("click", handlers.onCancelOrderEdit);
 
   const saveButton = document.createElement("button");
   saveButton.type = "submit";
-  saveButton.textContent = state.isSaving ? "Saving..." : "Save Changes";
+  setButtonContent(saveButton, state.isSaving ? "Saving..." : "Save Changes", "pencil");
   saveButton.disabled = state.isSaving;
 
   actions.append(cancelButton, saveButton);
@@ -570,7 +548,7 @@ function createProductLineEditor({
   const addButton = document.createElement("button");
   addButton.type = "button";
   addButton.className = "button-secondary";
-  addButton.textContent = "Add Product Line";
+  setButtonContent(addButton, "Add Product Line", "plus");
   addButton.disabled = state.isSaving;
   addButton.addEventListener("click", onAddProductLine);
   heading.append(title, addButton);
@@ -611,7 +589,7 @@ function createProductLineEditor({
     const removeButton = document.createElement("button");
     removeButton.type = "button";
     removeButton.className = "button-secondary";
-    removeButton.textContent = "Remove";
+    setButtonContent(removeButton, "Remove", "trash");
     removeButton.disabled = state.isSaving;
     removeButton.addEventListener("click", () => onRemoveProductLine(index));
 

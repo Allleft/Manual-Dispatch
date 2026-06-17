@@ -1,4 +1,8 @@
 import { state } from "../state/app-state.js";
+import {
+  createModalKicker,
+  setButtonContent,
+} from "../utils/dom-utils.js";
 
 export function renderAccountStatus({ onLogout }) {
   const accountStatus = document.querySelector("#account-status");
@@ -22,7 +26,7 @@ export function renderAccountStatus({ onLogout }) {
   const logoutButton = document.createElement("button");
   logoutButton.type = "button";
   logoutButton.className = "button-secondary";
-  logoutButton.textContent = "Logout";
+  setButtonContent(logoutButton, "Logout", "x", { iconAfter: true });
   logoutButton.addEventListener("click", onLogout);
 
   accountStatus.append(badge, logoutButton);
@@ -60,9 +64,7 @@ export function renderAuthGate({
   modal.setAttribute("aria-labelledby", "auth-title");
   modal.addEventListener("click", (event) => event.stopPropagation());
 
-  const kicker = document.createElement("p");
-  kicker.className = "section-kicker";
-  kicker.textContent = "Operator login";
+  const kicker = createModalKicker("Operator login", "user");
 
   const title = document.createElement("h2");
   title.id = "auth-title";
@@ -174,8 +176,12 @@ export function renderAuthGate({
   switchButton.type = "button";
   switchButton.className = "button-secondary";
   switchButton.disabled = state.isAuthLoading;
-  switchButton.textContent =
-    state.authMode === "login" ? "Create account" : "Back to login";
+  setButtonContent(
+    switchButton,
+    state.authMode === "login" ? "Create account" : "Back to login",
+    state.authMode === "login" ? "plus" : "x",
+    { iconAfter: state.authMode !== "login" },
+  );
   switchButton.addEventListener("click", () => {
     onSwitchAuthMode(state.authMode === "login" ? "register" : "login");
   });
@@ -183,7 +189,8 @@ export function renderAuthGate({
   const submitButton = document.createElement("button");
   submitButton.type = "submit";
   submitButton.disabled = state.isAuthLoading;
-  submitButton.textContent =
+  setButtonContent(
+    submitButton,
     state.authMode === "register"
       ? state.isAuthLoading
         ? "Creating..."
@@ -194,7 +201,9 @@ export function renderAuthGate({
         : "Reset password"
       : state.isAuthLoading
       ? "Logging in..."
-      : "Login";
+      : "Login",
+    state.authMode === "reset" ? "refresh" : "user",
+  );
 
   actions.append(switchButton, submitButton);
   form.append(error, success, actions);
