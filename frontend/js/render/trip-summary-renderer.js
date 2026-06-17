@@ -164,50 +164,46 @@ export function renderDriverSummary({
     });
 
     vehicleWrap.append(vehicleSelect);
-    header.append(name, driverBadges, loadSummary, vehicleWrap, vehicleStatus, vehicleCapacity);
-    if (duplicateHint.textContent) {
-      header.append(duplicateHint);
-    }
-    if (exceptions.length > 0) {
-      header.append(exceptionList);
-    }
-    if (hasAssignedTasks && !hasLockedFinalSummary && !hasSavedFinalSummary) {
-      header.append(generateButton);
-    }
+    header.append(name, driverBadges);
     if (finalLockHint.textContent) {
       header.append(finalLockHint);
     }
 
     const trips = document.createElement("div");
     trips.className = "trip-columns";
-    if (!hasAssignedTasks && !hasSavedFinalSummary) {
-      const emptyState = document.createElement("p");
-      emptyState.className = "empty-trip editable-empty-state";
-      emptyState.textContent = hasUnsavedLockedFinalSummary
-        ? "No editable tasks. Locked Final Trip Summary is shown below."
-        : "No assigned orders for this delivery date.";
-      trips.append(emptyState);
-    } else {
-      ["trip1", "trip2"].forEach((tripNo) => {
-        if (getOrderAssignmentsForDriverTrip(driver.driver_id, tripNo).length > 0) {
-          trips.append(
-            createTripGroup(
-              driver.driver_id,
-              tripNo,
-              tripNo === "trip1" ? "Trip 1" : "Trip 2",
-              { onOpenOpShopPickupDetail, onOpenOrderDetail, onUnassign },
-            ),
-          );
-        }
-      });
-      if (assignedOpShopPickups.length > 0) {
-        trips.append(
-          createOpShopPickupGroup(driver.driver_id, assignedOpShopPickups, {
-            onOpenOpShopPickupDetail,
-            onUnassign,
-          }),
-        );
-      }
+
+    const canGenerate = hasAssignedTasks && !hasLockedFinalSummary && !hasSavedFinalSummary;
+    const deliveryGenerateButton = canGenerate && assignedOpShopPickups.length === 0
+      ? generateButton
+      : null;
+    const opshopGenerateButton = canGenerate && assignedOpShopPickups.length > 0
+      ? generateButton
+      : null;
+
+    trips.append(
+      createDeliveryOrdersPanel(driver.driver_id, {
+        duplicateHint,
+        exceptionList,
+        exceptions,
+        generateButton: deliveryGenerateButton,
+        hasSavedFinalSummary,
+        hasUnsavedLockedFinalSummary,
+        loadSummary,
+        vehicleCapacity,
+        vehicleStatus,
+        vehicleWrap,
+      }, { onOpenOpShopPickupDetail, onOpenOrderDetail, onUnassign }),
+    );
+
+    if (assignedOpShopPickups.length > 0) {
+      trips.append(
+        createOpShopPickupGroup(driver.driver_id, assignedOpShopPickups, {
+          onOpenOpShopPickupDetail,
+          onUnassign,
+        }, {
+          generateButton: opshopGenerateButton,
+        }),
+      );
     }
 
     card.append(header, trips);
@@ -228,12 +224,68 @@ function renderDriverSummaryDeliveryDateControl({ onDeliveryDateChange }) {
   };
 }
 
+function createDeliveryOrdersPanel(driverId, {
+  duplicateHint,
+  exceptionList,
+  exceptions,
+  generateButton,
+  hasSavedFinalSummary,
+  hasUnsavedLockedFinalSummary,
+  loadSummary,
+  vehicleCapacity,
+  vehicleStatus,
+  vehicleWrap,
+}, handlers) {
+  const panel = document.createElement("section");
+  panel.className = "trip-group assigned-delivery-orders-section";
+
+  panel.append(createTripPanelHeader("DELIVERY ORDERS", "box", generateButton));
+  panel.append(loadSummary, vehicleWrap, vehicleStatus, vehicleCapacity);
+
+  if (duplicateHint.textContent) {
+    panel.append(duplicateHint);
+  }
+  if (exceptions.length > 0) {
+    panel.append(exceptionList);
+  }
+
+  const taskList = document.createElement("div");
+  taskList.className = "delivery-trip-list";
+  const hasOrderTasks = ["trip1", "trip2"].some(
+    (tripNo) => getOrderAssignmentsForDriverTrip(driverId, tripNo).length > 0,
+  );
+
+  if (!hasOrderTasks && !hasSavedFinalSummary) {
+    const emptyState = document.createElement("p");
+    emptyState.className = "empty-trip editable-empty-state";
+    emptyState.textContent = hasUnsavedLockedFinalSummary
+      ? "No editable tasks. Locked Final Trip Summary is shown below."
+      : "No assigned orders for this delivery date.";
+    taskList.append(emptyState);
+  } else {
+    ["trip1", "trip2"].forEach((tripNo) => {
+      if (getOrderAssignmentsForDriverTrip(driverId, tripNo).length > 0) {
+        taskList.append(
+          createTripGroup(
+            driverId,
+            tripNo,
+            tripNo === "trip1" ? "Trip 1" : "Trip 2",
+            handlers,
+          ),
+        );
+      }
+    });
+  }
+
+  panel.append(taskList);
+  return panel;
+}
+
 function createTripGroup(driverId, tripNo, title, handlers) {
   const group = document.createElement("section");
   group.className = "trip-group";
 
-  const heading = document.createElement("h4");
-  heading.append(createTripHeadingIcon("box"), document.createTextNode(title));
+  const heading = createTripPanelHeader(title, "box");
 
   const tripTotals = calculateTripTotals(driverId, tripNo);
   const tripSummary = document.createElement("p");
@@ -265,12 +317,13 @@ function createTripGroup(driverId, tripNo, title, handlers) {
   return group;
 }
 
-function createOpShopPickupGroup(driverId, assignedOpShopPickups, handlers) {
+function createOpShopPickupGroup(driverId, assignedOpShopPickups, handlers, {
+  generateButton = null,
+} = {}) {
   const group = document.createElement("section");
   group.className = "trip-group assigned-opshop-pickups-section";
 
-  const heading = document.createElement("h4");
-  heading.append(createTripHeadingIcon("bag"), document.createTextNode("OP SHOP PICKUPS"));
+  const heading = createTripPanelHeader("OP SHOP PICKUPS", "bag", generateButton);
 
   const summary = document.createElement("p");
   summary.className = "trip-summary";
@@ -289,6 +342,21 @@ function createOpShopPickupGroup(driverId, assignedOpShopPickups, handlers) {
 
   group.append(heading, summary, taskList);
   return group;
+}
+
+function createTripPanelHeader(title, iconName, actionButton = null) {
+  const header = document.createElement("div");
+  header.className = "trip-group-panel-header";
+
+  const heading = document.createElement("h4");
+  heading.append(createTripHeadingIcon(iconName), document.createTextNode(title));
+  header.append(heading);
+
+  if (actionButton) {
+    header.append(actionButton);
+  }
+
+  return header;
 }
 
 function createOpShopPickupEntries(driverId, assignedOpShopPickups) {
