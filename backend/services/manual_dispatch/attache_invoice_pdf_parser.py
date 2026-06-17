@@ -228,21 +228,9 @@ def _parse_customer_profile(lines):
 
     phone = _find_phone(delivery_block) or _find_phone(tax_window)
     postcode = profile.get("postcode") or _find_postcode(tax_window)
-    extra_address_lines = [
-        line
-        for line in tax_window
-        if not _find_phone([line])
-        and not _is_postcode_line(line)
-        and not _parse_time_instruction(line)[0]
-        and not _is_stop_marker(line)
-    ]
-
-    address_lines = [profile.get("delivery_address")] if profile.get("delivery_address") else []
-    address_lines.extend(line for line in extra_address_lines if line not in address_lines)
-
     return {
         "company_name": profile.get("company_name"),
-        "delivery_address": ", ".join(address_lines) if address_lines else None,
+        "delivery_address": profile.get("delivery_address"),
         "suburb": profile.get("suburb"),
         "postcode": postcode,
         "phone": phone,

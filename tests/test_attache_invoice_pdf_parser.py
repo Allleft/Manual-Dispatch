@@ -6,6 +6,69 @@ from backend.services.manual_dispatch.attache_invoice_pdf_parser import (
 
 
 class AttacheInvoicePdfParserTest(unittest.TestCase):
+    def test_king_pin_products_delivery_address_does_not_include_invoice_metadata(self):
+        parsed = parse_attache_invoice_text(
+            """
+            Invoice No
+            181486
+            Order No Date
+            04/02/26 KINCHE89 002848
+
+            Invoice to:
+            B.S.L. WIPERS (VIC) PTY LTD
+            98-102 HUME HIGHWAY
+            SOMERTON VIC 3062
+
+            Deliver to:
+            KING PIN PRODUCTS
+            9 PARK RD
+            CHELTENHAM 3192
+
+            Tax Invoice
+            9583 5333
+            Invoice No
+            181486
+            Customer Code
+            KINCHE89
+            Date
+            04/02/26
+            Order No
+            002848
+            KING PIN PRODUCTS
+            9 PARK RD
+            CHELTENHAM 3192
+            B.S.L. WIPERS (VIC) PTY LTD
+            98-102 HUME HIGHWAY
+            SOMERTON VIC 3062
+            RPWSING 24.50 KG 100 PURE WHITE SINGLET 2.450 269.50 245.00
+            BAG10 0.00 10 PLASTIC BAG 10 kg 0.000 0.00 0.00
+            """,
+            source_filename="181486.pdf",
+        )
+
+        self.assertEqual("181486", parsed.invoice_number)
+        self.assertEqual("KING PIN PRODUCTS", parsed.company_name)
+        self.assertEqual("9 PARK RD", parsed.delivery_address)
+        self.assertEqual("CHELTENHAM", parsed.suburb)
+        self.assertEqual("3192", parsed.postcode)
+        self.assertEqual("2026-02-05", parsed.delivery_date)
+        self.assertIn("Order No: 002848", parsed.note)
+
+        excluded_fragments = [
+            "KING PIN PRODUCTS",
+            "CHELTENHAM",
+            "3192",
+            "Invoice No",
+            "Customer Code",
+            "Date",
+            "Order No",
+            "B.S.L. WIPERS",
+            "98-102 HUME HIGHWAY",
+            "SOMERTON",
+        ]
+        for fragment in excluded_fragments:
+            self.assertNotIn(fragment, parsed.delivery_address)
+
     def test_snap_pack_bag_invoice(self):
         parsed = parse_attache_invoice_text(
             """
