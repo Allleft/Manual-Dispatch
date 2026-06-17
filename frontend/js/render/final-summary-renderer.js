@@ -412,7 +412,7 @@ function createFinalTripSummaryCard(summary, options = {}) {
     });
 
     table.append(thead, tbody);
-    tripSection.append(heading, table);
+    tripSection.append(heading, wrapFinalSummaryTable(table));
     trips.append(tripSection);
   });
 
@@ -466,8 +466,15 @@ function createOpShopPickupSection(pickups) {
   });
 
   table.append(thead, tbody);
-  section.append(heading, table);
+  section.append(heading, wrapFinalSummaryTable(table));
   return section;
+}
+
+function wrapFinalSummaryTable(table) {
+  const wrap = document.createElement("div");
+  wrap.className = "final-trip-table-wrap";
+  wrap.append(table);
+  return wrap;
 }
 
 function formatOpShopPickupCategory(value) {

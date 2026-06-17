@@ -68,14 +68,14 @@ textarea:focus-visible {
   gap: 1.5rem;
   max-width: 1640px;
   margin: 0 auto;
-  padding: 1rem 1rem 0.55rem;
+  padding: 0.65rem 1rem 0.35rem;
 }
 
 .eyebrow,
 .section-kicker {
-  margin: 0 0 0.35rem;
+  margin: 0 0 0.28rem;
   color: var(--accent);
-  font-size: 0.78rem;
+  font-size: 0.74rem;
   font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -91,8 +91,8 @@ p {
 
 h1 {
   max-width: 720px;
-  margin-bottom: 0.25rem;
-  font-size: clamp(2rem, 3.5vw, 3.15rem);
+  margin-bottom: 0.15rem;
+  font-size: clamp(1.7rem, 2.8vw, 2.55rem);
   line-height: 1;
   letter-spacing: -0.06em;
 }
@@ -120,22 +120,23 @@ h1 {
   align-items: center;
   justify-content: flex-end;
   flex-wrap: wrap;
-  gap: 0.65rem;
+  gap: 0.5rem;
 }
 
 .account-badge {
   margin-bottom: 0;
   border: 1px solid rgba(39, 93, 69, 0.22);
   border-radius: 999px;
-  padding: 0.62rem 0.82rem;
+  padding: 0.5rem 0.72rem;
   color: var(--accent-strong);
   background: var(--accent-soft);
+  font-size: 0.86rem;
   font-weight: 900;
 }
 
 .board-shell {
   display: grid;
-  gap: 0.78rem;
+  gap: 0.7rem;
   max-width: 1640px;
   margin: 0 auto;
   padding: 0 1rem 2rem;
@@ -150,7 +151,7 @@ h1 {
 .board-section {
   border: 1px solid rgba(23, 33, 29, 0.1);
   border-radius: var(--radius-xl);
-  padding: 1rem;
+  padding: 0.9rem;
   background: #fff;
   box-shadow: var(--shadow);
 }
@@ -190,10 +191,10 @@ h1 {
 }
 
 .board-view-tab {
-  min-height: 40px;
+  min-height: 38px;
   border: 0;
   border-radius: 999px;
-  padding: 0.62rem 2rem;
+  padding: 0.55rem 1.85rem;
   color: var(--accent-strong);
   background: transparent;
   box-shadow: none;
@@ -232,7 +233,7 @@ h1 {
 }
 
 .dispatch-date-controls input {
-  min-height: 40px;
+  min-height: 38px;
   width: 100%;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
@@ -246,7 +247,7 @@ h1 {
   grid-column: 1 / -1;
   margin-bottom: 0;
   border-radius: var(--radius-sm);
-  padding: 0.62rem 0.75rem;
+  padding: 0.55rem 0.68rem;
   font-size: 0.86rem;
   line-height: 1.45;
 }
@@ -267,12 +268,12 @@ h1 {
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 0.85rem;
+  margin-bottom: 0.72rem;
 }
 
 .section-heading h2 {
   margin-bottom: 0;
-  font-size: clamp(1.65rem, 2.8vw, 2.15rem);
+  font-size: clamp(1.5rem, 2.5vw, 1.95rem);
   letter-spacing: -0.045em;
 }
 
@@ -316,11 +317,11 @@ h1 {
   display: grid;
   grid-template-columns: minmax(220px, 1fr) minmax(160px, 220px) minmax(160px, 220px) auto auto;
   align-items: end;
-  gap: 0.55rem;
-  margin-bottom: 0.75rem;
+  gap: 0.5rem;
+  margin-bottom: 0.65rem;
   border: 1px solid rgba(31, 101, 232, 0.14);
   border-radius: var(--radius-md);
-  padding: 0.65rem 0.75rem;
+  padding: 0.55rem 0.65rem;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 251, 255, 0.96));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
@@ -328,16 +329,16 @@ h1 {
 
 .task-filter-bar label {
   display: grid;
-  gap: 0.35rem;
+  gap: 0.28rem;
   color: #32425d;
-  font-size: 0.78rem;
+  font-size: 0.74rem;
   font-weight: 900;
   letter-spacing: 0.04em;
 }
 
 .task-filter-bar input,
 .task-filter-bar select {
-  min-height: 40px;
+  min-height: 38px;
   width: 100%;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
@@ -359,7 +360,8 @@ h1 {
   align-items: center;
   gap: 0.7rem;
   border-radius: 11px;
-  padding: 0 1rem;
+  min-height: 38px;
+  padding: 0 0.9rem;
   background: linear-gradient(135deg, var(--accent), var(--accent-strong));
   box-shadow: 0 10px 24px rgba(39, 93, 69, 0.16);
 }
@@ -395,7 +397,7 @@ h1 {
 .task-grid,
 .driver-grid {
   display: grid;
-  gap: 0.85rem;
+  gap: 0.78rem;
 }
 
 .task-grid {
@@ -407,10 +409,10 @@ h1 {
 .task-pool-section {
   grid-column: 1 / -1;
   display: grid;
-  gap: 0.65rem;
+  gap: 0.55rem;
   border: 1px solid rgba(23, 33, 29, 0.09);
   border-radius: var(--radius-xl);
-  padding: clamp(0.9rem, 1.4vw, 1.05rem);
+  padding: clamp(0.78rem, 1.2vw, 0.95rem);
   background: #fff;
   box-shadow: var(--shadow-soft);
 }
@@ -457,7 +459,7 @@ h1 {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: start;
   justify-content: start;
-  gap: 1rem;
+  gap: 0.82rem;
 }
 
 .task-pool-section-opshop {
@@ -537,16 +539,16 @@ h1 {
 
 .opshop-pickup-list-summary-main {
   display: grid;
-  gap: 0.55rem;
+  gap: 0.45rem;
 }
 
 .opshop-pickup-list-summary-card {
   display: grid;
-  gap: 0.7rem;
-  min-height: 205px;
+  gap: 0.55rem;
+  min-height: 188px;
   border-color: rgba(39, 93, 69, 0.14);
   border-radius: var(--radius-lg);
-  padding: 0.9rem;
+  padding: 0.78rem;
   background:
     linear-gradient(180deg, #fff, rgba(250, 253, 251, 0.96));
   box-shadow: var(--shadow-card);
@@ -556,12 +558,13 @@ h1 {
 .opshop-pickup-list-summary-card h3 {
   margin-bottom: 0;
   color: var(--ink);
-  font-size: 1.08rem;
+  font-size: 1rem;
   letter-spacing: -0.035em;
 }
 
 .opshop-pickup-list-summary-card p {
   color: var(--muted);
+  font-size: 0.84rem;
   line-height: 1.38;
 }
 
@@ -569,8 +572,8 @@ h1 {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border-radius: 999px;
   background:
     linear-gradient(135deg, rgba(39, 93, 69, 0.14), rgba(39, 93, 69, 0.04)),
@@ -578,8 +581,8 @@ h1 {
 }
 
 .opshop-summary-card-icon .ui-icon {
-  width: 19px;
-  height: 19px;
+  width: 17px;
+  height: 17px;
   color: var(--accent-strong);
 }
 
@@ -588,7 +591,7 @@ h1 {
   align-items: center;
   gap: 0.55rem;
   width: 100%;
-  min-height: 40px;
+  min-height: 38px;
   color: #fff;
   background: linear-gradient(135deg, var(--accent), var(--accent-strong));
   box-shadow: 0 9px 18px rgba(39, 93, 69, 0.13);
@@ -1175,10 +1178,10 @@ h1 {
 
 .order-card {
   display: grid;
-  gap: 0.6rem;
+  gap: 0.5rem;
   width: 100%;
   max-width: none;
-  padding: 0.8rem;
+  padding: 0.7rem;
   cursor: pointer;
   box-shadow: var(--shadow-card);
   transition:
@@ -1195,7 +1198,7 @@ h1 {
 }
 
 .order-card-compact {
-  grid-template-columns: minmax(0, 1fr) minmax(112px, 0.62fr);
+  grid-template-columns: minmax(0, 1fr) minmax(112px, 0.58fr);
   align-items: stretch;
 }
 
@@ -1213,7 +1216,7 @@ h1 {
 
 .compact-order-main {
   display: grid;
-  gap: 0.34rem;
+  gap: 0.28rem;
   min-width: 0;
 }
 
@@ -1236,24 +1239,33 @@ h1 {
 }
 
 .compact-company {
+  display: -webkit-box;
   overflow: hidden;
   color: var(--muted);
   font-size: 0.82rem;
   font-weight: 800;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .compact-suburb {
+  display: -webkit-box;
+  overflow: hidden;
   margin-bottom: 0;
-  font-size: 1.08rem;
+  font-size: 1.02rem;
   letter-spacing: -0.03em;
+  line-height: 1.12;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .compact-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
+  gap: 0.3rem;
 }
 
 .compact-note {
@@ -1382,6 +1394,7 @@ h1 {
 .compact-order-controls {
   align-content: start;
   gap: 0.3rem;
+  min-width: 0;
 }
 
 .compact-order-controls label {
@@ -1487,7 +1500,7 @@ select:disabled {
 }
 
 .driver-card {
-  padding: 0.85rem;
+  padding: 0.75rem;
   border-color: rgba(39, 93, 69, 0.14);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.9));
@@ -1496,8 +1509,8 @@ select:disabled {
 
 .driver-card-header {
   display: grid;
-  gap: 0.55rem;
-  margin-bottom: 0.65rem;
+  gap: 0.45rem;
+  margin-bottom: 0.55rem;
 }
 
 .driver-card h3 {
@@ -1511,8 +1524,8 @@ select:disabled {
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   border: 1px solid rgba(31, 101, 232, 0.16);
   border-radius: 999px;
   color: var(--delivery-strong);
@@ -1520,8 +1533,8 @@ select:disabled {
 }
 
 .driver-card-name-icon .ui-icon {
-  width: 17px;
-  height: 17px;
+  width: 16px;
+  height: 16px;
 }
 
 .vehicle-select {
@@ -1572,14 +1585,14 @@ select:disabled {
 .trip-columns {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 0.75rem;
+  gap: 0.65rem;
 }
 
 .trip-group {
   min-height: 0;
   border: 1px solid rgba(31, 101, 232, 0.22);
   border-radius: var(--radius-md);
-  padding: 0.72rem;
+  padding: 0.64rem;
   background:
     linear-gradient(180deg, rgba(248, 251, 255, 0.96), rgba(255, 255, 255, 0.9));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.76);
@@ -1601,8 +1614,8 @@ select:disabled {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   border-radius: 8px;
   color: #fff;
   background: linear-gradient(135deg, var(--delivery), var(--delivery-strong));
@@ -1610,8 +1623,8 @@ select:disabled {
 }
 
 .trip-group-heading-icon .ui-icon {
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
 }
 
 .trip-group-panel-header {
@@ -1620,6 +1633,14 @@ select:disabled {
   justify-content: space-between;
   gap: 0.65rem;
   margin-bottom: 0.48rem;
+  min-width: 0;
+}
+
+.trip-group-panel-header .generate-summary-button {
+  min-height: 34px;
+  flex: 0 0 auto;
+  padding: 0 0.7rem;
+  font-size: 0.78rem;
 }
 
 .assigned-delivery-orders-section {
@@ -1723,17 +1744,17 @@ select:disabled {
 
 .assigned-task-list {
   display: grid;
-  gap: 0.55rem;
+  gap: 0.48rem;
 }
 
 .assigned-task {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 0.62rem;
+  gap: 0.55rem;
   border: 1px solid rgba(31, 101, 232, 0.14);
   border-radius: var(--radius-md);
-  padding: 0.68rem;
+  padding: 0.6rem;
   background: var(--panel);
   box-shadow: 0 10px 22px rgba(31, 101, 232, 0.06);
   cursor: pointer;
@@ -1764,15 +1785,21 @@ select:disabled {
 }
 
 .assigned-opshop-name {
+  display: -webkit-box;
+  overflow: hidden;
   margin-bottom: 0;
   color: var(--ink);
   font-size: 1rem;
   font-weight: 900;
   line-height: 1.18;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .assigned-opshop-suburb {
-  display: block;
+  display: -webkit-box;
+  overflow: hidden;
   margin-bottom: 0;
   border: 0;
   border-radius: 0;
@@ -1783,7 +1810,17 @@ select:disabled {
   font-weight: 800;
   letter-spacing: 0.02em;
   line-height: 1.25;
+  overflow-wrap: anywhere;
   text-transform: uppercase;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.assigned-opshop-task .button-secondary {
+  min-height: 34px;
+  align-self: center;
+  padding: 0 0.7rem;
+  font-size: 0.78rem;
 }
 
 .assigned-opshop-pickups-section {
@@ -1814,31 +1851,33 @@ select:disabled {
 
 .assigned-opshop-route-group {
   display: grid;
-  gap: 0.7rem;
+  gap: 0.55rem;
   border: 1px solid rgba(39, 93, 69, 0.16);
   border-radius: var(--radius-md);
-  padding: 0.8rem;
+  padding: 0.68rem;
   background:
     linear-gradient(180deg, rgba(250, 253, 251, 0.98), rgba(255, 255, 255, 0.96));
 }
 
 .assigned-opshop-route-group-header {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 0.6rem;
+  gap: 0.55rem;
 }
 
 .assigned-opshop-route-group-title {
   display: flex;
   align-items: center;
   gap: 0.55rem;
+  min-width: 0;
   margin: 0;
   color: var(--ink);
-  font-size: 0.98rem;
+  font-size: 0.92rem;
   font-weight: 900;
   line-height: 1.2;
+  overflow-wrap: anywhere;
 }
 
 .assigned-opshop-route-group-icon {
@@ -1846,21 +1885,28 @@ select:disabled {
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   border-radius: 999px;
   color: var(--accent-strong);
   background: var(--accent-soft);
 }
 
 .assigned-opshop-route-group-icon .ui-icon {
-  width: 17px;
-  height: 17px;
+  width: 16px;
+  height: 16px;
 }
 
 .assigned-opshop-route-group-card-list {
   display: grid;
-  gap: 0.45rem;
+  gap: 0.38rem;
+}
+
+.assigned-opshop-route-group-header .button-secondary {
+  min-height: 34px;
+  padding: 0 0.7rem;
+  font-size: 0.76rem;
+  white-space: nowrap;
 }
 
 .assigned-pallet {
@@ -2009,7 +2055,7 @@ select:disabled {
 .final-summary-card {
   border: 1px solid rgba(39, 93, 69, 0.2);
   border-radius: var(--radius-lg);
-  padding: 1rem;
+  padding: 0.85rem;
   background: var(--panel);
   box-shadow: var(--shadow-card);
 }
@@ -2019,12 +2065,12 @@ select:disabled {
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 0.85rem;
+  margin-bottom: 0.7rem;
 }
 
 .final-summary-header h3 {
   margin-bottom: 0;
-  font-size: clamp(1.25rem, 3vw, 1.8rem);
+  font-size: clamp(1.15rem, 2.5vw, 1.55rem);
   letter-spacing: -0.03em;
 }
 
@@ -2039,13 +2085,13 @@ select:disabled {
 .final-summary-meta {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.65rem;
-  margin: 0 0 1rem;
+  gap: 0.55rem;
+  margin: 0 0 0.78rem;
 }
 
 .final-summary-trips {
   display: grid;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 .final-trip-section {
@@ -2056,20 +2102,29 @@ select:disabled {
 .final-trip-section h4 {
   margin-bottom: 0;
   color: var(--accent-strong);
+  font-size: 0.95rem;
+}
+
+.final-trip-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: #fff;
 }
 
 .final-trip-table {
   width: 100%;
+  min-width: 760px;
   border-collapse: collapse;
   overflow: hidden;
-  border-radius: var(--radius-sm);
   background: #fff;
 }
 
 .final-trip-table th,
 .final-trip-table td {
   border-bottom: 1px solid var(--line);
-  padding: 0.65rem 0.7rem;
+  padding: 0.52rem 0.58rem;
   text-align: left;
   vertical-align: top;
 }
@@ -2084,7 +2139,40 @@ select:disabled {
 
 .final-trip-table td {
   color: var(--ink);
-  font-size: 0.9rem;
+  font-size: 0.84rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.final-summary-opshop-table {
+  min-width: 1080px;
+}
+
+.final-summary-opshop-table th:nth-child(1),
+.final-summary-opshop-table td:nth-child(1) {
+  width: 42px;
+}
+
+.final-summary-opshop-table th:nth-child(2),
+.final-summary-opshop-table td:nth-child(2),
+.final-summary-opshop-table th:nth-child(6),
+.final-summary-opshop-table td:nth-child(6),
+.final-summary-opshop-table th:nth-child(7),
+.final-summary-opshop-table td:nth-child(7) {
+  width: 92px;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.final-summary-opshop-table th:nth-child(3),
+.final-summary-opshop-table td:nth-child(3),
+.final-summary-opshop-table th:nth-child(4),
+.final-summary-opshop-table td:nth-child(4),
+.final-summary-opshop-table th:nth-child(8),
+.final-summary-opshop-table td:nth-child(8),
+.final-summary-opshop-table th:nth-child(9),
+.final-summary-opshop-table td:nth-child(9) {
+  min-width: 150px;
 }
 
 .final-summary-product-details {
@@ -2536,7 +2624,7 @@ select:disabled {
   }
 
   .board-section {
-    padding: 1rem;
+    padding: 0.75rem;
   }
 
   .trip-columns {
@@ -2545,6 +2633,18 @@ select:disabled {
 
   .assigned-task {
     grid-template-columns: 1fr;
+  }
+
+  .trip-group-panel-header,
+  .assigned-opshop-route-group-header {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .trip-group-panel-header .generate-summary-button,
+  .assigned-opshop-route-group-header .button-secondary,
+  .assigned-opshop-task .button-secondary {
+    width: fit-content;
   }
 
   .order-card-header {
@@ -2593,8 +2693,7 @@ select:disabled {
   }
 
   .final-trip-table {
-    display: block;
-    overflow-x: auto;
+    min-width: 680px;
   }
 }
 
