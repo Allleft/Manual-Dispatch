@@ -81,6 +81,7 @@ export function renderAddOrderPopup({
 
   formGrid.append(
     createAddOrderField("Invoice #", "invoice_number", { onUpdateAddOrderForm }),
+    createAddOrderField("Order #", "order_no", { onUpdateAddOrderForm }),
     createAddOrderField("Company Name", "company_name", { onUpdateAddOrderForm }),
     createAddOrderField("Phone", "phone", { type: "tel", onUpdateAddOrderForm }),
     createAddOrderField("Delivery Address", "delivery_address", { onUpdateAddOrderForm }),
@@ -428,6 +429,7 @@ function createOrderFormGrid(formState, { mode, handlers = {} }) {
 
   formGrid.append(
     createField("Invoice #", "invoice_number"),
+    createField("Order #", "order_no"),
     createField("Company Name", "company_name"),
     createField("Phone", "phone", { type: "tel" }),
     createField("Delivery Address", "delivery_address"),

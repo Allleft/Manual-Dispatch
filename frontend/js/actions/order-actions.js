@@ -22,6 +22,7 @@ export function createOrderActions({
   function getDefaultAddOrderForm() {
     return {
       invoice_number: "",
+      order_no: "",
       company_name: "",
       phone: "",
       delivery_address: "",
@@ -73,6 +74,7 @@ export function createOrderActions({
   function getOrderEditForm(order) {
     return {
       invoice_number: order.invoice_number || "",
+      order_no: order.order_no || "",
       company_name: order.company_name || "",
       phone: order.phone || "",
       delivery_address: order.delivery_address || "",

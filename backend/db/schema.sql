@@ -3,6 +3,7 @@ PRAGMA foreign_keys = ON;
 CREATE TABLE IF NOT EXISTS manual_orders (
     order_id TEXT PRIMARY KEY,
     invoice_number TEXT,
+    order_no TEXT,
     company_name TEXT,
     phone TEXT,
     delivery_address TEXT,
@@ -220,6 +221,7 @@ CREATE TABLE IF NOT EXISTS final_trip_summary_rows (
     task_id TEXT NOT NULL,
     order_id_snapshot TEXT,
     invoice_number_snapshot TEXT,
+    order_no_snapshot TEXT,
     company_name_snapshot TEXT,
     suburb_snapshot TEXT,
     delivery_address_snapshot TEXT,
@@ -266,6 +268,7 @@ CREATE TABLE IF NOT EXISTS final_trip_summary_opshop_pickup_rows (
 INSERT OR IGNORE INTO manual_orders (
     order_id,
     invoice_number,
+    order_no,
     company_name,
     phone,
     delivery_address,
@@ -285,6 +288,7 @@ INSERT OR IGNORE INTO manual_orders (
     (
         'ORD-001',
         'INV-1001',
+        NULL,
         'Demo Customer A',
         '0400 000 001',
         '1 Demo Street',
@@ -304,6 +308,7 @@ INSERT OR IGNORE INTO manual_orders (
     (
         'ORD-002',
         'INV-1002',
+        NULL,
         'Demo Customer B',
         '0400 000 002',
         '2 Demo Street',
@@ -323,6 +328,7 @@ INSERT OR IGNORE INTO manual_orders (
     (
         'ORD-003',
         'INV-1003',
+        NULL,
         'Demo Customer C',
         '0400 000 003',
         '3 Demo Street',

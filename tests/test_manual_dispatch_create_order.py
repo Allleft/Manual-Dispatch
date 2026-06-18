@@ -33,6 +33,7 @@ class ManualDispatchCreateOrderTest(unittest.TestCase):
 
         self.assertEqual("ORD-20260505-001", order.order_id)
         self.assertEqual("INV-2001", order.invoice_number)
+        self.assertEqual("ORD-NO-2001", order.order_no)
         self.assertEqual("0400 000 999", order.phone)
         self.assertEqual("Noble Park", order.suburb)
         self.assertEqual("Normal", order.urgency)
@@ -119,6 +120,7 @@ class ManualDispatchCreateOrderTest(unittest.TestCase):
     def _request(self, **overrides):
         values = {
             "invoice_number": "INV-2001",
+            "order_no": "ORD-NO-2001",
             "company_name": "New Customer",
             "phone": "0400 000 999",
             "delivery_address": "10 Manual Way",

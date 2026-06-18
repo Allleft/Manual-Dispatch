@@ -11,6 +11,7 @@ FINAL_SUMMARY_HEADERS = [
     "Suburb",
     "Estimated Distance From Warehouse (km)",
     "Invoice #",
+    "Order #",
     "Product Details",
     "Load",
 ]
@@ -103,12 +104,13 @@ def _write_summary_sheet(worksheet, summary):
                 order.suburb_snapshot or "",
                 _format_estimated_distance(order),
                 order.invoice_number_snapshot or "",
+                order.order_no_snapshot or "",
                 _format_product_details(order),
                 _format_load_quantity(order),
             ]
             for column_index, value in enumerate(values, start=1):
                 cell = worksheet.cell(row=row_index, column=column_index, value=value)
-                if column_index == 6:
+                if column_index == 7:
                     cell.alignment = Alignment(wrap_text=True, vertical="top")
             row_index += 1
             row_number += 1

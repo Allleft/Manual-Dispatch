@@ -246,7 +246,7 @@ function createDeliveryOrderFilterBar({ onOpenAttacheInvoiceImport }) {
   const searchInput = document.createElement("input");
   searchInput.id = "order-search";
   searchInput.type = "search";
-  searchInput.placeholder = "Invoice, company, suburb, postcode, note";
+  searchInput.placeholder = "Invoice, Order #, company, suburb, postcode, note";
   searchLabel.append(searchInput);
 
   const urgencyLabel = document.createElement("label");
@@ -485,6 +485,10 @@ function createDeliveryOrderCard(order, {
   invoice.className = "compact-invoice";
   invoice.textContent = `Invoice # ${formatOptional(order.invoice_number)}`;
 
+  const orderNo = document.createElement("p");
+  orderNo.className = "compact-invoice compact-order-no";
+  orderNo.textContent = `Order # ${formatOptional(order.order_no)}`;
+
   const company = document.createElement("p");
   company.className = "compact-company";
   company.textContent = formatOptional(order.company_name);
@@ -506,7 +510,7 @@ function createDeliveryOrderCard(order, {
   note.className = "compact-note";
   note.textContent = `Note: ${truncateText(order.note || "None")}`;
 
-  content.append(invoice, company, suburb, meta, note);
+  content.append(invoice, orderNo, company, suburb, meta, note);
 
   const controls = createAssignmentControls({
     getPendingSelection,

@@ -123,6 +123,7 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
         legacy_driver = next(driver for driver in board.drivers if driver.driver_id == "DOLD")
 
         self.assertIsNone(legacy_order.invoice_number)
+        self.assertEqual("002848", legacy_order.order_no)
         self.assertIsNone(legacy_order.phone)
         self.assertFalse(legacy_driver.pallet_only)
 
@@ -173,11 +174,13 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
             }
 
         self.assertIn("invoice_number", order_columns)
+        self.assertIn("order_no", order_columns)
         self.assertIn("phone", order_columns)
         self.assertIn("pallet_only", driver_columns)
         self.assertIn("delivery_date", vehicle_assignment_columns)
         self.assertIn("delivery_date", final_summary_columns)
         self.assertIn("product_details_snapshot", final_summary_row_columns)
+        self.assertIn("order_no_snapshot", final_summary_row_columns)
         self.assertIn(
             "estimated_distance_km_from_warehouse_snapshot",
             final_summary_row_columns,
@@ -477,7 +480,7 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
                     0,
                     '08:00',
                     '10:00',
-                    'Legacy row'
+                    'Legacy row Order No: 002848'
                 );
 
                 INSERT INTO manual_drivers (

@@ -1314,6 +1314,7 @@ class SQLiteManualDispatchRepository:
                 INSERT INTO manual_orders (
                     order_id,
                     invoice_number,
+                    order_no,
                     company_name,
                     phone,
                     delivery_address,
@@ -1329,11 +1330,12 @@ class SQLiteManualDispatchRepository:
                     end_time,
                     note,
                     status
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     order.order_id,
                     order.invoice_number,
+                    order.order_no,
                     order.company_name,
                     order.phone,
                     order.delivery_address,
@@ -1362,6 +1364,7 @@ class SQLiteManualDispatchRepository:
                 UPDATE manual_orders
                 SET
                     invoice_number = ?,
+                    order_no = ?,
                     company_name = ?,
                     phone = ?,
                     delivery_address = ?,
@@ -1380,6 +1383,7 @@ class SQLiteManualDispatchRepository:
                 """,
                 (
                     order.invoice_number,
+                    order.order_no,
                     order.company_name,
                     order.phone,
                     order.delivery_address,
@@ -1944,6 +1948,7 @@ class SQLiteManualDispatchRepository:
                         task_id,
                         order_id_snapshot,
                         invoice_number_snapshot,
+                        order_no_snapshot,
                         company_name_snapshot,
                         suburb_snapshot,
                         delivery_address_snapshot,
@@ -1953,7 +1958,7 @@ class SQLiteManualDispatchRepository:
                         pallet_quantity_snapshot,
                         loose_bags_quantity_snapshot,
                         note_snapshot
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         row_id,
@@ -1964,6 +1969,7 @@ class SQLiteManualDispatchRepository:
                         row["task_id"],
                         row.get("order_id_snapshot"),
                         row.get("invoice_number_snapshot"),
+                        row.get("order_no_snapshot"),
                         row.get("company_name_snapshot"),
                         row.get("suburb_snapshot"),
                         row.get("delivery_address_snapshot"),
@@ -2336,6 +2342,7 @@ class SQLiteManualDispatchRepository:
                     task_id,
                     order_id_snapshot,
                     invoice_number_snapshot,
+                    order_no_snapshot,
                     company_name_snapshot,
                     suburb_snapshot,
                     delivery_address_snapshot,
@@ -2345,7 +2352,7 @@ class SQLiteManualDispatchRepository:
                     pallet_quantity_snapshot,
                     loose_bags_quantity_snapshot,
                     note_snapshot
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     row_id,
@@ -2356,6 +2363,7 @@ class SQLiteManualDispatchRepository:
                     row["task_id"],
                     row.get("order_id_snapshot"),
                     row.get("invoice_number_snapshot"),
+                    row.get("order_no_snapshot"),
                     row.get("company_name_snapshot"),
                     row.get("suburb_snapshot"),
                     row.get("delivery_address_snapshot"),
@@ -2519,6 +2527,7 @@ class SQLiteManualDispatchRepository:
         return Order(
             order_id=row["order_id"],
             invoice_number=row["invoice_number"],
+            order_no=row["order_no"] if "order_no" in row.keys() else None,
             company_name=row["company_name"],
             phone=row["phone"],
             delivery_address=row["delivery_address"],
@@ -2651,6 +2660,9 @@ class SQLiteManualDispatchRepository:
             task_id=row["task_id"],
             order_id_snapshot=row["order_id_snapshot"],
             invoice_number_snapshot=row["invoice_number_snapshot"],
+            order_no_snapshot=(
+                row["order_no_snapshot"] if "order_no_snapshot" in row.keys() else None
+            ),
             company_name_snapshot=row["company_name_snapshot"],
             suburb_snapshot=row["suburb_snapshot"],
             delivery_address_snapshot=row["delivery_address_snapshot"],

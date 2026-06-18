@@ -13,6 +13,7 @@ class ProductDetailLine:
 class Order:
     order_id: str
     invoice_number: Optional[str]
+    order_no: Optional[str]
     company_name: str
     phone: Optional[str]
     delivery_address: str
@@ -448,6 +449,7 @@ class FinalTripSummaryOrderSnapshot:
     pallet_quantity_snapshot: int
     loose_bags_quantity_snapshot: int
     note_snapshot: Optional[str]
+    order_no_snapshot: Optional[str] = None
     product_lines_snapshot: List[ProductDetailLine] = field(default_factory=list)
     estimated_distance_km_from_warehouse_snapshot: Optional[float] = None
 
@@ -562,6 +564,7 @@ class ResetOperatorPasswordRequest:
 @dataclass
 class CreateOrderRequest:
     invoice_number: Optional[str] = None
+    order_no: Optional[str] = None
     company_name: Optional[str] = None
     phone: Optional[str] = None
     delivery_address: Optional[str] = None
@@ -582,6 +585,7 @@ class CreateOrderRequest:
 @dataclass
 class UpdateOrderRequest:
     invoice_number: Optional[str] = None
+    order_no: Optional[str] = None
     company_name: Optional[str] = None
     phone: Optional[str] = None
     delivery_address: Optional[str] = None
@@ -641,6 +645,7 @@ class CommitAttacheInvoicePdfImportRow:
     importable: bool = True
     is_duplicate: bool = False
     invoice_number: Optional[str] = None
+    order_no: Optional[str] = None
     company_name: Optional[str] = None
     phone: Optional[str] = None
     delivery_address: Optional[str] = None

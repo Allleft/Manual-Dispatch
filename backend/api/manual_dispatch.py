@@ -188,6 +188,7 @@ def commit_attache_invoice_pdf_import(request: CommitAttacheInvoicePdfImportRequ
             created = service.create_order(
                 CreateOrderRequest(
                     invoice_number=row.invoice_number,
+                    order_no=row.order_no,
                     company_name=row.company_name,
                     phone=row.phone,
                     delivery_address=row.delivery_address,

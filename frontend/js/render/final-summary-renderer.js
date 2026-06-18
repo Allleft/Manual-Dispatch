@@ -378,6 +378,7 @@ function createFinalTripSummaryCard(summary, options = {}) {
       "Suburb",
       "Estimated Distance From Warehouse (km)",
       "Invoice #",
+      "Order #",
       "Product Details",
       "Load",
     ].forEach((label) => {
@@ -397,12 +398,13 @@ function createFinalTripSummaryCard(summary, options = {}) {
         formatOptional(order.suburb, ""),
         formatEstimatedDistance(order),
         formatOptional(order.invoice_number, ""),
+        formatOptional(order.order_no, ""),
         formatProductDetails(order),
         formatOrderLoadQuantity(order),
       ].forEach((value, columnIndex) => {
         const td = document.createElement("td");
         td.textContent = value;
-        if (columnIndex === 5) {
+        if (columnIndex === 6) {
           td.className = "final-summary-product-details";
         }
         row.append(td);

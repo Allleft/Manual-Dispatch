@@ -43,6 +43,7 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
         )
 
         self.assertEqual("181486", parsed.invoice_number)
+        self.assertEqual("002848", parsed.order_no)
         self.assertEqual("KING PIN PRODUCTS", parsed.company_name)
         self.assertEqual("9 PARK RD", parsed.delivery_address)
         self.assertEqual("CHELTENHAM", parsed.suburb)

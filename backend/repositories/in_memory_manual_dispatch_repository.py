@@ -31,6 +31,7 @@ class InMemoryManualDispatchRepository:
             Order(
                 order_id="ORD-001",
                 invoice_number="INV-1001",
+                order_no=None,
                 company_name="Demo Customer A",
                 phone="0400 000 001",
                 delivery_address="1 Demo Street",
@@ -49,6 +50,7 @@ class InMemoryManualDispatchRepository:
             Order(
                 order_id="ORD-002",
                 invoice_number="INV-1002",
+                order_no=None,
                 company_name="Demo Customer B",
                 phone="0400 000 002",
                 delivery_address="2 Demo Street",
@@ -67,6 +69,7 @@ class InMemoryManualDispatchRepository:
             Order(
                 order_id="ORD-003",
                 invoice_number="INV-1003",
+                order_no=None,
                 company_name="Demo Customer C",
                 phone="0400 000 003",
                 delivery_address="3 Demo Street",
@@ -1226,6 +1229,7 @@ class InMemoryManualDispatchRepository:
                         task_id=row["task_id"],
                         order_id_snapshot=row.get("order_id_snapshot"),
                         invoice_number_snapshot=row.get("invoice_number_snapshot"),
+                        order_no_snapshot=row.get("order_no_snapshot"),
                         company_name_snapshot=row.get("company_name_snapshot"),
                         suburb_snapshot=row.get("suburb_snapshot"),
                         delivery_address_snapshot=row.get("delivery_address_snapshot"),

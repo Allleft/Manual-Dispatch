@@ -33,6 +33,7 @@ class ManualDispatchEditOrderTest(unittest.TestCase):
             "ORD-001",
             self._request(
                 invoice_number="INV-9001",
+                order_no="ORD-NO-9001",
                 company_name="Updated Company",
                 phone="0499 111 222",
                 suburb="Mulgrave",
@@ -43,6 +44,7 @@ class ManualDispatchEditOrderTest(unittest.TestCase):
         )
 
         self.assertEqual("INV-9001", updated.invoice_number)
+        self.assertEqual("ORD-NO-9001", updated.order_no)
         self.assertEqual("Updated Company", updated.company_name)
         self.assertEqual("0499 111 222", updated.phone)
         self.assertEqual("Mulgrave", updated.suburb)
@@ -167,6 +169,7 @@ class ManualDispatchEditOrderTest(unittest.TestCase):
     def _request(self, **overrides):
         values = {
             "invoice_number": "INV-1001",
+            "order_no": "ORD-NO-1001",
             "company_name": "Demo Customer A",
             "phone": "0400 000 001",
             "delivery_address": "1 Demo Street",

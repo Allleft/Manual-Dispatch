@@ -69,6 +69,9 @@ class ManualDispatchFinalSummaryTest(unittest.TestCase):
         self.assertIn("final_trip_summary_opshop_pickup_rows", tables)
 
     def test_save_final_summary_persists_snapshot_rows(self):
+        order = self.repository.get_order("ORD-001")
+        order.order_no = "002848"
+        self.repository.update_order(order)
         self._assign_order("ORD-001", "D001", "trip1")
         self._assign_vehicle("D001", "V002")
 
@@ -82,6 +85,7 @@ class ManualDispatchFinalSummaryTest(unittest.TestCase):
         self.assertEqual(1, len(summary.trips))
         self.assertEqual("trip1", summary.trips[0].trip_no)
         self.assertEqual("ORD-001", summary.trips[0].orders[0].task_id)
+        self.assertEqual("002848", summary.trips[0].orders[0].order_no_snapshot)
         self.assertEqual("Demo Customer A", summary.trips[0].orders[0].company_name_snapshot)
 
     def test_save_final_summary_preserves_trip_grouping_and_skips_empty_trips(self):
@@ -822,6 +826,7 @@ class ManualDispatchFinalSummaryTest(unittest.TestCase):
             "task_id": order_id,
             "order_id": order_id,
             "invoice_number": order.invoice_number,
+            "order_no": order.order_no,
             "company_name": order.company_name,
             "suburb": order.suburb,
             "delivery_address": order.delivery_address,

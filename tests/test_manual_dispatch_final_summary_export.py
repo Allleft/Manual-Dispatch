@@ -54,6 +54,9 @@ class ManualDispatchFinalSummaryExportTest(unittest.TestCase):
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_export_workbook_contains_saved_snapshot_values(self):
+        order = self.repository.get_order("ORD-001")
+        order.order_no = "002848"
+        self.repository.update_order(order)
         self._assign_order("ORD-001", "D001", "trip1")
         self._assign_order("ORD-003", "D001", "trip2")
         self.service.save_final_trip_summary(
@@ -86,6 +89,8 @@ class ManualDispatchFinalSummaryExportTest(unittest.TestCase):
         self.assertIn("Suburb", values)
         self.assertIn("Estimated Distance From Warehouse (km)", values)
         self.assertIn("Invoice #", values)
+        self.assertIn("Order #", values)
+        self.assertIn("002848", values)
         self.assertIn("Product Details", values)
         self.assertIn("Load", values)
 
@@ -296,6 +301,7 @@ class ManualDispatchFinalSummaryExportTest(unittest.TestCase):
             "task_id": order_id,
             "order_id": order_id,
             "invoice_number": order.invoice_number,
+            "order_no": order.order_no,
             "company_name": order.company_name,
             "suburb": order.suburb,
             "delivery_address": order.delivery_address,

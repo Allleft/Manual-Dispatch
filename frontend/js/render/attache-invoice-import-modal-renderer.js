@@ -7,6 +7,7 @@ import { formatOptional } from "../utils/format-utils.js";
 
 
 const EDITABLE_FIELDS = [
+  ["order_no", "text"],
   ["phone", "text"],
   ["delivery_address", "text"],
   ["suburb", "text"],
@@ -182,7 +183,8 @@ function createPreviewTable({ onCommit, onToggleRow, onUpdateRow }) {
 function createTableHead() {
   const labels = [
     "Import",
-    "Invoice No",
+    "Invoice #",
+    "Order #",
     "Customer",
     "Phone",
     "Address",
@@ -222,6 +224,7 @@ function createPreviewRow(row, { onToggleRow, onUpdateRow }) {
   tr.append(createCell(checkbox));
 
   tr.append(createReadOnlyCell(row.invoice_number));
+  tr.append(createCell(createInput(row, "order_no", "text", onUpdateRow)));
   tr.append(createReadOnlyCell(row.company_name));
   EDITABLE_FIELDS.forEach(([field, type]) => {
     if (["phone", "delivery_address", "suburb", "postcode", "delivery_date", "start_time", "end_time", "pallet_quantity", "loose_bags_quantity"].includes(field)) {

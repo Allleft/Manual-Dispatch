@@ -126,6 +126,7 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
 
         field_labels = [
             "Invoice #",
+            "Order #",
             "Company Name",
             "Phone",
             "Delivery Address",
@@ -181,6 +182,8 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("renderAttacheInvoiceImportModal();", update_files_body)
         self.assertIn("Preview Import", renderer)
         self.assertIn("Confirm Import", renderer)
+        self.assertIn('"Order #"', renderer)
+        self.assertIn('createInput(row, "order_no", "text", onUpdateRow)', renderer)
         self.assertIn('fileInput.accept = "application/pdf,.pdf"', renderer)
         self.assertIn("createSelectedFileFeedback", renderer)
         self.assertIn("1 file selected:", renderer)
@@ -252,8 +255,11 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         ).read_text(encoding="utf-8")
 
         self.assertIn('"Estimated Distance From Warehouse (km)"', final_summary_renderer)
+        self.assertIn('"Order #"', final_summary_renderer)
+        self.assertIn("formatOptional(order.order_no, \"\")", final_summary_renderer)
         self.assertIn("function formatEstimatedDistance(order)", final_summary_renderer)
         self.assertIn("function sortFinalSummaryOrders(orders)", final_summary_actions)
+        self.assertIn("order_no_snapshot: order.order_no", final_summary_actions)
 
     def test_phase5_opshop_pickups_render_above_delivery_orders(self):
         task_pool_renderer = (
@@ -271,6 +277,7 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("Regular OP SHOP Pickup List", task_pool_renderer)
         self.assertIn("Oncall OP SHOP Pickup List", task_pool_renderer)
         self.assertIn("Countryside OP SHOP Pickup List", task_pool_renderer)
+        self.assertIn("Order # ${formatOptional(order.order_no)}", task_pool_renderer)
         self.assertIn("No Oncall OP SHOP pickups added.", task_pool_renderer)
         self.assertIn("onOpenOncallOpShopPickupList", task_pool_renderer)
         self.assertIn("opshop-pickup-list-summary-card", task_pool_renderer)

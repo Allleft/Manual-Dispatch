@@ -37,6 +37,7 @@ class OrderService:
         order = Order(
             order_id=self.id_generator.generate_order_id(delivery_date),
             invoice_number=clean_optional_text(request.invoice_number),
+            order_no=clean_optional_text(request.order_no),
             company_name=clean_optional_text(request.company_name) or "",
             phone=clean_optional_text(request.phone),
             delivery_address=clean_optional_text(request.delivery_address) or "",
@@ -93,6 +94,7 @@ class OrderService:
         order = Order(
             order_id=existing.order_id,
             invoice_number=clean_optional_text(request.invoice_number),
+            order_no=clean_optional_text(request.order_no),
             company_name=clean_optional_text(request.company_name) or "",
             phone=clean_optional_text(request.phone),
             delivery_address=clean_optional_text(request.delivery_address) or "",

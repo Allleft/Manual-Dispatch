@@ -33,6 +33,7 @@ export function orderMatchesSearch(order, searchText) {
 
   return [
     order.invoice_number,
+    order.order_no,
     order.company_name,
     order.suburb,
     order.postcode,

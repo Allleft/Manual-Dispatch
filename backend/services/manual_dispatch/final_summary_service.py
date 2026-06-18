@@ -290,6 +290,11 @@ class FinalSummaryService:
                             order_snapshot.get("invoice_number_snapshot")
                             or order_snapshot.get("invoice_number")
                         ),
+                        "order_no_snapshot": clean_optional_text(
+                            order_snapshot.get("order_no_snapshot")
+                            or order_snapshot.get("order_no")
+                            or getattr(task, "order_no", None)
+                        ),
                         "company_name_snapshot": clean_optional_text(
                             order_snapshot.get("company_name_snapshot")
                             or order_snapshot.get("company_name")

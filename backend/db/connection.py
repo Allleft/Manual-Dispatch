@@ -1,4 +1,5 @@
 import os
+import re
 import sqlite3
 from pathlib import Path
 
@@ -65,6 +66,7 @@ def _is_env_flag_enabled(name, default=False):
 
 def _ensure_manual_dispatch_columns(connection):
     _ensure_column(connection, "manual_orders", "invoice_number", "TEXT")
+    _ensure_column(connection, "manual_orders", "order_no", "TEXT")
     _ensure_column(connection, "manual_orders", "phone", "TEXT")
     _ensure_column(connection, "manual_orders", "status", "TEXT NOT NULL DEFAULT 'ACTIVE'")
     _ensure_column(
@@ -126,6 +128,12 @@ def _ensure_manual_dispatch_columns(connection):
     _ensure_column(
         connection,
         "final_trip_summary_rows",
+        "order_no_snapshot",
+        "TEXT",
+    )
+    _ensure_column(
+        connection,
+        "final_trip_summary_rows",
         "estimated_distance_km_from_warehouse_snapshot",
         "REAL",
     )
@@ -169,6 +177,7 @@ def _ensure_manual_dispatch_columns(connection):
         WHERE pickup_category IS NULL OR TRIM(pickup_category) = ''
         """
     )
+    _backfill_manual_order_numbers(connection)
 
 
 def _ensure_column(connection, table_name, column_name, column_definition):
@@ -180,6 +189,47 @@ def _ensure_column(connection, table_name, column_name, column_definition):
         connection.execute(
             f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_definition}"
         )
+
+
+def _backfill_manual_order_numbers(connection):
+    try:
+        rows = connection.execute(
+            """
+            SELECT order_id, note
+            FROM manual_orders
+            WHERE (order_no IS NULL OR TRIM(order_no) = '')
+                AND note IS NOT NULL
+                AND TRIM(note) != ''
+            """
+        ).fetchall()
+    except sqlite3.Error:
+        return
+
+    for row in rows:
+        order_no = _extract_order_no_from_note(row["note"])
+        if not order_no:
+            continue
+        try:
+            connection.execute(
+                """
+                UPDATE manual_orders
+                SET order_no = ?
+                WHERE order_id = ?
+                    AND (order_no IS NULL OR TRIM(order_no) = '')
+                """,
+                (order_no, row["order_id"]),
+            )
+        except sqlite3.Error:
+            continue
+
+
+def _extract_order_no_from_note(note):
+    match = re.search(
+        r"\bOrder\s*(?:No\.?|#)?\s*:?\s*([A-Za-z0-9][A-Za-z0-9_-]*)",
+        str(note or ""),
+        flags=re.IGNORECASE,
+    )
+    return match.group(1) if match else None
 
 
 def _ensure_driver_vehicle_assignment_key(connection):
