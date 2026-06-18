@@ -1,4 +1,4 @@
-import { state } from "../state/app-state.js";
+import { DEFAULT_DISPATCH_DATE, state } from "../state/app-state.js";
 import {
   calculateDriverTotals,
   calculateTripTotals,
@@ -217,10 +217,12 @@ function renderDriverSummaryDeliveryDateControl({ onDeliveryDateChange }) {
     return;
   }
 
-  deliveryDateInput.value = state.driverSummaryDeliveryDate || "";
+  const minimumDeliveryDate = state.dispatchDate || DEFAULT_DISPATCH_DATE;
+  deliveryDateInput.min = minimumDeliveryDate;
+  deliveryDateInput.value = state.driverSummaryDeliveryDate || minimumDeliveryDate;
   deliveryDateInput.disabled = state.isLoading || state.isSaving;
   deliveryDateInput.onchange = () => {
-    onDeliveryDateChange(deliveryDateInput.value);
+    onDeliveryDateChange(deliveryDateInput.value || minimumDeliveryDate);
   };
 }
 

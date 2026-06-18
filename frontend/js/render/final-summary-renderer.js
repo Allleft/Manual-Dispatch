@@ -103,13 +103,15 @@ function renderFinalSummaryControls({
   }
 
   if (deliveryDateInput) {
-    deliveryDateInput.value = state.driverSummaryDeliveryDate || state.dispatchDate || DEFAULT_DISPATCH_DATE;
+    const minimumDeliveryDate = state.dispatchDate || DEFAULT_DISPATCH_DATE;
+    deliveryDateInput.min = minimumDeliveryDate;
+    deliveryDateInput.value = state.driverSummaryDeliveryDate || minimumDeliveryDate;
     deliveryDateInput.disabled =
       state.isLoading ||
       state.isSaving ||
       state.isSavingFinalSummaries;
     deliveryDateInput.onchange = () => {
-      onDeliveryDateChange(deliveryDateInput.value || state.dispatchDate || DEFAULT_DISPATCH_DATE);
+      onDeliveryDateChange(deliveryDateInput.value || minimumDeliveryDate);
     };
   }
 

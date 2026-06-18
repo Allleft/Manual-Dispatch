@@ -69,14 +69,29 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn('setActiveBoardView("trip-summary")', final_summary_actions)
         self.assertIn("onDeliveryDateChange", final_summary_renderer)
         self.assertIn('document.querySelector("#final-summary-delivery-date")', final_summary_renderer)
-        self.assertIn("state.driverSummaryDeliveryDate = deliveryDate", app_js)
+        self.assertIn("function updateDriverSummaryDeliveryDate(deliveryDate)", app_js)
+        self.assertIn("Delivery date cannot be before dispatch date.", app_js)
+        self.assertIn("nextDeliveryDate < minimumDeliveryDate", app_js)
+        self.assertIn("state.driverSummaryDeliveryDate = minimumDeliveryDate", app_js)
         self.assertIn(".final-summary-date-controls label", styles)
 
     def test_driver_summary_delivery_date_control_is_present(self):
         index_html = (FRONTEND_ROOT / "index.html").read_text(encoding="utf-8")
+        trip_summary_renderer = (
+            FRONTEND_ROOT / "js" / "render" / "trip-summary-renderer.js"
+        ).read_text(encoding="utf-8")
+        final_summary_renderer = (
+            FRONTEND_ROOT / "js" / "render" / "final-summary-renderer.js"
+        ).read_text(encoding="utf-8")
+        app_js = (FRONTEND_ROOT / "app.js").read_text(encoding="utf-8")
 
         self.assertIn('id="driver-summary-delivery-date"', index_html)
         self.assertIn('type="date"', index_html)
+        self.assertIn("deliveryDateInput.min = minimumDeliveryDate", trip_summary_renderer)
+        self.assertIn("deliveryDateInput.min = minimumDeliveryDate", final_summary_renderer)
+        self.assertIn("onDeliveryDateChange(deliveryDateInput.value || minimumDeliveryDate)", trip_summary_renderer)
+        self.assertIn("onDeliveryDateChange(deliveryDateInput.value || minimumDeliveryDate)", final_summary_renderer)
+        self.assertIn("updateDriverSummaryDeliveryDate(deliveryDate)", app_js)
 
     def test_task_pool_delivery_date_filter_controls_are_present(self):
         index_html = (FRONTEND_ROOT / "index.html").read_text(encoding="utf-8")
