@@ -43,6 +43,7 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
         )
 
         self.assertEqual("181486", parsed.invoice_number)
+        self.assertEqual("KINCHE89", parsed.customer_code)
         self.assertEqual("002848", parsed.order_no)
         self.assertEqual("KING PIN PRODUCTS", parsed.company_name)
         self.assertEqual("9 PARK RD", parsed.delivery_address)
@@ -75,7 +76,7 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
             """
             Invoice No
               182438
-            Order No Date
+            Order NoDate
             20/03/26 SNASPR 20032026
             Invoice to:
             SNAP PACK
@@ -100,6 +101,8 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
         )
 
         self.assertEqual("182438", parsed.invoice_number)
+        self.assertEqual("SNASPR", parsed.customer_code)
+        self.assertEqual("20032026", parsed.order_no)
         self.assertEqual("SNAP PACK", parsed.company_name)
         self.assertEqual("2026-03-21", parsed.delivery_date)
         self.assertEqual(0, parsed.pallet_quantity)
@@ -150,6 +153,8 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
         )
 
         self.assertEqual("183075", parsed.invoice_number)
+        self.assertEqual("CORRIN", parsed.customer_code)
+        self.assertEqual("40", parsed.order_no)
         self.assertEqual("Coringle Furniture", parsed.company_name)
         self.assertEqual("2026-04-22", parsed.delivery_date)
         self.assertEqual(1, parsed.pallet_quantity)
@@ -220,7 +225,7 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
             """
             Invoice No
               183080
-            Order No Date
+            Order No. Date
             21/04/26 DESCRA 21042026
             Invoice to:
             DESI DHABA CRAIGIEBURN
@@ -241,6 +246,8 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
         )
 
         self.assertEqual("183080", parsed.invoice_number)
+        self.assertEqual("DESCRA", parsed.customer_code)
+        self.assertEqual("21042026", parsed.order_no)
         self.assertEqual("11:00", parsed.start_time)
         self.assertIsNone(parsed.end_time)
         self.assertEqual(0, parsed.pallet_quantity)
@@ -261,7 +268,7 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
             """
             Invoice No
               183081
-            Order No Date
+            ORDER NODATE
             21/04/26 PAKPAK21 21042026
             Invoice to:
             PAKENHAM ACCIDENT REPAIR
@@ -282,6 +289,8 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
         )
 
         self.assertEqual("183081", parsed.invoice_number)
+        self.assertEqual("PAKPAK21", parsed.customer_code)
+        self.assertEqual("21042026", parsed.order_no)
         self.assertEqual("08:00", parsed.start_time)
         self.assertIsNone(parsed.end_time)
         self.assertEqual(6, parsed.loose_bags_quantity)

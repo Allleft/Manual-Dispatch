@@ -196,15 +196,53 @@ def _find_regex(text, pattern):
     return clean_optional_text(match.group(1)) if match else None
 
 
+def _is_order_no_date_header(line):
+    compact = re.sub(r"[^A-Z0-9]+", "", str(line or "").upper())
+    return compact == "ORDERNODATE"
+
+
+def _find_order_no_date_row(lines):
+    for index, line in enumerate(lines):
+        if not _is_order_no_date_header(line) or index + 1 >= len(lines):
+            continue
+        parts = lines[index + 1].split()
+        if len(parts) >= 3 and _looks_like_date(parts[0]):
+            return {
+                "customer_code": clean_optional_text(parts[1]),
+                "order_no": clean_optional_text(parts[2]),
+            }
+    return {}
+
+
+def _is_customer_code_noise(value):
+    upper = str(value or "").strip().upper()
+    return (
+        not upper
+        or upper in {"CODE", "DATE"}
+        or upper.startswith("CODE DESCRIPTION")
+        or " DESCRIPTION " in f" {upper} "
+    )
+
+
 def _parse_customer_code(lines):
-    inline = _find_regex("\n".join(lines), r"Customer Code\s*[:#]?\s*([A-Z0-9-]+)")
+    inline = _find_regex("\n".join(lines), r"Customer Code\s*[:#]\s*([A-Z0-9-]+)")
     if inline:
         return inline
+    order_no_date_customer_code = _find_order_no_date_row(lines).get("customer_code")
+    if order_no_date_customer_code:
+        return order_no_date_customer_code
+    header_value = _find_field(lines, ("Customer Code",))
+    if header_value and not _is_customer_code_noise(header_value):
+        return header_value.split()[0]
     for index, line in enumerate(lines):
-        if line.upper().startswith("ORDER NO DATE") and index + 1 < len(lines):
-            parts = lines[index + 1].split()
-            if len(parts) >= 2:
-                return clean_optional_text(parts[1])
+        if (
+            line.strip().upper() == "CUSTOMER"
+            and index + 2 < len(lines)
+            and lines[index + 1].strip().upper() == "CODE"
+        ):
+            candidate = clean_optional_text(lines[index + 2])
+            if candidate and not _is_customer_code_noise(candidate):
+                return candidate.split()[0]
     return None
 
 
@@ -215,6 +253,9 @@ def _parse_order_no(lines):
     )
     if inline:
         return inline
+    order_no_date_row = _find_order_no_date_row(lines)
+    if order_no_date_row.get("order_no"):
+        return order_no_date_row["order_no"]
     for index, line in enumerate(lines):
         if line.strip().upper() == "ORDER NO" and index + 1 < len(lines):
             candidate = clean_optional_text(lines[index + 1])
