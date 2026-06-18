@@ -733,8 +733,6 @@ def _build_note(lines, customer_code=None, order_no=None, time_instruction=None)
     note_lines = []
     if customer_code:
         note_lines.append(f"Customer Code: {customer_code}")
-    if order_no:
-        note_lines.append(f"Order No: {order_no}")
     if time_instruction:
         note_lines.append(time_instruction)
 

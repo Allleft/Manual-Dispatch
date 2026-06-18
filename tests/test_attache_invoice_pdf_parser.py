@@ -6,6 +6,13 @@ from backend.services.manual_dispatch.attache_invoice_pdf_parser import (
 
 
 class AttacheInvoicePdfParserTest(unittest.TestCase):
+    def assert_order_number_not_in_note(self, parsed):
+        note = parsed.note or ""
+        self.assertNotIn("Order No", note)
+        self.assertNotIn("Order #", note)
+        if parsed.order_no:
+            self.assertNotIn(parsed.order_no, note)
+
     def test_king_pin_products_delivery_address_does_not_include_invoice_metadata(self):
         parsed = parse_attache_invoice_text(
             """
@@ -51,7 +58,7 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
         self.assertEqual("9583 5333", parsed.phone)
         self.assertEqual("3192", parsed.postcode)
         self.assertEqual("2026-02-05", parsed.delivery_date)
-        self.assertIn("Order No: 002848", parsed.note)
+        self.assert_order_number_not_in_note(parsed)
         self.assertNotEqual("(03) 9930 7740", parsed.phone)
 
         excluded_fragments = [
@@ -103,6 +110,7 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
         self.assertEqual("182438", parsed.invoice_number)
         self.assertEqual("SNASPR", parsed.customer_code)
         self.assertEqual("20032026", parsed.order_no)
+        self.assert_order_number_not_in_note(parsed)
         self.assertEqual("SNAP PACK", parsed.company_name)
         self.assertEqual("2026-03-21", parsed.delivery_date)
         self.assertEqual(0, parsed.pallet_quantity)
@@ -155,6 +163,7 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
         self.assertEqual("183075", parsed.invoice_number)
         self.assertEqual("CORRIN", parsed.customer_code)
         self.assertEqual("40", parsed.order_no)
+        self.assert_order_number_not_in_note(parsed)
         self.assertEqual("Coringle Furniture", parsed.company_name)
         self.assertEqual("2026-04-22", parsed.delivery_date)
         self.assertEqual(1, parsed.pallet_quantity)
@@ -205,9 +214,10 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
         )
 
         self.assertEqual("183077", parsed.invoice_number)
+        self.assertEqual("PO000008304", parsed.order_no)
+        self.assert_order_number_not_in_note(parsed)
         self.assertEqual(1, parsed.pallet_quantity)
         self.assertEqual(0, parsed.loose_bags_quantity)
-        self.assertIn("Order No: PO000008304", parsed.note)
         self.assertIn("NO VAN, MUST BE TRUCK DELIVERY", parsed.note)
         self.assertEqual(
             [
@@ -248,6 +258,7 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
         self.assertEqual("183080", parsed.invoice_number)
         self.assertEqual("DESCRA", parsed.customer_code)
         self.assertEqual("21042026", parsed.order_no)
+        self.assert_order_number_not_in_note(parsed)
         self.assertEqual("11:00", parsed.start_time)
         self.assertIsNone(parsed.end_time)
         self.assertEqual(0, parsed.pallet_quantity)
@@ -291,6 +302,7 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
         self.assertEqual("183081", parsed.invoice_number)
         self.assertEqual("PAKPAK21", parsed.customer_code)
         self.assertEqual("21042026", parsed.order_no)
+        self.assert_order_number_not_in_note(parsed)
         self.assertEqual("08:00", parsed.start_time)
         self.assertIsNone(parsed.end_time)
         self.assertEqual(6, parsed.loose_bags_quantity)
