@@ -168,7 +168,6 @@ function renderAuthGate() {
 function renderBoardControls() {
   const dateInput = document.querySelector("#dispatch-date");
   const specificationButton = document.querySelector("#specification-button");
-  const addOrderButton = document.querySelector("#add-order-button");
   const status = document.querySelector("#board-status");
   const error = document.querySelector("#board-error");
 
@@ -181,10 +180,6 @@ function renderBoardControls() {
 
   if (specificationButton) {
     specificationButton.disabled = state.isLoading || state.isSaving;
-  }
-
-  if (addOrderButton) {
-    addOrderButton.disabled = state.isLoading || state.isSaving;
   }
 
   if (status) {
@@ -223,11 +218,6 @@ function renderBoardControls() {
     };
   }
 
-  if (addOrderButton) {
-    addOrderButton.onclick = () => {
-      orderActions.openAddOrder();
-    };
-  }
 }
 
 function renderBoardViewNavigation() {
@@ -327,6 +317,7 @@ function renderTaskPool() {
     onOpenOpShopPickupList: opShopPickupActions.openOpShopPickupList,
     onOpenOpShopTemplateManagement: opShopTemplateActions.openTemplateManagement,
     onOpenAttacheInvoiceImport: attacheInvoiceImportActions.openImportModal,
+    onOpenAddOrder: orderActions.openAddOrder,
     onOpenOrderDetail: orderActions.openOrderDetail,
     onPendingSelectionChange: assignmentActions.updatePendingSelection,
     onAssignTask: assignmentActions.handleAssignTask,

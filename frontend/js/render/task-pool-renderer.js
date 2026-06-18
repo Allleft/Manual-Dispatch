@@ -6,6 +6,7 @@ import {
 import {
   createBadge,
   createOption,
+  setButtonContent,
 } from "../utils/dom-utils.js";
 import {
   formatOptional,
@@ -72,6 +73,7 @@ export function renderTaskPool({
   onOpenOpShopPickupList,
   onOpenOpShopTemplateManagement,
   onOpenAttacheInvoiceImport,
+  onOpenAddOrder,
   onOpenOrderDetail,
   onPendingSelectionChange,
   onAssignTask,
@@ -115,6 +117,7 @@ export function renderTaskPool({
       filteredOrders,
       getPendingSelection,
       onAssignTask,
+      onOpenAddOrder,
       onOpenAttacheInvoiceImport,
       onOpenOrderDetail,
       onPendingSelectionChange,
@@ -189,6 +192,7 @@ function createDeliveryOrderSection({
   filteredOrders,
   getPendingSelection,
   onAssignTask,
+  onOpenAddOrder,
   onOpenAttacheInvoiceImport,
   onOpenOrderDetail,
   onPendingSelectionChange,
@@ -200,7 +204,7 @@ function createDeliveryOrderSection({
     titleText: "DELIVERY ORDERS",
   });
 
-  const filterBar = createDeliveryOrderFilterBar({ onOpenAttacheInvoiceImport });
+  const filterBar = createDeliveryOrderFilterBar({ onOpenAddOrder, onOpenAttacheInvoiceImport });
   const list = document.createElement("div");
   list.className = "task-pool-section-grid";
 
@@ -235,7 +239,7 @@ function createDeliveryOrderSection({
   return section;
 }
 
-function createDeliveryOrderFilterBar({ onOpenAttacheInvoiceImport }) {
+function createDeliveryOrderFilterBar({ onOpenAddOrder, onOpenAttacheInvoiceImport }) {
   const filterBar = document.createElement("div");
   filterBar.className = "task-filter-bar";
   filterBar.setAttribute("aria-label", "Delivery Order search and filters");
@@ -275,6 +279,14 @@ function createDeliveryOrderFilterBar({ onOpenAttacheInvoiceImport }) {
   clearDeliveryDateButton.type = "button";
   clearDeliveryDateButton.textContent = "All delivery dates";
 
+  const addOrderButton = document.createElement("button");
+  addOrderButton.id = "add-order-button";
+  addOrderButton.className = "button-delivery-action button-add-order";
+  addOrderButton.type = "button";
+  setButtonContent(addOrderButton, "Add Order", "plus");
+  addOrderButton.disabled = state.isLoading || state.isSaving;
+  addOrderButton.addEventListener("click", onOpenAddOrder);
+
   const importButton = document.createElement("button");
   importButton.className = "button-secondary button-delivery-action";
   importButton.type = "button";
@@ -292,6 +304,7 @@ function createDeliveryOrderFilterBar({ onOpenAttacheInvoiceImport }) {
     urgencyLabel,
     deliveryDateLabel,
     clearDeliveryDateButton,
+    addOrderButton,
     importButton,
     summary,
   );
@@ -318,13 +331,6 @@ function createOpShopPickupListSummaryCard(pickups, onOpenOpShopPickupList) {
   title.className = "compact-suburb";
   title.textContent = "Regular OP SHOP Pickup List";
 
-  const summary = document.createElement("p");
-  summary.className = "compact-note opshop-pickup-note";
-  summary.textContent =
-    pickups.length === 0
-      ? "No OP SHOP PICKUP tasks for this Regular pickup week."
-      : `${pickups.length} scheduled pickups in this Regular pickup week.`;
-
   const meta = document.createElement("div");
   meta.className = "compact-meta opshop-pickup-meta";
   meta.append(
@@ -338,7 +344,7 @@ function createOpShopPickupListSummaryCard(pickups, onOpenOpShopPickupList) {
   openButton.append(document.createTextNode("Open List"), createIcon("arrow-right"));
   openButton.addEventListener("click", onOpenOpShopPickupList);
 
-  content.append(icon, kicker, title, summary, meta, openButton);
+  content.append(icon, kicker, title, meta, openButton);
   card.append(content);
   return card;
 }
@@ -363,13 +369,6 @@ function createOncallOpShopPickupListSummaryCard(pickups, onOpenOncallOpShopPick
   title.className = "compact-suburb";
   title.textContent = "Oncall OP SHOP Pickup List";
 
-  const summary = document.createElement("p");
-  summary.className = "compact-note opshop-pickup-note";
-  summary.textContent =
-    pickups.length === 0
-      ? "No Oncall OP SHOP pickups added."
-      : `${pickups.length} Oncall pickups added.`;
-
   const meta = document.createElement("div");
   meta.className = "compact-meta opshop-pickup-meta";
   meta.append(
@@ -383,7 +382,7 @@ function createOncallOpShopPickupListSummaryCard(pickups, onOpenOncallOpShopPick
   openButton.append(document.createTextNode("Open List"), createIcon("arrow-right"));
   openButton.addEventListener("click", onOpenOncallOpShopPickupList);
 
-  content.append(icon, kicker, title, summary, meta, openButton);
+  content.append(icon, kicker, title, meta, openButton);
   card.append(content);
   return card;
 }
@@ -411,13 +410,6 @@ function createCountrysideOpShopPickupListSummaryCard(
   title.className = "compact-suburb";
   title.textContent = "Countryside OP SHOP Pickup List";
 
-  const summary = document.createElement("p");
-  summary.className = "compact-note opshop-pickup-note";
-  summary.textContent =
-    pickups.length === 0
-      ? "No Countryside OP SHOP pickups added."
-      : `${pickups.length} Countryside pickups added.`;
-
   const meta = document.createElement("div");
   meta.className = "compact-meta opshop-pickup-meta";
   meta.append(
@@ -433,7 +425,7 @@ function createCountrysideOpShopPickupListSummaryCard(
     state.isCountrysideOpShopPickupListLoading || state.isCountrysideOpShopPickupSaving;
   openButton.addEventListener("click", onOpenCountrysideOpShopPickupList);
 
-  content.append(icon, kicker, title, summary, meta, openButton);
+  content.append(icon, kicker, title, meta, openButton);
   card.append(content);
   return card;
 }
@@ -506,11 +498,13 @@ function createDeliveryOrderCard(order, {
     createBadge(`Start: ${formatOptional(order.start_time)}`),
   );
 
-  const note = document.createElement("p");
-  note.className = "compact-note";
-  note.textContent = `Note: ${truncateText(order.note || "None")}`;
-
-  content.append(invoice, orderNo, company, suburb, meta, note);
+  content.append(invoice, orderNo, company, suburb, meta);
+  if (order.note) {
+    const note = document.createElement("p");
+    note.className = "compact-note";
+    note.textContent = `Note: ${truncateText(order.note)}`;
+    content.append(note);
+  }
 
   const controls = createAssignmentControls({
     getPendingSelection,

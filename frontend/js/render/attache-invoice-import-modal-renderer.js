@@ -68,19 +68,26 @@ export function renderAttacheInvoiceImportModal({
   closeButton.addEventListener("click", onClose);
   header.append(titleWrap, closeButton);
 
-  const intro = document.createElement("p");
-  intro.className = "compact-note";
-  intro.textContent =
-    "Upload text-based Attache invoice PDFs, preview parsed Delivery Orders, edit fields, then confirm import.";
-
   const controls = document.createElement("div");
   controls.className = "attache-import-controls";
   const fileInput = document.createElement("input");
+  fileInput.id = "attache-invoice-file-input";
+  fileInput.className = "visually-hidden-file-input";
   fileInput.type = "file";
   fileInput.accept = "application/pdf,.pdf";
   fileInput.multiple = true;
   fileInput.disabled = state.isAttacheInvoiceImportPreviewing || state.isAttacheInvoiceImportCommitting;
   fileInput.addEventListener("change", () => onUpdateFiles(fileInput.files));
+
+  const fileSelectButton = document.createElement("label");
+  fileSelectButton.className = "button-secondary attache-file-select-button";
+  fileSelectButton.setAttribute("for", fileInput.id);
+  fileSelectButton.textContent = "Choose PDF files";
+  if (fileInput.disabled) {
+    fileSelectButton.classList.add("is-disabled");
+    fileSelectButton.setAttribute("aria-disabled", "true");
+    fileSelectButton.addEventListener("click", (event) => event.preventDefault());
+  }
 
   const selectedFiles = createSelectedFileFeedback();
 
@@ -96,7 +103,7 @@ export function renderAttacheInvoiceImportModal({
     || state.isAttacheInvoiceImportCommitting
     || state.attacheInvoiceImportFiles.length === 0;
   previewButton.addEventListener("click", onPreview);
-  controls.append(fileInput, selectedFiles, previewButton);
+  controls.append(fileSelectButton, fileInput, selectedFiles, previewButton);
 
   const error = document.createElement("p");
   error.className = "board-error";
@@ -108,7 +115,7 @@ export function renderAttacheInvoiceImportModal({
   success.hidden = !state.attacheInvoiceImportSuccess;
   success.textContent = state.attacheInvoiceImportSuccess;
 
-  modal.append(header, intro, controls, error, success, createPreviewTable({
+  modal.append(header, controls, error, success, createPreviewTable({
     onCommit,
     onToggleRow,
     onUpdateRow,

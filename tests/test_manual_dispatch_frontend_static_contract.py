@@ -185,6 +185,9 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn('"Order #"', renderer)
         self.assertIn('createInput(row, "order_no", "text", onUpdateRow)', renderer)
         self.assertIn('fileInput.accept = "application/pdf,.pdf"', renderer)
+        self.assertIn('fileInput.className = "visually-hidden-file-input"', renderer)
+        self.assertIn("attache-file-select-button", renderer)
+        self.assertIn("Choose PDF files", renderer)
         self.assertIn("createSelectedFileFeedback", renderer)
         self.assertIn("1 file selected:", renderer)
         self.assertIn("files selected", renderer)
@@ -273,12 +276,12 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
             task_pool_renderer.index("OP SHOP PICKUP"),
             task_pool_renderer.index("DELIVERY ORDERS"),
         )
-        self.assertIn("No OP SHOP PICKUP tasks for this Regular pickup week.", task_pool_renderer)
+        self.assertNotIn("No OP SHOP PICKUP tasks for this Regular pickup week.", task_pool_renderer)
         self.assertIn("Regular OP SHOP Pickup List", task_pool_renderer)
         self.assertIn("Oncall OP SHOP Pickup List", task_pool_renderer)
         self.assertIn("Countryside OP SHOP Pickup List", task_pool_renderer)
         self.assertIn("Order # ${formatOptional(order.order_no)}", task_pool_renderer)
-        self.assertIn("No Oncall OP SHOP pickups added.", task_pool_renderer)
+        self.assertNotIn("No Oncall OP SHOP pickups added.", task_pool_renderer)
         self.assertIn("onOpenOncallOpShopPickupList", task_pool_renderer)
         self.assertIn("opshop-pickup-list-summary-card", task_pool_renderer)
         self.assertIn("section.append(actions, list)", task_pool_renderer)
@@ -618,9 +621,14 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn('urgencySelect.id = "urgency-filter"', task_pool_renderer)
         self.assertIn('deliveryDateInput.id = "task-pool-delivery-date-filter"', task_pool_renderer)
         self.assertIn('clearDeliveryDateButton.id = "clear-task-pool-delivery-date-filter"', task_pool_renderer)
+        self.assertIn('addOrderButton.id = "add-order-button"', task_pool_renderer)
+        self.assertIn('setButtonContent(addOrderButton, "Add Order", "plus")', task_pool_renderer)
         self.assertIn('summary.id = "task-filter-summary"', task_pool_renderer)
         delivery_section = task_pool_renderer.split("function createDeliveryOrderSection", 1)[1]
-        self.assertIn("const filterBar = createDeliveryOrderFilterBar({ onOpenAttacheInvoiceImport });", delivery_section)
+        self.assertIn(
+            "const filterBar = createDeliveryOrderFilterBar({ onOpenAddOrder, onOpenAttacheInvoiceImport });",
+            delivery_section,
+        )
         self.assertIn("section.append(filterBar, list);", delivery_section)
         self.assertNotIn('class="task-filter-bar"', index_html)
         self.assertIn("opshopRegularListWindowStart", task_pool_renderer)
@@ -1084,7 +1092,7 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
             app_js,
         )
         self.assertIn("Countryside OP SHOP Pickup List", task_pool_renderer)
-        self.assertIn("No Countryside OP SHOP pickups added.", task_pool_renderer)
+        self.assertNotIn("No Countryside OP SHOP pickups added.", task_pool_renderer)
         self.assertIn("onOpenCountrysideOpShopPickupList", task_pool_renderer)
         self.assertNotIn("Manage Countryside Routes", task_pool_renderer)
         self.assertIn("Countryside OP SHOP Pickup List", modal_renderer)

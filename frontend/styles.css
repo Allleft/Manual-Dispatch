@@ -315,7 +315,13 @@ h1 {
 
 .task-filter-bar {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(160px, 220px) minmax(160px, 220px) auto auto;
+  grid-template-columns:
+    minmax(220px, 1.25fr)
+    minmax(130px, 170px)
+    minmax(150px, 185px)
+    auto
+    auto
+    auto;
   align-items: end;
   gap: 0.5rem;
   margin-bottom: 0.65rem;
@@ -358,27 +364,22 @@ h1 {
 #add-order-button {
   display: inline-flex;
   align-items: center;
-  gap: 0.7rem;
+  justify-content: center;
+  gap: 0.42rem;
   border-radius: 11px;
   min-height: 38px;
-  padding: 0 0.9rem;
-  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
-  box-shadow: 0 10px 24px rgba(39, 93, 69, 0.16);
+  padding: 0 0.88rem;
+  white-space: nowrap;
 }
 
 #add-order-button::after {
-  display: inline-grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border: 2px solid rgba(255, 255, 255, 0.78);
-  border-radius: 999px;
-  content: "+";
-  font-size: 1.05rem;
-  line-height: 1;
+  display: none;
+  content: none;
 }
 
 .filter-summary {
+  grid-column: 1 / -1;
+  justify-self: start;
   margin-bottom: 0;
   border-radius: var(--radius-sm);
   padding: 0.56rem 0.75rem;
@@ -2792,6 +2793,30 @@ select:disabled {
   margin: 0 0 1rem;
 }
 
+.visually-hidden-file-input {
+  position: absolute;
+  overflow: hidden;
+  width: 1px;
+  height: 1px;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.attache-file-select-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.attache-file-select-button.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
 .attache-import-preview {
   display: grid;
   gap: 1rem;
@@ -3568,8 +3593,28 @@ select:disabled {
   word-break: break-word;
 }
 
+.specification-modal .spec-table th:last-child,
+.specification-modal .spec-table td:last-child {
+  width: 210px;
+  min-width: 210px;
+  white-space: nowrap;
+  word-break: normal;
+}
+
 .specification-modal .spec-actions {
+  justify-content: flex-start;
+  align-items: center;
   flex-wrap: nowrap;
+}
+
+.specification-modal .spec-actions button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 0.34rem;
+  min-width: 92px;
+  white-space: nowrap;
 }
 
 .specification-modal input[type="checkbox"] {
