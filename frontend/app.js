@@ -967,6 +967,7 @@ function renderOrderDetailPopup() {
 
 function renderAttacheInvoiceImportModal() {
   renderAttacheInvoiceImportModalView({
+    onClearSelection: attacheInvoiceImportActions.clearPreviewSelection,
     onClose: attacheInvoiceImportActions.closeImportModal,
     onCommit: attacheInvoiceImportActions.commitImport,
     onPreview: attacheInvoiceImportActions.previewImport,

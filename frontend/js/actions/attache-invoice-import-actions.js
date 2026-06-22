@@ -76,6 +76,14 @@ export function createAttacheInvoiceImportActions({
     renderAttacheInvoiceImportModal();
   }
 
+  function clearPreviewSelection() {
+    state.attacheInvoiceImportRows = state.attacheInvoiceImportRows.map((row) => ({
+      ...row,
+      selected: false,
+    }));
+    renderAttacheInvoiceImportModal();
+  }
+
   async function commitImport() {
     if (state.isAttacheInvoiceImportCommitting) {
       return;
@@ -113,6 +121,7 @@ export function createAttacheInvoiceImportActions({
   }
 
   return {
+    clearPreviewSelection,
     closeImportModal,
     commitImport,
     openImportModal,

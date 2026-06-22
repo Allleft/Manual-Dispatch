@@ -178,6 +178,7 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         renderer = (
             FRONTEND_ROOT / "js" / "render" / "attache-invoice-import-modal-renderer.js"
         ).read_text(encoding="utf-8")
+        styles = (FRONTEND_ROOT / "styles.css").read_text(encoding="utf-8")
 
         self.assertIn("Import Attache Invoices", task_pool_renderer)
         self.assertIn("onOpenAttacheInvoiceImport", task_pool_renderer)
@@ -208,6 +209,22 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("files selected", renderer)
         self.assertIn('feedback.setAttribute("aria-live", "polite")', renderer)
         self.assertIn("row.is_duplicate", renderer)
+        self.assertIn("onClearSelection", renderer)
+        self.assertIn("clearPreviewSelection", actions)
+        self.assertIn(
+            "onClearSelection: attacheInvoiceImportActions.clearPreviewSelection",
+            app_js,
+        )
+        self.assertIn("attache-import-preview-table-wrap", renderer)
+        self.assertIn("attache-import-selection-footer", renderer)
+        self.assertIn("attache-import-footer", renderer)
+        self.assertIn("attache-import-products-card", renderer)
+        self.assertIn("attache-import-warnings-card", renderer)
+        self.assertIn("No importable invoice rows are available.", renderer)
+        self.assertIn("position: sticky;", styles)
+        self.assertIn(".attache-import-preview-table-wrap", styles)
+        self.assertIn(".attache-import-table thead th", styles)
+        self.assertIn(".attache-import-confirm-button", styles)
 
     def test_modal_accent_visual_contracts_are_present(self):
         app_js = (FRONTEND_ROOT / "app.js").read_text(encoding="utf-8")
