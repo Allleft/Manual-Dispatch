@@ -8,7 +8,7 @@ from pathlib import Path
 from backend.repositories.sqlite_manual_dispatch_repository import (
     SQLiteManualDispatchRepository,
 )
-from backend.db.connection import connect
+from backend.db.connection import connect, initialize_database
 from backend.schemas import (
     AssignDriverVehicleRequest,
     AssignTaskRequest,
@@ -46,6 +46,174 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
         self.assertIn("manual_dispatch_assignments", tables)
         self.assertIn("manual_driver_vehicle_assignments", tables)
         self.assertIn("order_product_lines", tables)
+
+    def test_fresh_product_line_schema_allows_cartons(self):
+        with sqlite3.connect(self.db_path) as connection:
+            table_sql = connection.execute(
+                """
+                SELECT sql
+                FROM sqlite_master
+                WHERE type = 'table' AND name = 'order_product_lines'
+                """
+            ).fetchone()[0]
+
+        self.assertIn("'CARTONS'", table_sql)
+
+    def test_existing_product_lines_are_preserved_when_cartons_are_migrated(self):
+        legacy_path = self.temp_dir / "legacy_product_lines.sqlite3"
+        with sqlite3.connect(legacy_path) as connection:
+            connection.executescript(
+                """
+                PRAGMA foreign_keys = ON;
+                CREATE TABLE manual_orders (
+                    order_id TEXT PRIMARY KEY,
+                    invoice_number TEXT,
+                    order_no TEXT,
+                    company_name TEXT,
+                    phone TEXT,
+                    delivery_address TEXT,
+                    suburb TEXT NOT NULL,
+                    postcode TEXT,
+                    delivery_date TEXT,
+                    zone TEXT,
+                    urgency TEXT,
+                    preferred_driver_id TEXT,
+                    pallet_quantity INTEGER NOT NULL DEFAULT 0,
+                    loose_bags_quantity INTEGER NOT NULL DEFAULT 0,
+                    start_time TEXT,
+                    end_time TEXT,
+                    note TEXT,
+                    status TEXT NOT NULL DEFAULT 'ACTIVE'
+                );
+                CREATE TABLE order_product_lines (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    order_id TEXT NOT NULL,
+                    line_no INTEGER NOT NULL,
+                    product_name TEXT NOT NULL,
+                    quantity INTEGER NOT NULL,
+                    unit TEXT NOT NULL,
+                    UNIQUE(order_id, line_no),
+                    CHECK(quantity > 0),
+                    CHECK(unit IN ('PALLETS', 'BAGS')),
+                    FOREIGN KEY(order_id) REFERENCES manual_orders(order_id)
+                        ON DELETE CASCADE
+                );
+                CREATE INDEX idx_legacy_product_unit
+                    ON order_product_lines(unit);
+                CREATE TABLE product_line_audit (
+                    product_line_id INTEGER NOT NULL,
+                    unit TEXT NOT NULL
+                );
+                CREATE TRIGGER trg_legacy_product_insert
+                    AFTER INSERT ON order_product_lines
+                    BEGIN
+                        INSERT INTO product_line_audit (product_line_id, unit)
+                        VALUES (NEW.id, NEW.unit);
+                    END;
+                INSERT INTO manual_orders (
+                    order_id,
+                    invoice_number,
+                    company_name,
+                    suburb,
+                    delivery_date,
+                    pallet_quantity,
+                    loose_bags_quantity,
+                    status
+                ) VALUES (
+                    'ORD-LEGACY-CARTON',
+                    'LEGACY-CARTON',
+                    'Legacy Product Customer',
+                    'Dandenong',
+                    '2026-06-05',
+                    1,
+                    2,
+                    'ACTIVE'
+                );
+                INSERT INTO order_product_lines (
+                    id, order_id, line_no, product_name, quantity, unit
+                ) VALUES
+                    (7, 'ORD-LEGACY-CARTON', 1, 'Existing Pallet Product', 1, 'PALLETS'),
+                    (8, 'ORD-LEGACY-CARTON', 2, 'Existing Bag Product', 2, 'BAGS');
+                """
+            )
+
+        previous_seed_flag = os.environ.get("MANUAL_DISPATCH_SEED_DEMO_DATA")
+        os.environ["MANUAL_DISPATCH_SEED_DEMO_DATA"] = "0"
+        try:
+            initialize_database(legacy_path)
+            initialize_database(legacy_path)
+        finally:
+            if previous_seed_flag is None:
+                os.environ.pop("MANUAL_DISPATCH_SEED_DEMO_DATA", None)
+            else:
+                os.environ["MANUAL_DISPATCH_SEED_DEMO_DATA"] = previous_seed_flag
+
+        with sqlite3.connect(legacy_path) as connection:
+            table_sql = connection.execute(
+                "SELECT sql FROM sqlite_master WHERE name = 'order_product_lines'"
+            ).fetchone()[0]
+            rows = connection.execute(
+                """
+                SELECT id, line_no, product_name, quantity, unit
+                FROM order_product_lines
+                ORDER BY id
+                """
+            ).fetchall()
+            indexes = {
+                row[0]
+                for row in connection.execute(
+                    """
+                    SELECT name
+                    FROM sqlite_master
+                    WHERE type = 'index' AND tbl_name = 'order_product_lines'
+                    """
+                ).fetchall()
+            }
+            triggers = {
+                row[0]
+                for row in connection.execute(
+                    """
+                    SELECT name
+                    FROM sqlite_master
+                    WHERE type = 'trigger' AND tbl_name = 'order_product_lines'
+                    """
+                ).fetchall()
+            }
+            connection.execute(
+                """
+                INSERT INTO order_product_lines (
+                    order_id, line_no, product_name, quantity, unit
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    "ORD-LEGACY-CARTON",
+                    3,
+                    "New Carton Product",
+                    2,
+                    "CARTONS",
+                ),
+            )
+            foreign_key_issues = connection.execute("PRAGMA foreign_key_check").fetchall()
+            carton_audit_rows = connection.execute(
+                """
+                SELECT unit
+                FROM product_line_audit
+                WHERE unit = 'CARTONS'
+                """
+            ).fetchall()
+
+        self.assertIn("'CARTONS'", table_sql)
+        self.assertEqual(
+            [
+                (7, 1, "Existing Pallet Product", 1, "PALLETS"),
+                (8, 2, "Existing Bag Product", 2, "BAGS"),
+            ],
+            rows,
+        )
+        self.assertIn("idx_legacy_product_unit", indexes)
+        self.assertIn("trg_legacy_product_insert", triggers)
+        self.assertEqual([("CARTONS",)], carton_audit_rows)
+        self.assertEqual([], foreign_key_issues)
 
     def test_connection_uses_wal_and_busy_timeout_for_office_deployment(self):
         with connect(self.db_path) as connection:

@@ -20,7 +20,8 @@ export function getOrderLoadUnit(order) {
 
 export function formatPluralLoadUnit(unit, quantity) {
   const normalized = String(unit || "").toUpperCase();
-  const singular = normalized === "BAGS" ? "Bag" : "Pallet";
+  const singular =
+    normalized === "BAGS" ? "Bag" : normalized === "CARTONS" ? "Carton" : "Pallet";
   return Number(quantity) === 1 ? singular : `${singular}s`;
 }
 

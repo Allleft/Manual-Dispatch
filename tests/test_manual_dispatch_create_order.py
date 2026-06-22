@@ -84,6 +84,40 @@ class ManualDispatchCreateOrderTest(unittest.TestCase):
         self.assertEqual(2, created.pallet_quantity)
         self.assertEqual(1, created.loose_bags_quantity)
 
+    def test_pallet_order_with_carton_product_detail_appears_on_board(self):
+        created = self.service.create_order(
+            self._request(
+                invoice_number="184068",
+                order_no="7147703",
+                pallet_quantity=1,
+                loose_bags_quantity=0,
+                product_lines=[
+                    {
+                        "product_name": "COLOUR RAGS 10KG NET",
+                        "quantity": 1,
+                        "unit": "PALLETS",
+                    },
+                    {
+                        "product_name": "COLOR RAGS 1.5KG BAG",
+                        "quantity": 2,
+                        "unit": "CARTONS",
+                    },
+                ],
+            )
+        )
+        board_order = next(
+            order
+            for order in self.service.get_board(self.dispatch_date).orders
+            if order.order_id == created.order_id
+        )
+
+        self.assertEqual(1, board_order.pallet_quantity)
+        self.assertEqual(0, board_order.loose_bags_quantity)
+        self.assertEqual(
+            ["PALLETS", "CARTONS"],
+            [line.unit for line in board_order.product_lines],
+        )
+
     def test_missing_suburb_is_rejected(self):
         with self.assertRaises(ValueError):
             self.service.create_order(self._request(suburb=""))

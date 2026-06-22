@@ -256,12 +256,17 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         final_summary_renderer = (
             FRONTEND_ROOT / "js" / "render" / "final-summary-renderer.js"
         ).read_text(encoding="utf-8")
+        format_utils = (
+            FRONTEND_ROOT / "js" / "utils" / "format-utils.js"
+        ).read_text(encoding="utf-8")
         styles = (FRONTEND_ROOT / "styles.css").read_text(encoding="utf-8")
 
         self.assertIn('setButtonContent(productDetailButton, "Product Detail", "list")', order_modal_renderer)
         self.assertIn('title.textContent = "Product Details"', order_modal_renderer)
         self.assertIn('setButtonContent(addButton, "Add Product Line", "plus")', order_modal_renderer)
         self.assertIn('setButtonContent(removeButton, "Remove", "trash")', order_modal_renderer)
+        self.assertIn('{ value: "CARTONS", label: "Cartons" }', order_modal_renderer)
+        self.assertIn('normalized === "CARTONS" ? "Carton"', format_utils)
         self.assertIn('"Product Details"', final_summary_renderer)
 
     def test_phase18_final_summary_distance_display_is_present(self):

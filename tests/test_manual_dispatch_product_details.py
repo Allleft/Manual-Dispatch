@@ -105,11 +105,58 @@ class ManualDispatchProductDetailsTest(unittest.TestCase):
                         "quantity": 2,
                         "unit": "BAGS",
                     },
+                    {
+                        "product_name": "COLOR RAGS 1.5KG BAG",
+                        "quantity": 2,
+                        "unit": "CARTONS",
+                    },
                 ],
             )
         )
 
-        self.assertEqual(["PALLETS", "BAGS"], [line.unit for line in created.product_lines])
+        self.assertEqual(
+            ["PALLETS", "BAGS", "CARTONS"],
+            [line.unit for line in created.product_lines],
+        )
+
+    def test_pallet_order_allows_carton_product_details_without_changing_totals(self):
+        created = self.service.create_order(
+            self._create_request(
+                invoice_number="184068",
+                pallet_quantity=1,
+                loose_bags_quantity=0,
+                product_lines=self._pallet_and_carton_lines(),
+            )
+        )
+        reloaded = self.repository.get_order(created.order_id)
+
+        self.assertEqual(1, reloaded.pallet_quantity)
+        self.assertEqual(0, reloaded.loose_bags_quantity)
+        self.assertEqual(
+            ["PALLETS", "CARTONS"],
+            [line.unit for line in reloaded.product_lines],
+        )
+
+    def test_carton_product_detail_requires_a_pallet_quantity(self):
+        for loose_bags_quantity in (0, 2):
+            with self.subTest(loose_bags_quantity=loose_bags_quantity):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "Product detail CARTONS requires a pallet quantity",
+                ):
+                    self.service.create_order(
+                        self._create_request(
+                            pallet_quantity=0,
+                            loose_bags_quantity=loose_bags_quantity,
+                            product_lines=[
+                                {
+                                    "product_name": "COLOR RAGS 1.5KG BAG",
+                                    "quantity": 2,
+                                    "unit": "CARTONS",
+                                }
+                            ],
+                        )
+                    )
 
     def test_rejects_product_detail_unit_that_conflicts_with_order_load_unit(self):
         with self.assertRaisesRegex(
@@ -245,6 +292,43 @@ class ManualDispatchProductDetailsTest(unittest.TestCase):
         )
         self.assertIn("5 Pallets", values)
 
+    def test_final_summary_excel_formats_cartons_without_changing_load(self):
+        created = self.service.create_order(
+            self._create_request(
+                invoice_number="184068",
+                pallet_quantity=1,
+                loose_bags_quantity=0,
+                product_lines=self._pallet_and_carton_lines(),
+            )
+        )
+        self._assign_order(created.order_id)
+        self.service.save_final_trip_summary(self._summary_request(created.order_id))
+
+        workbook = load_workbook(
+            BytesIO(
+                build_final_summary_excel(
+                    self.service.list_final_trip_summaries(self.dispatch_date),
+                    self.dispatch_date,
+                )
+            ),
+            data_only=True,
+        )
+        values = [
+            cell
+            for worksheet in workbook.worksheets
+            for row in worksheet.iter_rows(values_only=True)
+            for cell in row
+            if cell is not None
+        ]
+
+        self.assertIn(
+            "1. COLOUR RAGS 10KG NET - 1 Pallet\n"
+            "2. COLOR RAGS 1.5KG BAG - 2 Cartons",
+            values,
+        )
+        self.assertIn("1 Pallet", values)
+        self.assertNotIn("2 Bags", values)
+
     def _create_request(self, **overrides):
         values = {
             "invoice_number": "VIC-PROD-001",
@@ -278,6 +362,20 @@ class ManualDispatchProductDetailsTest(unittest.TestCase):
                 "product_name": "pure white singlet 10kg",
                 "quantity": 2,
                 "unit": "PALLETS",
+            },
+        ]
+
+    def _pallet_and_carton_lines(self):
+        return [
+            {
+                "product_name": "COLOUR RAGS 10KG NET",
+                "quantity": 1,
+                "unit": "PALLETS",
+            },
+            {
+                "product_name": "COLOR RAGS 1.5KG BAG",
+                "quantity": 2,
+                "unit": "CARTONS",
             },
         ]
 

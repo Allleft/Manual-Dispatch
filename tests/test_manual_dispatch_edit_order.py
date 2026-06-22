@@ -73,6 +73,34 @@ class ManualDispatchEditOrderTest(unittest.TestCase):
         self.assertEqual(5, updated.pallet_quantity)
         self.assertEqual(2, updated.loose_bags_quantity)
 
+    def test_update_pallet_order_preserves_carton_product_detail(self):
+        updated = self.service.update_order(
+            "ORD-001",
+            self._request(
+                pallet_quantity=1,
+                loose_bags_quantity=0,
+                product_lines=[
+                    {
+                        "product_name": "COLOUR RAGS 10KG NET",
+                        "quantity": 1,
+                        "unit": "PALLETS",
+                    },
+                    {
+                        "product_name": "COLOR RAGS 1.5KG BAG",
+                        "quantity": 2,
+                        "unit": "CARTONS",
+                    },
+                ],
+            ),
+        )
+
+        self.assertEqual(1, updated.pallet_quantity)
+        self.assertEqual(0, updated.loose_bags_quantity)
+        self.assertEqual(
+            ["PALLETS", "CARTONS"],
+            [line.unit for line in updated.product_lines],
+        )
+
     def test_update_order_rejects_missing_delivery_date(self):
         with self.assertRaisesRegex(ValueError, "delivery_date is required"):
             self.service.update_order("ORD-001", self._request(delivery_date=""))

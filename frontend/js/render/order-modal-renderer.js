@@ -563,7 +563,8 @@ function createProductLineEditor({
 
   const helper = document.createElement("p");
   helper.className = "compact-note";
-  helper.textContent = "Product lines must use PALLETS or BAGS and match the Order load quantities.";
+  helper.textContent =
+    "Product lines may use PALLETS, BAGS, or CARTONS. Cartons require a pallet quantity.";
 
   section.append(heading, helper);
 
@@ -646,6 +647,7 @@ function createProductLineUnitSelect(line, index, onUpdateProductLine) {
   [
     { value: "PALLETS", label: "Pallets" },
     { value: "BAGS", label: "Bags" },
+    { value: "CARTONS", label: "Cartons" },
   ].forEach((option) => {
     select.append(createOption(option.value, option.label, line.unit === option.value));
   });

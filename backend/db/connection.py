@@ -65,6 +65,7 @@ def _is_env_flag_enabled(name, default=False):
 
 
 def _ensure_manual_dispatch_columns(connection):
+    _ensure_order_product_line_units(connection)
     _ensure_column(connection, "manual_orders", "invoice_number", "TEXT")
     _ensure_column(connection, "manual_orders", "order_no", "TEXT")
     _ensure_column(connection, "manual_orders", "phone", "TEXT")
@@ -178,6 +179,118 @@ def _ensure_manual_dispatch_columns(connection):
         """
     )
     _backfill_manual_order_numbers(connection)
+
+
+def _ensure_order_product_line_units(connection):
+    table_row = connection.execute(
+        """
+        SELECT sql
+        FROM sqlite_master
+        WHERE type = 'table' AND name = 'order_product_lines'
+        """
+    ).fetchone()
+    table_sql = table_row["sql"] if table_row else ""
+    if not table_sql or "CARTONS" in table_sql.upper():
+        return
+
+    expected_columns = {
+        "id",
+        "order_id",
+        "line_no",
+        "product_name",
+        "quantity",
+        "unit",
+    }
+    existing_columns = {
+        row["name"]
+        for row in connection.execute("PRAGMA table_info(order_product_lines)").fetchall()
+    }
+    if existing_columns != expected_columns:
+        raise RuntimeError(
+            "Cannot safely migrate order_product_lines with unexpected columns"
+        )
+
+    schema_objects = [
+        row["sql"]
+        for row in connection.execute(
+            """
+            SELECT sql
+            FROM sqlite_master
+            WHERE tbl_name = 'order_product_lines'
+                AND type IN ('index', 'trigger')
+                AND sql IS NOT NULL
+            ORDER BY type, name
+            """
+        ).fetchall()
+    ]
+    row_count = connection.execute(
+        "SELECT COUNT(*) FROM order_product_lines"
+    ).fetchone()[0]
+
+    connection.execute("SAVEPOINT migrate_order_product_line_units")
+    try:
+        connection.execute("DROP TABLE IF EXISTS order_product_lines__new")
+        connection.execute(
+            """
+            CREATE TABLE order_product_lines__new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                order_id TEXT NOT NULL,
+                line_no INTEGER NOT NULL,
+                product_name TEXT NOT NULL,
+                quantity INTEGER NOT NULL,
+                unit TEXT NOT NULL,
+                UNIQUE(order_id, line_no),
+                CHECK(quantity > 0),
+                CHECK(unit IN ('PALLETS', 'BAGS', 'CARTONS')),
+                FOREIGN KEY(order_id) REFERENCES manual_orders(order_id)
+                    ON DELETE CASCADE
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO order_product_lines__new (
+                id,
+                order_id,
+                line_no,
+                product_name,
+                quantity,
+                unit
+            )
+            SELECT
+                id,
+                order_id,
+                line_no,
+                product_name,
+                quantity,
+                unit
+            FROM order_product_lines
+            ORDER BY id
+            """
+        )
+        copied_count = connection.execute(
+            "SELECT COUNT(*) FROM order_product_lines__new"
+        ).fetchone()[0]
+        if copied_count != row_count:
+            raise RuntimeError("order_product_lines migration did not copy every row")
+
+        connection.execute("DROP TABLE order_product_lines")
+        connection.execute(
+            "ALTER TABLE order_product_lines__new RENAME TO order_product_lines"
+        )
+        for schema_object_sql in schema_objects:
+            connection.execute(schema_object_sql)
+
+        foreign_key_issues = connection.execute(
+            "PRAGMA foreign_key_check(order_product_lines)"
+        ).fetchall()
+        if foreign_key_issues:
+            raise RuntimeError("order_product_lines migration failed foreign key validation")
+        connection.execute("RELEASE SAVEPOINT migrate_order_product_line_units")
+    except Exception:
+        connection.execute("ROLLBACK TO SAVEPOINT migrate_order_product_line_units")
+        connection.execute("RELEASE SAVEPOINT migrate_order_product_line_units")
+        raise
 
 
 def _ensure_column(connection, table_name, column_name, column_definition):

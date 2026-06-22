@@ -228,7 +228,10 @@ def _format_opshop_pickup_category(pickup):
 
 def _pluralized_unit(unit, quantity):
     normalized = str(unit or "").upper()
-    singular = "Pallet" if normalized == "PALLETS" else "Bag"
+    singular = {
+        "PALLETS": "Pallet",
+        "CARTONS": "Carton",
+    }.get(normalized, "Bag")
     return singular if quantity == 1 else f"{singular}s"
 
 

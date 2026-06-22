@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS order_product_lines (
     unit TEXT NOT NULL,
     UNIQUE(order_id, line_no),
     CHECK(quantity > 0),
-    CHECK(unit IN ('PALLETS', 'BAGS')),
+    CHECK(unit IN ('PALLETS', 'BAGS', 'CARTONS')),
     FOREIGN KEY(order_id) REFERENCES manual_orders(order_id)
         ON DELETE CASCADE
 );

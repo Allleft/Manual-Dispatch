@@ -5,7 +5,7 @@ from backend.schemas import ProductDetailLine
 
 
 ISO_DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-VALID_PRODUCT_DETAIL_UNITS = {"PALLETS", "BAGS"}
+VALID_PRODUCT_DETAIL_UNITS = {"PALLETS", "BAGS", "CARTONS"}
 
 
 def clean_optional_text(value):
@@ -82,7 +82,9 @@ def normalize_product_detail_lines(product_lines, load_unit, field_name="product
             f"{field_name} item {index} unit",
         ).upper()
         if unit not in VALID_PRODUCT_DETAIL_UNITS:
-            raise ValueError(f"{field_name} item {index} unit must be PALLETS or BAGS")
+            raise ValueError(
+                f"{field_name} item {index} unit must be PALLETS, BAGS, or CARTONS"
+            )
 
         normalized_lines.append(
             ProductDetailLine(
@@ -92,12 +94,21 @@ def normalize_product_detail_lines(product_lines, load_unit, field_name="product
             )
         )
 
+    if any(line.unit == "CARTONS" for line in normalized_lines) and load_unit not in {
+        "PALLETS",
+        "MIXED",
+    }:
+        raise ValueError("Product detail CARTONS requires a pallet quantity.")
     if normalized_lines and not load_unit:
         raise ValueError("Product detail unit must align with the Order pallet or bag quantity")
+    allowed_units = {
+        "PALLETS": {"PALLETS", "CARTONS"},
+        "BAGS": {"BAGS"},
+        "MIXED": VALID_PRODUCT_DETAIL_UNITS,
+    }.get(load_unit, set())
     if (
         normalized_lines
-        and load_unit != "MIXED"
-        and any(line.unit != load_unit for line in normalized_lines)
+        and any(line.unit not in allowed_units for line in normalized_lines)
     ):
         raise ValueError("Product detail unit must align with the Order pallet or bag quantity")
     return normalized_lines
