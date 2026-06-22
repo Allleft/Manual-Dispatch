@@ -70,9 +70,9 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("onDeliveryDateChange", final_summary_renderer)
         self.assertIn('document.querySelector("#final-summary-delivery-date")', final_summary_renderer)
         self.assertIn("function updateDriverSummaryDeliveryDate(deliveryDate)", app_js)
-        self.assertIn("Delivery date cannot be before dispatch date.", app_js)
-        self.assertIn("nextDeliveryDate < minimumDeliveryDate", app_js)
-        self.assertIn("state.driverSummaryDeliveryDate = minimumDeliveryDate", app_js)
+        self.assertNotIn("Delivery date cannot be before dispatch date.", app_js)
+        self.assertNotIn("nextDeliveryDate <", app_js)
+        self.assertIn("deliveryDate || defaultDeliveryDate", app_js)
         self.assertIn(".final-summary-date-controls label", styles)
 
     def test_driver_summary_delivery_date_control_is_present(self):
@@ -87,10 +87,12 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
 
         self.assertIn('id="driver-summary-delivery-date"', index_html)
         self.assertIn('type="date"', index_html)
-        self.assertIn("deliveryDateInput.min = minimumDeliveryDate", trip_summary_renderer)
-        self.assertIn("deliveryDateInput.min = minimumDeliveryDate", final_summary_renderer)
-        self.assertIn("onDeliveryDateChange(deliveryDateInput.value || minimumDeliveryDate)", trip_summary_renderer)
-        self.assertIn("onDeliveryDateChange(deliveryDateInput.value || minimumDeliveryDate)", final_summary_renderer)
+        self.assertNotIn("deliveryDateInput.min", trip_summary_renderer)
+        self.assertNotIn("deliveryDateInput.min", final_summary_renderer)
+        self.assertIn("state.dispatchDate || DEFAULT_DISPATCH_DATE", trip_summary_renderer)
+        self.assertIn("state.dispatchDate || DEFAULT_DISPATCH_DATE", final_summary_renderer)
+        self.assertIn("onDeliveryDateChange(deliveryDateInput.value || defaultDeliveryDate)", trip_summary_renderer)
+        self.assertIn("onDeliveryDateChange(deliveryDateInput.value || defaultDeliveryDate)", final_summary_renderer)
         self.assertIn("updateDriverSummaryDeliveryDate(deliveryDate)", app_js)
 
     def test_task_pool_delivery_date_filter_controls_are_present(self):

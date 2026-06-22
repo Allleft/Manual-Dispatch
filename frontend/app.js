@@ -50,7 +50,6 @@ const BOARD_VIEW_SECTION_IDS = {
   "trip-summary": "trip-summary-view",
   "final-summary": "final-summary-view",
 };
-const DELIVERY_DATE_BEFORE_DISPATCH_MESSAGE = "Delivery date cannot be before dispatch date.";
 
 async function loadBoard(dispatchDate = state.dispatchDate, options = {}) {
   const force = Boolean(options.force);
@@ -477,24 +476,9 @@ function renderFinalTripSummaries() {
 }
 
 function updateDriverSummaryDeliveryDate(deliveryDate) {
-  const minimumDeliveryDate = state.dispatchDate || DEFAULT_DISPATCH_DATE;
-  const nextDeliveryDate = deliveryDate || minimumDeliveryDate;
-  if (nextDeliveryDate < minimumDeliveryDate) {
-    state.driverSummaryDeliveryDate = minimumDeliveryDate;
-    state.errorMessage = DELIVERY_DATE_BEFORE_DISPATCH_MESSAGE;
-    state.finalSummaryGlobalSaveError = DELIVERY_DATE_BEFORE_DISPATCH_MESSAGE;
-    state.finalSummaryGlobalSaveSuccess = "";
-    renderBoardControls();
-    return false;
-  }
-
+  const defaultDeliveryDate = state.dispatchDate || DEFAULT_DISPATCH_DATE;
+  const nextDeliveryDate = deliveryDate || defaultDeliveryDate;
   state.driverSummaryDeliveryDate = nextDeliveryDate;
-  if (state.errorMessage === DELIVERY_DATE_BEFORE_DISPATCH_MESSAGE) {
-    state.errorMessage = "";
-  }
-  if (state.finalSummaryGlobalSaveError === DELIVERY_DATE_BEFORE_DISPATCH_MESSAGE) {
-    state.finalSummaryGlobalSaveError = "";
-  }
   renderBoardControls();
   return true;
 }
