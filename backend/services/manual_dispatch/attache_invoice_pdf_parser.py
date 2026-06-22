@@ -22,7 +22,14 @@ ACCOUNTING_NOISE_PATTERNS = (
 )
 
 IGNORED_PRODUCT_CODES = {"DEL", "DELIVERY", "FUEL"}
-PACKAGING_UNITS = {"BAG10", "BAG5"}
+PACKAGING_UNITS = {"BAG10", "BAG5", "BAG1.5"}
+OPERATIONAL_NOTE_ANCHORS = (
+    "ATTN:",
+    "DELIVERY INSTRUCTION",
+    "EMAIL INVOICE",
+    "ON DELIVERY DOCKET",
+    "PAID ",
+)
 STOP_BLOCK_MARKERS = (
     "ABN",
     "Amt+GST",
@@ -49,7 +56,7 @@ SUPPLIER_ISSUER_MARKERS = (
 )
 PRODUCT_LINE_PATTERN = re.compile(
     r"^(?P<code>[A-Z0-9#-]+)\s+(?P<name>.+?)\s+(?P<quantity>\d+)\s+"
-    r"(?P<unit>PALLETS?|PAL|BAG10|BAG5|BAGS?|DELIVERY)\b",
+    r"(?P<unit>PALLETS?|PAL|CARTONS?|CTN|BAG10|BAG5|BAG1\.5|BAGS?|DELIVERY)\b",
     re.IGNORECASE,
 )
 
@@ -606,10 +613,9 @@ def _split_address(value):
 
 
 def _parse_product_lines(lines):
-    kg_products = []
-    bag_products = []
+    products = []
     pallet_quantity = 0
-    last_kg_product = None
+    last_product = None
     for line in lines:
         if _is_noise_line(line):
             continue
@@ -617,23 +623,34 @@ def _parse_product_lines(lines):
         if code in IGNORED_PRODUCT_CODES:
             continue
         if code == "PAL":
-            pallet_quantity += _parse_pallet_quantity(line)
+            quantity = _parse_pallet_quantity(line)
+            pallet_quantity += quantity
+            _assign_transport_unit(products, "PALLETS", quantity)
+            continue
+        if _is_carton_transport_line(line):
+            _assign_transport_unit(
+                products,
+                "CARTONS",
+                _parse_carton_quantity(line),
+                prefer_carton_product=True,
+            )
             continue
         if code in PACKAGING_UNITS:
-            if last_kg_product:
-                last_kg_product["bag_quantity"] = _parse_packaging_quantity(line)
+            if last_product:
+                last_product["packaging_code"] = code
+                last_product["packaging_quantity"] = _parse_packaging_quantity(line)
             continue
 
         kg_product = _parse_kg_product_line(line)
         if kg_product:
-            kg_products.append(kg_product)
-            last_kg_product = kg_product
+            products.append(kg_product)
+            last_product = kg_product
             continue
 
         bag_product = _parse_real_bag_product_line(line)
         if bag_product:
-            bag_products.append(bag_product)
-            last_kg_product = None
+            products.append(bag_product)
+            last_product = bag_product
             continue
 
         legacy_product = _parse_legacy_product_line(line)
@@ -641,48 +658,118 @@ def _parse_product_lines(lines):
             unit = legacy_product["unit"]
             if unit in {"PAL", "PALLET", "PALLETS"}:
                 pallet_quantity += legacy_product["quantity"]
-                kg_products.append(
-                    {
-                        "name": _strip_trailing_order_weight(legacy_product["name"]),
-                        "bag_quantity": legacy_product["quantity"],
-                    }
+                product = _new_product(
+                    _strip_trailing_order_weight(legacy_product["name"]),
+                    source_unit="PALLETS",
                 )
+                product["transport_unit"] = "PALLETS"
+                product["transport_quantity"] = legacy_product["quantity"]
+                products.append(product)
+                last_product = product
+            elif unit in {"CTN", "CARTON", "CARTONS"}:
+                product = _new_product(
+                    _strip_trailing_order_weight(legacy_product["name"]),
+                    source_unit="CARTONS",
+                )
+                product["transport_unit"] = "CARTONS"
+                product["transport_quantity"] = legacy_product["quantity"]
+                products.append(product)
+                last_product = product
             elif unit in PACKAGING_UNITS:
-                if last_kg_product:
-                    last_kg_product["bag_quantity"] = legacy_product["quantity"]
+                if last_product:
+                    last_product["packaging_code"] = unit
+                    last_product["packaging_quantity"] = legacy_product["quantity"]
                 else:
-                    kg_products.append(
-                        {
-                            "name": _strip_trailing_order_weight(legacy_product["name"]),
-                            "bag_quantity": legacy_product["quantity"],
-                        }
+                    product = _new_product(
+                        _strip_trailing_order_weight(legacy_product["name"]),
+                        legacy_product["quantity"],
+                        "BAGS",
                     )
-                    last_kg_product = kg_products[-1]
+                    products.append(product)
+                    last_product = product
             elif unit in {"BAG", "BAGS"}:
-                bag_products.append(legacy_product)
+                product = _new_product(
+                    legacy_product["name"],
+                    legacy_product["quantity"],
+                    "BAGS",
+                )
+                products.append(product)
+                last_product = product
             continue
 
     product_lines = []
     loose_bags_quantity = 0
-    for product in kg_products:
-        if pallet_quantity > 0:
-            product_lines.append(_product_line(product["name"], pallet_quantity, "PALLETS"))
+    for product in products:
+        transport_quantity = product.get("transport_quantity") or 0
+        transport_unit = product.get("transport_unit")
+        if transport_quantity > 0 and transport_unit:
+            product_lines.append(
+                _product_line(product["name"], transport_quantity, transport_unit)
+            )
             continue
-        bag_quantity = product.get("bag_quantity") or 0
+        bag_quantity = product.get("packaging_quantity") or product.get("source_quantity") or 0
         if bag_quantity > 0:
             loose_bags_quantity += bag_quantity
             product_lines.append(_product_line(product["name"], bag_quantity, "BAGS"))
-
-    for product in bag_products:
-        if product["quantity"] > 0:
-            loose_bags_quantity += product["quantity"]
-            product_lines.append(_product_line(product["name"], product["quantity"], "BAGS"))
 
     return {
         "pallet_quantity": pallet_quantity,
         "loose_bags_quantity": loose_bags_quantity,
         "product_lines": _dedupe_product_lines(product_lines),
     }
+
+
+def _new_product(name, source_quantity=0, source_unit=None):
+    return {
+        "name": name,
+        "source_quantity": source_quantity,
+        "source_unit": source_unit,
+        "packaging_code": None,
+        "packaging_quantity": 0,
+        "transport_unit": None,
+        "transport_quantity": 0,
+    }
+
+
+def _assign_transport_unit(products, unit, quantity, prefer_carton_product=False):
+    if quantity <= 0:
+        return
+    candidates = [product for product in products if not product.get("transport_unit")]
+    if prefer_carton_product:
+        carton_candidates = [
+            product
+            for product in candidates
+            if product.get("packaging_code") == "BAG1.5"
+            or "1.5KG" in str(product.get("name") or "").upper().replace(" ", "")
+        ]
+        if carton_candidates:
+            candidates = carton_candidates
+    elif unit == "PALLETS":
+        packaged_candidates = [
+            product
+            for product in candidates
+            if product.get("packaging_code") in PACKAGING_UNITS
+        ]
+        if packaged_candidates:
+            candidates = packaged_candidates
+    if not candidates:
+        return
+    product = candidates[-1] if prefer_carton_product else candidates[0]
+    product["transport_unit"] = unit
+    product["transport_quantity"] = quantity
+
+
+def _is_carton_transport_line(line):
+    return bool(re.search(r"\b(?:CTN|CARTONS?)\b", str(line or ""), re.IGNORECASE))
+
+
+def _parse_carton_quantity(line):
+    matches = re.findall(
+        r"\b(?:CTN|CARTONS?)\s+(\d+)(?!\.)\b",
+        str(line or ""),
+        re.IGNORECASE,
+    )
+    return int(matches[-1]) if matches else 0
 
 
 def _line_code(line):
@@ -737,7 +824,7 @@ def _parse_kg_product_line(line):
         name_tokens = _strip_trailing_numeric_tokens(name_tokens)
 
     name = _strip_trailing_order_weight(" ".join(name_tokens))
-    return {"name": name, "bag_quantity": 0} if name else None
+    return _new_product(name, source_unit="KG") if name else None
 
 
 def _parse_real_bag_product_line(line):
@@ -751,7 +838,7 @@ def _parse_real_bag_product_line(line):
     quantity = int(parts[bag_index + 1])
     name_tokens = _strip_trailing_numeric_tokens(parts[bag_index + 2 :])
     name = _clean_product_name(" ".join(name_tokens))
-    return {"name": name, "quantity": quantity, "unit": "BAGS"} if name else None
+    return _new_product(name, quantity, "BAGS") if name else None
 
 
 def _parse_legacy_product_line(line):
@@ -823,6 +910,10 @@ def _build_note(lines, customer_code=None, order_no=None, time_instruction=None)
     if time_instruction:
         note_lines.append(time_instruction)
 
+    for line in _extract_operational_note_blocks(lines):
+        if line not in note_lines:
+            note_lines.append(line)
+
     for line in lines:
         normalized = line.strip()
         upper = normalized.upper()
@@ -844,6 +935,105 @@ def _build_note(lines, customer_code=None, order_no=None, time_instruction=None)
                 note_lines.append(normalized)
 
     return "\n".join(note_lines) or None
+
+
+def _extract_operational_note_blocks(lines):
+    note_lines = []
+    collecting = False
+    remaining_lines = 0
+    for line in lines:
+        normalized = str(line or "").strip()
+        upper = normalized.upper()
+        is_anchor = any(marker in upper for marker in OPERATIONAL_NOTE_ANCHORS)
+        if is_anchor:
+            collecting = True
+            remaining_lines = 12
+        elif collecting and _is_operational_note_stop(normalized):
+            collecting = False
+            remaining_lines = 0
+            continue
+
+        if not collecting:
+            continue
+        formatted = _format_operational_note_line(normalized)
+        if formatted and formatted not in note_lines:
+            note_lines.append(formatted)
+        remaining_lines -= 1
+        if remaining_lines <= 0:
+            collecting = False
+    return note_lines
+
+
+def _is_operational_note_stop(line):
+    upper = str(line or "").strip().upper()
+    if _is_customer_email_line(line):
+        return False
+    if (
+        not upper
+        or _is_operational_note_supplier_stop(line)
+        or upper.startswith(
+            (
+                "ACCOUNT:",
+                "AMT+GST",
+                "BSB:",
+                "CODE DESCRIPTION",
+                "GOODS REMAIN",
+                "PAYMENT BY",
+                "PLEASE NOTE NEW BANK ACC DETAILS",
+                "PRICE PER NET",
+                "TERMS:",
+                "TOTAL",
+            )
+        )
+        or _looks_like_product_or_transport_line(line)
+    ):
+        return True
+    return False
+
+
+def _is_operational_note_supplier_stop(line):
+    text = str(line or "").strip()
+    upper = text.upper()
+    if upper.startswith(("ABN", "EMAIL:", "WEB:")) or "@TEAMSAUSTRALIA.COM.AU" in upper:
+        return True
+    normalized = re.sub(r"[^A-Z0-9]+", " ", upper)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return any(
+        marker in normalized
+        for marker in (
+            "B S L WIPERS",
+            "BSL WIPERS",
+            "MCC RAGMAN",
+            "MELBOURNE CLEANING CLOTHS",
+            "SMITHS RAGS",
+            "98 102 HUME HIGHWAY",
+        )
+    )
+
+
+def _looks_like_product_or_transport_line(line):
+    code = _line_code(line)
+    return (
+        code in {"DEL", "FUEL"}
+        or code in PACKAGING_UNITS
+        or code in {"PAL", "CTN"}
+        or _parse_kg_product_line(line) is not None
+        or _parse_real_bag_product_line(line) is not None
+    )
+
+
+def _is_customer_email_line(line):
+    text = str(line or "").strip()
+    return bool(
+        re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", text)
+    ) and not _is_operational_note_supplier_stop(text)
+
+
+def _format_operational_note_line(line):
+    text = str(line or "").strip()
+    if _is_customer_email_line(text):
+        return f"[{text}](mailto:{text})"
+    return text
 
 
 def _is_noise_line(line):

@@ -136,6 +136,243 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
             _find_postcode(["(03) 9768 3537", "03 9768 3537", "0402 848 618"])
         )
 
+    def test_paid_and_attention_operational_note_block(self):
+        parsed = parse_attache_invoice_text(
+            """
+            Invoice No
+              184040
+            Order No Date
+            03/06/26 LINCLA 3088
+            Invoice to:
+            LINEAR METAL POLISHING PTY LTD
+            55 SARTON RD
+            CLAYTON 3168
+            Deliver to:
+            LINEAR METAL POLISHING PTY LTD
+            55 SARTON RD
+            CLAYTON
+            Tax Invoice
+            9548 7214
+            3168
+            RFLAN 12.80 KG 40 FLANNELETTE #9 3.199 140.76 127.96
+            BAG10 0.00 4 PLASTIC BAG 10 kg 0.000 0.00 0.00
+            DEL 1.36 DEL 1 DELIVERY /FUEL LEVY CHARGE 13.640 15.00 13.64
+            PAID EWAY
+            ATTN: DANIELLE FOWLER
+            Payment by Visa, Mastercard can be made by phoning: 03 9930 7700
+            Terms: C.O.D.
+            Total Invoice:AUD 155.76
+            """,
+            source_filename="184040.pdf",
+        )
+
+        self.assertEqual("184040", parsed.invoice_number)
+        self.assertEqual("LINCLA", parsed.customer_code)
+        self.assertEqual("3088", parsed.order_no)
+        self.assertIn("PAID EWAY\nATTN: DANIELLE FOWLER", parsed.note)
+        self.assertNotIn("DELIVERY /FUEL LEVY", parsed.note)
+        self.assertNotIn("Total Invoice", parsed.note)
+        self.assert_order_number_not_in_note(parsed)
+
+    def test_prepayment_operational_note_keeps_customer_email(self):
+        parsed = parse_attache_invoice_text(
+            """
+            email: admin@teamsaustralia.com.au
+            MELBOURNE CLEANING CLOTHS
+            Invoice No
+              184061
+            Order No Date
+            04/06/26 EDEMIC PO-0458
+            Invoice to:
+            EDENS EXCAVATIONS
+            21 CONSTANCE CRT
+            EPPING 3076
+            Deliver to:
+            EDENS EXCAVATIONS OPENS 8AM
+            21 CONSTANCE CRT
+            EPPING
+            Tax Invoice
+            0448999253
+            3076
+            RSING 5.25 KG 30 COLOR TSHIRT RAGS 1.750 57.75 52.50
+            BAG10 0.00 3 PLASTIC BAG 10 kg 0.000 0.00 0.00
+            DEL 1.00 DEL 1 DELIVERY /FUEL LEVY CHARGE 10.000 11.00 10.00
+            EMAIL INVOICE FOR PRE PAYMENT
+            accounts@edensexcavations.com.au
+            admin@teamsaustralia.com.au
+            Payment by Visa, Mastercard can be made by phoning: 03 9930 7700
+            """,
+            source_filename="184061.pdf",
+        )
+
+        self.assertEqual("184061", parsed.invoice_number)
+        self.assertEqual("EDEMIC", parsed.customer_code)
+        self.assertEqual("PO-0458", parsed.order_no)
+        self.assertEqual("08:00", parsed.start_time)
+        self.assertIn("EMAIL INVOICE FOR PRE PAYMENT", parsed.note)
+        self.assertIn(
+            "[accounts@edensexcavations.com.au](mailto:accounts@edensexcavations.com.au)",
+            parsed.note,
+        )
+        self.assertNotIn("admin@teamsaustralia.com.au", parsed.note)
+        self.assert_order_number_not_in_note(parsed)
+
+    def test_delivery_docket_operational_note_keeps_multiline_instructions(self):
+        parsed = parse_attache_invoice_text(
+            """
+            Invoice No
+              184062
+            Order No Date
+            04/06/26 MICTHO PO61432
+            Invoice to:
+            MICRO FASTENERS
+            6 MERCEDES DV
+            THOMASTOWN 3074
+            Deliver to:
+            MICRO FASTENERS
+            6 MERCEDES DV
+            THOMASTOWN
+            Tax Invoice
+            94640330
+            OPENS 7AM
+            3074
+            RPWSING 121.50 KG 450 PURE WHITE SINGLET 2.700 1,336.50 1215.00
+            BAG10 0.00 45 PLASTIC BAG 10 kg 0.000 0.00 0.00
+            PAL 0.00 PLT 1 PALLET 0.000 0.00 0.00
+            DEL 1.00 DEL 1 DELIVERY /FUEL LEVY CHARGE 10.000 11.00 10.00
+            ON DELIVERY DOCKET NO INVOICE
+            REGENT RV PTY LTD
+            20-50 FILLO DRIVE
+            SOMERTON, VIC, 3062
+            SITE CONTACT: Atra - 0477511802
+            DELIVERY ONLY ACCEPTED BETWEEN 7.30 am until 2.30pm
+            Payment by Visa, Mastercard can be made by phoning: 03 9930 7700
+            Terms: 30 DAYS
+            BSB: 013-226 ACCOUNT: 654484155
+            PLEASE NOTE NEW BANK ACC DETAILS:
+            """,
+            source_filename="184062.pdf",
+        )
+
+        self.assertEqual("184062", parsed.invoice_number)
+        self.assertEqual("MICTHO", parsed.customer_code)
+        self.assertEqual("PO61432", parsed.order_no)
+        self.assertEqual("07:00", parsed.start_time)
+        expected_lines = [
+            "ON DELIVERY DOCKET NO INVOICE",
+            "REGENT RV PTY LTD",
+            "20-50 FILLO DRIVE",
+            "SOMERTON, VIC, 3062",
+            "SITE CONTACT: Atra - 0477511802",
+            "DELIVERY ONLY ACCEPTED BETWEEN 7.30 am until 2.30pm",
+        ]
+        note_lines = parsed.note.splitlines()
+        positions = [note_lines.index(line) for line in expected_lines]
+        self.assertEqual(sorted(positions), positions)
+        self.assertNotIn("PLEASE NOTE NEW BANK ACC DETAILS", parsed.note)
+        self.assertNotIn("BSB:", parsed.note)
+        self.assertNotIn("654484155", parsed.note)
+        self.assert_order_number_not_in_note(parsed)
+
+    def test_pallet_transport_replaces_contained_bag_quantity(self):
+        parsed = parse_attache_invoice_text(
+            """
+            Invoice No
+              184063
+            Order No Date
+            04/06/26 BTLDAN 6300379
+            Invoice to:
+            TOYOTA MATERIAL HANDLING
+            253-281 DISCOVERY ROAD
+            DANDENONG SOUTH 3175
+            Deliver to:
+            TOYOTA MATERIAL HANDLING (VIC) P/L
+            253-281 DISCOVERY ROAD
+            DANDENONG SOUTH VIC
+            Tax Invoice
+            8795 2500
+            RSING10KG 130.50 BAG 90 COLOUR RAGS 10KG NET 14.500 1,435.50 1305.00
+            BAG10 0.00 90 PLASTIC BAG 10 kg 0.000 0.00 0.00
+            PAL 0.00 PLT 2 PALLET 0.000 0.00 0.00
+            DEL 1.00 DEL 1 DELIVERY /FUEL LEVY CHARGE 10.000 11.00 10.00
+            """,
+            source_filename="184063.pdf",
+        )
+
+        self.assertEqual("184063", parsed.invoice_number)
+        self.assertEqual("6300379", parsed.order_no)
+        self.assertEqual(2, parsed.pallet_quantity)
+        self.assertEqual(0, parsed.loose_bags_quantity)
+        self.assertEqual(
+            [
+                {
+                    "product_name": "COLOUR RAGS 10KG NET",
+                    "quantity": 2,
+                    "unit": "PALLETS",
+                }
+            ],
+            parsed.product_lines,
+        )
+        self.assertNotIn("BAGS", [line["unit"] for line in parsed.product_lines])
+        self.assertNotIn(90, [line["quantity"] for line in parsed.product_lines])
+
+    def test_pallet_and_carton_transport_units_are_associated_per_product(self):
+        parsed = parse_attache_invoice_text(
+            """
+            Invoice No
+              184068
+            Order No Date
+            04/06/26 JBCBAL 7147703
+            Invoice to:
+            JB CAMERON
+            132 Armstrong Street
+            BALLARAT 3350
+            Deliver to:
+            JB CAMERON
+            126 ARMSTRONG ST SOUTH
+            BALLARAT CENTRAL
+            Tax Invoice
+            (03) 5337 4400
+            3350
+            RSING10KG 65.25 BAG 45 COLOUR RAGS 10KG NET 14.500 717.75 652.50
+            BAG10 0.00 45 PLASTIC BAG 10 kg 0.000 0.00 0.00
+            RSING1.5KG 9.80 BAG 28 COLOR RAGS 1.5KG BAG 3.500 107.80 98.00
+            BAG1.5 0.00 28 PLASTIC BAG 1.5 kg 0.000 0.00 0.00
+            CTN 0.00 CTN 2 CARTONS 0.000 0.00 0.00
+            PAL 0.00 PLT 1 PALLET 0.000 0.00 0.00
+            DEL 10.50 DEL 1 DELIVERY /FUEL LEVY CHARGE 105.000 115.50 105.00
+            """,
+            source_filename="184068.pdf",
+        )
+
+        self.assertEqual("184068", parsed.invoice_number)
+        self.assertEqual("7147703", parsed.order_no)
+        self.assertEqual(1, parsed.pallet_quantity)
+        self.assertEqual(0, parsed.loose_bags_quantity)
+        self.assertEqual(
+            [
+                {
+                    "product_name": "COLOUR RAGS 10KG NET",
+                    "quantity": 1,
+                    "unit": "PALLETS",
+                },
+                {
+                    "product_name": "COLOR RAGS 1.5KG BAG",
+                    "quantity": 2,
+                    "unit": "CARTONS",
+                },
+            ],
+            parsed.product_lines,
+        )
+        self.assertNotIn("BAGS", [line["unit"] for line in parsed.product_lines])
+        self.assertNotIn("CARTONS", [line["product_name"] for line in parsed.product_lines])
+        self.assertFalse(
+            any("BAG1.5" in line["product_name"] for line in parsed.product_lines)
+        )
+        self.assertFalse(
+            any(line["quantity"] in {45, 28} for line in parsed.product_lines)
+        )
+
     def test_snap_pack_bag_invoice(self):
         parsed = parse_attache_invoice_text(
             """
