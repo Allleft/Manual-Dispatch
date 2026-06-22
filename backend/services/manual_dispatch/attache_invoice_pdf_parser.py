@@ -267,17 +267,31 @@ def _parse_order_no(lines):
 def _parse_customer_profile(lines):
     invoice_block = _collect_block(lines, "Invoice to:")
     delivery_block = _collect_block(lines, "Deliver to:")
+    delivery_context = _collect_delivery_context_window(lines)
     tax_window = _collect_tax_invoice_window(lines)
 
     invoice_profile = _profile_from_address_block(invoice_block)
     delivery_profile = _profile_from_address_block(delivery_block)
 
     profile = invoice_profile
-    if delivery_profile.get("delivery_address") and delivery_profile.get("postcode"):
+    if _is_valid_delivery_profile(delivery_profile):
         profile = delivery_profile
 
-    phone = _find_phone(delivery_block) or _find_phone(tax_window)
-    postcode = profile.get("postcode") or _find_postcode(tax_window)
+    matching_invoice_postcode = None
+    if profile is delivery_profile and _profiles_match(delivery_profile, invoice_profile):
+        matching_invoice_postcode = invoice_profile.get("postcode")
+
+    phone = (
+        _find_phone(delivery_context)
+        or _find_phone(delivery_block)
+        or _find_phone(tax_window)
+    )
+    postcode = (
+        profile.get("postcode")
+        or matching_invoice_postcode
+        or _find_postcode(delivery_context)
+        or _find_postcode(tax_window)
+    )
     return {
         "company_name": profile.get("company_name"),
         "delivery_address": profile.get("delivery_address"),
@@ -303,6 +317,20 @@ def _collect_block(lines, header):
     return block
 
 
+def _collect_delivery_context_window(lines, max_lines=20):
+    for index, line in enumerate(lines):
+        if line.upper() != "DELIVER TO:":
+            continue
+        window = []
+        for candidate in lines[index + 1 : index + 1 + max_lines]:
+            upper = candidate.upper()
+            if upper.startswith(("PRICE PER NET", "AMT+GST", "CODE DESCRIPTION")):
+                break
+            window.append(candidate)
+        return window
+    return []
+
+
 def _collect_tax_invoice_window(lines):
     window = []
     collecting = False
@@ -320,7 +348,41 @@ def _collect_tax_invoice_window(lines):
 
 def _is_stop_marker(line):
     upper = str(line or "").upper()
+    if upper.startswith("UNIT ") and _is_unit_street_address(line):
+        return False
     return any(upper.startswith(marker.upper()) for marker in STOP_BLOCK_MARKERS)
+
+
+def _is_unit_street_address(line):
+    return bool(
+        re.match(
+            r"^UNIT\s+[A-Z]*\d+[A-Z0-9-]*\s*(?:[/,-]\s*)?\d+\b",
+            str(line or "").strip(),
+            re.IGNORECASE,
+        )
+    )
+
+
+def _is_valid_delivery_profile(profile):
+    return all(
+        profile.get(field)
+        for field in ("company_name", "delivery_address", "suburb")
+    )
+
+
+def _profiles_match(left, right):
+    for field in ("company_name", "delivery_address"):
+        left_value = _normalize_profile_value(left.get(field))
+        right_value = _normalize_profile_value(right.get(field))
+        if not left_value or left_value != right_value:
+            return False
+    left_suburb = _normalize_profile_value(left.get("suburb"))
+    right_suburb = _normalize_profile_value(right.get("suburb"))
+    return not (left_suburb and right_suburb and left_suburb != right_suburb)
+
+
+def _normalize_profile_value(value):
+    return re.sub(r"[^A-Z0-9]+", "", str(value or "").upper())
 
 
 def _profile_from_address_block(block):
@@ -347,9 +409,9 @@ def _profile_from_address_block(block):
             if address_lines and suburb:
                 break
             continue
-        suburb_postcode_match = re.match(r"^(.+?)\s+(\d{4})$", line)
+        suburb_postcode_match = re.match(r"^(.+?)[,\s]+(\d{4})$", line)
         if suburb_postcode_match:
-            suburb = suburb_postcode_match.group(1).strip()
+            suburb = suburb_postcode_match.group(1).strip(" ,")
             postcode = postcode or suburb_postcode_match.group(2)
             if address_lines:
                 break
@@ -368,10 +430,17 @@ def _profile_from_address_block(block):
             suburb = inferred_suburb
             postcode = postcode or inferred_postcode
 
+    if (
+        not suburb
+        and len(address_lines) >= 2
+        and _looks_like_suburb_line(address_lines[-1])
+    ):
+        suburb = address_lines.pop().strip(" ,")
+
     return {
         "company_name": clean_optional_text(company_name),
         "delivery_address": clean_optional_text(", ".join(address_lines)),
-        "suburb": clean_optional_text(suburb),
+        "suburb": clean_optional_text(str(suburb or "").strip(" ,")),
         "postcode": clean_optional_text(postcode),
     }
 
@@ -381,10 +450,19 @@ def _find_phone(lines):
         stripped = line.strip()
         if stripped.upper().startswith("PHONE:"):
             continue
-        digits = re.sub(r"\D", "", stripped)
-        if len(digits) >= 8 and re.fullmatch(r"[()0-9 +.-]+", stripped):
+        if _is_phone_like_line(stripped):
             return clean_optional_text(stripped)
     return None
+
+
+def _is_phone_like_line(line):
+    stripped = str(line or "").strip()
+    digits = re.sub(r"\D", "", stripped)
+    if len(digits) < 8:
+        return False
+    if stripped.upper().startswith(("PHONE:", "TEL:", "TELEPHONE:", "MOBILE:")):
+        return True
+    return bool(re.fullmatch(r"[()0-9 +.-]+", stripped))
 
 
 def _is_supplier_or_issuer_line(line):
@@ -401,9 +479,18 @@ def _find_postcode(lines):
     for line in lines:
         if _is_postcode_line(line):
             return line.strip()
-        match = re.search(r"\b(\d{4})\b", line)
-        if match:
-            return match.group(1)
+    for line in lines:
+        text = str(line or "").strip()
+        if (
+            not text
+            or _is_phone_like_line(text)
+            or _is_supplier_or_issuer_line(text)
+            or _is_stop_marker(text)
+        ):
+            continue
+        match = re.fullmatch(r"(.+?)[,\s]+(\d{4})", text)
+        if match and _looks_like_suburb_line(match.group(1).strip(" ,")):
+            return match.group(2)
     return None
 
 

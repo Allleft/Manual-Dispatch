@@ -1,6 +1,7 @@
 import unittest
 
 from backend.services.manual_dispatch.attache_invoice_pdf_parser import (
+    _find_postcode,
     parse_attache_invoice_text,
 )
 
@@ -77,6 +78,63 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
         ]
         for fragment in excluded_fragments:
             self.assertNotIn(fragment, parsed.delivery_address)
+
+    def test_interleaved_delivery_address_keeps_customer_phone_and_postcode(self):
+        parsed = parse_attache_invoice_text(
+            """
+            Customer
+            Code
+            Code Description Tax
+            email: admin@teamsaustralia.com.au
+            MELBOURNE CLEANING CLOTHS
+            Invoice No
+              184066
+            Order No Date
+            04/06/26 BOLDAN 524783
+            Invoice to:
+            Bolts & Industrial Supplies
+            Unit 1 / 433 Hammond Road
+            Dandenong,  3175
+            Total
+            Deliver to:
+            Bolts & Industrial Supplies
+            Unit 1 / 433 Hammond Road
+            Dandenong,
+            web: www.melbournecleaningcloths.com.au
+            ABN: 23 114 428 563
+            Tax Invoice
+            (03) 9768 3537
+            3175
+            Price Per Net
+            98-102 HUME HIGHWAY SOMERTON VIC 3062
+            Amt+GST
+            Phone: (03) 9930 7700
+            RWINCH 55.00 KG 200 WINDCHEATER #15 2.750 605.00 550.00
+            BAG10 0.00 20 PLASTIC BAG 10 kg 0.000 0.00 0.00
+            PAL 2.50 PLT 1 PALLET 25.000 27.50 25.00
+            """,
+            source_filename="184066.pdf",
+        )
+
+        self.assertEqual("184066", parsed.invoice_number)
+        self.assertEqual("BOLDAN", parsed.customer_code)
+        self.assertEqual("524783", parsed.order_no)
+        self.assertEqual("Bolts & Industrial Supplies", parsed.company_name)
+        self.assertEqual("Unit 1 / 433 Hammond Road", parsed.delivery_address)
+        self.assertEqual("Dandenong", parsed.suburb)
+        self.assertEqual("3175", parsed.postcode)
+        self.assertEqual("(03) 9768 3537", parsed.phone)
+        self.assertNotIn("MELBOURNE CLEANING CLOTHS", parsed.delivery_address)
+        self.assertNotIn("98-102 HUME HIGHWAY", parsed.delivery_address)
+        self.assertNotIn("SOMERTON", parsed.delivery_address)
+        self.assertNotEqual("(03) 9930 7700", parsed.phone)
+
+    def test_postcode_detection_does_not_use_phone_exchange(self):
+        self.assertEqual("3175", _find_postcode(["(03) 9768 3537", "3175"]))
+        self.assertEqual("3175", _find_postcode(["Dandenong, 3175"]))
+        self.assertIsNone(
+            _find_postcode(["(03) 9768 3537", "03 9768 3537", "0402 848 618"])
+        )
 
     def test_snap_pack_bag_invoice(self):
         parsed = parse_attache_invoice_text(
