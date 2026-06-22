@@ -3491,19 +3491,50 @@ select:disabled {
 }
 
 .opshop-date-group-toggle {
-  border-color: rgba(39, 93, 69, 0.16);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(239, 249, 244, 0.72));
+  border-color: rgba(255, 255, 255, 0.2);
+  color: var(--paper);
+  background: linear-gradient(135deg, var(--accent-strong), var(--accent));
+  box-shadow: 0 10px 24px rgba(23, 63, 48, 0.18);
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
 }
 
-.opshop-date-group-title {
-  color: var(--accent-strong);
+.opshop-date-group-toggle:hover {
+  border-color: rgba(255, 255, 255, 0.42);
+  background: linear-gradient(135deg, var(--accent), #347257);
+  box-shadow: 0 12px 26px rgba(23, 63, 48, 0.24);
+}
+
+.opshop-date-group-toggle:focus-visible {
+  border-color: rgba(255, 255, 255, 0.55);
+  outline: 3px solid #8fd6b2;
+  outline-offset: 3px;
+  background: linear-gradient(135deg, var(--accent), #347257);
+}
+
+.opshop-date-group-title,
+.opshop-date-group-label {
+  color: var(--paper);
   font-weight: 950;
 }
 
 .opshop-date-group-count {
-  color: #596961;
+  color: var(--accent-soft);
   font-weight: 850;
+}
+
+.opshop-date-group-state {
+  color: var(--accent-soft);
+  font-weight: 900;
+  letter-spacing: 0.1em;
+}
+
+.opshop-date-group-label .ui-icon,
+.opshop-date-group-state .ui-icon {
+  color: var(--paper);
+  stroke-width: 2.35;
 }
 
 .specification-modal {

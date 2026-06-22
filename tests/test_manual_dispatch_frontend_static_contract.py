@@ -695,6 +695,29 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("opshop-date-group-toggle", styles)
         self.assertIn("opshop-date-group-count", styles)
         self.assertIn("opshop-date-group-state", styles)
+        self.assertIn(
+            "linear-gradient(135deg, var(--accent-strong), var(--accent))",
+            styles,
+        )
+        self.assertIn(".opshop-date-group-toggle:hover", styles)
+        self.assertIn(".opshop-date-group-toggle:focus-visible", styles)
+        self.assertIn("outline: 3px solid #8fd6b2", styles)
+        self.assertRegex(
+            styles,
+            r"\.opshop-date-group-title,\s*\.opshop-date-group-label\s*\{[^}]*color: var\(--paper\)",
+        )
+        self.assertRegex(
+            styles,
+            r"\.opshop-date-group-count\s*\{[^}]*color: var\(--accent-soft\)",
+        )
+        self.assertRegex(
+            styles,
+            r"\.opshop-date-group-state\s*\{[^}]*color: var\(--accent-soft\)",
+        )
+        self.assertRegex(
+            styles,
+            r"\.opshop-date-group-label \.ui-icon,\s*\.opshop-date-group-state \.ui-icon\s*\{[^}]*color: var\(--paper\)",
+        )
         self.assertIn(".opshop-date-card-list[hidden]", styles)
         self.assertIn("display: none;", styles)
         self.assertIn("Object.prototype.hasOwnProperty.call(collapsedDates, pickupDate)", date_group_utils)
