@@ -525,6 +525,96 @@ class SaveFinalTripSummaryRequest:
 
 
 @dataclass
+class DeliveryRunSheetOrderSnapshot:
+    row_id: str
+    trip_no: str
+    row_no: int
+    task_type: str
+    task_id: str
+    order_id_snapshot: Optional[str]
+    invoice_number_snapshot: Optional[str]
+    order_no_snapshot: Optional[str]
+    company_name_snapshot: Optional[str]
+    suburb_snapshot: Optional[str]
+    delivery_address_snapshot: Optional[str]
+    product_snapshot: Optional[str]
+    pallet_quantity_snapshot: int
+    loose_bags_quantity_snapshot: int
+    note_snapshot: Optional[str]
+    product_lines_snapshot: List[ProductDetailLine] = field(default_factory=list)
+    estimated_distance_km_from_warehouse_snapshot: Optional[float] = None
+
+
+@dataclass
+class DeliveryRunSheetTrip:
+    trip_no: str
+    orders: List[DeliveryRunSheetOrderSnapshot] = field(default_factory=list)
+
+
+@dataclass
+class DeliveryRunSheet:
+    run_sheet_id: str
+    dispatch_date: str
+    delivery_date: str
+    driver_id: str
+    driver_name_snapshot: str
+    vehicle_id: Optional[str]
+    vehicle_rego_snapshot: Optional[str]
+    total_pallets: int
+    total_loose_bags: int
+    status: str
+    generated_at: str
+    saved_at: Optional[str]
+    saved_by_account_name: Optional[str]
+    saved_by_account_id: Optional[int]
+    legacy_summary_id: Optional[str]
+    trips: List[DeliveryRunSheetTrip] = field(default_factory=list)
+
+
+@dataclass
+class OpShopPickupCollectionRowSnapshot:
+    row_id: str
+    row_no: int
+    pickup_task_id_snapshot: Optional[str]
+    opshop_name_snapshot: Optional[str]
+    suburb_snapshot: Optional[str]
+    street_address_snapshot: Optional[str]
+    area_region_snapshot: Optional[str]
+    pickup_date_snapshot: Optional[str]
+    run_type_snapshot: Optional[str]
+    pickup_category_snapshot: Optional[str]
+    route_group_id_snapshot: Optional[str]
+    route_group_name_snapshot: Optional[str]
+    pickup_frequency_snapshot: Optional[str]
+    time_window_snapshot: Optional[str]
+    primary_contact_snapshot: Optional[str]
+    primary_phone_snapshot: Optional[str]
+    secondary_contact_snapshot: Optional[str]
+    secondary_phone_snapshot: Optional[str]
+    access_type_snapshot: Optional[str]
+    key_required_snapshot: bool
+    trailer_restriction_snapshot: Optional[str]
+    notes_snapshot: Optional[str]
+    status_snapshot: Optional[str]
+
+
+@dataclass
+class OpShopPickupCollection:
+    collection_id: str
+    dispatch_date: str
+    pickup_date: str
+    driver_id: str
+    driver_name_snapshot: str
+    status: str
+    generated_at: str
+    saved_at: Optional[str]
+    saved_by_account_name: Optional[str]
+    saved_by_account_id: Optional[int]
+    legacy_summary_id: Optional[str]
+    pickups: List[OpShopPickupCollectionRowSnapshot] = field(default_factory=list)
+
+
+@dataclass
 class OperatorAccountRecord:
     account_id: int
     account_name: str

@@ -1,4 +1,5 @@
 from backend.schemas import (
+    DeliveryRunSheet,
     Driver,
     FinalTripSummary,
     FinalTripSummaryOpShopPickupSnapshot,
@@ -8,6 +9,7 @@ from backend.schemas import (
     ManualDriverVehicleAssignment,
     Order,
     OpShopPickupBoardItem,
+    OpShopPickupCollection,
     OpShopCountrysideRouteGroup,
     OpShopLocation,
     OpShopPickupSchedule,
@@ -159,6 +161,8 @@ class InMemoryManualDispatchRepository:
         self.assignments = []
         self.driver_vehicle_assignments = []
         self.final_trip_summaries = []
+        self.delivery_run_sheets = []
+        self.opshop_pickup_collections = []
         self.operator_accounts = []
         self.opshop_locations = []
         self.opshop_countryside_route_groups = []
@@ -388,6 +392,170 @@ class InMemoryManualDispatchRepository:
             ),
             None,
         )
+
+    def list_delivery_run_sheets(
+        self,
+        dispatch_date=None,
+        delivery_date=None,
+        status=None,
+    ):
+        return [
+            run_sheet
+            for run_sheet in self.delivery_run_sheets
+            if (not dispatch_date or run_sheet.dispatch_date == dispatch_date)
+            and (not delivery_date or run_sheet.delivery_date == delivery_date)
+            and (not status or run_sheet.status == status)
+        ]
+
+    def get_delivery_run_sheet(self, run_sheet_id):
+        return next(
+            (
+                run_sheet
+                for run_sheet in self.delivery_run_sheets
+                if run_sheet.run_sheet_id == run_sheet_id
+            ),
+            None,
+        )
+
+    def get_delivery_run_sheet_for_driver(
+        self,
+        dispatch_date,
+        delivery_date,
+        driver_id,
+    ):
+        return next(
+            (
+                run_sheet
+                for run_sheet in self.delivery_run_sheets
+                if run_sheet.dispatch_date == dispatch_date
+                and run_sheet.delivery_date == delivery_date
+                and run_sheet.driver_id == driver_id
+            ),
+            None,
+        )
+
+    def has_saved_delivery_run_sheet(self, dispatch_date, driver_id, delivery_date):
+        run_sheet = self.get_delivery_run_sheet_for_driver(
+            dispatch_date,
+            delivery_date,
+            driver_id,
+        )
+        return bool(run_sheet and run_sheet.status == "SAVED")
+
+    def upsert_delivery_run_sheet(self, run_sheet):
+        duplicate = next(
+            (
+                existing
+                for existing in self.delivery_run_sheets
+                if existing.run_sheet_id != run_sheet.run_sheet_id
+                and existing.dispatch_date == run_sheet.dispatch_date
+                and existing.delivery_date == run_sheet.delivery_date
+                and existing.driver_id == run_sheet.driver_id
+            ),
+            None,
+        )
+        if duplicate:
+            raise ValueError(
+                "Delivery Run Sheet already exists for this driver and delivery date."
+            )
+        self.delivery_run_sheets = [
+            existing
+            for existing in self.delivery_run_sheets
+            if existing.run_sheet_id != run_sheet.run_sheet_id
+        ]
+        self.delivery_run_sheets.append(run_sheet)
+        return run_sheet
+
+    def delete_delivery_run_sheet(self, run_sheet_id):
+        before_count = len(self.delivery_run_sheets)
+        self.delivery_run_sheets = [
+            run_sheet
+            for run_sheet in self.delivery_run_sheets
+            if run_sheet.run_sheet_id != run_sheet_id
+        ]
+        return len(self.delivery_run_sheets) != before_count
+
+    def list_opshop_pickup_collections(
+        self,
+        dispatch_date=None,
+        pickup_date=None,
+        status=None,
+    ):
+        return [
+            collection
+            for collection in self.opshop_pickup_collections
+            if (not dispatch_date or collection.dispatch_date == dispatch_date)
+            and (not pickup_date or collection.pickup_date == pickup_date)
+            and (not status or collection.status == status)
+        ]
+
+    def get_opshop_pickup_collection(self, collection_id):
+        return next(
+            (
+                collection
+                for collection in self.opshop_pickup_collections
+                if collection.collection_id == collection_id
+            ),
+            None,
+        )
+
+    def get_opshop_pickup_collection_for_driver(
+        self,
+        dispatch_date,
+        pickup_date,
+        driver_id,
+    ):
+        return next(
+            (
+                collection
+                for collection in self.opshop_pickup_collections
+                if collection.dispatch_date == dispatch_date
+                and collection.pickup_date == pickup_date
+                and collection.driver_id == driver_id
+            ),
+            None,
+        )
+
+    def has_saved_opshop_pickup_collection(self, dispatch_date, driver_id, pickup_date):
+        collection = self.get_opshop_pickup_collection_for_driver(
+            dispatch_date,
+            pickup_date,
+            driver_id,
+        )
+        return bool(collection and collection.status == "SAVED")
+
+    def upsert_opshop_pickup_collection(self, collection):
+        duplicate = next(
+            (
+                existing
+                for existing in self.opshop_pickup_collections
+                if existing.collection_id != collection.collection_id
+                and existing.dispatch_date == collection.dispatch_date
+                and existing.pickup_date == collection.pickup_date
+                and existing.driver_id == collection.driver_id
+            ),
+            None,
+        )
+        if duplicate:
+            raise ValueError(
+                "OP SHOP Pickup Collection already exists for this driver and pickup date."
+            )
+        self.opshop_pickup_collections = [
+            existing
+            for existing in self.opshop_pickup_collections
+            if existing.collection_id != collection.collection_id
+        ]
+        self.opshop_pickup_collections.append(collection)
+        return collection
+
+    def delete_opshop_pickup_collection(self, collection_id):
+        before_count = len(self.opshop_pickup_collections)
+        self.opshop_pickup_collections = [
+            collection
+            for collection in self.opshop_pickup_collections
+            if collection.collection_id != collection_id
+        ]
+        return len(self.opshop_pickup_collections) != before_count
 
     def list_opshop_locations(self):
         return sorted(self.opshop_locations, key=lambda location: location.opshop_id)

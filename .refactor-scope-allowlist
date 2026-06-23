@@ -1,0 +1,10 @@
+^backend/db/schema.sql$
+^backend/schemas.py$
+^backend/repositories/in_memory_manual_dispatch_repository.py$
+^backend/repositories/sqlite_manual_dispatch_repository.py$
+^tests/test_workspace_snapshot_persistence.py$
+^docs/separate-delivery-and-opshop-workspaces-spec.md$
+^CHANGE_MANIFEST.md$
+^OBSERVATIONS.md$
+^\.refactor-scope-allowlist$
+^\.refactor-session.md$

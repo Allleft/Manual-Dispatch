@@ -265,6 +265,108 @@ CREATE TABLE IF NOT EXISTS final_trip_summary_opshop_pickup_rows (
         ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS delivery_run_sheets (
+    run_sheet_id TEXT PRIMARY KEY,
+    dispatch_date TEXT NOT NULL,
+    delivery_date TEXT NOT NULL,
+    driver_id TEXT NOT NULL,
+    driver_name_snapshot TEXT NOT NULL,
+    vehicle_id TEXT,
+    vehicle_rego_snapshot TEXT,
+    total_pallets INTEGER NOT NULL DEFAULT 0,
+    total_loose_bags INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL,
+    generated_at TEXT NOT NULL,
+    saved_at TEXT,
+    saved_by_account_name TEXT,
+    saved_by_account_id INTEGER,
+    legacy_summary_id TEXT,
+    UNIQUE(dispatch_date, delivery_date, driver_id),
+    CHECK(status IN ('GENERATED', 'SAVED')),
+    FOREIGN KEY(saved_by_account_id) REFERENCES operator_accounts(id)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_delivery_run_sheets_legacy_summary
+ON delivery_run_sheets (legacy_summary_id)
+WHERE legacy_summary_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS delivery_run_sheet_rows (
+    row_id TEXT PRIMARY KEY,
+    run_sheet_id TEXT NOT NULL,
+    trip_no TEXT NOT NULL,
+    row_no INTEGER NOT NULL,
+    task_type TEXT NOT NULL DEFAULT 'ORDER',
+    task_id TEXT NOT NULL,
+    order_id_snapshot TEXT,
+    invoice_number_snapshot TEXT,
+    order_no_snapshot TEXT,
+    company_name_snapshot TEXT,
+    suburb_snapshot TEXT,
+    delivery_address_snapshot TEXT,
+    product_snapshot TEXT,
+    product_details_snapshot TEXT NOT NULL DEFAULT '[]',
+    estimated_distance_km_from_warehouse_snapshot REAL,
+    pallet_quantity_snapshot INTEGER NOT NULL DEFAULT 0,
+    loose_bags_quantity_snapshot INTEGER NOT NULL DEFAULT 0,
+    note_snapshot TEXT,
+    UNIQUE(run_sheet_id, trip_no, row_no),
+    CHECK(task_type = 'ORDER'),
+    CHECK(trip_no IN ('trip1', 'trip2')),
+    FOREIGN KEY(run_sheet_id) REFERENCES delivery_run_sheets(run_sheet_id)
+        ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS opshop_pickup_collections (
+    collection_id TEXT PRIMARY KEY,
+    dispatch_date TEXT NOT NULL,
+    pickup_date TEXT NOT NULL,
+    driver_id TEXT NOT NULL,
+    driver_name_snapshot TEXT NOT NULL,
+    status TEXT NOT NULL,
+    generated_at TEXT NOT NULL,
+    saved_at TEXT,
+    saved_by_account_name TEXT,
+    saved_by_account_id INTEGER,
+    legacy_summary_id TEXT,
+    UNIQUE(dispatch_date, pickup_date, driver_id),
+    CHECK(status IN ('GENERATED', 'SAVED')),
+    FOREIGN KEY(saved_by_account_id) REFERENCES operator_accounts(id)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_opshop_pickup_collections_legacy_summary
+ON opshop_pickup_collections (legacy_summary_id)
+WHERE legacy_summary_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS opshop_pickup_collection_rows (
+    row_id TEXT PRIMARY KEY,
+    collection_id TEXT NOT NULL,
+    row_no INTEGER NOT NULL,
+    pickup_task_id_snapshot TEXT,
+    opshop_name_snapshot TEXT,
+    suburb_snapshot TEXT,
+    street_address_snapshot TEXT,
+    area_region_snapshot TEXT,
+    pickup_date_snapshot TEXT,
+    run_type_snapshot TEXT,
+    pickup_category_snapshot TEXT,
+    route_group_id_snapshot TEXT,
+    route_group_name_snapshot TEXT,
+    pickup_frequency_snapshot TEXT,
+    time_window_snapshot TEXT,
+    primary_contact_snapshot TEXT,
+    primary_phone_snapshot TEXT,
+    secondary_contact_snapshot TEXT,
+    secondary_phone_snapshot TEXT,
+    access_type_snapshot TEXT,
+    key_required_snapshot INTEGER,
+    trailer_restriction_snapshot TEXT,
+    notes_snapshot TEXT,
+    status_snapshot TEXT,
+    UNIQUE(collection_id, row_no),
+    FOREIGN KEY(collection_id) REFERENCES opshop_pickup_collections(collection_id)
+        ON DELETE CASCADE
+);
+
 INSERT OR IGNORE INTO manual_orders (
     order_id,
     invoice_number,

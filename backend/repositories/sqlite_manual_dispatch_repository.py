@@ -3,6 +3,9 @@ import json
 
 from backend.db.connection import connect, get_database_path, initialize_database
 from backend.schemas import (
+    DeliveryRunSheet,
+    DeliveryRunSheetOrderSnapshot,
+    DeliveryRunSheetTrip,
     Driver,
     FinalTripSummary,
     FinalTripSummaryOpShopPickupSnapshot,
@@ -14,6 +17,8 @@ from backend.schemas import (
     OpShopCountrysideRouteGroup,
     OpShopLocation,
     OpShopPickupBoardItem,
+    OpShopPickupCollection,
+    OpShopPickupCollectionRowSnapshot,
     OpShopPickupSchedule,
     OpShopPickupScheduleCandidate,
     OpShopPickupTask,
@@ -381,6 +386,369 @@ class SQLiteManualDispatchRepository:
                 (dispatch_date, delivery_date, driver_id),
             ).fetchone()
         return self._row_to_final_trip_summary(row) if row else None
+
+    def list_delivery_run_sheets(
+        self,
+        dispatch_date=None,
+        delivery_date=None,
+        status=None,
+    ):
+        clauses = []
+        parameters = []
+        if dispatch_date:
+            clauses.append("dispatch_date = ?")
+            parameters.append(dispatch_date)
+        if delivery_date:
+            clauses.append("delivery_date = ?")
+            parameters.append(delivery_date)
+        if status:
+            clauses.append("status = ?")
+            parameters.append(status)
+        where_clause = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+
+        with connect(self.db_path) as connection:
+            rows = connection.execute(
+                f"""
+                SELECT *
+                FROM delivery_run_sheets
+                {where_clause}
+                ORDER BY delivery_date DESC, generated_at DESC, run_sheet_id
+                """,
+                parameters,
+            ).fetchall()
+        return [self._row_to_delivery_run_sheet(row) for row in rows]
+
+    def get_delivery_run_sheet(self, run_sheet_id):
+        with connect(self.db_path) as connection:
+            row = connection.execute(
+                "SELECT * FROM delivery_run_sheets WHERE run_sheet_id = ?",
+                (run_sheet_id,),
+            ).fetchone()
+        return self._row_to_delivery_run_sheet(row) if row else None
+
+    def get_delivery_run_sheet_for_driver(
+        self,
+        dispatch_date,
+        delivery_date,
+        driver_id,
+    ):
+        with connect(self.db_path) as connection:
+            row = connection.execute(
+                """
+                SELECT *
+                FROM delivery_run_sheets
+                WHERE dispatch_date = ? AND delivery_date = ? AND driver_id = ?
+                LIMIT 1
+                """,
+                (dispatch_date, delivery_date, driver_id),
+            ).fetchone()
+        return self._row_to_delivery_run_sheet(row) if row else None
+
+    def has_saved_delivery_run_sheet(self, dispatch_date, driver_id, delivery_date):
+        run_sheet = self.get_delivery_run_sheet_for_driver(
+            dispatch_date,
+            delivery_date,
+            driver_id,
+        )
+        return bool(run_sheet and run_sheet.status == "SAVED")
+
+    def upsert_delivery_run_sheet(self, run_sheet):
+        with connect(self.db_path) as connection:
+            connection.execute(
+                """
+                INSERT INTO delivery_run_sheets (
+                    run_sheet_id,
+                    dispatch_date,
+                    delivery_date,
+                    driver_id,
+                    driver_name_snapshot,
+                    vehicle_id,
+                    vehicle_rego_snapshot,
+                    total_pallets,
+                    total_loose_bags,
+                    status,
+                    generated_at,
+                    saved_at,
+                    saved_by_account_name,
+                    saved_by_account_id,
+                    legacy_summary_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(run_sheet_id) DO UPDATE SET
+                    dispatch_date = excluded.dispatch_date,
+                    delivery_date = excluded.delivery_date,
+                    driver_id = excluded.driver_id,
+                    driver_name_snapshot = excluded.driver_name_snapshot,
+                    vehicle_id = excluded.vehicle_id,
+                    vehicle_rego_snapshot = excluded.vehicle_rego_snapshot,
+                    total_pallets = excluded.total_pallets,
+                    total_loose_bags = excluded.total_loose_bags,
+                    status = excluded.status,
+                    generated_at = excluded.generated_at,
+                    saved_at = excluded.saved_at,
+                    saved_by_account_name = excluded.saved_by_account_name,
+                    saved_by_account_id = excluded.saved_by_account_id,
+                    legacy_summary_id = excluded.legacy_summary_id
+                """,
+                (
+                    run_sheet.run_sheet_id,
+                    run_sheet.dispatch_date,
+                    run_sheet.delivery_date,
+                    run_sheet.driver_id,
+                    run_sheet.driver_name_snapshot,
+                    run_sheet.vehicle_id,
+                    run_sheet.vehicle_rego_snapshot,
+                    run_sheet.total_pallets,
+                    run_sheet.total_loose_bags,
+                    run_sheet.status,
+                    run_sheet.generated_at,
+                    run_sheet.saved_at,
+                    run_sheet.saved_by_account_name,
+                    run_sheet.saved_by_account_id,
+                    run_sheet.legacy_summary_id,
+                ),
+            )
+            connection.execute(
+                "DELETE FROM delivery_run_sheet_rows WHERE run_sheet_id = ?",
+                (run_sheet.run_sheet_id,),
+            )
+            for trip in run_sheet.trips:
+                for order in trip.orders:
+                    connection.execute(
+                        """
+                        INSERT INTO delivery_run_sheet_rows (
+                            row_id,
+                            run_sheet_id,
+                            trip_no,
+                            row_no,
+                            task_type,
+                            task_id,
+                            order_id_snapshot,
+                            invoice_number_snapshot,
+                            order_no_snapshot,
+                            company_name_snapshot,
+                            suburb_snapshot,
+                            delivery_address_snapshot,
+                            product_snapshot,
+                            product_details_snapshot,
+                            estimated_distance_km_from_warehouse_snapshot,
+                            pallet_quantity_snapshot,
+                            loose_bags_quantity_snapshot,
+                            note_snapshot
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            order.row_id,
+                            run_sheet.run_sheet_id,
+                            trip.trip_no,
+                            order.row_no,
+                            order.task_type,
+                            order.task_id,
+                            order.order_id_snapshot,
+                            order.invoice_number_snapshot,
+                            order.order_no_snapshot,
+                            order.company_name_snapshot,
+                            order.suburb_snapshot,
+                            order.delivery_address_snapshot,
+                            order.product_snapshot,
+                            self._serialize_product_lines(order.product_lines_snapshot),
+                            order.estimated_distance_km_from_warehouse_snapshot,
+                            order.pallet_quantity_snapshot,
+                            order.loose_bags_quantity_snapshot,
+                            order.note_snapshot,
+                        ),
+                    )
+            connection.commit()
+        return self.get_delivery_run_sheet(run_sheet.run_sheet_id)
+
+    def delete_delivery_run_sheet(self, run_sheet_id):
+        with connect(self.db_path) as connection:
+            cursor = connection.execute(
+                "DELETE FROM delivery_run_sheets WHERE run_sheet_id = ?",
+                (run_sheet_id,),
+            )
+            connection.commit()
+        return cursor.rowcount > 0
+
+    def list_opshop_pickup_collections(
+        self,
+        dispatch_date=None,
+        pickup_date=None,
+        status=None,
+    ):
+        clauses = []
+        parameters = []
+        if dispatch_date:
+            clauses.append("dispatch_date = ?")
+            parameters.append(dispatch_date)
+        if pickup_date:
+            clauses.append("pickup_date = ?")
+            parameters.append(pickup_date)
+        if status:
+            clauses.append("status = ?")
+            parameters.append(status)
+        where_clause = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+
+        with connect(self.db_path) as connection:
+            rows = connection.execute(
+                f"""
+                SELECT *
+                FROM opshop_pickup_collections
+                {where_clause}
+                ORDER BY pickup_date DESC, generated_at DESC, collection_id
+                """,
+                parameters,
+            ).fetchall()
+        return [self._row_to_opshop_pickup_collection(row) for row in rows]
+
+    def get_opshop_pickup_collection(self, collection_id):
+        with connect(self.db_path) as connection:
+            row = connection.execute(
+                "SELECT * FROM opshop_pickup_collections WHERE collection_id = ?",
+                (collection_id,),
+            ).fetchone()
+        return self._row_to_opshop_pickup_collection(row) if row else None
+
+    def get_opshop_pickup_collection_for_driver(
+        self,
+        dispatch_date,
+        pickup_date,
+        driver_id,
+    ):
+        with connect(self.db_path) as connection:
+            row = connection.execute(
+                """
+                SELECT *
+                FROM opshop_pickup_collections
+                WHERE dispatch_date = ? AND pickup_date = ? AND driver_id = ?
+                LIMIT 1
+                """,
+                (dispatch_date, pickup_date, driver_id),
+            ).fetchone()
+        return self._row_to_opshop_pickup_collection(row) if row else None
+
+    def has_saved_opshop_pickup_collection(self, dispatch_date, driver_id, pickup_date):
+        collection = self.get_opshop_pickup_collection_for_driver(
+            dispatch_date,
+            pickup_date,
+            driver_id,
+        )
+        return bool(collection and collection.status == "SAVED")
+
+    def upsert_opshop_pickup_collection(self, collection):
+        with connect(self.db_path) as connection:
+            connection.execute(
+                """
+                INSERT INTO opshop_pickup_collections (
+                    collection_id,
+                    dispatch_date,
+                    pickup_date,
+                    driver_id,
+                    driver_name_snapshot,
+                    status,
+                    generated_at,
+                    saved_at,
+                    saved_by_account_name,
+                    saved_by_account_id,
+                    legacy_summary_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(collection_id) DO UPDATE SET
+                    dispatch_date = excluded.dispatch_date,
+                    pickup_date = excluded.pickup_date,
+                    driver_id = excluded.driver_id,
+                    driver_name_snapshot = excluded.driver_name_snapshot,
+                    status = excluded.status,
+                    generated_at = excluded.generated_at,
+                    saved_at = excluded.saved_at,
+                    saved_by_account_name = excluded.saved_by_account_name,
+                    saved_by_account_id = excluded.saved_by_account_id,
+                    legacy_summary_id = excluded.legacy_summary_id
+                """,
+                (
+                    collection.collection_id,
+                    collection.dispatch_date,
+                    collection.pickup_date,
+                    collection.driver_id,
+                    collection.driver_name_snapshot,
+                    collection.status,
+                    collection.generated_at,
+                    collection.saved_at,
+                    collection.saved_by_account_name,
+                    collection.saved_by_account_id,
+                    collection.legacy_summary_id,
+                ),
+            )
+            connection.execute(
+                "DELETE FROM opshop_pickup_collection_rows WHERE collection_id = ?",
+                (collection.collection_id,),
+            )
+            for pickup in collection.pickups:
+                connection.execute(
+                    """
+                    INSERT INTO opshop_pickup_collection_rows (
+                        row_id,
+                        collection_id,
+                        row_no,
+                        pickup_task_id_snapshot,
+                        opshop_name_snapshot,
+                        suburb_snapshot,
+                        street_address_snapshot,
+                        area_region_snapshot,
+                        pickup_date_snapshot,
+                        run_type_snapshot,
+                        pickup_category_snapshot,
+                        route_group_id_snapshot,
+                        route_group_name_snapshot,
+                        pickup_frequency_snapshot,
+                        time_window_snapshot,
+                        primary_contact_snapshot,
+                        primary_phone_snapshot,
+                        secondary_contact_snapshot,
+                        secondary_phone_snapshot,
+                        access_type_snapshot,
+                        key_required_snapshot,
+                        trailer_restriction_snapshot,
+                        notes_snapshot,
+                        status_snapshot
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        pickup.row_id,
+                        collection.collection_id,
+                        pickup.row_no,
+                        pickup.pickup_task_id_snapshot,
+                        pickup.opshop_name_snapshot,
+                        pickup.suburb_snapshot,
+                        pickup.street_address_snapshot,
+                        pickup.area_region_snapshot,
+                        pickup.pickup_date_snapshot,
+                        pickup.run_type_snapshot,
+                        pickup.pickup_category_snapshot,
+                        pickup.route_group_id_snapshot,
+                        pickup.route_group_name_snapshot,
+                        pickup.pickup_frequency_snapshot,
+                        pickup.time_window_snapshot,
+                        pickup.primary_contact_snapshot,
+                        pickup.primary_phone_snapshot,
+                        pickup.secondary_contact_snapshot,
+                        pickup.secondary_phone_snapshot,
+                        pickup.access_type_snapshot,
+                        int(bool(pickup.key_required_snapshot)),
+                        pickup.trailer_restriction_snapshot,
+                        pickup.notes_snapshot,
+                        pickup.status_snapshot,
+                    ),
+                )
+            connection.commit()
+        return self.get_opshop_pickup_collection(collection.collection_id)
+
+    def delete_opshop_pickup_collection(self, collection_id):
+        with connect(self.db_path) as connection:
+            cursor = connection.execute(
+                "DELETE FROM opshop_pickup_collections WHERE collection_id = ?",
+                (collection_id,),
+            )
+            connection.commit()
+        return cursor.rowcount > 0
 
     def get_order(self, order_id):
         with connect(self.db_path) as connection:
@@ -2707,6 +3075,126 @@ class SQLiteManualDispatchRepository:
             pickup_category_snapshot=_row_value(row, "pickup_category_snapshot"),
             route_group_id_snapshot=_row_value(row, "route_group_id_snapshot"),
             route_group_name_snapshot=_row_value(row, "route_group_name_snapshot"),
+        )
+
+    def _row_to_delivery_run_sheet(self, row):
+        with connect(self.db_path) as connection:
+            sheet_rows = connection.execute(
+                """
+                SELECT *
+                FROM delivery_run_sheet_rows
+                WHERE run_sheet_id = ?
+                ORDER BY
+                    CASE trip_no WHEN 'trip1' THEN 1 WHEN 'trip2' THEN 2 ELSE 9 END,
+                    row_no
+                """,
+                (row["run_sheet_id"],),
+            ).fetchall()
+
+        trips = []
+        for trip_no in ("trip1", "trip2"):
+            orders = [
+                DeliveryRunSheetOrderSnapshot(
+                    row_id=sheet_row["row_id"],
+                    trip_no=sheet_row["trip_no"],
+                    row_no=sheet_row["row_no"],
+                    task_type=sheet_row["task_type"],
+                    task_id=sheet_row["task_id"],
+                    order_id_snapshot=sheet_row["order_id_snapshot"],
+                    invoice_number_snapshot=sheet_row["invoice_number_snapshot"],
+                    order_no_snapshot=sheet_row["order_no_snapshot"],
+                    company_name_snapshot=sheet_row["company_name_snapshot"],
+                    suburb_snapshot=sheet_row["suburb_snapshot"],
+                    delivery_address_snapshot=sheet_row["delivery_address_snapshot"],
+                    product_snapshot=sheet_row["product_snapshot"],
+                    pallet_quantity_snapshot=sheet_row["pallet_quantity_snapshot"],
+                    loose_bags_quantity_snapshot=sheet_row["loose_bags_quantity_snapshot"],
+                    note_snapshot=sheet_row["note_snapshot"],
+                    product_lines_snapshot=self._deserialize_product_lines(
+                        sheet_row["product_details_snapshot"]
+                    ),
+                    estimated_distance_km_from_warehouse_snapshot=sheet_row[
+                        "estimated_distance_km_from_warehouse_snapshot"
+                    ],
+                )
+                for sheet_row in sheet_rows
+                if sheet_row["trip_no"] == trip_no
+            ]
+            if orders:
+                trips.append(DeliveryRunSheetTrip(trip_no=trip_no, orders=orders))
+
+        return DeliveryRunSheet(
+            run_sheet_id=row["run_sheet_id"],
+            dispatch_date=row["dispatch_date"],
+            delivery_date=row["delivery_date"],
+            driver_id=row["driver_id"],
+            driver_name_snapshot=row["driver_name_snapshot"],
+            vehicle_id=row["vehicle_id"],
+            vehicle_rego_snapshot=row["vehicle_rego_snapshot"],
+            total_pallets=row["total_pallets"],
+            total_loose_bags=row["total_loose_bags"],
+            status=row["status"],
+            generated_at=row["generated_at"],
+            saved_at=row["saved_at"],
+            saved_by_account_name=row["saved_by_account_name"],
+            saved_by_account_id=row["saved_by_account_id"],
+            legacy_summary_id=row["legacy_summary_id"],
+            trips=trips,
+        )
+
+    def _row_to_opshop_pickup_collection(self, row):
+        with connect(self.db_path) as connection:
+            pickup_rows = connection.execute(
+                """
+                SELECT *
+                FROM opshop_pickup_collection_rows
+                WHERE collection_id = ?
+                ORDER BY row_no, row_id
+                """,
+                (row["collection_id"],),
+            ).fetchall()
+
+        pickups = [
+            OpShopPickupCollectionRowSnapshot(
+                row_id=pickup_row["row_id"],
+                row_no=pickup_row["row_no"],
+                pickup_task_id_snapshot=pickup_row["pickup_task_id_snapshot"],
+                opshop_name_snapshot=pickup_row["opshop_name_snapshot"],
+                suburb_snapshot=pickup_row["suburb_snapshot"],
+                street_address_snapshot=pickup_row["street_address_snapshot"],
+                area_region_snapshot=pickup_row["area_region_snapshot"],
+                pickup_date_snapshot=pickup_row["pickup_date_snapshot"],
+                run_type_snapshot=pickup_row["run_type_snapshot"],
+                pickup_category_snapshot=pickup_row["pickup_category_snapshot"],
+                route_group_id_snapshot=pickup_row["route_group_id_snapshot"],
+                route_group_name_snapshot=pickup_row["route_group_name_snapshot"],
+                pickup_frequency_snapshot=pickup_row["pickup_frequency_snapshot"],
+                time_window_snapshot=pickup_row["time_window_snapshot"],
+                primary_contact_snapshot=pickup_row["primary_contact_snapshot"],
+                primary_phone_snapshot=pickup_row["primary_phone_snapshot"],
+                secondary_contact_snapshot=pickup_row["secondary_contact_snapshot"],
+                secondary_phone_snapshot=pickup_row["secondary_phone_snapshot"],
+                access_type_snapshot=pickup_row["access_type_snapshot"],
+                key_required_snapshot=bool(pickup_row["key_required_snapshot"]),
+                trailer_restriction_snapshot=pickup_row["trailer_restriction_snapshot"],
+                notes_snapshot=pickup_row["notes_snapshot"],
+                status_snapshot=pickup_row["status_snapshot"],
+            )
+            for pickup_row in pickup_rows
+        ]
+        return OpShopPickupCollection(
+            collection_id=row["collection_id"],
+            dispatch_date=row["dispatch_date"],
+            pickup_date=row["pickup_date"],
+            driver_id=row["driver_id"],
+            driver_name_snapshot=row["driver_name_snapshot"],
+            status=row["status"],
+            generated_at=row["generated_at"],
+            saved_at=row["saved_at"],
+            saved_by_account_name=row["saved_by_account_name"],
+            saved_by_account_id=row["saved_by_account_id"],
+            legacy_summary_id=row["legacy_summary_id"],
+            pickups=pickups,
         )
 
     def _row_to_operator_account(self, row):
