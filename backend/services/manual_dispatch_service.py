@@ -11,6 +11,9 @@ from backend.services.manual_dispatch.delivery_run_sheet_service import (
 from backend.services.manual_dispatch.delivery_workspace_board_service import (
     DeliveryWorkspaceBoardService,
 )
+from backend.services.manual_dispatch.delivery_workspace_mutation_service import (
+    DeliveryWorkspaceMutationService,
+)
 from backend.services.manual_dispatch.final_summary_service import FinalSummaryService
 from backend.services.manual_dispatch.id_generation import ManualDispatchIdGenerator
 from backend.services.manual_dispatch.order_service import OrderService
@@ -20,6 +23,9 @@ from backend.services.manual_dispatch.opshop_pickup_collection_service import (
 )
 from backend.services.manual_dispatch.opshop_workspace_board_service import (
     OpShopWorkspaceBoardService,
+)
+from backend.services.manual_dispatch.opshop_workspace_mutation_service import (
+    OpShopWorkspaceMutationService,
 )
 from backend.services.manual_dispatch.opshop_template_service import OpShopTemplateService
 from backend.services.manual_dispatch.specification_service import SpecificationService
@@ -74,6 +80,16 @@ class ManualDispatchService:
             self.repository,
             self.opshop_pickup_service,
         )
+        self.delivery_workspace_mutation_service = DeliveryWorkspaceMutationService(
+            self.repository,
+            self.validator,
+            self.delivery_workspace_board_service,
+        )
+        self.opshop_workspace_mutation_service = OpShopWorkspaceMutationService(
+            self.repository,
+            self.validator,
+            self.opshop_workspace_board_service,
+        )
 
     def get_board(self, dispatch_date):
         return self.board_service.get_board(dispatch_date)
@@ -91,6 +107,34 @@ class ManualDispatchService:
         return ManualDispatchSpecificationResponse(
             drivers=self.repository.list_specification_drivers(),
             vehicles=self.repository.list_specification_vehicles(),
+        )
+
+    def assign_delivery_workspace_order(self, request):
+        return self.delivery_workspace_mutation_service.assign_order(request)
+
+    def unassign_delivery_workspace_order(self, request):
+        return self.delivery_workspace_mutation_service.unassign_order(request)
+
+    def assign_delivery_workspace_vehicle(self, request):
+        return self.delivery_workspace_mutation_service.assign_vehicle(request)
+
+    def clear_delivery_workspace_vehicle(self, request):
+        return self.delivery_workspace_mutation_service.clear_vehicle(request)
+
+    def apply_opshop_workspace_assignments(self, request):
+        return self.opshop_workspace_mutation_service.apply_assignments(request)
+
+    def unassign_opshop_workspace_pickup(self, request):
+        return self.opshop_workspace_mutation_service.unassign_pickup(request)
+
+    def assign_opshop_workspace_countryside_route_group(
+        self,
+        route_group_id,
+        request,
+    ):
+        return self.opshop_workspace_mutation_service.assign_countryside_route_group(
+            route_group_id,
+            request,
         )
 
     def create_generated_delivery_run_sheet(self, request):

@@ -1670,6 +1670,114 @@ class SQLiteManualDispatchRepository:
             connection.commit()
         return self.get_opshop_pickup_task(pickup_task_id)
 
+    def apply_opshop_pickup_assignment_batch(
+        self,
+        dispatch_date,
+        tasks,
+        remove_all_existing=False,
+    ):
+        with connect(self.db_path) as connection:
+            for task in tasks:
+                connection.execute(
+                    """
+                    INSERT INTO opshop_pickup_tasks (
+                        pickup_task_id, schedule_id, opshop_id, pickup_date,
+                        task_type, generated_from, status, dispatch_date,
+                        driver_id, trip_no, notes, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(pickup_task_id)
+                    DO UPDATE SET
+                        schedule_id = excluded.schedule_id,
+                        opshop_id = excluded.opshop_id,
+                        pickup_date = excluded.pickup_date,
+                        task_type = excluded.task_type,
+                        generated_from = excluded.generated_from,
+                        status = excluded.status,
+                        dispatch_date = excluded.dispatch_date,
+                        driver_id = excluded.driver_id,
+                        trip_no = excluded.trip_no,
+                        notes = excluded.notes,
+                        updated_at = excluded.updated_at
+                    """,
+                    (
+                        task.pickup_task_id,
+                        task.schedule_id,
+                        task.opshop_id,
+                        task.pickup_date,
+                        task.task_type,
+                        task.generated_from,
+                        task.status,
+                        task.dispatch_date,
+                        task.driver_id,
+                        task.trip_no,
+                        task.notes,
+                        task.created_at,
+                        task.updated_at,
+                    ),
+                )
+                if remove_all_existing:
+                    connection.execute(
+                        """
+                        DELETE FROM manual_dispatch_assignments
+                        WHERE task_type = 'OPSHOP_PICKUP' AND task_id = ?
+                        """,
+                        (task.pickup_task_id,),
+                    )
+                if task.driver_id:
+                    existing = self._fetch_assignment_row(
+                        connection,
+                        dispatch_date,
+                        "OPSHOP_PICKUP",
+                        task.pickup_task_id,
+                    )
+                    timestamp = self._timestamp()
+                    if existing:
+                        connection.execute(
+                            """
+                            UPDATE manual_dispatch_assignments
+                            SET driver_id = ?, trip_no = 'trip1', updated_at = ?
+                            WHERE dispatch_date = ?
+                                AND task_type = 'OPSHOP_PICKUP'
+                                AND task_id = ?
+                            """,
+                            (
+                                task.driver_id,
+                                timestamp,
+                                dispatch_date,
+                                task.pickup_task_id,
+                            ),
+                        )
+                    else:
+                        assignment_id = self._create_assignment_id(connection)
+                        connection.execute(
+                            """
+                            INSERT INTO manual_dispatch_assignments (
+                                assignment_id, dispatch_date, task_type, task_id,
+                                driver_id, trip_no, assigned_at, updated_at
+                            ) VALUES (?, ?, 'OPSHOP_PICKUP', ?, ?, 'trip1', ?, ?)
+                            """,
+                            (
+                                assignment_id,
+                                dispatch_date,
+                                task.pickup_task_id,
+                                task.driver_id,
+                                timestamp,
+                                timestamp,
+                            ),
+                        )
+                else:
+                    connection.execute(
+                        """
+                        DELETE FROM manual_dispatch_assignments
+                        WHERE dispatch_date = ?
+                            AND task_type = 'OPSHOP_PICKUP'
+                            AND task_id = ?
+                        """,
+                        (dispatch_date, task.pickup_task_id),
+                    )
+            connection.commit()
+        return [self.get_opshop_pickup_task(task.pickup_task_id) for task in tasks]
+
     def get_task(self, task_type, task_id):
         if task_type == "ORDER":
             order = self.get_order(task_id)

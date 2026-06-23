@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 from backend.schemas import (
     DeliveryRunSheet,
     Driver,
@@ -1013,6 +1015,42 @@ class InMemoryManualDispatchRepository:
         task.trip_no = trip_no
         task.updated_at = "2026-05-19T00:00:00+00:00"
         return task
+
+    def apply_opshop_pickup_assignment_batch(
+        self,
+        dispatch_date,
+        tasks,
+        remove_all_existing=False,
+    ):
+        original_tasks = deepcopy(self.opshop_pickup_tasks)
+        original_assignments = deepcopy(self.assignments)
+        try:
+            for task in tasks:
+                self.upsert_opshop_pickup_task(task)
+                if remove_all_existing:
+                    self.remove_assignments_for_task(
+                        "OPSHOP_PICKUP",
+                        task.pickup_task_id,
+                    )
+                if task.driver_id:
+                    self.upsert_assignment(
+                        dispatch_date,
+                        "OPSHOP_PICKUP",
+                        task.pickup_task_id,
+                        task.driver_id,
+                        "trip1",
+                    )
+                else:
+                    self.remove_assignment(
+                        dispatch_date,
+                        "OPSHOP_PICKUP",
+                        task.pickup_task_id,
+                    )
+        except Exception:
+            self.opshop_pickup_tasks = original_tasks
+            self.assignments = original_assignments
+            raise
+        return [self.get_opshop_pickup_task(task.pickup_task_id) for task in tasks]
 
     def get_task(self, task_type, task_id):
         if task_type == "ORDER":

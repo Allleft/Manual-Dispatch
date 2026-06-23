@@ -21,11 +21,17 @@ from backend.schemas import (
     CreateOpShopPickupTaskRequest,
     CreateOpShopTemplateRequest,
     CreateVehicleRequest,
+    DeliveryWorkspaceAssignOrderRequest,
+    DeliveryWorkspaceUnassignOrderRequest,
+    DeliveryWorkspaceVehicleAssignmentRequest,
+    DeliveryWorkspaceVehicleClearRequest,
     EnsureOpShopPickupTasksRequest,
     GenerateDeliveryRunSheetRequest,
     GenerateOpShopPickupCollectionRequest,
     LoginOperatorAccountRequest,
     MoveCountrysideRouteMembershipRequest,
+    OpShopWorkspaceAssignmentBatchRequest,
+    OpShopWorkspaceUnassignPickupRequest,
     RegisterOperatorAccountRequest,
     ResetOperatorPasswordRequest,
     SaveFinalTripSummaryRequest,
@@ -89,6 +95,112 @@ def get_opshop_workspace_board(dispatch_date: str):
 @router.get("/shared/specifications")
 def get_shared_specifications():
     return to_dict(service.get_shared_specifications())
+
+
+@router.post("/delivery/assignments")
+def assign_delivery_workspace_order(payload: dict = Body(...)):
+    try:
+        _reject_scoped_fields(payload, {"task_type"})
+        request = DeliveryWorkspaceAssignOrderRequest(
+            dispatch_date=payload.get("dispatch_date"),
+            order_id=payload.get("order_id"),
+            driver_id=payload.get("driver_id"),
+            trip_no=payload.get("trip_no"),
+        )
+        return to_dict(service.assign_delivery_workspace_order(request))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.post("/delivery/assignments/unassign")
+def unassign_delivery_workspace_order(payload: dict = Body(...)):
+    try:
+        _reject_scoped_fields(payload, {"task_type"})
+        request = DeliveryWorkspaceUnassignOrderRequest(
+            dispatch_date=payload.get("dispatch_date"),
+            order_id=payload.get("order_id"),
+        )
+        return to_dict(service.unassign_delivery_workspace_order(request))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.post("/delivery/vehicle-assignments")
+def assign_delivery_workspace_vehicle(payload: dict = Body(...)):
+    try:
+        _reject_scoped_fields(payload, {"task_type"})
+        request = DeliveryWorkspaceVehicleAssignmentRequest(
+            dispatch_date=payload.get("dispatch_date"),
+            delivery_date=payload.get("delivery_date"),
+            driver_id=payload.get("driver_id"),
+            vehicle_id=payload.get("vehicle_id"),
+        )
+        return to_dict(service.assign_delivery_workspace_vehicle(request))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.post("/delivery/vehicle-assignments/clear")
+def clear_delivery_workspace_vehicle(payload: dict = Body(...)):
+    try:
+        _reject_scoped_fields(payload, {"task_type"})
+        request = DeliveryWorkspaceVehicleClearRequest(
+            dispatch_date=payload.get("dispatch_date"),
+            delivery_date=payload.get("delivery_date"),
+            driver_id=payload.get("driver_id"),
+        )
+        return to_dict(service.clear_delivery_workspace_vehicle(request))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.post("/opshop/pickups/assignments/apply")
+def apply_opshop_workspace_assignments(payload: dict = Body(...)):
+    try:
+        _reject_scoped_fields(payload, {"task_type", "trip_no"})
+        request = OpShopWorkspaceAssignmentBatchRequest(
+            dispatch_date=payload.get("dispatch_date"),
+            assignments=payload.get("assignments") or [],
+        )
+        return to_dict(service.apply_opshop_workspace_assignments(request))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.post("/opshop/pickups/assignments/unassign")
+def unassign_opshop_workspace_pickup(payload: dict = Body(...)):
+    try:
+        _reject_scoped_fields(payload, {"task_type", "trip_no"})
+        request = OpShopWorkspaceUnassignPickupRequest(
+            dispatch_date=payload.get("dispatch_date"),
+            pickup_task_id=payload.get("pickup_task_id"),
+        )
+        return to_dict(service.unassign_opshop_workspace_pickup(request))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.post("/opshop/countryside-route-groups/{route_group_id}/assign")
+def assign_opshop_workspace_countryside_route_group(
+    route_group_id: str,
+    payload: dict = Body(...),
+):
+    try:
+        _reject_scoped_fields(payload, {"task_type", "trip_no"})
+        request = AssignCountrysideRouteGroupRequest(
+            dispatch_date=payload.get("dispatch_date"),
+            pickup_date=payload.get("pickup_date"),
+            assigned_driver_id=payload.get("assigned_driver_id"),
+            notes=payload.get("notes"),
+        )
+        return to_dict(
+            service.assign_opshop_workspace_countryside_route_group(
+                route_group_id,
+                request,
+            )
+        )
+    except ValueError as error:
+        raise _to_http_exception(error) from error
 
 
 @router.get("/specifications")
@@ -829,6 +941,12 @@ def _to_http_exception(error):
     message = str(error)
     status_code = 404 if "does not exist" in message else 400
     return HTTPException(status_code=status_code, detail=message)
+
+
+def _reject_scoped_fields(payload, forbidden_fields):
+    for field_name in forbidden_fields:
+        if field_name in (payload or {}):
+            raise ValueError(f"Scoped workspace request does not accept {field_name}")
 
 
 def _existing_invoice_numbers():

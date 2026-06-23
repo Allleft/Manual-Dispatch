@@ -471,6 +471,47 @@ class OpShopWorkspaceBoardResponse:
 
 
 @dataclass
+class DeliveryWorkspaceAssignOrderRequest:
+    dispatch_date: Optional[str] = None
+    order_id: Optional[str] = None
+    driver_id: Optional[str] = None
+    trip_no: Optional[str] = None
+
+
+@dataclass
+class DeliveryWorkspaceUnassignOrderRequest:
+    dispatch_date: Optional[str] = None
+    order_id: Optional[str] = None
+
+
+@dataclass
+class DeliveryWorkspaceVehicleAssignmentRequest:
+    dispatch_date: Optional[str] = None
+    delivery_date: Optional[str] = None
+    driver_id: Optional[str] = None
+    vehicle_id: Optional[str] = None
+
+
+@dataclass
+class DeliveryWorkspaceVehicleClearRequest:
+    dispatch_date: Optional[str] = None
+    delivery_date: Optional[str] = None
+    driver_id: Optional[str] = None
+
+
+@dataclass
+class OpShopWorkspaceAssignmentBatchRequest:
+    dispatch_date: Optional[str] = None
+    assignments: List[dict] = field(default_factory=list)
+
+
+@dataclass
+class OpShopWorkspaceUnassignPickupRequest:
+    dispatch_date: Optional[str] = None
+    pickup_task_id: Optional[str] = None
+
+
+@dataclass
 class AssignTaskRequest:
     dispatch_date: str
     task_type: str
