@@ -415,6 +415,35 @@ Use the backfill tool carefully:
 - Audit and review dry-run output before applying.
 - Do not apply to the real office database without confirming the findings and rollback plan.
 
+### Legacy Final Summary Workspace Migration
+
+The workspace migration tool copies legacy `SAVED` Final Summary snapshots into
+independent Delivery Run Sheet and OP SHOP Pickup Collection history. It does
+not delete or modify legacy Final Summary history.
+
+Always run dry-run first:
+
+```powershell
+.\tmp\route-test-venv\Scripts\python.exe .\tools\migrate_legacy_final_summaries_to_workspaces.py `
+  --db-path "data\manual_dispatch.sqlite3"
+```
+
+Apply requires explicit double confirmation:
+
+```powershell
+.\tmp\route-test-venv\Scripts\python.exe .\tools\migrate_legacy_final_summaries_to_workspaces.py `
+  --db-path "data\manual_dispatch.sqlite3" `
+  --apply --yes
+```
+
+Apply creates and integrity-checks a timestamped SQLite backup before running
+all migration writes in one transaction. Any legacy `GENERATED` summary or
+workspace key/marker conflict blocks the entire apply. Successful reruns are
+idempotent and create no duplicate headers or child rows.
+
+See [Legacy Final Summary Workspace Migration](docs/separate-delivery-and-opshop-workspaces-migration.md)
+for preflight, verification, and rollback steps.
+
 ## Deployment / Backup
 
 ### Office Trial

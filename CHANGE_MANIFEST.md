@@ -1,45 +1,50 @@
-# Change Manifest - Stage 2 Independent Services and APIs
+# Change Manifest - Stage 3 Legacy Workspace Migration
 
 **Task:** Separate Delivery and OP SHOP workspaces
 **Completed:** 2026-06-23
-**Files modified:** 10
-**Files created:** 8
+**Files modified:** 4
+**Files created:** 3
 **Files deleted:** 0
 
 ## Changes
 
 | Area | Files | Change |
 |---|---:|---|
-| Snapshot compatibility | 4 | Added additive call-before fields required by OP SHOP Collection snapshots. |
-| Independent locks | 2 | Added Delivery-only and OP SHOP-only saved-state helpers. |
-| Domain services | 2 | Added independent generate/list/get/save/cancel/export lookup lifecycles. |
-| Excel exporters | 2 | Added snapshot-only Delivery and OP SHOP workbooks with separated semantics. |
-| Service facade and API | 2 | Added 12 independent backend endpoints without changing legacy routes. |
-| Tests | 3 | Added lifecycle, lock, API, export, migration compatibility, and legacy regression coverage. |
-| Refactor governance | 3 | Updated scope allowlist, change manifest, and session handoff. |
+| Migration tool | 1 | Added read-only dry-run plus guarded, backed-up, atomic apply. |
+| Migration tests | 1 | Added real SQLite coverage for mapping, blockers, rollback, and idempotency. |
+| Operator documentation | 2 | Added migration/rollback runbook and README commands. |
+| Refactor governance | 3 | Updated scope allowlist, manifest, and session handoff. |
 
 ## Scope Compliance
 
-- [x] Changed files are within the approved Stage 2 backend-only scope.
-- [x] No frontend, scoped board API, workspace route, or migration-tool file changed.
-- [x] No dependency was added, removed, or upgraded.
-- [x] Legacy `/board`, Final Summary routes/tables/services/exports/locks remain intact.
-- [x] New services do not call legacy Final Summary lock/query helpers.
+- [x] Changed files are within the approved Stage 3 migration/documentation scope.
+- [x] No frontend, scoped board API, workspace route, or assignment file changed.
+- [x] No schema, repository, domain service, exporter, or dependency changed.
+- [x] Legacy Final Summary tables, APIs, services, exports, and live rows remain intact.
 - [x] No runtime database, workbook, backup, output, or environment file was added.
+
+## Safety Contract
+
+- [x] Default mode opens SQLite read-only and performs no writes.
+- [x] Apply requires both `--apply` and `--yes`.
+- [x] A timestamped SQLite backup must pass `PRAGMA integrity_check` before writes.
+- [x] Legacy `GENERATED` summaries and all detected conflicts block the entire apply.
+- [x] All migration writes occur in one transaction and roll back together.
+- [x] Matching `legacy_summary_id` markers are skipped unchanged on rerun.
+- [x] Historical OP SHOP rows are not enriched from mutable live records.
 
 ## Drift Check
 
-- Files touched: 18 (within the 20-file high-risk budget).
-- New files are limited to approved services, locks, exporters, and tests.
-- No out-of-scope abstraction, dependency, or behavior change was introduced.
-- Delivery and OP SHOP snapshot persistence remain independently keyed.
+- Files touched: 7 (within the 20-file high-risk budget).
+- New code is limited to one migration tool and one targeted test module.
+- No unrelated cleanup, abstraction, endpoint, or user-facing behavior was added.
 
 ## Test Results
 
-- Stage 2 targeted tests: 15 passed.
-- Legacy API/Final Summary/OP SHOP/vehicle regression tests: 69 passed.
-- Full Python suite: 410 passed.
+- Stage 3 targeted migration tests: 15 passed.
+- Legacy Final Summary/API and workspace regression tests: 66 passed.
+- Full Python suite: 425 passed.
 - Python compileall: `backend`, `tests`, and `tools` passed.
 - Frontend JavaScript syntax: all files passed `node --check`.
-- `git diff --check` and dependency/scope audits passed.
-- New failures: none so far.
+- `git diff --check` and `git diff --cached --check` passed.
+- New failures: none.
