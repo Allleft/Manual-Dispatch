@@ -216,6 +216,48 @@ class OpShopPickupBoardItem:
 
 
 @dataclass
+class OpShopWorkspacePickupItem:
+    pickup_task_id: str
+    task_type: str
+    schedule_id: Optional[str]
+    opshop_id: str
+    opshop_name: str
+    suburb: Optional[str]
+    street_address: Optional[str]
+    area_region: Optional[str]
+    pickup_date: str
+    dispatch_date: Optional[str]
+    run_day: Optional[str]
+    run_type: Optional[str]
+    pickup_frequency: Optional[str]
+    time_window: Optional[str]
+    call_before_arrival: bool
+    call_timing: Optional[str]
+    primary_contact: Optional[str]
+    primary_phone: Optional[str]
+    secondary_contact: Optional[str]
+    secondary_phone: Optional[str]
+    access_type: Optional[str]
+    key_required: bool
+    trailer_restriction: Optional[str]
+    status: str
+    generated_from: str
+    status_notes: Optional[str]
+    task_notes: Optional[str]
+    driver_id: Optional[str]
+    is_assigned: bool
+    default_driver_id: Optional[str]
+    default_driver_alias: Optional[str]
+    default_driver_name: Optional[str]
+    assigned_driver_id: Optional[str]
+    assigned_driver_name: Optional[str]
+    assigned_to_locked: bool
+    pickup_category: str
+    route_group_id: Optional[str]
+    route_group_name: Optional[str]
+
+
+@dataclass
 class OpShopPickupScheduleCandidate:
     schedule_id: str
     opshop_id: str
@@ -398,6 +440,34 @@ class ManualDispatchBoardResponse:
     opshop_regular_list_window_end: Optional[str] = None
     finalized_driver_delivery_dates: List[dict] = field(default_factory=list)
     generated_final_trip_summaries: List[dict] = field(default_factory=list)
+
+
+@dataclass
+class DeliveryVehicleAssignmentLock:
+    dispatch_date: str
+    delivery_date: str
+    driver_id: str
+    run_sheet_id: str
+
+
+@dataclass
+class DeliveryWorkspaceBoardResponse:
+    dispatch_date: str
+    orders: List[Order]
+    drivers: List[Driver]
+    vehicles: List[Vehicle]
+    assignments: List[ManualDispatchAssignment]
+    driver_vehicle_assignments: List[ManualDriverVehicleAssignment]
+    saved_vehicle_assignment_locks: List[DeliveryVehicleAssignmentLock]
+
+
+@dataclass
+class OpShopWorkspaceBoardResponse:
+    dispatch_date: str
+    opshop_pickups: List[OpShopWorkspacePickupItem]
+    drivers: List[Driver]
+    templates: List[OpShopTemplate]
+    countryside_route_groups: List[OpShopCountrysideRouteGroup]
 
 
 @dataclass

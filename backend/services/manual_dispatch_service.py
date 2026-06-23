@@ -1,3 +1,4 @@
+from backend.schemas import ManualDispatchSpecificationResponse
 from backend.repositories.in_memory_manual_dispatch_repository import (
     InMemoryManualDispatchRepository,
 )
@@ -7,12 +8,18 @@ from backend.services.manual_dispatch.board_service import BoardService
 from backend.services.manual_dispatch.delivery_run_sheet_service import (
     DeliveryRunSheetService,
 )
+from backend.services.manual_dispatch.delivery_workspace_board_service import (
+    DeliveryWorkspaceBoardService,
+)
 from backend.services.manual_dispatch.final_summary_service import FinalSummaryService
 from backend.services.manual_dispatch.id_generation import ManualDispatchIdGenerator
 from backend.services.manual_dispatch.order_service import OrderService
 from backend.services.manual_dispatch.opshop_pickup_service import OpShopPickupService
 from backend.services.manual_dispatch.opshop_pickup_collection_service import (
     OpShopPickupCollectionService,
+)
+from backend.services.manual_dispatch.opshop_workspace_board_service import (
+    OpShopWorkspaceBoardService,
 )
 from backend.services.manual_dispatch.opshop_template_service import OpShopTemplateService
 from backend.services.manual_dispatch.specification_service import SpecificationService
@@ -60,12 +67,31 @@ class ManualDispatchService:
             self.repository,
             self.validator,
         )
+        self.delivery_workspace_board_service = DeliveryWorkspaceBoardService(
+            self.repository
+        )
+        self.opshop_workspace_board_service = OpShopWorkspaceBoardService(
+            self.repository,
+            self.opshop_pickup_service,
+        )
 
     def get_board(self, dispatch_date):
         return self.board_service.get_board(dispatch_date)
 
     def get_specifications(self):
         return self.board_service.get_specifications()
+
+    def get_delivery_workspace_board(self, dispatch_date):
+        return self.delivery_workspace_board_service.get_board(dispatch_date)
+
+    def get_opshop_workspace_board(self, dispatch_date):
+        return self.opshop_workspace_board_service.get_board(dispatch_date)
+
+    def get_shared_specifications(self):
+        return ManualDispatchSpecificationResponse(
+            drivers=self.repository.list_specification_drivers(),
+            vehicles=self.repository.list_specification_vehicles(),
+        )
 
     def create_generated_delivery_run_sheet(self, request):
         return self.delivery_run_sheet_service.create_generated(request)

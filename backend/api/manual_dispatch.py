@@ -70,6 +70,27 @@ def get_board(dispatch_date: str):
     return to_dict(service.get_board(dispatch_date))
 
 
+@router.get("/delivery/board")
+def get_delivery_workspace_board(dispatch_date: str):
+    try:
+        return to_dict(service.get_delivery_workspace_board(dispatch_date))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.get("/opshop/board")
+def get_opshop_workspace_board(dispatch_date: str):
+    try:
+        return to_dict(service.get_opshop_workspace_board(dispatch_date))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.get("/shared/specifications")
+def get_shared_specifications():
+    return to_dict(service.get_shared_specifications())
+
+
 @router.get("/specifications")
 def get_specifications():
     return to_dict(service.get_specifications())
