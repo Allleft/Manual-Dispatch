@@ -1,40 +1,45 @@
-# Change Manifest - Workspace Snapshot Persistence Pilot
+# Change Manifest - Stage 2 Independent Services and APIs
 
 **Task:** Separate Delivery and OP SHOP workspaces
 **Completed:** 2026-06-23
-**Files modified:** 4
-**Files created:** 6
+**Files modified:** 10
+**Files created:** 8
 **Files deleted:** 0
 
 ## Changes
 
-| File | Change | Notes |
-|---|---|---|
-| `backend/db/schema.sql` | Schema | Added four additive snapshot tables and independent uniqueness constraints. |
-| `backend/schemas.py` | Models | Added independent Delivery Run Sheet and OP SHOP Pickup Collection snapshots. |
-| `backend/repositories/sqlite_manual_dispatch_repository.py` | Persistence | Added transactional CRUD and child-row hydration for both snapshot modules. |
-| `backend/repositories/in_memory_manual_dispatch_repository.py` | Persistence | Added matching in-memory repository contract. |
-| `tests/test_workspace_snapshot_persistence.py` | Tests | Covers idempotency, legacy readability, coexistence, replacement, and parity. |
-| `docs/separate-delivery-and-opshop-workspaces-spec.md` | Governance | Persisted the approved task boundary and acceptance criteria. |
-| `.refactor-scope-allowlist` | Governance | Defines the pilot's allowed file set. |
-| `.refactor-session.md` | Handoff | Records progress and the next atomic batch. |
-| `OBSERVATIONS.md` | Governance | Records out-of-scope observations without acting on them. |
-| `CHANGE_MANIFEST.md` | Governance | Records scope and verification evidence for this pilot. |
+| Area | Files | Change |
+|---|---:|---|
+| Snapshot compatibility | 4 | Added additive call-before fields required by OP SHOP Collection snapshots. |
+| Independent locks | 2 | Added Delivery-only and OP SHOP-only saved-state helpers. |
+| Domain services | 2 | Added independent generate/list/get/save/cancel/export lookup lifecycles. |
+| Excel exporters | 2 | Added snapshot-only Delivery and OP SHOP workbooks with separated semantics. |
+| Service facade and API | 2 | Added 12 independent backend endpoints without changing legacy routes. |
+| Tests | 3 | Added lifecycle, lock, API, export, migration compatibility, and legacy regression coverage. |
+| Refactor governance | 3 | Updated scope allowlist, change manifest, and session handoff. |
 
 ## Scope Compliance
 
-- [x] Every modified file is required by the approved persistence pilot or refactor protocol.
+- [x] Changed files are within the approved Stage 2 backend-only scope.
+- [x] No frontend, scoped board API, workspace route, or migration-tool file changed.
 - [x] No dependency was added, removed, or upgraded.
-- [x] No existing table, API route, response field, or frontend behavior was changed.
-- [x] No runtime database, workbook, backup, output, or local environment file was added.
-- [x] Legacy Final Summary tables and repository behavior remain intact.
+- [x] Legacy `/board`, Final Summary routes/tables/services/exports/locks remain intact.
+- [x] New services do not call legacy Final Summary lock/query helpers.
+- [x] No runtime database, workbook, backup, output, or environment file was added.
+
+## Drift Check
+
+- Files touched: 18 (within the 20-file high-risk budget).
+- New files are limited to approved services, locks, exporters, and tests.
+- No out-of-scope abstraction, dependency, or behavior change was introduced.
+- Delivery and OP SHOP snapshot persistence remain independently keyed.
 
 ## Test Results
 
-- Before: 54 repository and legacy Final Summary tests passed.
-- Targeted after: 58 tests passed, including 4 new independent persistence tests.
-- Full after: 399 tests passed.
+- Stage 2 targeted tests: 15 passed.
+- Legacy API/Final Summary/OP SHOP/vehicle regression tests: 69 passed.
+- Full Python suite: 410 passed.
+- Python compileall: `backend`, `tests`, and `tools` passed.
 - Frontend JavaScript syntax: all files passed `node --check`.
-- Python compile check: `backend`, `tests`, and `tools` passed.
-- New failures: none.
-- Pre-existing failures: none observed in the targeted baseline.
+- `git diff --check` and dependency/scope audits passed.
+- New failures: none so far.

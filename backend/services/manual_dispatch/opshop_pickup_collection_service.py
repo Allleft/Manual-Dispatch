@@ -1,0 +1,156 @@
+from dataclasses import replace
+from datetime import datetime, timezone
+from uuid import uuid4
+
+from backend.schemas import (
+    OpShopPickupCollection,
+    OpShopPickupCollectionRowSnapshot,
+)
+from backend.services.manual_dispatch.normalization import (
+    clean_optional_text,
+    clean_required_text,
+)
+
+
+class OpShopPickupCollectionService:
+    def __init__(self, repository, validator):
+        self.repository = repository
+        self.validator = validator
+
+    def create_generated(self, request):
+        dispatch_date = clean_required_text(request.dispatch_date, "dispatch_date")
+        pickup_date = clean_required_text(request.pickup_date, "pickup_date")
+        driver_id = clean_required_text(request.driver_id, "driver_id")
+        self.validator.validate_driver_exists(driver_id)
+
+        existing = self.repository.get_opshop_pickup_collection_for_driver(
+            dispatch_date,
+            pickup_date,
+            driver_id,
+        )
+        if existing:
+            raise ValueError(
+                "OP SHOP Pickup Collection already exists for this driver and pickup date."
+            )
+
+        pickups = self._build_pickups(dispatch_date, pickup_date, driver_id)
+        if not pickups:
+            raise ValueError("At least one assigned OP SHOP pickup is required.")
+
+        driver = self.repository.get_driver(driver_id)
+        collection = OpShopPickupCollection(
+            collection_id=f"OPC-{uuid4().hex.upper()}",
+            dispatch_date=dispatch_date,
+            pickup_date=pickup_date,
+            driver_id=driver_id,
+            driver_name_snapshot=driver.name,
+            status="GENERATED",
+            generated_at=_timestamp(),
+            saved_at=None,
+            saved_by_account_name=None,
+            saved_by_account_id=None,
+            legacy_summary_id=None,
+            pickups=pickups,
+        )
+        return self.repository.upsert_opshop_pickup_collection(collection)
+
+    def list(self, dispatch_date=None, pickup_date=None, status=None):
+        return self.repository.list_opshop_pickup_collections(
+            clean_optional_text(dispatch_date),
+            clean_optional_text(pickup_date),
+            clean_optional_text(status).upper() if clean_optional_text(status) else None,
+        )
+
+    def get(self, collection_id):
+        collection_id = clean_required_text(collection_id, "collection_id")
+        collection = self.repository.get_opshop_pickup_collection(collection_id)
+        if not collection:
+            raise ValueError(
+                f"OP SHOP Pickup Collection does not exist: {collection_id}"
+            )
+        return collection
+
+    def save_generated(self, collection_id, request):
+        collection = self.get(collection_id)
+        if collection.status != "GENERATED":
+            raise ValueError("Only generated OP SHOP Pickup Collections can be saved.")
+        account = self.validator.validate_saved_by_account(
+            request.saved_by_account_name,
+            request.saved_by_account_id,
+        )
+        saved = replace(
+            collection,
+            status="SAVED",
+            saved_at=_timestamp(),
+            saved_by_account_name=account.account_name,
+            saved_by_account_id=account.account_id,
+        )
+        return self.repository.upsert_opshop_pickup_collection(saved)
+
+    def cancel_generated(self, collection_id):
+        collection = self.get(collection_id)
+        if collection.status != "GENERATED":
+            raise ValueError(
+                "Only generated OP SHOP Pickup Collections can be cancelled."
+            )
+        return self.repository.delete_opshop_pickup_collection(
+            collection.collection_id
+        )
+
+    def get_saved_for_export(self, collection_id):
+        collection = self.get(collection_id)
+        if collection.status != "SAVED":
+            raise ValueError("Only saved OP SHOP Pickup Collections can be exported.")
+        return collection
+
+    def _build_pickups(self, dispatch_date, pickup_date, driver_id):
+        items = [
+            pickup
+            for pickup in self.repository.list_assigned_opshop_pickup_board_items(
+                dispatch_date
+            )
+            if pickup.driver_id == driver_id and pickup.pickup_date == pickup_date
+        ]
+        return [
+            OpShopPickupCollectionRowSnapshot(
+                row_id=f"OPCR-{uuid4().hex.upper()}",
+                row_no=row_no,
+                pickup_task_id_snapshot=pickup.pickup_task_id,
+                opshop_name_snapshot=pickup.opshop_name,
+                suburb_snapshot=pickup.suburb,
+                street_address_snapshot=pickup.street_address,
+                area_region_snapshot=pickup.area_region,
+                pickup_date_snapshot=pickup.pickup_date,
+                run_type_snapshot=pickup.run_type,
+                pickup_category_snapshot=pickup.pickup_category,
+                route_group_id_snapshot=pickup.route_group_id,
+                route_group_name_snapshot=pickup.route_group_name,
+                pickup_frequency_snapshot=pickup.pickup_frequency,
+                time_window_snapshot=pickup.time_window,
+                primary_contact_snapshot=pickup.primary_contact,
+                primary_phone_snapshot=pickup.primary_phone,
+                secondary_contact_snapshot=pickup.secondary_contact,
+                secondary_phone_snapshot=pickup.secondary_phone,
+                access_type_snapshot=pickup.access_type,
+                key_required_snapshot=pickup.key_required,
+                trailer_restriction_snapshot=pickup.trailer_restriction,
+                notes_snapshot=_pickup_notes(pickup),
+                status_snapshot=pickup.status,
+                call_before_arrival_snapshot=pickup.call_before_arrival,
+                call_timing_snapshot=pickup.call_timing,
+            )
+            for row_no, pickup in enumerate(items, start=1)
+        ]
+
+
+def _pickup_notes(pickup):
+    notes = []
+    for value in (pickup.task_notes, pickup.status_notes):
+        cleaned = clean_optional_text(value)
+        if cleaned and cleaned not in notes:
+            notes.append(cleaned)
+    return "\n".join(notes) or None
+
+
+def _timestamp():
+    return datetime.now(timezone.utc).isoformat()

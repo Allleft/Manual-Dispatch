@@ -353,6 +353,8 @@ CREATE TABLE IF NOT EXISTS opshop_pickup_collection_rows (
     route_group_name_snapshot TEXT,
     pickup_frequency_snapshot TEXT,
     time_window_snapshot TEXT,
+    call_before_arrival_snapshot INTEGER NOT NULL DEFAULT 0,
+    call_timing_snapshot TEXT,
     primary_contact_snapshot TEXT,
     primary_phone_snapshot TEXT,
     secondary_contact_snapshot TEXT,

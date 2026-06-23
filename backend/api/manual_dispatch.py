@@ -22,11 +22,14 @@ from backend.schemas import (
     CreateOpShopTemplateRequest,
     CreateVehicleRequest,
     EnsureOpShopPickupTasksRequest,
+    GenerateDeliveryRunSheetRequest,
+    GenerateOpShopPickupCollectionRequest,
     LoginOperatorAccountRequest,
     MoveCountrysideRouteMembershipRequest,
     RegisterOperatorAccountRequest,
     ResetOperatorPasswordRequest,
     SaveFinalTripSummaryRequest,
+    SaveGeneratedWorkspaceSnapshotRequest,
     UnassignTaskRequest,
     UpdateOpShopCountrysideRouteGroupRequest,
     UpdateDriverRequest,
@@ -40,6 +43,9 @@ from backend.repositories.sqlite_manual_dispatch_repository import (
     SQLiteManualDispatchRepository,
 )
 from backend.services.excel_export_service import build_manual_dispatch_excel
+from backend.services.delivery_run_sheet_excel_export_service import (
+    build_delivery_run_sheet_excel,
+)
 from backend.services.final_summary_excel_export_service import build_final_summary_excel
 from backend.services.manual_dispatch_service import ManualDispatchService
 from backend.services.manual_dispatch.attache_invoice_pdf_parser import (
@@ -48,6 +54,9 @@ from backend.services.manual_dispatch.attache_invoice_pdf_parser import (
 )
 from backend.services.opshop_pickup_excel_export_service import (
     build_opshop_pickup_run_sheet_excel,
+)
+from backend.services.opshop_pickup_collection_excel_export_service import (
+    build_opshop_pickup_collection_excel,
 )
 
 router = APIRouter(prefix="/api/manual-dispatch", tags=["manual-dispatch"])
@@ -504,6 +513,160 @@ def delete_vehicle(vehicle_id: str):
         return to_dict(service.delete_vehicle(vehicle_id))
     except ValueError as error:
         raise _to_http_exception(error) from error
+
+
+@router.post("/delivery/run-sheets/generated")
+def create_generated_delivery_run_sheet(request: GenerateDeliveryRunSheetRequest):
+    try:
+        return to_dict(service.create_generated_delivery_run_sheet(request))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.get("/delivery/run-sheets")
+def list_delivery_run_sheets(
+    dispatch_date: str = None,
+    delivery_date: str = None,
+    status: str = None,
+):
+    return [
+        to_dict(run_sheet)
+        for run_sheet in service.list_delivery_run_sheets(
+            dispatch_date,
+            delivery_date,
+            status,
+        )
+    ]
+
+
+@router.get("/delivery/run-sheets/{run_sheet_id}")
+def get_delivery_run_sheet(run_sheet_id: str):
+    try:
+        return to_dict(service.get_delivery_run_sheet(run_sheet_id))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.post("/delivery/run-sheets/{run_sheet_id}/save")
+def save_generated_delivery_run_sheet(
+    run_sheet_id: str,
+    request: SaveGeneratedWorkspaceSnapshotRequest,
+):
+    try:
+        return to_dict(
+            service.save_generated_delivery_run_sheet(run_sheet_id, request)
+        )
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.post("/delivery/run-sheets/{run_sheet_id}/cancel-generated")
+def cancel_generated_delivery_run_sheet(run_sheet_id: str):
+    try:
+        return {
+            "cancelled": service.cancel_generated_delivery_run_sheet(run_sheet_id)
+        }
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.get("/delivery/run-sheets/{run_sheet_id}/export-excel")
+def export_delivery_run_sheet_excel(run_sheet_id: str):
+    try:
+        run_sheet = service.get_saved_delivery_run_sheet_for_export(run_sheet_id)
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+    workbook_bytes = build_delivery_run_sheet_excel(run_sheet)
+    filename = (
+        f"Delivery_Run_Sheet_{_safe_filename_part(run_sheet.delivery_date)}_"
+        f"{_safe_filename_part(run_sheet.driver_name_snapshot)}.xlsx"
+    )
+    return Response(
+        content=workbook_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post("/opshop/pickup-collections/generated")
+def create_generated_opshop_pickup_collection(
+    request: GenerateOpShopPickupCollectionRequest,
+):
+    try:
+        return to_dict(service.create_generated_opshop_pickup_collection(request))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.get("/opshop/pickup-collections")
+def list_opshop_pickup_collections(
+    dispatch_date: str = None,
+    pickup_date: str = None,
+    status: str = None,
+):
+    return [
+        to_dict(collection)
+        for collection in service.list_opshop_pickup_collections(
+            dispatch_date,
+            pickup_date,
+            status,
+        )
+    ]
+
+
+@router.get("/opshop/pickup-collections/{collection_id}")
+def get_opshop_pickup_collection(collection_id: str):
+    try:
+        return to_dict(service.get_opshop_pickup_collection(collection_id))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.post("/opshop/pickup-collections/{collection_id}/save")
+def save_generated_opshop_pickup_collection(
+    collection_id: str,
+    request: SaveGeneratedWorkspaceSnapshotRequest,
+):
+    try:
+        return to_dict(
+            service.save_generated_opshop_pickup_collection(collection_id, request)
+        )
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.post("/opshop/pickup-collections/{collection_id}/cancel-generated")
+def cancel_generated_opshop_pickup_collection(collection_id: str):
+    try:
+        return {
+            "cancelled": service.cancel_generated_opshop_pickup_collection(
+                collection_id
+            )
+        }
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.get("/opshop/pickup-collections/{collection_id}/export-excel")
+def export_opshop_pickup_collection_excel(collection_id: str):
+    try:
+        collection = service.get_saved_opshop_pickup_collection_for_export(
+            collection_id
+        )
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+    workbook_bytes = build_opshop_pickup_collection_excel(collection)
+    filename = (
+        f"OPSHOP_Pickup_Collection_{_safe_filename_part(collection.pickup_date)}_"
+        f"{_safe_filename_part(collection.driver_name_snapshot)}.xlsx"
+    )
+    return Response(
+        content=workbook_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post("/final-summaries")

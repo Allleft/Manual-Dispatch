@@ -700,6 +700,8 @@ class SQLiteManualDispatchRepository:
                         route_group_name_snapshot,
                         pickup_frequency_snapshot,
                         time_window_snapshot,
+                        call_before_arrival_snapshot,
+                        call_timing_snapshot,
                         primary_contact_snapshot,
                         primary_phone_snapshot,
                         secondary_contact_snapshot,
@@ -709,7 +711,7 @@ class SQLiteManualDispatchRepository:
                         trailer_restriction_snapshot,
                         notes_snapshot,
                         status_snapshot
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         pickup.row_id,
@@ -727,6 +729,8 @@ class SQLiteManualDispatchRepository:
                         pickup.route_group_name_snapshot,
                         pickup.pickup_frequency_snapshot,
                         pickup.time_window_snapshot,
+                        int(bool(pickup.call_before_arrival_snapshot)),
+                        pickup.call_timing_snapshot,
                         pickup.primary_contact_snapshot,
                         pickup.primary_phone_snapshot,
                         pickup.secondary_contact_snapshot,
@@ -3170,6 +3174,10 @@ class SQLiteManualDispatchRepository:
                 route_group_name_snapshot=pickup_row["route_group_name_snapshot"],
                 pickup_frequency_snapshot=pickup_row["pickup_frequency_snapshot"],
                 time_window_snapshot=pickup_row["time_window_snapshot"],
+                call_before_arrival_snapshot=bool(
+                    pickup_row["call_before_arrival_snapshot"]
+                ),
+                call_timing_snapshot=pickup_row["call_timing_snapshot"],
                 primary_contact_snapshot=pickup_row["primary_contact_snapshot"],
                 primary_phone_snapshot=pickup_row["primary_phone_snapshot"],
                 secondary_contact_snapshot=pickup_row["secondary_contact_snapshot"],

@@ -156,6 +156,18 @@ def _ensure_manual_dispatch_columns(connection):
         "route_group_name_snapshot",
         "TEXT",
     )
+    _ensure_column(
+        connection,
+        "opshop_pickup_collection_rows",
+        "call_before_arrival_snapshot",
+        "INTEGER NOT NULL DEFAULT 0",
+    )
+    _ensure_column(
+        connection,
+        "opshop_pickup_collection_rows",
+        "call_timing_snapshot",
+        "TEXT",
+    )
     _ensure_column(connection, "opshop_pickup_schedules", "default_driver_id", "TEXT")
     _ensure_column(connection, "opshop_pickup_schedules", "default_driver_alias", "TEXT")
     _ensure_column(

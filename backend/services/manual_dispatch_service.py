@@ -4,10 +4,16 @@ from backend.repositories.in_memory_manual_dispatch_repository import (
 from backend.services.manual_dispatch.assignment_service import AssignmentService
 from backend.services.manual_dispatch.auth_service import OperatorAuthService
 from backend.services.manual_dispatch.board_service import BoardService
+from backend.services.manual_dispatch.delivery_run_sheet_service import (
+    DeliveryRunSheetService,
+)
 from backend.services.manual_dispatch.final_summary_service import FinalSummaryService
 from backend.services.manual_dispatch.id_generation import ManualDispatchIdGenerator
 from backend.services.manual_dispatch.order_service import OrderService
 from backend.services.manual_dispatch.opshop_pickup_service import OpShopPickupService
+from backend.services.manual_dispatch.opshop_pickup_collection_service import (
+    OpShopPickupCollectionService,
+)
 from backend.services.manual_dispatch.opshop_template_service import OpShopTemplateService
 from backend.services.manual_dispatch.specification_service import SpecificationService
 from backend.services.manual_dispatch.validation import ManualDispatchValidator
@@ -46,12 +52,79 @@ class ManualDispatchService:
             self.repository,
             self.validator,
         )
+        self.delivery_run_sheet_service = DeliveryRunSheetService(
+            self.repository,
+            self.validator,
+        )
+        self.opshop_pickup_collection_service = OpShopPickupCollectionService(
+            self.repository,
+            self.validator,
+        )
 
     def get_board(self, dispatch_date):
         return self.board_service.get_board(dispatch_date)
 
     def get_specifications(self):
         return self.board_service.get_specifications()
+
+    def create_generated_delivery_run_sheet(self, request):
+        return self.delivery_run_sheet_service.create_generated(request)
+
+    def list_delivery_run_sheets(
+        self,
+        dispatch_date=None,
+        delivery_date=None,
+        status=None,
+    ):
+        return self.delivery_run_sheet_service.list(
+            dispatch_date,
+            delivery_date,
+            status,
+        )
+
+    def get_delivery_run_sheet(self, run_sheet_id):
+        return self.delivery_run_sheet_service.get(run_sheet_id)
+
+    def save_generated_delivery_run_sheet(self, run_sheet_id, request):
+        return self.delivery_run_sheet_service.save_generated(run_sheet_id, request)
+
+    def cancel_generated_delivery_run_sheet(self, run_sheet_id):
+        return self.delivery_run_sheet_service.cancel_generated(run_sheet_id)
+
+    def get_saved_delivery_run_sheet_for_export(self, run_sheet_id):
+        return self.delivery_run_sheet_service.get_saved_for_export(run_sheet_id)
+
+    def create_generated_opshop_pickup_collection(self, request):
+        return self.opshop_pickup_collection_service.create_generated(request)
+
+    def list_opshop_pickup_collections(
+        self,
+        dispatch_date=None,
+        pickup_date=None,
+        status=None,
+    ):
+        return self.opshop_pickup_collection_service.list(
+            dispatch_date,
+            pickup_date,
+            status,
+        )
+
+    def get_opshop_pickup_collection(self, collection_id):
+        return self.opshop_pickup_collection_service.get(collection_id)
+
+    def save_generated_opshop_pickup_collection(self, collection_id, request):
+        return self.opshop_pickup_collection_service.save_generated(
+            collection_id,
+            request,
+        )
+
+    def cancel_generated_opshop_pickup_collection(self, collection_id):
+        return self.opshop_pickup_collection_service.cancel_generated(collection_id)
+
+    def get_saved_opshop_pickup_collection_for_export(self, collection_id):
+        return self.opshop_pickup_collection_service.get_saved_for_export(
+            collection_id
+        )
 
     def register_operator_account(self, request):
         return self.auth_service.register_operator_account(request)

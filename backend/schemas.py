@@ -596,6 +596,28 @@ class OpShopPickupCollectionRowSnapshot:
     trailer_restriction_snapshot: Optional[str]
     notes_snapshot: Optional[str]
     status_snapshot: Optional[str]
+    call_before_arrival_snapshot: bool = False
+    call_timing_snapshot: Optional[str] = None
+
+
+@dataclass
+class GenerateDeliveryRunSheetRequest:
+    dispatch_date: Optional[str] = None
+    delivery_date: Optional[str] = None
+    driver_id: Optional[str] = None
+
+
+@dataclass
+class GenerateOpShopPickupCollectionRequest:
+    dispatch_date: Optional[str] = None
+    pickup_date: Optional[str] = None
+    driver_id: Optional[str] = None
+
+
+@dataclass
+class SaveGeneratedWorkspaceSnapshotRequest:
+    saved_by_account_name: Optional[str] = None
+    saved_by_account_id: Optional[int] = None
 
 
 @dataclass

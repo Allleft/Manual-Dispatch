@@ -136,6 +136,13 @@ class WorkspaceSnapshotPersistenceTest(unittest.TestCase):
             saved_collection.pickups[0].opshop_name_snapshot,
         )
         self.assertTrue(
+            saved_collection.pickups[0].call_before_arrival_snapshot
+        )
+        self.assertEqual(
+            "30 minutes",
+            saved_collection.pickups[0].call_timing_snapshot,
+        )
+        self.assertTrue(
             self.repository.has_saved_delivery_run_sheet(
                 "2026-06-23",
                 "D001",
@@ -164,6 +171,33 @@ class WorkspaceSnapshotPersistenceTest(unittest.TestCase):
         self.assertEqual([("ORDER",)], delivery_rows)
         self.assertEqual([("OPSHOP-PICKUP-001",)], opshop_rows)
         self.assertEqual(0, legacy_rows)
+
+    def test_existing_pilot_collection_table_adds_call_before_columns(self):
+        legacy_path = self.temp_dir / "pilot-without-call-before.sqlite3"
+        with sqlite3.connect(legacy_path) as connection:
+            connection.execute(
+                """
+                CREATE TABLE opshop_pickup_collection_rows (
+                    row_id TEXT PRIMARY KEY,
+                    collection_id TEXT NOT NULL,
+                    row_no INTEGER NOT NULL
+                )
+                """
+            )
+            connection.commit()
+
+        initialize_database(legacy_path)
+        initialize_database(legacy_path)
+
+        with sqlite3.connect(legacy_path) as connection:
+            columns = {
+                row[1]
+                for row in connection.execute(
+                    "PRAGMA table_info(opshop_pickup_collection_rows)"
+                ).fetchall()
+            }
+        self.assertIn("call_before_arrival_snapshot", columns)
+        self.assertIn("call_timing_snapshot", columns)
 
     def test_upsert_replaces_snapshot_children_without_duplicates(self):
         run_sheet = self._delivery_run_sheet()
@@ -305,6 +339,8 @@ class WorkspaceSnapshotPersistenceTest(unittest.TestCase):
                     trailer_restriction_snapshot="No",
                     notes_snapshot="Call before arrival",
                     status_snapshot="ASSIGNED",
+                    call_before_arrival_snapshot=True,
+                    call_timing_snapshot="30 minutes",
                 )
             ],
         )
