@@ -102,6 +102,39 @@ export async function apiGetBoard(dispatchDate) {
 }
 
 
+export async function apiGetDeliveryWorkspaceBoard(dispatchDate) {
+  return requestJson("/api/manual-dispatch/delivery/board", {
+    query: { dispatch_date: dispatchDate },
+  });
+}
+
+
+export async function apiGetOpShopWorkspaceBoard(dispatchDate) {
+  return requestJson("/api/manual-dispatch/opshop/board", {
+    query: { dispatch_date: dispatchDate },
+  });
+}
+
+
+export async function apiGetSharedSpecifications() {
+  return requestJson("/api/manual-dispatch/shared/specifications");
+}
+
+
+export async function apiListDeliveryRunSheets(dispatchDate, status = "") {
+  return requestJson("/api/manual-dispatch/delivery/run-sheets", {
+    query: { dispatch_date: dispatchDate, status },
+  });
+}
+
+
+export async function apiListOpShopPickupCollections(dispatchDate, status = "") {
+  return requestJson("/api/manual-dispatch/opshop/pickup-collections", {
+    query: { dispatch_date: dispatchDate, status },
+  });
+}
+
+
 export async function apiAssignTask(payload) {
   return requestJson("/api/manual-dispatch/assign", {
     method: "POST",

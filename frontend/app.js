@@ -13,6 +13,7 @@ import { createOpShopPickupActions } from "./js/actions/opshop-pickup-actions.js
 import { createOpShopTemplateActions } from "./js/actions/opshop-template-actions.js";
 import { createSpecificationActions } from "./js/actions/specification-actions.js";
 import { createVehicleActions } from "./js/actions/vehicle-actions.js";
+import { createWorkspaceActions } from "./js/actions/workspace-actions.js";
 import { DEFAULT_DISPATCH_DATE, state } from "./js/state/app-state.js";
 import { applyBoardResponse as syncBoardResponse } from "./js/state/board-state-sync.js";
 import {
@@ -43,12 +44,33 @@ import { renderOpShopPickupListModal as renderOpShopPickupListModalView } from "
 import { renderCountrysideOpShopPickupListModal as renderCountrysideOpShopPickupListModalView } from "./js/render/opshop-countryside-pickup-list-modal-renderer.js";
 import { renderOncallOpShopPickupListModal as renderOncallOpShopPickupListModalView } from "./js/render/opshop-oncall-pickup-list-modal-renderer.js";
 import { renderOpShopTemplateManagementModal as renderOpShopTemplateManagementModalView } from "./js/render/opshop-template-management-modal-renderer.js";
+import { renderDeliveryWorkspace as renderDeliveryWorkspaceView } from "./js/render/delivery-workspace-renderer.js";
+import { renderOpShopWorkspace as renderOpShopWorkspaceView } from "./js/render/opshop-workspace-renderer.js";
+import { renderWorkspaceHome as renderWorkspaceHomeView } from "./js/render/workspace-home-renderer.js";
+import { renderWorkspaceNavigation as renderWorkspaceNavigationView } from "./js/render/workspace-navigation-renderer.js";
 
 const BOARD_VIEWS = new Set(["task-pool", "trip-summary", "final-summary"]);
 const BOARD_VIEW_SECTION_IDS = {
   "task-pool": "task-pool-view",
   "trip-summary": "trip-summary-view",
   "final-summary": "final-summary-view",
+};
+const WORKSPACE_ROUTES = new Set([
+  "home",
+  "delivery/task-pool",
+  "delivery/run-sheet",
+  "delivery/history",
+  "opshop/regular",
+  "opshop/oncall",
+  "opshop/countryside",
+  "opshop/templates",
+  "opshop/collections",
+  "opshop/history",
+]);
+const LEGACY_WORKSPACE_REDIRECTS = {
+  "task-pool": "delivery/task-pool",
+  "trip-summary": "delivery/run-sheet",
+  "final-summary": "delivery/history",
 };
 
 async function loadBoard(dispatchDate = state.dispatchDate, options = {}) {
@@ -124,12 +146,77 @@ function clearError() {
   state.errorMessage = "";
 }
 
+function getWorkspaceRouteFromHash() {
+  const requestedRoute = window.location.hash.replace(/^#/, "");
+  const redirectedRoute = LEGACY_WORKSPACE_REDIRECTS[requestedRoute] || requestedRoute;
+  return WORKSPACE_ROUTES.has(redirectedRoute) ? redirectedRoute : "home";
+}
+
+function getActiveWorkspace(route) {
+  if (route.startsWith("delivery/")) {
+    return "delivery";
+  }
+  if (route.startsWith("opshop/")) {
+    return "opshop";
+  }
+  return "";
+}
+
+function activateWorkspaceRoute(route) {
+  state.workspaceRoute = route;
+  state.activeWorkspace = getActiveWorkspace(route);
+  renderBoard();
+  workspaceActions.loadWorkspaceRoute(route);
+}
+
+function setWorkspaceRoute(route, options = {}) {
+  const resolvedRoute = WORKSPACE_ROUTES.has(route) ? route : "home";
+  const nextHash = `#${resolvedRoute}`;
+  if (options.replace) {
+    window.history.replaceState(null, "", nextHash);
+    activateWorkspaceRoute(resolvedRoute);
+    return;
+  }
+  if (window.location.hash !== nextHash) {
+    window.location.hash = resolvedRoute;
+    return;
+  }
+  activateWorkspaceRoute(resolvedRoute);
+}
+
+function initializeWorkspaceRouting() {
+  window.addEventListener("hashchange", () => {
+    if (!state.isLoggedIn) {
+      state.workspaceRoute = "home";
+      state.activeWorkspace = "";
+      renderBoard();
+      return;
+    }
+    const route = getWorkspaceRouteFromHash();
+    const expectedHash = `#${route}`;
+    if (window.location.hash !== expectedHash) {
+      window.history.replaceState(null, "", expectedHash);
+    }
+    activateWorkspaceRoute(route);
+  });
+
+  if (state.isLoggedIn) {
+    const route = getWorkspaceRouteFromHash();
+    window.history.replaceState(null, "", `#${route}`);
+    activateWorkspaceRoute(route);
+  }
+}
+
 function getBoardViewFromHash() {
   const value = window.location.hash.replace("#", "");
   return BOARD_VIEWS.has(value) ? value : "task-pool";
 }
 
 function setActiveBoardView(view) {
+  if (LEGACY_WORKSPACE_REDIRECTS[view]) {
+    setWorkspaceRoute(LEGACY_WORKSPACE_REDIRECTS[view]);
+    return;
+  }
   state.activeBoardView = BOARD_VIEWS.has(view) ? view : "task-pool";
   const nextHash = `#${state.activeBoardView}`;
   if (window.location.hash !== nextHash) {
@@ -154,6 +241,41 @@ function initializeBoardViewRouting() {
 
 function renderAccountStatus() {
   renderAccountStatusView({ onLogout: authActions.logoutAccount });
+}
+
+function renderWorkspaceNavigation() {
+  renderWorkspaceNavigationView({ state });
+}
+
+function renderWorkspace() {
+  const root = document.querySelector("#workspace-root");
+  const legacyShell = document.querySelector("#legacy-board-shell");
+  if (legacyShell) {
+    legacyShell.hidden = true;
+  }
+  if (!root) {
+    return;
+  }
+  root.hidden = !state.isLoggedIn;
+  if (!state.isLoggedIn) {
+    root.innerHTML = "";
+    return;
+  }
+  if (state.workspaceRoute === "home") {
+    renderWorkspaceHomeView(root);
+    return;
+  }
+  if (state.activeWorkspace === "delivery") {
+    renderDeliveryWorkspaceView(root, {
+      state,
+      onDispatchDateChange: workspaceActions.updateDispatchDate,
+    });
+    return;
+  }
+  renderOpShopWorkspaceView(root, {
+    state,
+    onDispatchDateChange: workspaceActions.updateDispatchDate,
+  });
 }
 
 function renderAuthGate() {
@@ -963,24 +1085,34 @@ function renderAttacheInvoiceImportModal() {
 
 function renderBoard() {
   renderAccountStatus();
-  renderBoardControls();
-  renderBoardViewNavigation();
-  renderVisibleBoardView();
-  renderOrderDetailPopup();
-  renderAddOrderPopup();
-  renderAttacheInvoiceImportModal();
-  renderOpShopPickupListModal();
-  renderOncallOpShopPickupListModal();
-  renderCountrysideOpShopPickupListModal();
-  renderOpShopTemplateManagementModal();
-  renderOpShopPickupDetailPopup();
-  renderSpecificationModal();
+  renderWorkspaceNavigation();
+  renderWorkspace();
+  if (state.workspaceRoute === "legacy") {
+    renderBoardControls();
+    renderBoardViewNavigation();
+    renderVisibleBoardView();
+    renderOrderDetailPopup();
+    renderAddOrderPopup();
+    renderAttacheInvoiceImportModal();
+    renderOpShopPickupListModal();
+    renderOncallOpShopPickupListModal();
+    renderCountrysideOpShopPickupListModal();
+    renderOpShopTemplateManagementModal();
+    renderOpShopPickupDetailPopup();
+    renderSpecificationModal();
+  }
   renderAuthGate();
 }
 
 const authActions = createAuthActions({
+  onAuthenticated: () => setWorkspaceRoute("home", { replace: true }),
   renderAuthGate,
   renderBoard,
+  state,
+});
+
+const workspaceActions = createWorkspaceActions({
+  renderWorkspace,
   state,
 });
 
@@ -1065,10 +1197,8 @@ const specificationActions = createSpecificationActions({
 });
 
 authActions.restoreAccountSession();
-initializeBoardViewRouting();
+initializeWorkspaceRouting();
 renderBoard();
-loadBoard(state.dispatchDate);
-loadFinalSummaryDates();
 
 
 

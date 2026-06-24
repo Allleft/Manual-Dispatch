@@ -39,15 +39,15 @@ export function renderAuthGate({
   onSwitchAuthMode,
 }) {
   const root = document.querySelector("#auth-root");
-  const boardShell = document.querySelector(".board-shell");
+  const protectedShells = document.querySelectorAll(".board-shell, .workspace-shell");
   if (!root) {
     return;
   }
 
-  if (boardShell) {
-    boardShell.classList.toggle("board-locked", !state.isLoggedIn);
-    boardShell.setAttribute("aria-hidden", state.isLoggedIn ? "false" : "true");
-  }
+  protectedShells.forEach((shell) => {
+    shell.classList.toggle("board-locked", !state.isLoggedIn);
+    shell.setAttribute("aria-hidden", state.isLoggedIn ? "false" : "true");
+  });
 
   root.innerHTML = "";
   if (state.isLoggedIn) {

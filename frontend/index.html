@@ -7,15 +7,18 @@
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
-    <header class="page-hero">
-      <div>
+    <header class="page-hero workspace-app-header">
+      <div class="workspace-brand">
         <p class="eyebrow">Manual office workflow</p>
-        <h1>Manual Dispatch Board</h1>
+        <h1>Manual Dispatch</h1>
       </div>
+      <nav id="workspace-header-nav" class="workspace-header-nav" aria-label="Workspace navigation"></nav>
       <div id="account-status" class="account-status" aria-live="polite"></div>
     </header>
 
-    <main class="board-shell" aria-label="Manual Dispatch Board">
+    <main id="workspace-root" class="workspace-shell" aria-label="Manual Dispatch workspaces" hidden></main>
+
+    <main id="legacy-board-shell" class="board-shell" aria-label="Manual Dispatch Board" hidden>
       <section class="board-section board-controls" aria-labelledby="board-controls-title">
 
         <div class="dispatch-date-controls">

@@ -1,63 +1,65 @@
-# Change Manifest - Stage 5 Scoped Workspace Mutation APIs
+# Change Manifest - Stage 6A Workspace Frontend Shell
 
 **Task:** Separate Delivery and OP SHOP workspaces
 **Completed:** 2026-06-24
 **Files modified:** 10
-**Files created:** 3
+**Files created:** 6
 **Files deleted:** 0
 
 ## Changes
 
 | Area | Files | Change |
 |---|---:|---|
-| Request contracts | 1 | Added task-type-safe Delivery and OP SHOP mutation request dataclasses. |
-| Independent lock helpers | 2 | Added generated/saved key and captured-task reservation checks. |
-| Scoped mutation services | 2 | Added Delivery assignment/vehicle and OP SHOP assignment/route-group workflows. |
-| Atomic persistence | 2 | Added narrow SQLite and in-memory OP SHOP assignment batch helpers. |
-| Facade and API | 2 | Added seven scoped mutation routes without changing legacy routes. |
-| Tests | 1 | Added HTTP contracts, lock states, atomicity, isolation, and board refresh coverage. |
+| Workspace routing | 2 | Added authenticated hash routing, Home default, and legacy redirects. |
+| Scoped read client/state | 3 | Added five scoped GET clients and independent workspace state/loading errors. |
+| Workspace renderers | 5 | Added Home, header navigation, Delivery, and OP SHOP read-only presentation. |
+| Visual shell | 2 | Added single-page mount point and responsive white blue/green workspace styling. |
+| Auth boundary | 2 | Added post-auth Home navigation and protected both application shells. |
+| Tests | 1 | Added route, endpoint isolation, source boundary, and title contract coverage. |
 | Refactor governance | 3 | Updated scope allowlist, manifest, and session handoff. |
 
 ## Scope Compliance
 
-- [x] Changed files are within the approved Stage 5 mutation/API scope.
-- [x] No frontend, hash route, Workspace Home, deployment, or migration-apply file changed.
-- [x] No database schema, dependency, legacy route, or legacy service behavior changed.
-- [x] Legacy `/board`, Final Summary, assignment, vehicle, and OP SHOP routes remain intact.
-- [x] No runtime database, workbook, backup, output, or environment file was added.
+- [x] Changed files are within the approved Stage 6A frontend/read-only scope.
+- [x] No backend schema, service, route, migration, exporter, or deployment file changed.
+- [x] No scoped or legacy mutation action is wired into the new workspace shell.
+- [x] Legacy renderers and actions remain available in source for later controlled reuse.
+- [x] No dependency, runtime database, workbook, backup, screenshot, or output was added.
 
-## Lock and Isolation Proof
+## Routing and Read Boundary Proof
 
-- [x] Generated Delivery Run Sheets block captured task changes, target assignments,
-  and vehicle assign/clear until cancellation.
-- [x] Saved Delivery Run Sheets enforce the same boundaries with a saved-state error.
-- [x] Generated and saved OP SHOP Collections block captured pickup changes and target
-  assignments without inspecting Delivery state.
-- [x] Delivery mutations do not inspect OP SHOP Collections or legacy Final Summary locks.
-- [x] OP SHOP mutations do not inspect Delivery Run Sheets or legacy Final Summary locks.
-- [x] A saved Delivery Run Sheet does not block OP SHOP assignment.
-- [x] A saved OP SHOP Collection does not block Delivery assignment or vehicle selection.
+- [x] Login success opens `#home`; invalid/empty hashes resolve safely to Home.
+- [x] All nine workspace child routes are refreshable hash routes.
+- [x] Three legacy hashes replace to their approved Delivery equivalents.
+- [x] Home returns before any scoped board request.
+- [x] Delivery loader contains no OP SHOP board/collection call.
+- [x] OP SHOP loader contains no Delivery board/run-sheet call.
+- [x] New workspace source contains no legacy board or Final Summary endpoint call.
+- [x] Delivery renderer contains no OP SHOP labels or payload fields.
+- [x] OP SHOP renderer contains no Delivery order, invoice, load, vehicle, or trip fields.
 
-## Transaction Proof
+## Browser QA
 
-- [x] OP SHOP batch requests preflight every row before persistence.
-- [x] Countryside route groups preflight every membership before persistence.
-- [x] SQLite task and assignment changes share one transaction and one commit.
-- [x] In-memory batch persistence restores task and assignment collections on failure.
-- [x] Tests prove an invalid batch row and a reserved route membership cause no partial writes.
+- [x] Real UI login opens Workspace Home.
+- [x] Both workspace cards navigate to the correct scoped page.
+- [x] Every required route renders and survives refresh.
+- [x] Request logging proves Delivery and OP SHOP boards do not cross-load.
+- [x] Legacy hashes and invalid hashes redirect correctly.
+- [x] Logout hides workspace content and returns to the login gate.
+- [x] Browser console errors: 0.
 
 ## Drift Check
 
-- Files touched: 13 (within the 20-file Stage 5 budget).
-- New files are limited to two scoped mutation services and one targeted test module.
-- No unrelated cleanup, frontend behavior, schema migration, or exporter change was added.
+- Files touched: 16 (within the 20-file Stage 6A budget).
+- New files are limited to the approved read-only action/renderers and targeted test.
+- No unrelated cleanup, mutation UI, backend behavior, or deployment change was added.
 
 ## Test Results
 
-- Stage 5 targeted scoped-mutation tests: 10 passed.
-- Stage 2/4/5 workspace regression set: 22 passed.
-- Full Python suite: 441 passed.
-- Python compileall: `backend`, `tests`, and `tools` passed.
-- Frontend JavaScript syntax: all files passed `node --check`.
-- `git diff --check` and `git diff --cached --check` passed.
-- New failures: none.
+- Stage 6A frontend shell tests: 10 passed.
+- Existing frontend static contracts: 24 passed.
+- Python compile check: passed for `backend`, `tests`, and `tools`.
+- Full Python test suite: 451 passed.
+- Frontend JavaScript syntax checks: passed for `frontend/app.js` and every
+  `frontend/**/*.js` file.
+- Git whitespace checks: working tree and staged diff checks passed.

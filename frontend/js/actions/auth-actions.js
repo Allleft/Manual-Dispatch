@@ -16,7 +16,12 @@ function getSafeSessionStorage() {
   }
 }
 
-export function createAuthActions({ state, renderAuthGate, renderBoard }) {
+export function createAuthActions({
+  state,
+  renderAuthGate,
+  renderBoard,
+  onAuthenticated = () => {},
+}) {
   function restoreAccountSession() {
     const storage = getSafeSessionStorage();
     if (!storage) {
@@ -98,6 +103,7 @@ export function createAuthActions({ state, renderAuthGate, renderBoard }) {
     try {
       const identity = await apiLoginAccount({ account_name: accountName, password });
       applyLoggedInAccount(identity);
+      onAuthenticated();
     } catch (error) {
       state.loginError = error.message || "Invalid account name or password";
     } finally {
@@ -135,6 +141,7 @@ export function createAuthActions({ state, renderAuthGate, renderBoard }) {
         confirm_password: confirmPassword,
       });
       applyLoggedInAccount(identity);
+      onAuthenticated();
     } catch (error) {
       state.registerError = error.message || "Unable to create account";
     } finally {
