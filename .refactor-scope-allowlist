@@ -12,6 +12,7 @@
 ^backend/services/manual_dispatch/opshop_pickup_collection_service.py$
 ^backend/services/manual_dispatch/opshop_workspace_board_service.py$
 ^backend/services/manual_dispatch/opshop_workspace_mutation_service.py$
+^backend/services/manual_dispatch/workspace_migration_readiness_service.py$
 ^backend/services/manual_dispatch_service.py$
 ^backend/services/opshop_pickup_collection_excel_export_service.py$
 ^frontend/app.js$
@@ -33,6 +34,7 @@
 ^tests/test_workspace_scoped_boards.py$
 ^tests/test_workspace_scoped_mutations.py$
 ^tests/test_workspace_frontend_shell.py$
+^tests/test_workspace_safety_hardening.py$
 ^tools/migrate_legacy_final_summaries_to_workspaces.py$
 ^docs/separate-delivery-and-opshop-workspaces-migration.md$
 ^README.md$

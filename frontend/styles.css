@@ -151,6 +151,33 @@
   gap: 1rem;
 }
 
+.workspace-migration-notice {
+  margin: 0 0 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid #d8e3ea;
+  border-radius: 14px;
+  color: var(--ink);
+  background: #f8fafc;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.workspace-migration-notice[hidden] {
+  display: none;
+}
+
+.workspace-migration-notice-checking {
+  color: #31546f;
+  border-color: #bdd5e8;
+  background: #f1f8fd;
+}
+
+.workspace-migration-notice-blocked {
+  color: #8a341f;
+  border-color: #f2b8a0;
+  background: #fff6f1;
+}
+
 .workspace-home-card {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -166,6 +193,12 @@
   transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
 }
 
+.workspace-home-card-disabled {
+  cursor: not-allowed;
+  opacity: 0.68;
+  box-shadow: none;
+}
+
 .workspace-home-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 16px 34px rgba(23, 33, 29, 0.08);
@@ -179,6 +212,12 @@
 .workspace-home-card-opshop:hover,
 .workspace-home-card-opshop:focus-visible {
   border-color: rgba(39, 93, 69, 0.35);
+}
+
+.workspace-home-card-disabled:hover {
+  transform: none;
+  border-color: var(--line);
+  box-shadow: none;
 }
 
 .workspace-home-card-icon,

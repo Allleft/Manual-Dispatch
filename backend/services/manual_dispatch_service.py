@@ -30,6 +30,9 @@ from backend.services.manual_dispatch.opshop_workspace_mutation_service import (
 from backend.services.manual_dispatch.opshop_template_service import OpShopTemplateService
 from backend.services.manual_dispatch.specification_service import SpecificationService
 from backend.services.manual_dispatch.validation import ManualDispatchValidator
+from backend.services.manual_dispatch.workspace_migration_readiness_service import (
+    WorkspaceMigrationReadinessService,
+)
 
 
 class ManualDispatchService:
@@ -90,6 +93,9 @@ class ManualDispatchService:
             self.validator,
             self.opshop_workspace_board_service,
         )
+        self.workspace_migration_readiness_service = (
+            WorkspaceMigrationReadinessService(self.repository)
+        )
 
     def get_board(self, dispatch_date):
         return self.board_service.get_board(dispatch_date)
@@ -98,10 +104,15 @@ class ManualDispatchService:
         return self.board_service.get_specifications()
 
     def get_delivery_workspace_board(self, dispatch_date):
+        self._ensure_workspace_ready("delivery")
         return self.delivery_workspace_board_service.get_board(dispatch_date)
 
     def get_opshop_workspace_board(self, dispatch_date):
+        self._ensure_workspace_ready("opshop")
         return self.opshop_workspace_board_service.get_board(dispatch_date)
+
+    def get_workspace_migration_status(self):
+        return self.workspace_migration_readiness_service.get_status()
 
     def get_shared_specifications(self):
         return ManualDispatchSpecificationResponse(
@@ -110,21 +121,27 @@ class ManualDispatchService:
         )
 
     def assign_delivery_workspace_order(self, request):
+        self._ensure_workspace_ready("delivery")
         return self.delivery_workspace_mutation_service.assign_order(request)
 
     def unassign_delivery_workspace_order(self, request):
+        self._ensure_workspace_ready("delivery")
         return self.delivery_workspace_mutation_service.unassign_order(request)
 
     def assign_delivery_workspace_vehicle(self, request):
+        self._ensure_workspace_ready("delivery")
         return self.delivery_workspace_mutation_service.assign_vehicle(request)
 
     def clear_delivery_workspace_vehicle(self, request):
+        self._ensure_workspace_ready("delivery")
         return self.delivery_workspace_mutation_service.clear_vehicle(request)
 
     def apply_opshop_workspace_assignments(self, request):
+        self._ensure_workspace_ready("opshop")
         return self.opshop_workspace_mutation_service.apply_assignments(request)
 
     def unassign_opshop_workspace_pickup(self, request):
+        self._ensure_workspace_ready("opshop")
         return self.opshop_workspace_mutation_service.unassign_pickup(request)
 
     def assign_opshop_workspace_countryside_route_group(
@@ -132,12 +149,14 @@ class ManualDispatchService:
         route_group_id,
         request,
     ):
+        self._ensure_workspace_ready("opshop")
         return self.opshop_workspace_mutation_service.assign_countryside_route_group(
             route_group_id,
             request,
         )
 
     def create_generated_delivery_run_sheet(self, request):
+        self._ensure_workspace_ready("delivery")
         return self.delivery_run_sheet_service.create_generated(request)
 
     def list_delivery_run_sheets(
@@ -146,6 +165,7 @@ class ManualDispatchService:
         delivery_date=None,
         status=None,
     ):
+        self._ensure_workspace_ready("delivery")
         return self.delivery_run_sheet_service.list(
             dispatch_date,
             delivery_date,
@@ -165,6 +185,7 @@ class ManualDispatchService:
         return self.delivery_run_sheet_service.get_saved_for_export(run_sheet_id)
 
     def create_generated_opshop_pickup_collection(self, request):
+        self._ensure_workspace_ready("opshop")
         return self.opshop_pickup_collection_service.create_generated(request)
 
     def list_opshop_pickup_collections(
@@ -173,6 +194,7 @@ class ManualDispatchService:
         pickup_date=None,
         status=None,
     ):
+        self._ensure_workspace_ready("opshop")
         return self.opshop_pickup_collection_service.list(
             dispatch_date,
             pickup_date,
@@ -195,6 +217,9 @@ class ManualDispatchService:
         return self.opshop_pickup_collection_service.get_saved_for_export(
             collection_id
         )
+
+    def _ensure_workspace_ready(self, workspace):
+        return self.workspace_migration_readiness_service.ensure_ready(workspace)
 
     def register_operator_account(self, request):
         return self.auth_service.register_operator_account(request)

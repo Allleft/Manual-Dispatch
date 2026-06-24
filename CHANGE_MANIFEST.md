@@ -1,65 +1,87 @@
-# Change Manifest - Stage 6A Workspace Frontend Shell
+# Change Manifest - Stage 6A.1 Workspace Safety Hardening
 
-**Task:** Separate Delivery and OP SHOP workspaces
+**Task:** Workspace migration safety, lifecycle atomicity, strict dates, and stale request protection
 **Completed:** 2026-06-24
-**Files modified:** 10
-**Files created:** 6
+**Files modified:** 17
+**Files created:** 2
 **Files deleted:** 0
 
 ## Changes
 
 | Area | Files | Change |
 |---|---:|---|
-| Workspace routing | 2 | Added authenticated hash routing, Home default, and legacy redirects. |
-| Scoped read client/state | 3 | Added five scoped GET clients and independent workspace state/loading errors. |
-| Workspace renderers | 5 | Added Home, header navigation, Delivery, and OP SHOP read-only presentation. |
-| Visual shell | 2 | Added single-page mount point and responsive white blue/green workspace styling. |
-| Auth boundary | 2 | Added post-auth Home navigation and protected both application shells. |
-| Tests | 1 | Added route, endpoint isolation, source boundary, and title contract coverage. |
-| Refactor governance | 3 | Updated scope allowlist, manifest, and session handoff. |
+| Migration readiness | 5 | Added exact legacy snapshot/marker inspection, typed guard service, facade guards, and status API. |
+| Atomic lifecycle | 4 | Added conditional GENERATED-only Save/Cancel repository operations for both domains. |
+| Date/race safety | 3 | Applied strict ISO generate/list validation and normalized duplicate Generate races. |
+| Frontend request safety | 6 | Added migration status Home UX, independent request versions, and removed unused shared-spec reads. |
+| Regression tests | 2 | Added backend/API atomicity/readiness coverage and real Node promise-interleaving tests. |
+| Refactor governance | 3 | Updated allowlist, manifest, and session handoff. |
 
-## Scope Compliance
+## Exact Migration Status Contract
 
-- [x] Changed files are within the approved Stage 6A frontend/read-only scope.
-- [x] No backend schema, service, route, migration, exporter, or deployment file changed.
-- [x] No scoped or legacy mutation action is wired into the new workspace shell.
-- [x] Legacy renderers and actions remain available in source for later controlled reuse.
-- [x] No dependency, runtime database, workbook, backup, screenshot, or output was added.
+```json
+{
+  "delivery_ready": true,
+  "opshop_ready": true,
+  "legacy_generated_summary_count": 0,
+  "delivery_unmigrated_summary_count": 0,
+  "opshop_unmigrated_summary_count": 0,
+  "delivery_unmigrated_summary_ids": [],
+  "opshop_unmigrated_summary_ids": []
+}
+```
 
-## Routing and Read Boundary Proof
+## Guarded Scoped Routes
 
-- [x] Login success opens `#home`; invalid/empty hashes resolve safely to Home.
-- [x] All nine workspace child routes are refreshable hash routes.
-- [x] Three legacy hashes replace to their approved Delivery equivalents.
-- [x] Home returns before any scoped board request.
-- [x] Delivery loader contains no OP SHOP board/collection call.
-- [x] OP SHOP loader contains no Delivery board/run-sheet call.
-- [x] New workspace source contains no legacy board or Final Summary endpoint call.
-- [x] Delivery renderer contains no OP SHOP labels or payload fields.
-- [x] OP SHOP renderer contains no Delivery order, invoice, load, vehicle, or trip fields.
+- `GET /api/manual-dispatch/delivery/board`
+- `GET /api/manual-dispatch/opshop/board`
+- `POST /api/manual-dispatch/delivery/assignments`
+- `POST /api/manual-dispatch/delivery/assignments/unassign`
+- `POST /api/manual-dispatch/delivery/vehicle-assignments`
+- `POST /api/manual-dispatch/delivery/vehicle-assignments/clear`
+- `POST /api/manual-dispatch/opshop/pickups/assignments/apply`
+- `POST /api/manual-dispatch/opshop/pickups/assignments/unassign`
+- `POST /api/manual-dispatch/opshop/countryside-route-groups/{route_group_id}/assign`
+- `POST /api/manual-dispatch/delivery/run-sheets/generated`
+- `GET /api/manual-dispatch/delivery/run-sheets`
+- `POST /api/manual-dispatch/opshop/pickup-collections/generated`
+- `GET /api/manual-dispatch/opshop/pickup-collections`
+
+## Boundary Proof
+
+- [x] Migration status is read-only and no real database migration was run.
+- [x] Legacy `/board`, Final Summary routes/tables/locks/frontend, and exports are unchanged.
+- [x] Shared specifications and the migration tool are not guarded.
+- [x] Save changes only a GENERATED header and preserves all child snapshot rows.
+- [x] Cancel cannot delete a snapshot already promoted to SAVED.
+- [x] Repeated Save cannot replace saved metadata or child rows.
+- [x] Duplicate Generate races return stable validation conflicts, not HTTP 500.
+- [x] Stale Delivery/OP SHOP responses cannot write data, errors, loading state, or final renders.
+- [x] Run Sheet/History and Collection/History do not request shared specifications.
+- [x] No Stage 6B mutation UI was wired.
+- [x] No schema, deployment, dependency, runtime database, backup, or output file changed.
 
 ## Browser QA
 
-- [x] Real UI login opens Workspace Home.
-- [x] Both workspace cards navigate to the correct scoped page.
-- [x] Every required route renders and survives refresh.
-- [x] Request logging proves Delivery and OP SHOP boards do not cross-load.
-- [x] Legacy hashes and invalid hashes redirect correctly.
-- [x] Logout hides workspace content and returns to the login gate.
+- [x] Clean temporary DB enabled both workspace cards.
+- [x] Legacy SAVED OP SHOP snapshot disabled only OP SHOP.
+- [x] Legacy board and Final Summary list remained HTTP 200 while scoped OP SHOP returned 409.
+- [x] Matching independent marker restored both workspaces to ready.
+- [x] History pages loaded with shared specifications deliberately unavailable.
 - [x] Browser console errors: 0.
+- [x] Temporary script/database/WAL/SHM artifacts removed.
 
 ## Drift Check
 
-- Files touched: 16 (within the 20-file Stage 6A budget).
-- New files are limited to the approved read-only action/renderers and targeted test.
-- No unrelated cleanup, mutation UI, backend behavior, or deployment change was added.
+- Files touched: 19 (within the 20-file Stage 6A.1 budget).
+- Product/test files: 16; governance files: 3.
+- No unrelated cleanup or mutation UI was added.
 
 ## Test Results
 
-- Stage 6A frontend shell tests: 10 passed.
-- Existing frontend static contracts: 24 passed.
+- Stage 6A.1 focused backend/frontend tests: 23 passed.
+- Existing workspace backend regression subset after backend changes: 31 passed.
+- Full Python test suite: 464 passed.
 - Python compile check: passed for `backend`, `tests`, and `tools`.
-- Full Python test suite: 451 passed.
-- Frontend JavaScript syntax checks: passed for `frontend/app.js` and every
-  `frontend/**/*.js` file.
-- Git whitespace checks: working tree and staged diff checks passed.
+- Frontend JavaScript syntax checks: passed for `frontend/app.js` and every `frontend/**/*.js` file.
+- Git working-tree and staged whitespace checks: passed.

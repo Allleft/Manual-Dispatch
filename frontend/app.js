@@ -262,7 +262,7 @@ function renderWorkspace() {
     return;
   }
   if (state.workspaceRoute === "home") {
-    renderWorkspaceHomeView(root);
+    renderWorkspaceHomeView(root, { state });
     return;
   }
   if (state.activeWorkspace === "delivery") {

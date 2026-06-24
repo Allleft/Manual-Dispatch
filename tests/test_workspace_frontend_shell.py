@@ -1,3 +1,5 @@
+import subprocess
+import textwrap
 import unittest
 from pathlib import Path
 
@@ -31,7 +33,8 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         )
         self.assertIn("onAuthenticated();", self.auth_actions)
         self.assertIn('workspaceRoute: "home"', self.state)
-        self.assertIn("if (!state.isLoggedIn || route === \"home\")", self.workspace_actions)
+        self.assertIn("if (!state.isLoggedIn)", self.workspace_actions)
+        self.assertIn('if (route === "home")', self.workspace_actions)
         self.assertNotIn("loadBoard(state.dispatchDate);", self.app)
         self.assertNotIn("loadFinalSummaryDates();\n", self.app.rsplit("renderBoard();", 1)[-1])
 
@@ -70,6 +73,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         )[1].split("async function loadDeliveryRoute", 1)[0]
         self.assertIn('route === "home"', early_return)
         self.assertIn("return;", early_return)
+        self.assertIn("getWorkspaceMigrationStatus", early_return)
 
     def test_scoped_api_client_has_all_read_only_workspace_endpoints(self):
         for endpoint in (
@@ -78,6 +82,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             "/api/manual-dispatch/shared/specifications",
             "/api/manual-dispatch/delivery/run-sheets",
             "/api/manual-dispatch/opshop/pickup-collections",
+            "/api/manual-dispatch/workspace-migration-status",
         ):
             self.assertIn(endpoint, self.api)
 
@@ -89,15 +94,16 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             "async function loadOpShopRoute", 1
         )[1].split("async function updateDispatchDate", 1)[0]
 
-        self.assertIn("apiGetDeliveryWorkspaceBoard", delivery_loader)
-        self.assertIn("apiListDeliveryRunSheets", delivery_loader)
-        self.assertNotIn("apiGetOpShopWorkspaceBoard", delivery_loader)
-        self.assertNotIn("apiListOpShopPickupCollections", delivery_loader)
+        self.assertIn("api.getDeliveryWorkspaceBoard", delivery_loader)
+        self.assertIn("api.listDeliveryRunSheets", delivery_loader)
+        self.assertNotIn("api.getOpShopWorkspaceBoard", delivery_loader)
+        self.assertNotIn("api.listOpShopPickupCollections", delivery_loader)
 
-        self.assertIn("apiGetOpShopWorkspaceBoard", opshop_loader)
-        self.assertIn("apiListOpShopPickupCollections", opshop_loader)
-        self.assertNotIn("apiGetDeliveryWorkspaceBoard", opshop_loader)
-        self.assertNotIn("apiListDeliveryRunSheets", opshop_loader)
+        self.assertIn("api.getOpShopWorkspaceBoard", opshop_loader)
+        self.assertIn("api.listOpShopPickupCollections", opshop_loader)
+        self.assertNotIn("api.getDeliveryWorkspaceBoard", opshop_loader)
+        self.assertNotIn("api.listDeliveryRunSheets", opshop_loader)
+        self.assertNotIn("apiGetSharedSpecifications", self.workspace_actions)
 
     def test_new_workspace_source_does_not_call_legacy_board_or_summary_apis(self):
         new_workspace_source = "\n".join(
@@ -159,6 +165,9 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         for state_field in (
             "workspaceRoute",
             "activeWorkspace",
+            "workspaceMigrationStatus",
+            "isWorkspaceMigrationStatusLoading",
+            "workspaceMigrationStatusError",
             "deliveryBoard",
             "deliveryRunSheets",
             "opshopBoard",
@@ -170,6 +179,152 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             "opshopWorkspaceError",
         ):
             self.assertIn(f"{state_field}:", self.state)
+
+    def test_home_disables_only_migration_blocked_workspace_cards(self):
+        self.assertIn("workspaceMigrationStatus", self.home_renderer)
+        self.assertIn('readyField: "delivery_ready"', self.home_renderer)
+        self.assertIn('readyField: "opshop_ready"', self.home_renderer)
+        self.assertIn('card.setAttribute("aria-disabled", "true")', self.home_renderer)
+        self.assertIn("Workspace migration is required", self.home_renderer)
+        self.assertIn("legacy_generated_summary_count", self.home_renderer)
+
+    def test_workspace_loaders_guard_against_stale_delivery_and_opshop_responses(self):
+        self._run_workspace_actions_script(
+            """
+            function deferred() {
+              let resolve;
+              const promise = new Promise((done) => { resolve = done; });
+              return { promise, resolve };
+            }
+
+            const oldDelivery = deferred();
+            const newDelivery = deferred();
+            const oldOpShop = deferred();
+            const newOpShop = deferred();
+            const state = {
+              isLoggedIn: true,
+              workspaceRoute: "delivery/task-pool",
+              dispatchDate: "2026-06-24",
+              deliveryBoard: null,
+              opshopBoard: null,
+              deliveryRunSheets: [],
+              opshopPickupCollections: [],
+              isDeliveryWorkspaceLoading: false,
+              deliveryWorkspaceError: "",
+              isOpShopWorkspaceLoading: false,
+              opshopWorkspaceError: "",
+            };
+            const api = {
+              getWorkspaceMigrationStatus: async () => ({}),
+              getDeliveryWorkspaceBoard: (date) =>
+                date === "2026-06-24" ? oldDelivery.promise : newDelivery.promise,
+              getOpShopWorkspaceBoard: (date) =>
+                date === "2026-06-24" ? oldOpShop.promise : newOpShop.promise,
+              listDeliveryRunSheets: async () => [],
+              listOpShopPickupCollections: async () => [],
+            };
+            const actions = createWorkspaceActions({
+              state,
+              renderWorkspace: () => {},
+              api,
+            });
+
+            const firstDelivery = actions.loadWorkspaceRoute("delivery/task-pool");
+            state.dispatchDate = "2026-06-25";
+            const secondDelivery = actions.loadWorkspaceRoute("delivery/task-pool");
+            newDelivery.resolve({ marker: "new-delivery" });
+            await secondDelivery;
+            oldDelivery.resolve({ marker: "old-delivery" });
+            await firstDelivery;
+            if (state.deliveryBoard.marker !== "new-delivery") {
+              throw new Error("stale Delivery response replaced current data");
+            }
+            if (state.isDeliveryWorkspaceLoading) {
+              throw new Error("stale Delivery response changed current loading state");
+            }
+
+            state.workspaceRoute = "opshop/regular";
+            state.dispatchDate = "2026-06-24";
+            const firstOpShop = actions.loadWorkspaceRoute("opshop/regular");
+            state.dispatchDate = "2026-06-25";
+            const secondOpShop = actions.loadWorkspaceRoute("opshop/regular");
+            newOpShop.resolve({ marker: "new-opshop" });
+            await secondOpShop;
+            oldOpShop.resolve({ marker: "old-opshop" });
+            await firstOpShop;
+            if (state.opshopBoard.marker !== "new-opshop") {
+              throw new Error("stale OP SHOP response replaced current data");
+            }
+            if (state.isOpShopWorkspaceLoading) {
+              throw new Error("stale OP SHOP response changed current loading state");
+            }
+            """
+        )
+
+    def test_history_loaders_do_not_depend_on_shared_specifications(self):
+        self._run_workspace_actions_script(
+            """
+            const state = {
+              isLoggedIn: true,
+              workspaceRoute: "delivery/history",
+              dispatchDate: "2026-06-24",
+              deliveryRunSheets: [],
+              opshopPickupCollections: [],
+              isDeliveryWorkspaceLoading: false,
+              deliveryWorkspaceError: "",
+              isOpShopWorkspaceLoading: false,
+              opshopWorkspaceError: "",
+            };
+            let sharedCalls = 0;
+            const api = {
+              getWorkspaceMigrationStatus: async () => ({}),
+              getDeliveryWorkspaceBoard: async () => ({}),
+              getOpShopWorkspaceBoard: async () => ({}),
+              listDeliveryRunSheets: async () => [{ run_sheet_id: "DRS-1" }],
+              listOpShopPickupCollections: async () => [{ collection_id: "OPC-1" }],
+              getSharedSpecifications: async () => {
+                sharedCalls += 1;
+                throw new Error("shared specifications unavailable");
+              },
+            };
+            const actions = createWorkspaceActions({
+              state,
+              renderWorkspace: () => {},
+              api,
+            });
+
+            await actions.loadWorkspaceRoute("delivery/history");
+            if (state.deliveryRunSheets[0].run_sheet_id !== "DRS-1") {
+              throw new Error("Delivery history did not load independently");
+            }
+            state.workspaceRoute = "opshop/history";
+            await actions.loadWorkspaceRoute("opshop/history");
+            if (state.opshopPickupCollections[0].collection_id !== "OPC-1") {
+              throw new Error("OP SHOP history did not load independently");
+            }
+            if (sharedCalls !== 0) {
+              throw new Error("history unexpectedly requested shared specifications");
+            }
+            """
+        )
+
+    def _run_workspace_actions_script(self, body):
+        module_uri = (FRONTEND_ROOT / "js/actions/workspace-actions.js").as_uri()
+        script = textwrap.dedent(
+            f"""
+            globalThis.window = {{ location: {{ protocol: "http:" }} }};
+            const {{ createWorkspaceActions }} = await import({module_uri!r});
+            {body}
+            """
+        )
+        result = subprocess.run(
+            ["node", "--input-type=module", "--eval", script],
+            cwd=PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(0, result.returncode, result.stderr or result.stdout)
 
     @staticmethod
     def _read(relative_path):

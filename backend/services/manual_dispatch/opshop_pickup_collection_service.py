@@ -1,4 +1,3 @@
-from dataclasses import replace
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -7,7 +6,9 @@ from backend.schemas import (
     OpShopPickupCollectionRowSnapshot,
 )
 from backend.services.manual_dispatch.normalization import (
+    clean_optional_iso_date,
     clean_optional_text,
+    clean_required_iso_date,
     clean_required_text,
 )
 
@@ -18,8 +19,8 @@ class OpShopPickupCollectionService:
         self.validator = validator
 
     def create_generated(self, request):
-        dispatch_date = clean_required_text(request.dispatch_date, "dispatch_date")
-        pickup_date = clean_required_text(request.pickup_date, "pickup_date")
+        dispatch_date = clean_required_iso_date(request.dispatch_date, "dispatch_date")
+        pickup_date = clean_required_iso_date(request.pickup_date, "pickup_date")
         driver_id = clean_required_text(request.driver_id, "driver_id")
         self.validator.validate_driver_exists(driver_id)
 
@@ -52,12 +53,23 @@ class OpShopPickupCollectionService:
             legacy_summary_id=None,
             pickups=pickups,
         )
-        return self.repository.upsert_opshop_pickup_collection(collection)
+        try:
+            return self.repository.upsert_opshop_pickup_collection(collection)
+        except Exception as error:
+            if self.repository.get_opshop_pickup_collection_for_driver(
+                dispatch_date,
+                pickup_date,
+                driver_id,
+            ):
+                raise ValueError(
+                    "OP SHOP Pickup Collection already exists for this driver and pickup date."
+                ) from error
+            raise
 
     def list(self, dispatch_date=None, pickup_date=None, status=None):
         return self.repository.list_opshop_pickup_collections(
-            clean_optional_text(dispatch_date),
-            clean_optional_text(pickup_date),
+            clean_optional_iso_date(dispatch_date, "dispatch_date"),
+            clean_optional_iso_date(pickup_date, "pickup_date"),
             clean_optional_text(status).upper() if clean_optional_text(status) else None,
         )
 
@@ -71,37 +83,45 @@ class OpShopPickupCollectionService:
         return collection
 
     def save_generated(self, collection_id, request):
-        collection = self.get(collection_id)
-        if collection.status != "GENERATED":
-            raise ValueError("Only generated OP SHOP Pickup Collections can be saved.")
         account = self.validator.validate_saved_by_account(
             request.saved_by_account_name,
             request.saved_by_account_id,
         )
-        saved = replace(
-            collection,
-            status="SAVED",
-            saved_at=_timestamp(),
-            saved_by_account_name=account.account_name,
-            saved_by_account_id=account.account_id,
+        promoted = self.repository.promote_generated_opshop_pickup_collection_to_saved(
+            clean_required_text(collection_id, "collection_id"),
+            _timestamp(),
+            account.account_name,
+            account.account_id,
         )
-        return self.repository.upsert_opshop_pickup_collection(saved)
+        if promoted:
+            return self.get(collection_id)
+        self._raise_transition_error(collection_id, "saved")
 
     def cancel_generated(self, collection_id):
-        collection = self.get(collection_id)
-        if collection.status != "GENERATED":
-            raise ValueError(
-                "Only generated OP SHOP Pickup Collections can be cancelled."
-            )
-        return self.repository.delete_opshop_pickup_collection(
-            collection.collection_id
+        collection_id = clean_required_text(collection_id, "collection_id")
+        cancelled = self.repository.delete_generated_opshop_pickup_collection(
+            collection_id
         )
+        if cancelled:
+            return True
+        self._raise_transition_error(collection_id, "cancelled")
 
     def get_saved_for_export(self, collection_id):
         collection = self.get(collection_id)
         if collection.status != "SAVED":
             raise ValueError("Only saved OP SHOP Pickup Collections can be exported.")
         return collection
+
+    def _raise_transition_error(self, collection_id, action):
+        current = self.repository.get_opshop_pickup_collection(collection_id)
+        if not current:
+            raise ValueError(
+                f"OP SHOP Pickup Collection does not exist: {collection_id}"
+            )
+        past_tense = "saved" if action == "saved" else "cancelled"
+        raise ValueError(
+            f"Only generated OP SHOP Pickup Collections can be {past_tense}."
+        )
 
     def _build_pickups(self, dispatch_date, pickup_date, driver_id):
         items = [

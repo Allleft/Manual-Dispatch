@@ -108,6 +108,10 @@ export async function apiGetDeliveryWorkspaceBoard(dispatchDate) {
   });
 }
 
+export async function apiGetWorkspaceMigrationStatus() {
+  return requestJson("/api/manual-dispatch/workspace-migration-status");
+}
+
 
 export async function apiGetOpShopWorkspaceBoard(dispatchDate) {
   return requestJson("/api/manual-dispatch/opshop/board", {

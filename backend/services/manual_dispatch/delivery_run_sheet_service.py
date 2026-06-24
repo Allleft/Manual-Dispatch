@@ -1,4 +1,3 @@
-from dataclasses import replace
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -9,7 +8,9 @@ from backend.schemas import (
     ProductDetailLine,
 )
 from backend.services.manual_dispatch.normalization import (
+    clean_optional_iso_date,
     clean_optional_text,
+    clean_required_iso_date,
     clean_required_text,
 )
 
@@ -20,8 +21,8 @@ class DeliveryRunSheetService:
         self.validator = validator
 
     def create_generated(self, request):
-        dispatch_date = clean_required_text(request.dispatch_date, "dispatch_date")
-        delivery_date = clean_required_text(request.delivery_date, "delivery_date")
+        dispatch_date = clean_required_iso_date(request.dispatch_date, "dispatch_date")
+        delivery_date = clean_required_iso_date(request.delivery_date, "delivery_date")
         driver_id = clean_required_text(request.driver_id, "driver_id")
         self.validator.validate_driver_exists(driver_id)
 
@@ -66,12 +67,23 @@ class DeliveryRunSheetService:
             legacy_summary_id=None,
             trips=trips,
         )
-        return self.repository.upsert_delivery_run_sheet(run_sheet)
+        try:
+            return self.repository.upsert_delivery_run_sheet(run_sheet)
+        except Exception as error:
+            if self.repository.get_delivery_run_sheet_for_driver(
+                dispatch_date,
+                delivery_date,
+                driver_id,
+            ):
+                raise ValueError(
+                    "Delivery Run Sheet already exists for this driver and delivery date."
+                ) from error
+            raise
 
     def list(self, dispatch_date=None, delivery_date=None, status=None):
         return self.repository.list_delivery_run_sheets(
-            clean_optional_text(dispatch_date),
-            clean_optional_text(delivery_date),
+            clean_optional_iso_date(dispatch_date, "dispatch_date"),
+            clean_optional_iso_date(delivery_date, "delivery_date"),
             clean_optional_text(status).upper() if clean_optional_text(status) else None,
         )
 
@@ -83,33 +95,41 @@ class DeliveryRunSheetService:
         return run_sheet
 
     def save_generated(self, run_sheet_id, request):
-        run_sheet = self.get(run_sheet_id)
-        if run_sheet.status != "GENERATED":
-            raise ValueError("Only generated Delivery Run Sheets can be saved.")
         account = self.validator.validate_saved_by_account(
             request.saved_by_account_name,
             request.saved_by_account_id,
         )
-        saved = replace(
-            run_sheet,
-            status="SAVED",
-            saved_at=_timestamp(),
-            saved_by_account_name=account.account_name,
-            saved_by_account_id=account.account_id,
+        promoted = self.repository.promote_generated_delivery_run_sheet_to_saved(
+            clean_required_text(run_sheet_id, "run_sheet_id"),
+            _timestamp(),
+            account.account_name,
+            account.account_id,
         )
-        return self.repository.upsert_delivery_run_sheet(saved)
+        if promoted:
+            return self.get(run_sheet_id)
+        self._raise_transition_error(run_sheet_id, "saved")
 
     def cancel_generated(self, run_sheet_id):
-        run_sheet = self.get(run_sheet_id)
-        if run_sheet.status != "GENERATED":
-            raise ValueError("Only generated Delivery Run Sheets can be cancelled.")
-        return self.repository.delete_delivery_run_sheet(run_sheet.run_sheet_id)
+        run_sheet_id = clean_required_text(run_sheet_id, "run_sheet_id")
+        cancelled = self.repository.delete_generated_delivery_run_sheet(run_sheet_id)
+        if cancelled:
+            return True
+        self._raise_transition_error(run_sheet_id, "cancelled")
 
     def get_saved_for_export(self, run_sheet_id):
         run_sheet = self.get(run_sheet_id)
         if run_sheet.status != "SAVED":
             raise ValueError("Only saved Delivery Run Sheets can be exported.")
         return run_sheet
+
+    def _raise_transition_error(self, run_sheet_id, action):
+        current = self.repository.get_delivery_run_sheet(run_sheet_id)
+        if not current:
+            raise ValueError(f"Delivery Run Sheet does not exist: {run_sheet_id}")
+        past_tense = "saved" if action == "saved" else "cancelled"
+        raise ValueError(
+            f"Only generated Delivery Run Sheets can be {past_tense}."
+        )
 
     def _build_trips(self, dispatch_date, delivery_date, driver_id):
         assignments = [

@@ -33,6 +33,13 @@ def clean_required_iso_date(value, field_name):
     return text
 
 
+def clean_optional_iso_date(value, field_name):
+    text = clean_optional_text(value)
+    if text is None:
+        return None
+    return clean_required_iso_date(text, field_name)
+
+
 def quantity_or_default(value, field_name):
     if value in (None, ""):
         return 0

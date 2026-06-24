@@ -387,6 +387,64 @@ class SQLiteManualDispatchRepository:
             ).fetchone()
         return self._row_to_final_trip_summary(row) if row else None
 
+    def get_workspace_migration_status(self):
+        with connect(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    summary.summary_id,
+                    summary.status,
+                    EXISTS (
+                        SELECT 1
+                        FROM final_trip_summary_rows delivery_row
+                        WHERE delivery_row.summary_id = summary.summary_id
+                    ) AS has_delivery_rows,
+                    EXISTS (
+                        SELECT 1
+                        FROM final_trip_summary_opshop_pickup_rows opshop_row
+                        WHERE opshop_row.summary_id = summary.summary_id
+                    ) AS has_opshop_rows,
+                    (
+                        SELECT COUNT(*)
+                        FROM delivery_run_sheets run_sheet
+                        WHERE run_sheet.legacy_summary_id = summary.summary_id
+                    ) AS delivery_marker_count,
+                    (
+                        SELECT COUNT(*)
+                        FROM opshop_pickup_collections collection
+                        WHERE collection.legacy_summary_id = summary.summary_id
+                    ) AS opshop_marker_count
+                FROM final_trip_summaries summary
+                WHERE summary.status IN ('GENERATED', 'SAVED')
+                ORDER BY summary.summary_id
+                """
+            ).fetchall()
+
+        generated_count = sum(row["status"] == "GENERATED" for row in rows)
+        delivery_unmigrated_ids = [
+            row["summary_id"]
+            for row in rows
+            if row["status"] == "SAVED"
+            and row["has_delivery_rows"]
+            and row["delivery_marker_count"] != 1
+        ]
+        opshop_unmigrated_ids = [
+            row["summary_id"]
+            for row in rows
+            if row["status"] == "SAVED"
+            and row["has_opshop_rows"]
+            and row["opshop_marker_count"] != 1
+        ]
+        return {
+            "delivery_ready": not generated_count and not delivery_unmigrated_ids,
+            "opshop_ready": not generated_count and not opshop_unmigrated_ids,
+            "legacy_generated_summary_count": generated_count,
+            "delivery_unmigrated_summary_count": len(delivery_unmigrated_ids),
+            "opshop_unmigrated_summary_count": len(opshop_unmigrated_ids),
+            "delivery_unmigrated_summary_ids": delivery_unmigrated_ids,
+            "opshop_unmigrated_summary_ids": opshop_unmigrated_ids,
+        }
+
     def list_delivery_run_sheets(
         self,
         dispatch_date=None,
@@ -559,6 +617,45 @@ class SQLiteManualDispatchRepository:
                     )
             connection.commit()
         return self.get_delivery_run_sheet(run_sheet.run_sheet_id)
+
+    def promote_generated_delivery_run_sheet_to_saved(
+        self,
+        run_sheet_id,
+        saved_at,
+        saved_by_account_name,
+        saved_by_account_id,
+    ):
+        with connect(self.db_path) as connection:
+            cursor = connection.execute(
+                """
+                UPDATE delivery_run_sheets
+                SET status = 'SAVED',
+                    saved_at = ?,
+                    saved_by_account_name = ?,
+                    saved_by_account_id = ?
+                WHERE run_sheet_id = ? AND status = 'GENERATED'
+                """,
+                (
+                    saved_at,
+                    saved_by_account_name,
+                    saved_by_account_id,
+                    run_sheet_id,
+                ),
+            )
+            connection.commit()
+        return cursor.rowcount > 0
+
+    def delete_generated_delivery_run_sheet(self, run_sheet_id):
+        with connect(self.db_path) as connection:
+            cursor = connection.execute(
+                """
+                DELETE FROM delivery_run_sheets
+                WHERE run_sheet_id = ? AND status = 'GENERATED'
+                """,
+                (run_sheet_id,),
+            )
+            connection.commit()
+        return cursor.rowcount > 0
 
     def delete_delivery_run_sheet(self, run_sheet_id):
         with connect(self.db_path) as connection:
@@ -744,6 +841,45 @@ class SQLiteManualDispatchRepository:
                 )
             connection.commit()
         return self.get_opshop_pickup_collection(collection.collection_id)
+
+    def promote_generated_opshop_pickup_collection_to_saved(
+        self,
+        collection_id,
+        saved_at,
+        saved_by_account_name,
+        saved_by_account_id,
+    ):
+        with connect(self.db_path) as connection:
+            cursor = connection.execute(
+                """
+                UPDATE opshop_pickup_collections
+                SET status = 'SAVED',
+                    saved_at = ?,
+                    saved_by_account_name = ?,
+                    saved_by_account_id = ?
+                WHERE collection_id = ? AND status = 'GENERATED'
+                """,
+                (
+                    saved_at,
+                    saved_by_account_name,
+                    saved_by_account_id,
+                    collection_id,
+                ),
+            )
+            connection.commit()
+        return cursor.rowcount > 0
+
+    def delete_generated_opshop_pickup_collection(self, collection_id):
+        with connect(self.db_path) as connection:
+            cursor = connection.execute(
+                """
+                DELETE FROM opshop_pickup_collections
+                WHERE collection_id = ? AND status = 'GENERATED'
+                """,
+                (collection_id,),
+            )
+            connection.commit()
+        return cursor.rowcount > 0
 
     def delete_opshop_pickup_collection(self, collection_id):
         with connect(self.db_path) as connection:

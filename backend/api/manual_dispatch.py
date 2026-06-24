@@ -54,6 +54,9 @@ from backend.services.delivery_run_sheet_excel_export_service import (
 )
 from backend.services.final_summary_excel_export_service import build_final_summary_excel
 from backend.services.manual_dispatch_service import ManualDispatchService
+from backend.services.manual_dispatch.workspace_migration_readiness_service import (
+    WorkspaceMigrationRequiredError,
+)
 from backend.services.manual_dispatch.attache_invoice_pdf_parser import (
     parse_attache_invoice_pdf_bytes,
     with_duplicate_warning,
@@ -74,6 +77,11 @@ REGISTRATION_DISABLED_MESSAGE = "Registration is disabled. Please contact an adm
 @router.get("/board")
 def get_board(dispatch_date: str):
     return to_dict(service.get_board(dispatch_date))
+
+
+@router.get("/workspace-migration-status")
+def get_workspace_migration_status():
+    return service.get_workspace_migration_status()
 
 
 @router.get("/delivery/board")
@@ -662,14 +670,17 @@ def list_delivery_run_sheets(
     delivery_date: str = None,
     status: str = None,
 ):
-    return [
-        to_dict(run_sheet)
-        for run_sheet in service.list_delivery_run_sheets(
-            dispatch_date,
-            delivery_date,
-            status,
-        )
-    ]
+    try:
+        return [
+            to_dict(run_sheet)
+            for run_sheet in service.list_delivery_run_sheets(
+                dispatch_date,
+                delivery_date,
+                status,
+            )
+        ]
+    except ValueError as error:
+        raise _to_http_exception(error) from error
 
 
 @router.get("/delivery/run-sheets/{run_sheet_id}")
@@ -738,14 +749,17 @@ def list_opshop_pickup_collections(
     pickup_date: str = None,
     status: str = None,
 ):
-    return [
-        to_dict(collection)
-        for collection in service.list_opshop_pickup_collections(
-            dispatch_date,
-            pickup_date,
-            status,
-        )
-    ]
+    try:
+        return [
+            to_dict(collection)
+            for collection in service.list_opshop_pickup_collections(
+                dispatch_date,
+                pickup_date,
+                status,
+            )
+        ]
+    except ValueError as error:
+        raise _to_http_exception(error) from error
 
 
 @router.get("/opshop/pickup-collections/{collection_id}")
@@ -939,7 +953,10 @@ def _save_final_trip_summary_request_from_payload(payload):
 
 def _to_http_exception(error):
     message = str(error)
-    status_code = 404 if "does not exist" in message else 400
+    if isinstance(error, WorkspaceMigrationRequiredError):
+        status_code = 409
+    else:
+        status_code = 404 if "does not exist" in message else 400
     return HTTPException(status_code=status_code, detail=message)
 
 

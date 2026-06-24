@@ -1,4 +1,5 @@
 from copy import deepcopy
+from dataclasses import replace
 
 from backend.schemas import (
     DeliveryRunSheet,
@@ -395,6 +396,47 @@ class InMemoryManualDispatchRepository:
             None,
         )
 
+    def get_workspace_migration_status(self):
+        generated = [
+            summary
+            for summary in self.final_trip_summaries
+            if summary.status == "GENERATED"
+        ]
+        delivery_unmigrated_ids = []
+        opshop_unmigrated_ids = []
+        for summary in self.final_trip_summaries:
+            if summary.status != "SAVED":
+                continue
+            has_delivery_rows = any(
+                trip.orders for trip in (summary.trips or [])
+            )
+            has_opshop_rows = bool(summary.opshop_pickups or [])
+            delivery_marker_count = sum(
+                run_sheet.legacy_summary_id == summary.summary_id
+                for run_sheet in self.delivery_run_sheets
+            )
+            opshop_marker_count = sum(
+                collection.legacy_summary_id == summary.summary_id
+                for collection in self.opshop_pickup_collections
+            )
+            if has_delivery_rows and delivery_marker_count != 1:
+                delivery_unmigrated_ids.append(summary.summary_id)
+            if has_opshop_rows and opshop_marker_count != 1:
+                opshop_unmigrated_ids.append(summary.summary_id)
+
+        generated_count = len(generated)
+        delivery_unmigrated_ids.sort()
+        opshop_unmigrated_ids.sort()
+        return {
+            "delivery_ready": not generated_count and not delivery_unmigrated_ids,
+            "opshop_ready": not generated_count and not opshop_unmigrated_ids,
+            "legacy_generated_summary_count": generated_count,
+            "delivery_unmigrated_summary_count": len(delivery_unmigrated_ids),
+            "opshop_unmigrated_summary_count": len(opshop_unmigrated_ids),
+            "delivery_unmigrated_summary_ids": delivery_unmigrated_ids,
+            "opshop_unmigrated_summary_ids": opshop_unmigrated_ids,
+        }
+
     def list_delivery_run_sheets(
         self,
         dispatch_date=None,
@@ -467,6 +509,38 @@ class InMemoryManualDispatchRepository:
         ]
         self.delivery_run_sheets.append(run_sheet)
         return run_sheet
+
+    def promote_generated_delivery_run_sheet_to_saved(
+        self,
+        run_sheet_id,
+        saved_at,
+        saved_by_account_name,
+        saved_by_account_id,
+    ):
+        for index, run_sheet in enumerate(self.delivery_run_sheets):
+            if run_sheet.run_sheet_id != run_sheet_id or run_sheet.status != "GENERATED":
+                continue
+            self.delivery_run_sheets[index] = replace(
+                run_sheet,
+                status="SAVED",
+                saved_at=saved_at,
+                saved_by_account_name=saved_by_account_name,
+                saved_by_account_id=saved_by_account_id,
+            )
+            return True
+        return False
+
+    def delete_generated_delivery_run_sheet(self, run_sheet_id):
+        before_count = len(self.delivery_run_sheets)
+        self.delivery_run_sheets = [
+            run_sheet
+            for run_sheet in self.delivery_run_sheets
+            if not (
+                run_sheet.run_sheet_id == run_sheet_id
+                and run_sheet.status == "GENERATED"
+            )
+        ]
+        return len(self.delivery_run_sheets) != before_count
 
     def delete_delivery_run_sheet(self, run_sheet_id):
         before_count = len(self.delivery_run_sheets)
@@ -549,6 +623,41 @@ class InMemoryManualDispatchRepository:
         ]
         self.opshop_pickup_collections.append(collection)
         return collection
+
+    def promote_generated_opshop_pickup_collection_to_saved(
+        self,
+        collection_id,
+        saved_at,
+        saved_by_account_name,
+        saved_by_account_id,
+    ):
+        for index, collection in enumerate(self.opshop_pickup_collections):
+            if (
+                collection.collection_id != collection_id
+                or collection.status != "GENERATED"
+            ):
+                continue
+            self.opshop_pickup_collections[index] = replace(
+                collection,
+                status="SAVED",
+                saved_at=saved_at,
+                saved_by_account_name=saved_by_account_name,
+                saved_by_account_id=saved_by_account_id,
+            )
+            return True
+        return False
+
+    def delete_generated_opshop_pickup_collection(self, collection_id):
+        before_count = len(self.opshop_pickup_collections)
+        self.opshop_pickup_collections = [
+            collection
+            for collection in self.opshop_pickup_collections
+            if not (
+                collection.collection_id == collection_id
+                and collection.status == "GENERATED"
+            )
+        ]
+        return len(self.opshop_pickup_collections) != before_count
 
     def delete_opshop_pickup_collection(self, collection_id):
         before_count = len(self.opshop_pickup_collections)
