@@ -217,6 +217,10 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("order_id: orderId", self.workspace_actions)
         self.assertIn("vehicle_id: vehicleId", self.workspace_actions)
         self.assertIn("saved_by_account_name: state.accountName || null", self.workspace_actions)
+        self.assertIn("Trip 1 orders", self.delivery_renderer)
+        self.assertIn("Trip 2 orders", self.delivery_renderer)
+        self.assertIn("Total orders", self.delivery_renderer)
+        self.assertIn("Vehicle", self.delivery_renderer)
 
     def test_opshop_workspace_wires_scoped_assignment_route_and_collection_actions(self):
         self.assertIn("Apply Assignment Changes", self.opshop_renderer)
@@ -230,6 +234,10 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("driver_id: state.opshopAssignmentDrafts[pickup.pickup_task_id] || null", self.workspace_actions)
         self.assertIn("function changedOpShopAssignmentDrafts", self.workspace_actions)
         self.assertIn("assignOpShopWorkspaceCountrysideRouteGroup", self.workspace_actions)
+        self.assertIn("Regular pickups", self.opshop_renderer)
+        self.assertIn("Oncall pickups", self.opshop_renderer)
+        self.assertIn("Countryside pickups", self.opshop_renderer)
+        self.assertIn("Total pickups", self.opshop_renderer)
         opshop_apply_block = self.workspace_actions.split(
             "async function applyOpShopAssignmentChanges", 1
         )[1].split("async function unassignOpShopPickup", 1)[0]
@@ -239,12 +247,274 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
     def test_opshop_default_driver_is_suggested_not_auto_submitted(self):
         self.assertIn("Suggested default", self.opshop_renderer)
         self.assertIn("defaultDriverHint", self.opshop_renderer)
+        self.assertIn("defaultDriverExists", self.opshop_renderer)
+        self.assertIn("`${defaultName} suggested`", self.opshop_renderer)
+        self.assertIn("`${defaultName} unavailable`", self.opshop_renderer)
+        self.assertIn('pickup.run_type !== "REGULAR"', self.opshop_renderer)
         self.assertIn("Object.prototype.hasOwnProperty.call(state.opshopAssignmentDrafts", self.opshop_renderer)
         changed_block = self.opshop_renderer.split(
             "function changedOpShopAssignments", 1
         )[1].split("function selectedOpShopDriverId", 1)[0]
         self.assertIn("state.opshopAssignmentDrafts", changed_block)
         self.assertNotIn("default_driver_id", changed_block)
+
+    def test_generated_cancel_requires_confirmation_before_scoped_api_call(self):
+        self._run_workspace_actions_script(
+            """
+            const baseState = {
+              isLoggedIn: true,
+              workspaceRoute: "delivery/run-sheet",
+              activeWorkspace: "delivery",
+              dispatchDate: "2026-06-24",
+              deliveryBoard: { orders: [], assignments: [], driver_vehicle_assignments: [] },
+              deliveryRunSheets: [],
+              opshopBoard: { opshop_pickups: [], countryside_route_groups: [] },
+              opshopPickupCollections: [],
+              isDeliveryWorkspaceLoading: false,
+              deliveryWorkspaceError: "",
+              deliveryActionError: "",
+              deliveryBusyActionKey: "",
+              deliveryAssignmentDrafts: { "ORDER-1": { driver_id: "DRIVER-1" } },
+              deliveryVehicleDrafts: {},
+              isOpShopWorkspaceLoading: false,
+              opshopWorkspaceError: "",
+              opshopActionError: "",
+              opshopBusyActionKey: "",
+              opshopAssignmentDrafts: { "PICKUP-1": "DRIVER-1" },
+              countrysideRouteGroupDrafts: {},
+            };
+
+            let deliveryCancelCalls = 0;
+            let opshopCancelCalls = 0;
+            const api = {
+              getWorkspaceMigrationStatus: async () => ({}),
+              getDeliveryWorkspaceBoard: async () => baseState.deliveryBoard,
+              getOpShopWorkspaceBoard: async () => baseState.opshopBoard,
+              listDeliveryRunSheets: async () => [],
+              listOpShopPickupCollections: async () => [],
+              cancelGeneratedDeliveryRunSheet: async () => { deliveryCancelCalls += 1; },
+              cancelGeneratedOpShopPickupCollection: async () => { opshopCancelCalls += 1; },
+            };
+
+            const declined = createWorkspaceActions({
+              state: baseState,
+              renderWorkspace: () => {},
+              api,
+              confirmAction: () => false,
+            });
+            await declined.cancelDeliveryRunSheet("DRS-1");
+            if (deliveryCancelCalls !== 0 || baseState.deliveryBusyActionKey || baseState.deliveryActionError) {
+              throw new Error("declined Delivery cancel changed state or called API");
+            }
+            baseState.workspaceRoute = "opshop/collections";
+            baseState.activeWorkspace = "opshop";
+            await declined.cancelOpShopPickupCollection("OPC-1");
+            if (opshopCancelCalls !== 0 || baseState.opshopBusyActionKey || baseState.opshopActionError) {
+              throw new Error("declined OP SHOP cancel changed state or called API");
+            }
+
+            const confirmed = createWorkspaceActions({
+              state: baseState,
+              renderWorkspace: () => {},
+              api,
+              confirmAction: () => true,
+            });
+            baseState.workspaceRoute = "delivery/run-sheet";
+            baseState.activeWorkspace = "delivery";
+            await confirmed.cancelDeliveryRunSheet("DRS-1");
+            baseState.workspaceRoute = "opshop/collections";
+            baseState.activeWorkspace = "opshop";
+            await confirmed.cancelOpShopPickupCollection("OPC-1");
+            if (deliveryCancelCalls !== 1 || opshopCancelCalls !== 1) {
+              throw new Error("confirmed cancel did not call scoped cancel APIs");
+            }
+            """
+        )
+
+    def test_opshop_batch_apply_preserves_unsubmitted_drafts_and_failed_drafts(self):
+        self._run_workspace_actions_script(
+            """
+            const pickups = [
+              { pickup_task_id: "REG-1", assigned_driver_id: "", driver_id: "" },
+              { pickup_task_id: "ONCALL-1", assigned_driver_id: "DRIVER-OLD", driver_id: "DRIVER-OLD" },
+              { pickup_task_id: "COUNTRY-1", assigned_driver_id: "DRIVER-3", driver_id: "DRIVER-3" },
+            ];
+            const state = {
+              isLoggedIn: true,
+              workspaceRoute: "opshop/oncall",
+              activeWorkspace: "opshop",
+              dispatchDate: "2026-06-24",
+              opshopBoard: { opshop_pickups: pickups, countryside_route_groups: [] },
+              opshopPickupCollections: [],
+              isOpShopWorkspaceLoading: false,
+              opshopWorkspaceError: "",
+              opshopActionError: "",
+              opshopBusyActionKey: "",
+              opshopAssignmentDrafts: {
+                "REG-1": "DRIVER-1",
+                "ONCALL-1": "",
+                "COUNTRY-1": "DRIVER-2",
+              },
+              countrysideRouteGroupDrafts: {},
+              deliveryBoard: { orders: [], assignments: [], driver_vehicle_assignments: [] },
+              deliveryRunSheets: [],
+              deliveryAssignmentDrafts: {},
+              deliveryVehicleDrafts: {},
+            };
+            const submitted = [];
+            const api = {
+              getWorkspaceMigrationStatus: async () => ({}),
+              getDeliveryWorkspaceBoard: async () => state.deliveryBoard,
+              getOpShopWorkspaceBoard: async () => state.opshopBoard,
+              listDeliveryRunSheets: async () => [],
+              listOpShopPickupCollections: async () => [],
+              applyOpShopWorkspaceAssignments: async (payload) => {
+                submitted.push(payload);
+                return state.opshopBoard;
+              },
+            };
+            const actions = createWorkspaceActions({
+              state,
+              renderWorkspace: () => {},
+              api,
+            });
+
+            await actions.applyOpShopAssignmentChanges([pickups[1]]);
+            if (submitted.length !== 1 || submitted[0].assignments[0].driver_id !== null) {
+              throw new Error("explicit Unassigned draft was not sent as null");
+            }
+            if (!Object.prototype.hasOwnProperty.call(state.opshopAssignmentDrafts, "REG-1")) {
+              throw new Error("Regular draft was not preserved after Oncall apply");
+            }
+            if (!Object.prototype.hasOwnProperty.call(state.opshopAssignmentDrafts, "COUNTRY-1")) {
+              throw new Error("Countryside draft was not preserved after Oncall apply");
+            }
+            if (Object.prototype.hasOwnProperty.call(state.opshopAssignmentDrafts, "ONCALL-1")) {
+              throw new Error("submitted Oncall draft was not removed after success");
+            }
+
+            api.applyOpShopWorkspaceAssignments = async () => {
+              const error = new Error("apply failed");
+              error.status = 400;
+              throw error;
+            };
+            const beforeFailure = JSON.stringify(state.opshopAssignmentDrafts);
+            await actions.applyOpShopAssignmentChanges([pickups[0]]);
+            if (JSON.stringify(state.opshopAssignmentDrafts) !== beforeFailure) {
+              throw new Error("failed OP SHOP apply changed drafts");
+            }
+            if (state.opshopActionError !== "apply failed") {
+              throw new Error("failed OP SHOP apply did not surface validation error");
+            }
+            """
+        )
+
+    def test_stale_mutation_responses_do_not_replace_current_workspace_state(self):
+        self._run_workspace_actions_script(
+            """
+            function deferred() {
+              let resolve;
+              let reject;
+              const promise = new Promise((done, fail) => {
+                resolve = done;
+                reject = fail;
+              });
+              return { promise, resolve, reject };
+            }
+
+            const deliveryMutation = deferred();
+            const opshopMutation = deferred();
+            const staleDeliveryError = deferred();
+            const state = {
+              isLoggedIn: true,
+              workspaceRoute: "delivery/task-pool",
+              activeWorkspace: "delivery",
+              dispatchDate: "2026-06-24",
+              deliveryBoard: {
+                marker: "date-a",
+                orders: [{ order_id: "ORDER-1" }],
+                assignments: [],
+                driver_vehicle_assignments: [],
+              },
+              deliveryRunSheets: [],
+              deliveryWorkspaceError: "",
+              deliveryActionError: "",
+              deliveryBusyActionKey: "",
+              deliveryAssignmentDrafts: { "ORDER-1": { driver_id: "DRIVER-1", trip_no: "trip1" } },
+              deliveryVehicleDrafts: {},
+              opshopBoard: {
+                marker: "opshop-a",
+                opshop_pickups: [{ pickup_task_id: "PICKUP-1", assigned_driver_id: "", driver_id: "" }],
+                countryside_route_groups: [],
+              },
+              opshopPickupCollections: [],
+              opshopWorkspaceError: "",
+              opshopActionError: "",
+              opshopBusyActionKey: "",
+              opshopAssignmentDrafts: { "PICKUP-1": "DRIVER-1" },
+              countrysideRouteGroupDrafts: {},
+            };
+            const api = {
+              getWorkspaceMigrationStatus: async () => ({}),
+              getDeliveryWorkspaceBoard: async () => state.deliveryBoard,
+              getOpShopWorkspaceBoard: async () => state.opshopBoard,
+              listDeliveryRunSheets: async () => [],
+              listOpShopPickupCollections: async () => [],
+              assignDeliveryWorkspaceOrder: async () => deliveryMutation.promise,
+              applyOpShopWorkspaceAssignments: async () => opshopMutation.promise,
+            };
+            const actions = createWorkspaceActions({
+              state,
+              renderWorkspace: () => {},
+              api,
+            });
+
+            const deliveryAction = actions.applyDeliveryOrderAssignment("ORDER-1");
+            state.dispatchDate = "2026-06-25";
+            state.deliveryBoard = { marker: "date-b", orders: [], assignments: [], driver_vehicle_assignments: [] };
+            deliveryMutation.resolve({ marker: "stale-date-a" });
+            await deliveryAction;
+            if (state.deliveryBoard.marker !== "date-b") {
+              throw new Error("stale Delivery mutation overwrote current board");
+            }
+            if (state.deliveryActionError || state.deliveryBusyActionKey) {
+              throw new Error("stale Delivery mutation left error or busy state");
+            }
+
+            state.workspaceRoute = "opshop/regular";
+            state.activeWorkspace = "opshop";
+            state.dispatchDate = "2026-06-24";
+            const opshopAction = actions.applyOpShopAssignmentChanges(state.opshopBoard.opshop_pickups);
+            state.workspaceRoute = "opshop/oncall";
+            state.opshopBoard = { marker: "opshop-new-route", opshop_pickups: [], countryside_route_groups: [] };
+            opshopMutation.resolve({ marker: "stale-opshop-route" });
+            await opshopAction;
+            if (state.opshopBoard.marker !== "opshop-new-route") {
+              throw new Error("stale OP SHOP mutation overwrote current board");
+            }
+            if (state.opshopActionError || state.opshopBusyActionKey) {
+              throw new Error("stale OP SHOP mutation left error or busy state");
+            }
+
+            api.assignDeliveryWorkspaceOrder = async () => staleDeliveryError.promise;
+            state.workspaceRoute = "delivery/task-pool";
+            state.activeWorkspace = "delivery";
+            state.dispatchDate = "2026-06-24";
+            state.deliveryAssignmentDrafts = { "ORDER-1": { driver_id: "DRIVER-1", trip_no: "trip1" } };
+            const deliveryErrorAction = actions.applyDeliveryOrderAssignment("ORDER-1");
+            state.dispatchDate = "2026-06-25";
+            const validationError = new Error("stale validation error");
+            validationError.status = 400;
+            staleDeliveryError.reject(validationError);
+            await deliveryErrorAction;
+            if (state.deliveryActionError) {
+              throw new Error("stale Delivery validation error appeared on current page");
+            }
+            if (state.deliveryBusyActionKey) {
+              throw new Error("stale Delivery validation error left busy state");
+            }
+            """
+        )
 
     def test_workspace_actions_handle_migration_conflict_and_normal_errors(self):
         self._run_workspace_actions_script(

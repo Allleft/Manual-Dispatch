@@ -59,7 +59,12 @@ const DEFAULT_API = {
 };
 
 
-export function createWorkspaceActions({ state, renderWorkspace, api = DEFAULT_API }) {
+export function createWorkspaceActions({
+  state,
+  renderWorkspace,
+  api = DEFAULT_API,
+  confirmAction = defaultConfirmAction,
+}) {
   let migrationStatusRequestVersion = 0;
   let deliveryWorkspaceRequestVersion = 0;
   let opshopWorkspaceRequestVersion = 0;
@@ -285,26 +290,32 @@ export function createWorkspaceActions({ state, renderWorkspace, api = DEFAULT_A
 
   async function applyDeliveryOrderAssignment(orderId) {
     const draft = getDeliveryAssignmentDraft(orderId);
-    await runDeliveryAction(`delivery-assignment:${orderId}`, async () => {
-      state.deliveryBoard = await api.assignDeliveryWorkspaceOrder({
-        dispatch_date: state.dispatchDate,
+    await runDeliveryAction(`delivery-assignment:${orderId}`, async (context) => {
+      await api.assignDeliveryWorkspaceOrder({
+        dispatch_date: context.dispatchDate,
         order_id: orderId,
         driver_id: draft.driver_id,
         trip_no: draft.trip_no || "trip1",
       });
-      pruneDeliveryDrafts();
+      if (isDeliveryMutationCurrent(context)) {
+        const { [orderId]: _removed, ...remaining } = state.deliveryAssignmentDrafts;
+        state.deliveryAssignmentDrafts = remaining;
+        await loadDeliveryRoute(context.route);
+      }
     });
   }
 
   async function unassignDeliveryOrder(orderId) {
-    await runDeliveryAction(`delivery-unassign:${orderId}`, async () => {
-      state.deliveryBoard = await api.unassignDeliveryWorkspaceOrder({
-        dispatch_date: state.dispatchDate,
+    await runDeliveryAction(`delivery-unassign:${orderId}`, async (context) => {
+      await api.unassignDeliveryWorkspaceOrder({
+        dispatch_date: context.dispatchDate,
         order_id: orderId,
       });
-      const { [orderId]: _removed, ...remaining } = state.deliveryAssignmentDrafts;
-      state.deliveryAssignmentDrafts = remaining;
-      pruneDeliveryDrafts();
+      if (isDeliveryMutationCurrent(context)) {
+        const { [orderId]: _removed, ...remaining } = state.deliveryAssignmentDrafts;
+        state.deliveryAssignmentDrafts = remaining;
+        await loadDeliveryRoute(context.route);
+      }
     });
   }
 
@@ -326,56 +337,73 @@ export function createWorkspaceActions({ state, renderWorkspace, api = DEFAULT_A
     const vehicleId = Object.prototype.hasOwnProperty.call(state.deliveryVehicleDrafts, key)
       ? state.deliveryVehicleDrafts[key]
       : currentAssignment?.vehicle_id || "";
-    await runDeliveryAction(`delivery-vehicle:${deliveryDate}:${driverId}`, async () => {
-      state.deliveryBoard = await api.assignDeliveryWorkspaceVehicle({
-        dispatch_date: state.dispatchDate,
+    await runDeliveryAction(`delivery-vehicle:${deliveryDate}:${driverId}`, async (context) => {
+      await api.assignDeliveryWorkspaceVehicle({
+        dispatch_date: context.dispatchDate,
         delivery_date: deliveryDate,
         driver_id: driverId,
         vehicle_id: vehicleId,
       });
-      pruneDeliveryDrafts();
+      if (isDeliveryMutationCurrent(context)) {
+        const { [key]: _removed, ...remaining } = state.deliveryVehicleDrafts;
+        state.deliveryVehicleDrafts = remaining;
+        await loadDeliveryRoute(context.route);
+      }
     });
   }
 
   async function clearDeliveryVehicleAssignment(deliveryDate, driverId) {
-    await runDeliveryAction(`delivery-vehicle-clear:${deliveryDate}:${driverId}`, async () => {
-      state.deliveryBoard = await api.clearDeliveryWorkspaceVehicle({
-        dispatch_date: state.dispatchDate,
+    await runDeliveryAction(`delivery-vehicle-clear:${deliveryDate}:${driverId}`, async (context) => {
+      await api.clearDeliveryWorkspaceVehicle({
+        dispatch_date: context.dispatchDate,
         delivery_date: deliveryDate,
         driver_id: driverId,
       });
-      const key = deliveryVehicleKey(deliveryDate, driverId);
-      const { [key]: _removed, ...remaining } = state.deliveryVehicleDrafts;
-      state.deliveryVehicleDrafts = remaining;
-      pruneDeliveryDrafts();
+      if (isDeliveryMutationCurrent(context)) {
+        const { [key]: _removed, ...remaining } = state.deliveryVehicleDrafts;
+        state.deliveryVehicleDrafts = remaining;
+        await loadDeliveryRoute(context.route);
+      }
     });
   }
 
   async function generateDeliveryRunSheet(candidate) {
     await runDeliveryAction(
       `delivery-generate:${candidate.delivery_date}:${candidate.driver_id}`,
-      async () => {
+      async (context) => {
         await api.createGeneratedDeliveryRunSheet({
-          dispatch_date: state.dispatchDate,
+          dispatch_date: context.dispatchDate,
           delivery_date: candidate.delivery_date,
           driver_id: candidate.driver_id,
         });
-        await loadDeliveryRoute("delivery/run-sheet");
+        if (isDeliveryMutationCurrent(context)) {
+          await loadDeliveryRoute(context.route);
+        }
       },
     );
   }
 
   async function saveDeliveryRunSheet(runSheetId) {
-    await runDeliveryAction(`delivery-save:${runSheetId}`, async () => {
+    await runDeliveryAction(`delivery-save:${runSheetId}`, async (context) => {
       await api.saveGeneratedDeliveryRunSheet(runSheetId, saveSnapshotPayload());
-      await loadDeliveryRoute(state.workspaceRoute);
+      if (isDeliveryMutationCurrent(context)) {
+        await loadDeliveryRoute(context.route);
+      }
     });
   }
 
   async function cancelDeliveryRunSheet(runSheetId) {
-    await runDeliveryAction(`delivery-cancel:${runSheetId}`, async () => {
+    const confirmed = confirmAction(
+      "Cancel this generated Delivery Run Sheet? Captured orders will return to the Delivery Task Pool.",
+    );
+    if (!confirmed) {
+      return;
+    }
+    await runDeliveryAction(`delivery-cancel:${runSheetId}`, async (context) => {
       await api.cancelGeneratedDeliveryRunSheet(runSheetId);
-      await loadDeliveryRoute("delivery/run-sheet");
+      if (isDeliveryMutationCurrent(context)) {
+        await loadDeliveryRoute(context.route);
+      }
     });
   }
 
@@ -394,10 +422,14 @@ export function createWorkspaceActions({ state, renderWorkspace, api = DEFAULT_A
   }
 
   async function applyOpShopAssignmentChanges(pickups) {
-    const changedAssignments = changedOpShopAssignmentDrafts(pickups).map((pickup) => ({
-        pickup_task_id: pickup.pickup_task_id,
-        driver_id: state.opshopAssignmentDrafts[pickup.pickup_task_id] || null,
-      }));
+    const changedPickups = changedOpShopAssignmentDrafts(pickups);
+    const changedAssignments = changedPickups.map((pickup) => ({
+      pickup_task_id: pickup.pickup_task_id,
+      driver_id: state.opshopAssignmentDrafts[pickup.pickup_task_id] || null,
+    }));
+    const submittedPickupIds = new Set(
+      changedAssignments.map((assignment) => assignment.pickup_task_id),
+    );
 
     if (!changedAssignments.length) {
       state.opshopActionError = "";
@@ -405,25 +437,33 @@ export function createWorkspaceActions({ state, renderWorkspace, api = DEFAULT_A
       return;
     }
 
-    await runOpShopAction("opshop-apply-assignments", async () => {
-      state.opshopBoard = await api.applyOpShopWorkspaceAssignments({
-        dispatch_date: state.dispatchDate,
+    await runOpShopAction("opshop-apply-assignments", async (context) => {
+      await api.applyOpShopWorkspaceAssignments({
+        dispatch_date: context.dispatchDate,
         assignments: changedAssignments,
       });
-      state.opshopAssignmentDrafts = {};
-      pruneOpShopDrafts();
+      if (isOpShopMutationCurrent(context)) {
+        state.opshopAssignmentDrafts = Object.fromEntries(
+          Object.entries(state.opshopAssignmentDrafts || {}).filter(
+            ([pickupTaskId]) => !submittedPickupIds.has(pickupTaskId),
+          ),
+        );
+        await loadOpShopRoute(context.route);
+      }
     });
   }
 
   async function unassignOpShopPickup(pickupTaskId) {
-    await runOpShopAction(`opshop-unassign:${pickupTaskId}`, async () => {
-      state.opshopBoard = await api.unassignOpShopWorkspacePickup({
-        dispatch_date: state.dispatchDate,
+    await runOpShopAction(`opshop-unassign:${pickupTaskId}`, async (context) => {
+      await api.unassignOpShopWorkspacePickup({
+        dispatch_date: context.dispatchDate,
         pickup_task_id: pickupTaskId,
       });
-      const { [pickupTaskId]: _removed, ...remaining } = state.opshopAssignmentDrafts;
-      state.opshopAssignmentDrafts = remaining;
-      pruneOpShopDrafts();
+      if (isOpShopMutationCurrent(context)) {
+        const { [pickupTaskId]: _removed, ...remaining } = state.opshopAssignmentDrafts;
+        state.opshopAssignmentDrafts = remaining;
+        await loadOpShopRoute(context.route);
+      }
     });
   }
 
@@ -449,50 +489,64 @@ export function createWorkspaceActions({ state, renderWorkspace, api = DEFAULT_A
       notes: "",
       ...(state.countrysideRouteGroupDrafts[routeGroupId] || {}),
     };
-    await runOpShopAction(`opshop-route-group:${routeGroupId}`, async () => {
-      state.opshopBoard = await api.assignOpShopWorkspaceCountrysideRouteGroup(
+    await runOpShopAction(`opshop-route-group:${routeGroupId}`, async (context) => {
+      await api.assignOpShopWorkspaceCountrysideRouteGroup(
         routeGroupId,
         {
-          dispatch_date: state.dispatchDate,
+          dispatch_date: context.dispatchDate,
           pickup_date: draft.pickup_date,
           assigned_driver_id: draft.assigned_driver_id,
           notes: draft.notes,
         },
       );
-      const { [routeGroupId]: _removed, ...remaining } = state.countrysideRouteGroupDrafts;
-      state.countrysideRouteGroupDrafts = remaining;
-      pruneOpShopDrafts();
+      if (isOpShopMutationCurrent(context)) {
+        const { [routeGroupId]: _removed, ...remaining } = state.countrysideRouteGroupDrafts;
+        state.countrysideRouteGroupDrafts = remaining;
+        await loadOpShopRoute(context.route);
+      }
     });
   }
 
   async function generateOpShopPickupCollection(candidate) {
     await runOpShopAction(
       `opshop-generate:${candidate.pickup_date}:${candidate.driver_id}`,
-      async () => {
+      async (context) => {
         await api.createGeneratedOpShopPickupCollection({
-          dispatch_date: state.dispatchDate,
+          dispatch_date: context.dispatchDate,
           pickup_date: candidate.pickup_date,
           driver_id: candidate.driver_id,
         });
-        await loadOpShopRoute("opshop/collections");
+        if (isOpShopMutationCurrent(context)) {
+          await loadOpShopRoute(context.route);
+        }
       },
     );
   }
 
   async function saveOpShopPickupCollection(collectionId) {
-    await runOpShopAction(`opshop-save:${collectionId}`, async () => {
+    await runOpShopAction(`opshop-save:${collectionId}`, async (context) => {
       await api.saveGeneratedOpShopPickupCollection(
         collectionId,
         saveSnapshotPayload(),
       );
-      await loadOpShopRoute(state.workspaceRoute);
+      if (isOpShopMutationCurrent(context)) {
+        await loadOpShopRoute(context.route);
+      }
     });
   }
 
   async function cancelOpShopPickupCollection(collectionId) {
-    await runOpShopAction(`opshop-cancel:${collectionId}`, async () => {
+    const confirmed = confirmAction(
+      "Cancel this generated OP SHOP Pickup Collection? Captured pickups will return to the OP SHOP workspace.",
+    );
+    if (!confirmed) {
+      return;
+    }
+    await runOpShopAction(`opshop-cancel:${collectionId}`, async (context) => {
       await api.cancelGeneratedOpShopPickupCollection(collectionId);
-      await loadOpShopRoute("opshop/collections");
+      if (isOpShopMutationCurrent(context)) {
+        await loadOpShopRoute(context.route);
+      }
     });
   }
 
@@ -503,16 +557,19 @@ export function createWorkspaceActions({ state, renderWorkspace, api = DEFAULT_A
   }
 
   async function runDeliveryAction(actionKey, callback) {
+    const context = captureMutationContext();
     state.deliveryBusyActionKey = actionKey;
     state.deliveryActionError = "";
     renderWorkspace();
     try {
-      await callback();
+      await callback(context);
     } catch (error) {
       if (await handleWorkspaceMigrationGuard(error)) {
         return;
       }
-      state.deliveryActionError = error.message;
+      if (isDeliveryMutationCurrent(context)) {
+        state.deliveryActionError = error.message;
+      }
     } finally {
       if (state.deliveryBusyActionKey === actionKey) {
         state.deliveryBusyActionKey = "";
@@ -522,16 +579,19 @@ export function createWorkspaceActions({ state, renderWorkspace, api = DEFAULT_A
   }
 
   async function runOpShopAction(actionKey, callback) {
+    const context = captureMutationContext();
     state.opshopBusyActionKey = actionKey;
     state.opshopActionError = "";
     renderWorkspace();
     try {
-      await callback();
+      await callback(context);
     } catch (error) {
       if (await handleWorkspaceMigrationGuard(error)) {
         return;
       }
-      state.opshopActionError = error.message;
+      if (isOpShopMutationCurrent(context)) {
+        state.opshopActionError = error.message;
+      }
     } finally {
       if (state.opshopBusyActionKey === actionKey) {
         state.opshopBusyActionKey = "";
@@ -622,6 +682,36 @@ export function createWorkspaceActions({ state, renderWorkspace, api = DEFAULT_A
     });
   }
 
+  function captureMutationContext() {
+    return {
+      route: state.workspaceRoute,
+      dispatchDate: state.dispatchDate,
+      activeWorkspace: state.activeWorkspace,
+    };
+  }
+
+  function isDeliveryMutationCurrent(context) {
+    return (
+      state.isLoggedIn &&
+      context &&
+      state.workspaceRoute === context.route &&
+      state.dispatchDate === context.dispatchDate &&
+      state.activeWorkspace === context.activeWorkspace &&
+      DELIVERY_ROUTES.has(context.route)
+    );
+  }
+
+  function isOpShopMutationCurrent(context) {
+    return (
+      state.isLoggedIn &&
+      context &&
+      state.workspaceRoute === context.route &&
+      state.dispatchDate === context.dispatchDate &&
+      state.activeWorkspace === context.activeWorkspace &&
+      OPSHOP_ROUTES.has(context.route)
+    );
+  }
+
   return {
     applyDeliveryOrderAssignment,
     applyDeliveryVehicleAssignment,
@@ -655,4 +745,12 @@ function currentOpShopDriverId(pickup) {
 
 function deliveryVehicleKey(deliveryDate, driverId) {
   return `${deliveryDate || ""}|${driverId || ""}`;
+}
+
+
+function defaultConfirmAction(message) {
+  if (typeof window === "undefined" || typeof window.confirm !== "function") {
+    return true;
+  }
+  return window.confirm(message);
 }

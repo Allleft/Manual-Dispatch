@@ -492,8 +492,12 @@ function createReadyCollectionSection(board, collections, state, actions) {
       heading.textContent = formatOptional(driver?.name, candidate.driver_id);
       const facts = document.createElement("dl");
       facts.className = "workspace-fact-grid";
+      appendFact(facts, "Driver", formatOptional(driver?.name, candidate.driver_id));
       appendFact(facts, "Pickup date", candidate.pickup_date);
-      appendFact(facts, "Pickup count", candidate.pickups.length);
+      appendFact(facts, "Regular pickups", candidate.regular_count);
+      appendFact(facts, "Oncall pickups", candidate.oncall_count);
+      appendFact(facts, "Countryside pickups", candidate.countryside_count);
+      appendFact(facts, "Total pickups", candidate.pickups.length);
       const button = createActionButton(
         "Generate",
         () => actions.generateOpShopPickupCollection(candidate),
@@ -587,9 +591,20 @@ function readyPickupCollectionCandidates(board, collections) {
         pickup_date: pickup.pickup_date,
         driver_id: driverId,
         pickups: [],
+        regular_count: 0,
+        oncall_count: 0,
+        countryside_count: 0,
       });
     }
-    groups.get(key).pickups.push(pickup);
+    const group = groups.get(key);
+    group.pickups.push(pickup);
+    if (pickup.pickup_category === "COUNTRYSIDE") {
+      group.countryside_count += 1;
+    } else if (pickup.run_type === "REGULAR") {
+      group.regular_count += 1;
+    } else if (pickup.run_type === "ON_CALL") {
+      group.oncall_count += 1;
+    }
   });
   return Array.from(groups.values()).sort((left, right) =>
     `${left.pickup_date}|${left.driver_id}`.localeCompare(`${right.pickup_date}|${right.driver_id}`),
@@ -621,14 +636,23 @@ function currentDriverId(pickup) {
 
 
 function defaultDriverHint(pickup, state) {
+  if (pickup.run_type !== "REGULAR" || pickup.pickup_category === "COUNTRYSIDE") {
+    return "None";
+  }
   const defaultName = pickup.default_driver_name || pickup.default_driver_alias || "";
   if (!defaultName) {
     return "None";
   }
-  if (pickup.run_type === "REGULAR" && !currentDriverId(pickup) && pickup.pickup_date >= state.dispatchDate) {
+  if (currentDriverId(pickup) || !pickup.pickup_date || pickup.pickup_date < state.dispatchDate) {
+    return "None";
+  }
+  const defaultDriverExists = (state.opshopBoard?.drivers || []).some(
+    (driver) => driver.driver_id === pickup.default_driver_id,
+  );
+  if (pickup.default_driver_id && defaultDriverExists) {
     return `${defaultName} suggested`;
   }
-  return defaultName;
+  return `${defaultName} unavailable`;
 }
 
 

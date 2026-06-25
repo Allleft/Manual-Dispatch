@@ -387,10 +387,14 @@ function createReadyRunSheetSection(board, runSheets, state, actions) {
       heading.textContent = formatOptional(driver?.name, candidate.driver_id);
       const facts = document.createElement("dl");
       facts.className = "workspace-fact-grid";
+      appendFact(facts, "Driver", formatOptional(driver?.name, candidate.driver_id));
       appendFact(facts, "Delivery date", candidate.delivery_date);
-      appendFact(facts, "Orders", candidate.orders.length);
+      appendFact(facts, "Trip 1 orders", candidate.trip1_order_count);
+      appendFact(facts, "Trip 2 orders", candidate.trip2_order_count);
+      appendFact(facts, "Total orders", candidate.orders.length);
       appendFact(facts, "Total pallets", candidate.total_pallets);
-      appendFact(facts, "Total bags", candidate.total_loose_bags);
+      appendFact(facts, "Total loose bags", candidate.total_loose_bags);
+      appendFact(facts, "Vehicle", candidate.vehicle_rego || "Not selected");
       const button = createActionButton(
         "Generate",
         () => actions.generateDeliveryRunSheet(candidate),
@@ -470,6 +474,13 @@ function readyDeliveryRunSheetCandidates(board, runSheets) {
       .map((runSheet) => `${runSheet.delivery_date}|${runSheet.driver_id}`),
   );
   const orders = new Map((board.orders || []).map((order) => [order.order_id, order]));
+  const vehicles = new Map((board.vehicles || []).map((vehicle) => [vehicle.vehicle_id, vehicle]));
+  const vehicleAssignments = new Map(
+    (board.driver_vehicle_assignments || []).map((assignment) => [
+      `${assignment.delivery_date}|${assignment.driver_id}`,
+      assignment,
+    ]),
+  );
   const groups = new Map();
   (board.assignments || []).forEach((assignment) => {
     const order = orders.get(assignment.task_id);
@@ -481,16 +492,27 @@ function readyDeliveryRunSheetCandidates(board, runSheets) {
       return;
     }
     if (!groups.has(key)) {
+      const vehicleAssignment = vehicleAssignments.get(key);
       groups.set(key, {
         delivery_date: order.delivery_date,
         driver_id: assignment.driver_id,
         orders: [],
+        trip1_order_count: 0,
+        trip2_order_count: 0,
         total_pallets: 0,
         total_loose_bags: 0,
+        vehicle_rego: vehicleAssignment
+          ? vehicles.get(vehicleAssignment.vehicle_id)?.rego || "Not selected"
+          : "Not selected",
       });
     }
     const group = groups.get(key);
     group.orders.push(order);
+    if (assignment.trip_no === "trip2") {
+      group.trip2_order_count += 1;
+    } else {
+      group.trip1_order_count += 1;
+    }
     group.total_pallets += Number(order.pallet_quantity || 0);
     group.total_loose_bags += Number(order.loose_bags_quantity || 0);
   });
