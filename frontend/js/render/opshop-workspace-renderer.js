@@ -809,5 +809,5 @@ function joinValues(...values) {
 
 
 function isBusy(state, actionKey) {
-  return state.opshopBusyActionKey === actionKey;
+  return Boolean(state.opshopBusyActionKeys?.[actionKey]);
 }

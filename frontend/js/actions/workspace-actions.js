@@ -68,6 +68,7 @@ export function createWorkspaceActions({
   let migrationStatusRequestVersion = 0;
   let deliveryWorkspaceRequestVersion = 0;
   let opshopWorkspaceRequestVersion = 0;
+  let actionTokenCounter = 0;
 
   async function loadWorkspaceRoute(route = state.workspaceRoute) {
     if (!state.isLoggedIn) {
@@ -124,8 +125,8 @@ export function createWorkspaceActions({
     state.activeWorkspace = "";
     state.isDeliveryWorkspaceLoading = false;
     state.isOpShopWorkspaceLoading = false;
-    state.deliveryBusyActionKey = "";
-    state.opshopBusyActionKey = "";
+    state.deliveryBusyActionKeys = {};
+    state.opshopBusyActionKeys = {};
     state.deliveryActionError = "";
     state.opshopActionError = "";
     if (typeof window !== "undefined") {
@@ -272,6 +273,7 @@ export function createWorkspaceActions({
     if (!nextDate || nextDate === state.dispatchDate) {
       return;
     }
+    clearWorkspaceDraftsForDispatchDateChange();
     state.dispatchDate = nextDate;
     await loadWorkspaceRoute(state.workspaceRoute);
   }
@@ -353,6 +355,7 @@ export function createWorkspaceActions({
   }
 
   async function clearDeliveryVehicleAssignment(deliveryDate, driverId) {
+    const key = deliveryVehicleKey(deliveryDate, driverId);
     await runDeliveryAction(`delivery-vehicle-clear:${deliveryDate}:${driverId}`, async (context) => {
       await api.clearDeliveryWorkspaceVehicle({
         dispatch_date: context.dispatchDate,
@@ -558,7 +561,9 @@ export function createWorkspaceActions({
 
   async function runDeliveryAction(actionKey, callback) {
     const context = captureMutationContext();
-    state.deliveryBusyActionKey = actionKey;
+    const token = nextActionToken();
+    state.deliveryBusyActionKeys = state.deliveryBusyActionKeys || {};
+    setBusyAction(state.deliveryBusyActionKeys, actionKey, token);
     state.deliveryActionError = "";
     renderWorkspace();
     try {
@@ -571,8 +576,7 @@ export function createWorkspaceActions({
         state.deliveryActionError = error.message;
       }
     } finally {
-      if (state.deliveryBusyActionKey === actionKey) {
-        state.deliveryBusyActionKey = "";
+      if (clearBusyAction(state.deliveryBusyActionKeys, actionKey, token)) {
         renderWorkspace();
       }
     }
@@ -580,7 +584,9 @@ export function createWorkspaceActions({
 
   async function runOpShopAction(actionKey, callback) {
     const context = captureMutationContext();
-    state.opshopBusyActionKey = actionKey;
+    const token = nextActionToken();
+    state.opshopBusyActionKeys = state.opshopBusyActionKeys || {};
+    setBusyAction(state.opshopBusyActionKeys, actionKey, token);
     state.opshopActionError = "";
     renderWorkspace();
     try {
@@ -593,8 +599,7 @@ export function createWorkspaceActions({
         state.opshopActionError = error.message;
       }
     } finally {
-      if (state.opshopBusyActionKey === actionKey) {
-        state.opshopBusyActionKey = "";
+      if (clearBusyAction(state.opshopBusyActionKeys, actionKey, token)) {
         renderWorkspace();
       }
     }
@@ -670,6 +675,17 @@ export function createWorkspaceActions({
     };
   }
 
+  function clearWorkspaceDraftsForDispatchDateChange() {
+    state.deliveryAssignmentDrafts = {};
+    state.deliveryVehicleDrafts = {};
+    state.opshopAssignmentDrafts = {};
+    state.countrysideRouteGroupDrafts = {};
+    state.deliveryActionError = "";
+    state.opshopActionError = "";
+    state.deliveryBusyActionKeys = {};
+    state.opshopBusyActionKeys = {};
+  }
+
   function changedOpShopAssignmentDrafts(pickups) {
     return (pickups || []).filter((pickup) => {
       if (!Object.prototype.hasOwnProperty.call(
@@ -688,6 +704,11 @@ export function createWorkspaceActions({
       dispatchDate: state.dispatchDate,
       activeWorkspace: state.activeWorkspace,
     };
+  }
+
+  function nextActionToken() {
+    actionTokenCounter += 1;
+    return `action-${actionTokenCounter}`;
   }
 
   function isDeliveryMutationCurrent(context) {
@@ -745,6 +766,20 @@ function currentOpShopDriverId(pickup) {
 
 function deliveryVehicleKey(deliveryDate, driverId) {
   return `${deliveryDate || ""}|${driverId || ""}`;
+}
+
+
+function setBusyAction(registry, actionKey, token) {
+  registry[actionKey] = token;
+}
+
+
+function clearBusyAction(registry, actionKey, token) {
+  if (!registry || registry[actionKey] !== token) {
+    return false;
+  }
+  delete registry[actionKey];
+  return true;
 }
 
 

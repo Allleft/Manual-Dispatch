@@ -190,13 +190,13 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             "isDeliveryWorkspaceLoading",
             "deliveryWorkspaceError",
             "deliveryActionError",
-            "deliveryBusyActionKey",
+            "deliveryBusyActionKeys",
             "deliveryAssignmentDrafts",
             "deliveryVehicleDrafts",
             "isOpShopWorkspaceLoading",
             "opshopWorkspaceError",
             "opshopActionError",
-            "opshopBusyActionKey",
+            "opshopBusyActionKeys",
             "opshopAssignmentDrafts",
             "countrysideRouteGroupDrafts",
         ):
@@ -273,13 +273,13 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
               isDeliveryWorkspaceLoading: false,
               deliveryWorkspaceError: "",
               deliveryActionError: "",
-              deliveryBusyActionKey: "",
+              deliveryBusyActionKeys: {},
               deliveryAssignmentDrafts: { "ORDER-1": { driver_id: "DRIVER-1" } },
               deliveryVehicleDrafts: {},
               isOpShopWorkspaceLoading: false,
               opshopWorkspaceError: "",
               opshopActionError: "",
-              opshopBusyActionKey: "",
+              opshopBusyActionKeys: {},
               opshopAssignmentDrafts: { "PICKUP-1": "DRIVER-1" },
               countrysideRouteGroupDrafts: {},
             };
@@ -303,13 +303,13 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
               confirmAction: () => false,
             });
             await declined.cancelDeliveryRunSheet("DRS-1");
-            if (deliveryCancelCalls !== 0 || baseState.deliveryBusyActionKey || baseState.deliveryActionError) {
+            if (deliveryCancelCalls !== 0 || Object.keys(baseState.deliveryBusyActionKeys || {}).length || baseState.deliveryActionError) {
               throw new Error("declined Delivery cancel changed state or called API");
             }
             baseState.workspaceRoute = "opshop/collections";
             baseState.activeWorkspace = "opshop";
             await declined.cancelOpShopPickupCollection("OPC-1");
-            if (opshopCancelCalls !== 0 || baseState.opshopBusyActionKey || baseState.opshopActionError) {
+            if (opshopCancelCalls !== 0 || Object.keys(baseState.opshopBusyActionKeys || {}).length || baseState.opshopActionError) {
               throw new Error("declined OP SHOP cancel changed state or called API");
             }
 
@@ -349,7 +349,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
               isOpShopWorkspaceLoading: false,
               opshopWorkspaceError: "",
               opshopActionError: "",
-              opshopBusyActionKey: "",
+              opshopBusyActionKeys: {},
               opshopAssignmentDrafts: {
                 "REG-1": "DRIVER-1",
                 "ONCALL-1": "",
@@ -439,7 +439,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
               deliveryRunSheets: [],
               deliveryWorkspaceError: "",
               deliveryActionError: "",
-              deliveryBusyActionKey: "",
+              deliveryBusyActionKeys: {},
               deliveryAssignmentDrafts: { "ORDER-1": { driver_id: "DRIVER-1", trip_no: "trip1" } },
               deliveryVehicleDrafts: {},
               opshopBoard: {
@@ -450,7 +450,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
               opshopPickupCollections: [],
               opshopWorkspaceError: "",
               opshopActionError: "",
-              opshopBusyActionKey: "",
+              opshopBusyActionKeys: {},
               opshopAssignmentDrafts: { "PICKUP-1": "DRIVER-1" },
               countrysideRouteGroupDrafts: {},
             };
@@ -477,7 +477,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             if (state.deliveryBoard.marker !== "date-b") {
               throw new Error("stale Delivery mutation overwrote current board");
             }
-            if (state.deliveryActionError || state.deliveryBusyActionKey) {
+            if (state.deliveryActionError || Object.keys(state.deliveryBusyActionKeys || {}).length) {
               throw new Error("stale Delivery mutation left error or busy state");
             }
 
@@ -492,7 +492,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             if (state.opshopBoard.marker !== "opshop-new-route") {
               throw new Error("stale OP SHOP mutation overwrote current board");
             }
-            if (state.opshopActionError || state.opshopBusyActionKey) {
+            if (state.opshopActionError || Object.keys(state.opshopBusyActionKeys || {}).length) {
               throw new Error("stale OP SHOP mutation left error or busy state");
             }
 
@@ -510,8 +510,285 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             if (state.deliveryActionError) {
               throw new Error("stale Delivery validation error appeared on current page");
             }
-            if (state.deliveryBusyActionKey) {
+            if (Object.keys(state.deliveryBusyActionKeys || {}).length) {
               throw new Error("stale Delivery validation error left busy state");
+            }
+            """
+        )
+
+    def test_dispatch_date_change_clears_workspace_drafts_and_errors(self):
+        self._run_workspace_actions_script(
+            """
+            const state = {
+              isLoggedIn: true,
+              workspaceRoute: "opshop/countryside",
+              activeWorkspace: "opshop",
+              dispatchDate: "2026-06-24",
+              deliveryBoard: { orders: [], assignments: [], driver_vehicle_assignments: [] },
+              deliveryRunSheets: [],
+              deliveryActionError: "old delivery error",
+              deliveryBusyActionKeys: { "delivery-assignment:ORDER-1": "old" },
+              deliveryAssignmentDrafts: { "ORDER-1": { driver_id: "DRIVER-1" } },
+              deliveryVehicleDrafts: { "2026-06-24|DRIVER-1": "VEHICLE-1" },
+              opshopBoard: { opshop_pickups: [], countryside_route_groups: [] },
+              opshopPickupCollections: [],
+              opshopActionError: "old opshop error",
+              opshopBusyActionKeys: { "opshop-unassign:PICKUP-1": "old" },
+              opshopAssignmentDrafts: { "PICKUP-1": "DRIVER-1" },
+              countrysideRouteGroupDrafts: {
+                "ROUTE-1": {
+                  pickup_date: "2026-06-24",
+                  assigned_driver_id: "DRIVER-1",
+                  notes: "old note",
+                },
+              },
+              isDeliveryWorkspaceLoading: false,
+              deliveryWorkspaceError: "",
+              isOpShopWorkspaceLoading: false,
+              opshopWorkspaceError: "",
+            };
+            const api = {
+              getWorkspaceMigrationStatus: async () => ({}),
+              getDeliveryWorkspaceBoard: async () => state.deliveryBoard,
+              getOpShopWorkspaceBoard: async () => ({
+                opshop_pickups: [],
+                countryside_route_groups: [{ route_group_id: "ROUTE-1" }],
+              }),
+              listDeliveryRunSheets: async () => [],
+              listOpShopPickupCollections: async () => [],
+            };
+            const actions = createWorkspaceActions({
+              state,
+              renderWorkspace: () => {},
+              api,
+            });
+
+            await actions.updateDispatchDate("2026-06-25");
+            if (state.dispatchDate !== "2026-06-25") {
+              throw new Error("dispatch date did not update");
+            }
+            for (const [name, value] of Object.entries({
+              deliveryAssignmentDrafts: state.deliveryAssignmentDrafts,
+              deliveryVehicleDrafts: state.deliveryVehicleDrafts,
+              opshopAssignmentDrafts: state.opshopAssignmentDrafts,
+              countrysideRouteGroupDrafts: state.countrysideRouteGroupDrafts,
+              deliveryBusyActionKeys: state.deliveryBusyActionKeys,
+              opshopBusyActionKeys: state.opshopBusyActionKeys,
+            })) {
+              if (Object.keys(value || {}).length) {
+                throw new Error(`${name} was not cleared on dispatch date change`);
+              }
+            }
+            if (state.deliveryActionError || state.opshopActionError) {
+              throw new Error("workspace action errors were not cleared");
+            }
+
+            actions.updateCountrysideRouteGroupDraft("ROUTE-1", "assigned_driver_id", "DRIVER-2");
+            if (state.countrysideRouteGroupDrafts["ROUTE-1"].pickup_date !== "2026-06-25") {
+              throw new Error("Countryside route-group draft did not default to new dispatch date");
+            }
+            """
+        )
+
+    def test_concurrent_delivery_busy_keys_are_independent_and_token_guarded(self):
+        self._run_workspace_actions_script(
+            """
+            function deferred() {
+              let resolve;
+              const promise = new Promise((done) => { resolve = done; });
+              return { promise, resolve };
+            }
+
+            const first = deferred();
+            const second = deferred();
+            const oldSameKey = deferred();
+            const newSameKey = deferred();
+            const state = {
+              isLoggedIn: true,
+              workspaceRoute: "delivery/task-pool",
+              activeWorkspace: "delivery",
+              dispatchDate: "2026-06-24",
+              deliveryBoard: {
+                orders: [{ order_id: "ORDER-1" }, { order_id: "ORDER-2" }],
+                assignments: [],
+                driver_vehicle_assignments: [],
+              },
+              deliveryRunSheets: [],
+              deliveryActionError: "",
+              deliveryBusyActionKeys: {},
+              deliveryAssignmentDrafts: {
+                "ORDER-1": { driver_id: "DRIVER-1", trip_no: "trip1" },
+                "ORDER-2": { driver_id: "DRIVER-2", trip_no: "trip1" },
+              },
+              deliveryVehicleDrafts: {},
+              opshopBoard: { opshop_pickups: [], countryside_route_groups: [] },
+              opshopPickupCollections: [],
+              opshopActionError: "",
+              opshopBusyActionKeys: {},
+              opshopAssignmentDrafts: {},
+              countrysideRouteGroupDrafts: {},
+            };
+            let sameKeyCall = 0;
+            const api = {
+              getWorkspaceMigrationStatus: async () => ({}),
+              getDeliveryWorkspaceBoard: async () => state.deliveryBoard,
+              getOpShopWorkspaceBoard: async () => state.opshopBoard,
+              listDeliveryRunSheets: async () => [],
+              listOpShopPickupCollections: async () => [],
+              assignDeliveryWorkspaceOrder: async (payload) => {
+                if (payload.order_id === "ORDER-2") {
+                  return second.promise;
+                }
+                if (payload.dispatch_date === "2026-06-25") {
+                  return newSameKey.promise;
+                }
+                sameKeyCall += 1;
+                return sameKeyCall === 1 ? first.promise : oldSameKey.promise;
+              },
+            };
+            const actions = createWorkspaceActions({
+              state,
+              renderWorkspace: () => {},
+              api,
+            });
+
+            const firstAction = actions.applyDeliveryOrderAssignment("ORDER-1");
+            const secondAction = actions.applyDeliveryOrderAssignment("ORDER-2");
+            if (!state.deliveryBusyActionKeys["delivery-assignment:ORDER-1"] ||
+                !state.deliveryBusyActionKeys["delivery-assignment:ORDER-2"]) {
+              throw new Error("Delivery did not track two busy actions independently");
+            }
+            first.resolve({});
+            await firstAction;
+            if (!state.deliveryBusyActionKeys["delivery-assignment:ORDER-2"]) {
+              throw new Error("finishing first Delivery action cleared second busy key");
+            }
+            second.resolve({});
+            await secondAction;
+            if (Object.keys(state.deliveryBusyActionKeys).length) {
+              throw new Error("Delivery busy registry did not clear after both actions finished");
+            }
+
+            state.dispatchDate = "2026-06-24";
+            state.deliveryAssignmentDrafts = { "ORDER-1": { driver_id: "DRIVER-1", trip_no: "trip1" } };
+            const oldAction = actions.applyDeliveryOrderAssignment("ORDER-1");
+            await actions.updateDispatchDate("2026-06-25");
+            state.deliveryAssignmentDrafts = { "ORDER-1": { driver_id: "DRIVER-NEW", trip_no: "trip1" } };
+            const currentAction = actions.applyDeliveryOrderAssignment("ORDER-1");
+            oldSameKey.resolve({});
+            await oldAction;
+            if (!state.deliveryBusyActionKeys["delivery-assignment:ORDER-1"]) {
+              throw new Error("old-date Delivery action cleared current-date same-key busy state");
+            }
+            newSameKey.resolve({});
+            await currentAction;
+            if (Object.keys(state.deliveryBusyActionKeys).length) {
+              throw new Error("current-date Delivery action did not clear its busy key");
+            }
+            """
+        )
+
+    def test_concurrent_opshop_busy_keys_are_independent_and_token_guarded(self):
+        self._run_workspace_actions_script(
+            """
+            function deferred() {
+              let resolve;
+              const promise = new Promise((done) => { resolve = done; });
+              return { promise, resolve };
+            }
+
+            const first = deferred();
+            const second = deferred();
+            const oldSameKey = deferred();
+            const newSameKey = deferred();
+            const pickup = { pickup_task_id: "PICKUP-1", assigned_driver_id: "", driver_id: "" };
+            const state = {
+              isLoggedIn: true,
+              workspaceRoute: "opshop/regular",
+              activeWorkspace: "opshop",
+              dispatchDate: "2026-06-24",
+              opshopBoard: {
+                opshop_pickups: [pickup],
+                countryside_route_groups: [
+                  { route_group_id: "ROUTE-1" },
+                  { route_group_id: "ROUTE-2" },
+                ],
+              },
+              opshopPickupCollections: [],
+              opshopActionError: "",
+              opshopBusyActionKeys: {},
+              opshopAssignmentDrafts: { "PICKUP-1": "DRIVER-1" },
+              countrysideRouteGroupDrafts: {
+                "ROUTE-1": { pickup_date: "2026-06-24", assigned_driver_id: "DRIVER-1", notes: "" },
+                "ROUTE-2": { pickup_date: "2026-06-24", assigned_driver_id: "DRIVER-2", notes: "" },
+              },
+              deliveryBoard: { orders: [], assignments: [], driver_vehicle_assignments: [] },
+              deliveryRunSheets: [],
+              deliveryActionError: "",
+              deliveryBusyActionKeys: {},
+              deliveryAssignmentDrafts: {},
+              deliveryVehicleDrafts: {},
+            };
+            let routeOneCall = 0;
+            const api = {
+              getWorkspaceMigrationStatus: async () => ({}),
+              getDeliveryWorkspaceBoard: async () => state.deliveryBoard,
+              getOpShopWorkspaceBoard: async () => state.opshopBoard,
+              listDeliveryRunSheets: async () => [],
+              listOpShopPickupCollections: async () => [],
+              assignOpShopWorkspaceCountrysideRouteGroup: async (routeGroupId, payload) => {
+                if (routeGroupId === "ROUTE-2") {
+                  return second.promise;
+                }
+                if (payload.dispatch_date === "2026-06-25") {
+                  return newSameKey.promise;
+                }
+                routeOneCall += 1;
+                return routeOneCall === 1 ? first.promise : oldSameKey.promise;
+              },
+            };
+            const actions = createWorkspaceActions({
+              state,
+              renderWorkspace: () => {},
+              api,
+            });
+
+            const firstAction = actions.assignCountrysideRouteGroup("ROUTE-1");
+            const secondAction = actions.assignCountrysideRouteGroup("ROUTE-2");
+            if (!state.opshopBusyActionKeys["opshop-route-group:ROUTE-1"] ||
+                !state.opshopBusyActionKeys["opshop-route-group:ROUTE-2"]) {
+              throw new Error("OP SHOP did not track two busy actions independently");
+            }
+            first.resolve({});
+            await firstAction;
+            if (!state.opshopBusyActionKeys["opshop-route-group:ROUTE-2"]) {
+              throw new Error("finishing first OP SHOP action cleared second busy key");
+            }
+            second.resolve({});
+            await secondAction;
+            if (Object.keys(state.opshopBusyActionKeys).length) {
+              throw new Error("OP SHOP busy registry did not clear after both actions finished");
+            }
+
+            state.dispatchDate = "2026-06-24";
+            state.countrysideRouteGroupDrafts = {
+              "ROUTE-1": { pickup_date: "2026-06-24", assigned_driver_id: "DRIVER-1", notes: "" },
+            };
+            const oldAction = actions.assignCountrysideRouteGroup("ROUTE-1");
+            await actions.updateDispatchDate("2026-06-25");
+            state.countrysideRouteGroupDrafts = {
+              "ROUTE-1": { pickup_date: "2026-06-25", assigned_driver_id: "DRIVER-NEW", notes: "" },
+            };
+            const currentAction = actions.assignCountrysideRouteGroup("ROUTE-1");
+            oldSameKey.resolve({});
+            await oldAction;
+            if (!state.opshopBusyActionKeys["opshop-route-group:ROUTE-1"]) {
+              throw new Error("old-date OP SHOP action cleared current-date same-key busy state");
+            }
+            newSameKey.resolve({});
+            await currentAction;
+            if (Object.keys(state.opshopBusyActionKeys).length) {
+              throw new Error("current-date OP SHOP action did not clear its busy key");
             }
             """
         )
@@ -538,7 +815,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
               isDeliveryWorkspaceLoading: false,
               deliveryWorkspaceError: "",
               deliveryActionError: "",
-              deliveryBusyActionKey: "",
+              deliveryBusyActionKeys: {},
               deliveryAssignmentDrafts: {
                 "ORDER-1": { driver_id: "DRIVER-1", trip_no: "trip1" },
               },
@@ -546,7 +823,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
               isOpShopWorkspaceLoading: false,
               opshopWorkspaceError: "",
               opshopActionError: "",
-              opshopBusyActionKey: "",
+              opshopBusyActionKeys: {},
               opshopAssignmentDrafts: {},
               countrysideRouteGroupDrafts: {},
             };

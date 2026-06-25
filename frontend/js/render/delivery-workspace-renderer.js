@@ -695,5 +695,5 @@ function formatLoad(order) {
 
 
 function isBusy(state, actionKey) {
-  return state.deliveryBusyActionKey === actionKey;
+  return Boolean(state.deliveryBusyActionKeys?.[actionKey]);
 }
