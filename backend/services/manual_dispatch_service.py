@@ -176,9 +176,11 @@ class ManualDispatchService:
         return self.delivery_run_sheet_service.get(run_sheet_id)
 
     def save_generated_delivery_run_sheet(self, run_sheet_id, request):
+        self._ensure_workspace_ready("delivery")
         return self.delivery_run_sheet_service.save_generated(run_sheet_id, request)
 
     def cancel_generated_delivery_run_sheet(self, run_sheet_id):
+        self._ensure_workspace_ready("delivery")
         return self.delivery_run_sheet_service.cancel_generated(run_sheet_id)
 
     def get_saved_delivery_run_sheet_for_export(self, run_sheet_id):
@@ -205,12 +207,14 @@ class ManualDispatchService:
         return self.opshop_pickup_collection_service.get(collection_id)
 
     def save_generated_opshop_pickup_collection(self, collection_id, request):
+        self._ensure_workspace_ready("opshop")
         return self.opshop_pickup_collection_service.save_generated(
             collection_id,
             request,
         )
 
     def cancel_generated_opshop_pickup_collection(self, collection_id):
+        self._ensure_workspace_ready("opshop")
         return self.opshop_pickup_collection_service.cancel_generated(collection_id)
 
     def get_saved_opshop_pickup_collection_for_export(self, collection_id):

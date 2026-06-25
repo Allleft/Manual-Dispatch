@@ -407,21 +407,34 @@ class InMemoryManualDispatchRepository:
         for summary in self.final_trip_summaries:
             if summary.status != "SAVED":
                 continue
-            has_delivery_rows = any(
-                trip.orders for trip in (summary.trips or [])
+            delivery_row_count = sum(
+                len(trip.orders) for trip in (summary.trips or [])
             )
+            has_delivery_rows = delivery_row_count > 0
             has_opshop_rows = bool(summary.opshop_pickups or [])
-            delivery_marker_count = sum(
+            opshop_row_count = len(summary.opshop_pickups or [])
+            valid_delivery_marker_count = sum(
                 run_sheet.legacy_summary_id == summary.summary_id
+                and run_sheet.status == "SAVED"
+                and run_sheet.dispatch_date == summary.dispatch_date
+                and run_sheet.delivery_date == summary.delivery_date
+                and run_sheet.driver_id == summary.driver_id
+                and sum(len(trip.orders) for trip in (run_sheet.trips or []))
+                == delivery_row_count
                 for run_sheet in self.delivery_run_sheets
             )
-            opshop_marker_count = sum(
+            valid_opshop_marker_count = sum(
                 collection.legacy_summary_id == summary.summary_id
+                and collection.status == "SAVED"
+                and collection.dispatch_date == summary.dispatch_date
+                and collection.pickup_date == summary.delivery_date
+                and collection.driver_id == summary.driver_id
+                and len(collection.pickups or []) == opshop_row_count
                 for collection in self.opshop_pickup_collections
             )
-            if has_delivery_rows and delivery_marker_count != 1:
+            if has_delivery_rows and valid_delivery_marker_count != 1:
                 delivery_unmigrated_ids.append(summary.summary_id)
-            if has_opshop_rows and opshop_marker_count != 1:
+            if has_opshop_rows and valid_opshop_marker_count != 1:
                 opshop_unmigrated_ids.append(summary.summary_id)
 
         generated_count = len(generated)

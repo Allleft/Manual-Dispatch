@@ -399,6 +399,11 @@ class SQLiteManualDispatchRepository:
                         FROM final_trip_summary_rows delivery_row
                         WHERE delivery_row.summary_id = summary.summary_id
                     ) AS has_delivery_rows,
+                    (
+                        SELECT COUNT(*)
+                        FROM final_trip_summary_rows delivery_row
+                        WHERE delivery_row.summary_id = summary.summary_id
+                    ) AS delivery_row_count,
                     EXISTS (
                         SELECT 1
                         FROM final_trip_summary_opshop_pickup_rows opshop_row
@@ -406,14 +411,45 @@ class SQLiteManualDispatchRepository:
                     ) AS has_opshop_rows,
                     (
                         SELECT COUNT(*)
+                        FROM final_trip_summary_opshop_pickup_rows opshop_row
+                        WHERE opshop_row.summary_id = summary.summary_id
+                    ) AS opshop_row_count,
+                    (
+                        SELECT COUNT(*)
                         FROM delivery_run_sheets run_sheet
                         WHERE run_sheet.legacy_summary_id = summary.summary_id
-                    ) AS delivery_marker_count,
+                            AND run_sheet.status = 'SAVED'
+                            AND run_sheet.dispatch_date = summary.dispatch_date
+                            AND run_sheet.delivery_date = summary.delivery_date
+                            AND run_sheet.driver_id = summary.driver_id
+                            AND (
+                                SELECT COUNT(*)
+                                FROM delivery_run_sheet_rows run_sheet_row
+                                WHERE run_sheet_row.run_sheet_id = run_sheet.run_sheet_id
+                            ) = (
+                                SELECT COUNT(*)
+                                FROM final_trip_summary_rows delivery_row
+                                WHERE delivery_row.summary_id = summary.summary_id
+                            )
+                    ) AS valid_delivery_marker_count,
                     (
                         SELECT COUNT(*)
                         FROM opshop_pickup_collections collection
                         WHERE collection.legacy_summary_id = summary.summary_id
-                    ) AS opshop_marker_count
+                            AND collection.status = 'SAVED'
+                            AND collection.dispatch_date = summary.dispatch_date
+                            AND collection.pickup_date = summary.delivery_date
+                            AND collection.driver_id = summary.driver_id
+                            AND (
+                                SELECT COUNT(*)
+                                FROM opshop_pickup_collection_rows collection_row
+                                WHERE collection_row.collection_id = collection.collection_id
+                            ) = (
+                                SELECT COUNT(*)
+                                FROM final_trip_summary_opshop_pickup_rows opshop_row
+                                WHERE opshop_row.summary_id = summary.summary_id
+                            )
+                    ) AS valid_opshop_marker_count
                 FROM final_trip_summaries summary
                 WHERE summary.status IN ('GENERATED', 'SAVED')
                 ORDER BY summary.summary_id
@@ -426,14 +462,14 @@ class SQLiteManualDispatchRepository:
             for row in rows
             if row["status"] == "SAVED"
             and row["has_delivery_rows"]
-            and row["delivery_marker_count"] != 1
+            and row["valid_delivery_marker_count"] != 1
         ]
         opshop_unmigrated_ids = [
             row["summary_id"]
             for row in rows
             if row["status"] == "SAVED"
             and row["has_opshop_rows"]
-            and row["opshop_marker_count"] != 1
+            and row["valid_opshop_marker_count"] != 1
         ]
         return {
             "delivery_ready": not generated_count and not delivery_unmigrated_ids,
