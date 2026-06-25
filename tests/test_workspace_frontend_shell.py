@@ -75,7 +75,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("return;", early_return)
         self.assertIn("getWorkspaceMigrationStatus", early_return)
 
-    def test_scoped_api_client_has_all_read_only_workspace_endpoints(self):
+    def test_scoped_api_client_has_all_workspace_endpoints(self):
         for endpoint in (
             "/api/manual-dispatch/delivery/board",
             "/api/manual-dispatch/opshop/board",
@@ -83,8 +83,22 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             "/api/manual-dispatch/delivery/run-sheets",
             "/api/manual-dispatch/opshop/pickup-collections",
             "/api/manual-dispatch/workspace-migration-status",
+            "/api/manual-dispatch/delivery/assignments",
+            "/api/manual-dispatch/delivery/assignments/unassign",
+            "/api/manual-dispatch/delivery/vehicle-assignments",
+            "/api/manual-dispatch/delivery/vehicle-assignments/clear",
+            "/api/manual-dispatch/delivery/run-sheets/generated",
+            "/api/manual-dispatch/opshop/pickups/assignments/apply",
+            "/api/manual-dispatch/opshop/pickups/assignments/unassign",
+            "/api/manual-dispatch/opshop/countryside-route-groups/",
+            "/api/manual-dispatch/opshop/pickup-collections/generated",
         ):
             self.assertIn(endpoint, self.api)
+        self.assertIn("/export-excel", self.api)
+        self.assertIn("requestBlobDownload", self.api)
+        self.assertIn("Content-Disposition", self.api)
+        self.assertIn("error.status = response.status", self.api)
+        self.assertIn("error.detail = detail", self.api)
 
     def test_delivery_and_opshop_loaders_are_independent(self):
         delivery_loader = self.workspace_actions.split(
@@ -175,10 +189,147 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             "sharedSpecifications",
             "isDeliveryWorkspaceLoading",
             "deliveryWorkspaceError",
+            "deliveryActionError",
+            "deliveryBusyActionKey",
+            "deliveryAssignmentDrafts",
+            "deliveryVehicleDrafts",
             "isOpShopWorkspaceLoading",
             "opshopWorkspaceError",
+            "opshopActionError",
+            "opshopBusyActionKey",
+            "opshopAssignmentDrafts",
+            "countrysideRouteGroupDrafts",
         ):
             self.assertIn(f"{state_field}:", self.state)
+
+    def test_delivery_workspace_wires_scoped_assignment_vehicle_and_lifecycle_actions(self):
+        self.assertIn("applyDeliveryOrderAssignment", self.delivery_renderer)
+        self.assertIn("unassignDeliveryOrder", self.delivery_renderer)
+        self.assertIn("applyDeliveryVehicleAssignment", self.delivery_renderer)
+        self.assertIn("clearDeliveryVehicleAssignment", self.delivery_renderer)
+        self.assertIn("generateDeliveryRunSheet", self.delivery_renderer)
+        self.assertIn("saveDeliveryRunSheet", self.delivery_renderer)
+        self.assertIn("cancelDeliveryRunSheet", self.delivery_renderer)
+        self.assertIn("exportDeliveryRunSheet", self.delivery_renderer)
+        self.assertIn("Ready to Generate", self.delivery_renderer)
+        self.assertIn("driver_id: draft.driver_id", self.workspace_actions)
+        self.assertIn("trip_no: draft.trip_no || \"trip1\"", self.workspace_actions)
+        self.assertIn("order_id: orderId", self.workspace_actions)
+        self.assertIn("vehicle_id: vehicleId", self.workspace_actions)
+        self.assertIn("saved_by_account_name: state.accountName || null", self.workspace_actions)
+
+    def test_opshop_workspace_wires_scoped_assignment_route_and_collection_actions(self):
+        self.assertIn("Apply Assignment Changes", self.opshop_renderer)
+        self.assertIn("assignCountrysideRouteGroup", self.opshop_renderer)
+        self.assertIn("generateOpShopPickupCollection", self.opshop_renderer)
+        self.assertIn("saveOpShopPickupCollection", self.opshop_renderer)
+        self.assertIn("cancelOpShopPickupCollection", self.opshop_renderer)
+        self.assertIn("exportOpShopPickupCollection", self.opshop_renderer)
+        self.assertIn("Ready to Generate", self.opshop_renderer)
+        self.assertIn("pickup_task_id: pickup.pickup_task_id", self.workspace_actions)
+        self.assertIn("driver_id: state.opshopAssignmentDrafts[pickup.pickup_task_id] || null", self.workspace_actions)
+        self.assertIn("function changedOpShopAssignmentDrafts", self.workspace_actions)
+        self.assertIn("assignOpShopWorkspaceCountrysideRouteGroup", self.workspace_actions)
+        opshop_apply_block = self.workspace_actions.split(
+            "async function applyOpShopAssignmentChanges", 1
+        )[1].split("async function unassignOpShopPickup", 1)[0]
+        self.assertNotIn("task_type", opshop_apply_block)
+        self.assertNotIn("trip_no", opshop_apply_block)
+
+    def test_opshop_default_driver_is_suggested_not_auto_submitted(self):
+        self.assertIn("Suggested default", self.opshop_renderer)
+        self.assertIn("defaultDriverHint", self.opshop_renderer)
+        self.assertIn("Object.prototype.hasOwnProperty.call(state.opshopAssignmentDrafts", self.opshop_renderer)
+        changed_block = self.opshop_renderer.split(
+            "function changedOpShopAssignments", 1
+        )[1].split("function selectedOpShopDriverId", 1)[0]
+        self.assertIn("state.opshopAssignmentDrafts", changed_block)
+        self.assertNotIn("default_driver_id", changed_block)
+
+    def test_workspace_actions_handle_migration_conflict_and_normal_errors(self):
+        self._run_workspace_actions_script(
+            """
+            const state = {
+              isLoggedIn: true,
+              workspaceRoute: "delivery/task-pool",
+              activeWorkspace: "delivery",
+              dispatchDate: "2026-06-24",
+              workspaceMigrationStatus: null,
+              isWorkspaceMigrationStatusLoading: false,
+              workspaceMigrationStatusError: "",
+              deliveryBoard: {
+                orders: [{ order_id: "ORDER-1" }],
+                assignments: [],
+                driver_vehicle_assignments: [],
+              },
+              deliveryRunSheets: [],
+              opshopBoard: { opshop_pickups: [], countryside_route_groups: [] },
+              opshopPickupCollections: [],
+              isDeliveryWorkspaceLoading: false,
+              deliveryWorkspaceError: "",
+              deliveryActionError: "",
+              deliveryBusyActionKey: "",
+              deliveryAssignmentDrafts: {
+                "ORDER-1": { driver_id: "DRIVER-1", trip_no: "trip1" },
+              },
+              deliveryVehicleDrafts: {},
+              isOpShopWorkspaceLoading: false,
+              opshopWorkspaceError: "",
+              opshopActionError: "",
+              opshopBusyActionKey: "",
+              opshopAssignmentDrafts: {},
+              countrysideRouteGroupDrafts: {},
+            };
+            let migrationChecks = 0;
+            const migrationError = new Error("Workspace migration required");
+            migrationError.status = 409;
+            const validationError = new Error("Driver is required");
+            validationError.status = 400;
+            const api = {
+              getWorkspaceMigrationStatus: async () => {
+                migrationChecks += 1;
+                return { delivery_ready: false, opshop_ready: true };
+              },
+              getDeliveryWorkspaceBoard: async () => state.deliveryBoard,
+              getOpShopWorkspaceBoard: async () => state.opshopBoard,
+              listDeliveryRunSheets: async () => [],
+              listOpShopPickupCollections: async () => [],
+              assignDeliveryWorkspaceOrder: async () => { throw migrationError; },
+            };
+            const actions = createWorkspaceActions({
+              state,
+              renderWorkspace: () => {},
+              api,
+            });
+            window.location.replace = (value) => {
+              window.location.replaced = value;
+            };
+            await actions.applyDeliveryOrderAssignment("ORDER-1");
+            if (state.workspaceRoute !== "home" || window.location.replaced !== "#home") {
+              throw new Error("409 migration guard did not return home");
+            }
+            if (migrationChecks !== 1 || !state.workspaceMigrationStatus) {
+              throw new Error("409 migration guard did not refresh migration status");
+            }
+            if (state.deliveryActionError) {
+              throw new Error("409 left stale delivery action error");
+            }
+
+            state.workspaceRoute = "delivery/task-pool";
+            state.activeWorkspace = "delivery";
+            state.deliveryAssignmentDrafts = {
+              "ORDER-1": { driver_id: "DRIVER-1", trip_no: "trip1" },
+            };
+            api.assignDeliveryWorkspaceOrder = async () => { throw validationError; };
+            await actions.applyDeliveryOrderAssignment("ORDER-1");
+            if (state.workspaceRoute !== "delivery/task-pool") {
+              throw new Error("normal validation error redirected away from page");
+            }
+            if (state.deliveryActionError !== "Driver is required") {
+              throw new Error("normal validation error was not surfaced");
+            }
+            """
+        )
 
     def test_home_disables_only_migration_blocked_workspace_cards(self):
         self.assertIn("workspaceMigrationStatus", self.home_renderer)

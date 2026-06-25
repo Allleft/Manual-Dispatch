@@ -629,6 +629,57 @@
   padding-left: 1rem;
 }
 
+.workspace-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.55rem;
+  margin-top: 0.75rem;
+}
+
+.workspace-action-row-stacked {
+  align-items: stretch;
+}
+
+.workspace-field {
+  display: grid;
+  flex: 1 1 150px;
+  min-width: 0;
+  gap: 0.22rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.workspace-field input,
+.workspace-field select {
+  min-height: 2.42rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.62rem;
+  color: var(--ink);
+  background: #fff;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 760;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.workspace-field input:focus-visible,
+.workspace-field select:focus-visible {
+  outline: 3px solid rgba(31, 101, 232, 0.18);
+  outline-offset: 1px;
+}
+
+.workspace-action-button {
+  min-height: 2.42rem;
+  padding: 0.5rem 0.8rem;
+  white-space: nowrap;
+}
+
 .workspace-context-panel {
   display: grid;
   gap: 0.65rem;
@@ -666,6 +717,36 @@
 .workspace-context-row span {
   color: var(--muted);
   font-size: 0.8rem;
+}
+
+.workspace-context-row-actions {
+  grid-template-columns: minmax(160px, 1.2fr) minmax(120px, 1fr);
+  align-items: end;
+  gap: 0.55rem;
+}
+
+.workspace-context-row-actions .workspace-field {
+  grid-column: span 2;
+}
+
+.workspace-assignment-bar {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.workspace-assignment-bar > div {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.workspace-assignment-bar span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.workspace-route-assignment-list {
+  display: grid;
+  gap: 0.65rem;
 }
 
 .workspace-route-chip-list {

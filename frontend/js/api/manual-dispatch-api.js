@@ -61,13 +61,15 @@ async function requestJson(path, options = {}) {
 
   if (!response.ok) {
     let message = `Request failed with status ${response.status}`;
+    let detail = null;
     try {
       const payload = await response.json();
+      detail = payload.detail;
       message = formatApiErrorDetail(payload.detail) || message;
     } catch (error) {
       message = response.statusText || message;
     }
-    throw new Error(message);
+    throw createApiError(message, response, detail);
   }
 
   return response.json();
@@ -82,16 +84,71 @@ async function requestFormData(path, formData, options = {}) {
 
   if (!response.ok) {
     let message = `Request failed with status ${response.status}`;
+    let detail = null;
     try {
       const payload = await response.json();
+      detail = payload.detail;
       message = formatApiErrorDetail(payload.detail) || message;
     } catch (error) {
       message = response.statusText || message;
     }
-    throw new Error(message);
+    throw createApiError(message, response, detail);
   }
 
   return response.json();
+}
+
+
+function createApiError(message, response, detail = null) {
+  const error = new Error(message);
+  error.status = response.status;
+  error.detail = detail;
+  return error;
+}
+
+
+function getFilenameFromContentDisposition(headerValue, fallbackFilename) {
+  if (!headerValue) {
+    return fallbackFilename;
+  }
+  const utf8Match = headerValue.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match) {
+    return decodeURIComponent(utf8Match[1].replace(/"/g, ""));
+  }
+  const plainMatch = headerValue.match(/filename="?([^";]+)"?/i);
+  return plainMatch ? plainMatch[1] : fallbackFilename;
+}
+
+
+async function requestBlobDownload(path, fallbackFilename) {
+  const response = await fetch(getApiUrl(path));
+  if (!response.ok) {
+    let message = `Request failed with status ${response.status}`;
+    let detail = null;
+    try {
+      const payload = await response.json();
+      detail = payload.detail;
+      message = formatApiErrorDetail(payload.detail) || message;
+    } catch (error) {
+      message = response.statusText || message;
+    }
+    throw createApiError(message, response, detail);
+  }
+
+  const blob = await response.blob();
+  const filename = getFilenameFromContentDisposition(
+    response.headers.get("Content-Disposition"),
+    fallbackFilename,
+  );
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+  return { filename };
 }
 
 
@@ -136,6 +193,138 @@ export async function apiListOpShopPickupCollections(dispatchDate, status = "") 
   return requestJson("/api/manual-dispatch/opshop/pickup-collections", {
     query: { dispatch_date: dispatchDate, status },
   });
+}
+
+
+export async function apiAssignDeliveryWorkspaceOrder(payload) {
+  return requestJson("/api/manual-dispatch/delivery/assignments", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+
+export async function apiUnassignDeliveryWorkspaceOrder(payload) {
+  return requestJson("/api/manual-dispatch/delivery/assignments/unassign", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+
+export async function apiAssignDeliveryWorkspaceVehicle(payload) {
+  return requestJson("/api/manual-dispatch/delivery/vehicle-assignments", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+
+export async function apiClearDeliveryWorkspaceVehicle(payload) {
+  return requestJson("/api/manual-dispatch/delivery/vehicle-assignments/clear", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+
+export async function apiCreateGeneratedDeliveryRunSheet(payload) {
+  return requestJson("/api/manual-dispatch/delivery/run-sheets/generated", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+
+export async function apiSaveGeneratedDeliveryRunSheet(runSheetId, payload) {
+  return requestJson(
+    `/api/manual-dispatch/delivery/run-sheets/${encodeURIComponent(runSheetId)}/save`,
+    {
+      method: "POST",
+      body: payload,
+    },
+  );
+}
+
+
+export async function apiCancelGeneratedDeliveryRunSheet(runSheetId) {
+  return requestJson(
+    `/api/manual-dispatch/delivery/run-sheets/${encodeURIComponent(runSheetId)}/cancel-generated`,
+    { method: "POST" },
+  );
+}
+
+
+export async function apiExportDeliveryRunSheetExcel(runSheetId) {
+  return requestBlobDownload(
+    `/api/manual-dispatch/delivery/run-sheets/${encodeURIComponent(runSheetId)}/export-excel`,
+    "delivery-run-sheet.xlsx",
+  );
+}
+
+
+export async function apiApplyOpShopWorkspaceAssignments(payload) {
+  return requestJson("/api/manual-dispatch/opshop/pickups/assignments/apply", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+
+export async function apiUnassignOpShopWorkspacePickup(payload) {
+  return requestJson("/api/manual-dispatch/opshop/pickups/assignments/unassign", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+
+export async function apiAssignOpShopWorkspaceCountrysideRouteGroup(
+  routeGroupId,
+  payload,
+) {
+  return requestJson(
+    `/api/manual-dispatch/opshop/countryside-route-groups/${encodeURIComponent(routeGroupId)}/assign`,
+    {
+      method: "POST",
+      body: payload,
+    },
+  );
+}
+
+
+export async function apiCreateGeneratedOpShopPickupCollection(payload) {
+  return requestJson("/api/manual-dispatch/opshop/pickup-collections/generated", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+
+export async function apiSaveGeneratedOpShopPickupCollection(collectionId, payload) {
+  return requestJson(
+    `/api/manual-dispatch/opshop/pickup-collections/${encodeURIComponent(collectionId)}/save`,
+    {
+      method: "POST",
+      body: payload,
+    },
+  );
+}
+
+
+export async function apiCancelGeneratedOpShopPickupCollection(collectionId) {
+  return requestJson(
+    `/api/manual-dispatch/opshop/pickup-collections/${encodeURIComponent(collectionId)}/cancel-generated`,
+    { method: "POST" },
+  );
+}
+
+
+export async function apiExportOpShopPickupCollectionExcel(collectionId) {
+  return requestBlobDownload(
+    `/api/manual-dispatch/opshop/pickup-collections/${encodeURIComponent(collectionId)}/export-excel`,
+    "opshop-pickup-collection.xlsx",
+  );
 }
 
 

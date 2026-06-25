@@ -268,12 +268,14 @@ function renderWorkspace() {
   if (state.activeWorkspace === "delivery") {
     renderDeliveryWorkspaceView(root, {
       state,
+      actions: workspaceActions,
       onDispatchDateChange: workspaceActions.updateDispatchDate,
     });
     return;
   }
   renderOpShopWorkspaceView(root, {
     state,
+    actions: workspaceActions,
     onDispatchDateChange: workspaceActions.updateDispatchDate,
   });
 }
