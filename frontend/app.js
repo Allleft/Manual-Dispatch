@@ -58,6 +58,7 @@ const BOARD_VIEW_SECTION_IDS = {
 const WORKSPACE_ROUTES = new Set([
   "home",
   "delivery/task-pool",
+  "delivery/trip-summary",
   "delivery/run-sheet",
   "delivery/history",
   "opshop/regular",
@@ -69,7 +70,7 @@ const WORKSPACE_ROUTES = new Set([
 ]);
 const LEGACY_WORKSPACE_REDIRECTS = {
   "task-pool": "delivery/task-pool",
-  "trip-summary": "delivery/run-sheet",
+  "trip-summary": "delivery/trip-summary",
   "final-summary": "delivery/history",
 };
 

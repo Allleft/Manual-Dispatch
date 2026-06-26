@@ -24,6 +24,7 @@ import {
 
 const DELIVERY_ROUTES = new Set([
   "delivery/task-pool",
+  "delivery/trip-summary",
   "delivery/run-sheet",
   "delivery/history",
 ]);
@@ -182,7 +183,7 @@ export function createWorkspaceActions({
           state.deliveryBoard = board;
           pruneDeliveryDrafts();
         }
-      } else if (route === "delivery/run-sheet") {
+      } else if (route === "delivery/trip-summary" || route === "delivery/run-sheet") {
         const [board, runSheets] = await Promise.all([
           api.getDeliveryWorkspaceBoard(dispatchDate),
           api.listDeliveryRunSheets(dispatchDate, ""),
@@ -275,7 +276,14 @@ export function createWorkspaceActions({
     }
     clearWorkspaceDraftsForDispatchDateChange();
     state.dispatchDate = nextDate;
+    state.deliveryTripSummaryDate = nextDate;
     await loadWorkspaceRoute(state.workspaceRoute);
+  }
+
+  function updateDeliveryTripSummaryDate(nextDate) {
+    state.deliveryTripSummaryDate = nextDate || state.dispatchDate;
+    state.deliveryTripAddOrderDrafts = {};
+    renderWorkspace();
   }
 
   function updateDeliveryAssignmentDraft(orderId, field, value) {
@@ -302,6 +310,52 @@ export function createWorkspaceActions({
       if (isDeliveryMutationCurrent(context)) {
         const { [orderId]: _removed, ...remaining } = state.deliveryAssignmentDrafts;
         state.deliveryAssignmentDrafts = remaining;
+        await loadDeliveryRoute(context.route);
+      }
+    });
+  }
+
+  function updateDeliveryTripAddOrderDraft(deliveryDate, driverId, tripNo, orderId) {
+    const key = deliveryTripAddOrderKey(deliveryDate, driverId, tripNo);
+    state.deliveryTripAddOrderDrafts = {
+      ...state.deliveryTripAddOrderDrafts,
+      [key]: orderId,
+    };
+    renderWorkspace();
+  }
+
+  async function addDeliveryOrderToTrip(deliveryDate, driverId, tripNo) {
+    const key = deliveryTripAddOrderKey(deliveryDate, driverId, tripNo);
+    const orderId = state.deliveryTripAddOrderDrafts[key] || "";
+    if (!orderId) {
+      state.deliveryActionError = "Select an unassigned Delivery Order before adding it to a trip.";
+      renderWorkspace();
+      return;
+    }
+    await runDeliveryAction(`delivery-add-order:${deliveryDate}:${driverId}:${tripNo}`, async (context) => {
+      await api.assignDeliveryWorkspaceOrder({
+        dispatch_date: context.dispatchDate,
+        order_id: orderId,
+        driver_id: driverId,
+        trip_no: tripNo,
+      });
+      if (isDeliveryMutationCurrent(context)) {
+        const { [key]: _removed, ...remaining } = state.deliveryTripAddOrderDrafts;
+        state.deliveryTripAddOrderDrafts = remaining;
+        await loadDeliveryRoute(context.route);
+      }
+    });
+  }
+
+  async function moveDeliveryOrderToTrip(orderId, driverId, tripNo) {
+    await runDeliveryAction(`delivery-move:${orderId}:${tripNo}`, async (context) => {
+      await api.assignDeliveryWorkspaceOrder({
+        dispatch_date: context.dispatchDate,
+        order_id: orderId,
+        driver_id: driverId,
+        trip_no: tripNo,
+      });
+      if (isDeliveryMutationCurrent(context)) {
         await loadDeliveryRoute(context.route);
       }
     });
@@ -379,9 +433,7 @@ export function createWorkspaceActions({
           delivery_date: candidate.delivery_date,
           driver_id: candidate.driver_id,
         });
-        if (isDeliveryMutationCurrent(context)) {
-          await loadDeliveryRoute(context.route);
-        }
+        await navigateToDeliveryRunSheets(context);
       },
     );
   }
@@ -627,6 +679,11 @@ export function createWorkspaceActions({
         orderIds.has(orderId),
       ),
     );
+    state.deliveryTripAddOrderDrafts = Object.fromEntries(
+      Object.entries(state.deliveryTripAddOrderDrafts || {}).filter(([, orderId]) =>
+        orderIds.has(orderId),
+      ),
+    );
 
     const vehicleKeys = new Set();
     (state.deliveryBoard?.driver_vehicle_assignments || []).forEach((assignment) => {
@@ -677,6 +734,7 @@ export function createWorkspaceActions({
 
   function clearWorkspaceDraftsForDispatchDateChange() {
     state.deliveryAssignmentDrafts = {};
+    state.deliveryTripAddOrderDrafts = {};
     state.deliveryVehicleDrafts = {};
     state.opshopAssignmentDrafts = {};
     state.countrysideRouteGroupDrafts = {};
@@ -711,6 +769,18 @@ export function createWorkspaceActions({
     return `action-${actionTokenCounter}`;
   }
 
+  async function navigateToDeliveryRunSheets(context) {
+    if (!context || context.activeWorkspace !== "delivery") {
+      return;
+    }
+    state.workspaceRoute = "delivery/run-sheet";
+    state.activeWorkspace = "delivery";
+    if (typeof window !== "undefined" && window.history?.pushState) {
+      window.history.pushState(null, "", "#delivery/run-sheet");
+    }
+    await loadDeliveryRoute("delivery/run-sheet");
+  }
+
   function isDeliveryMutationCurrent(context) {
     return (
       state.isLoggedIn &&
@@ -736,6 +806,7 @@ export function createWorkspaceActions({
   return {
     applyDeliveryOrderAssignment,
     applyDeliveryVehicleAssignment,
+    addDeliveryOrderToTrip,
     applyOpShopAssignmentChanges,
     assignCountrysideRouteGroup,
     cancelDeliveryRunSheet,
@@ -746,12 +817,15 @@ export function createWorkspaceActions({
     generateDeliveryRunSheet,
     generateOpShopPickupCollection,
     loadWorkspaceRoute,
+    moveDeliveryOrderToTrip,
     saveDeliveryRunSheet,
     saveOpShopPickupCollection,
     unassignDeliveryOrder,
     unassignOpShopPickup,
     updateCountrysideRouteGroupDraft,
     updateDeliveryAssignmentDraft,
+    updateDeliveryTripAddOrderDraft,
+    updateDeliveryTripSummaryDate,
     updateDeliveryVehicleDraft,
     updateDispatchDate,
     updateOpShopAssignmentDraft,
@@ -766,6 +840,11 @@ function currentOpShopDriverId(pickup) {
 
 function deliveryVehicleKey(deliveryDate, driverId) {
   return `${deliveryDate || ""}|${driverId || ""}`;
+}
+
+
+function deliveryTripAddOrderKey(deliveryDate, driverId, tripNo) {
+  return `${deliveryDate || ""}|${driverId || ""}|${tripNo || ""}`;
 }
 
 

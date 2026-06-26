@@ -42,6 +42,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         for route in (
             "home",
             "delivery/task-pool",
+            "delivery/trip-summary",
             "delivery/run-sheet",
             "delivery/history",
             "opshop/regular",
@@ -55,7 +56,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
 
         for legacy_route, scoped_route in (
             ("task-pool", "delivery/task-pool"),
-            ("trip-summary", "delivery/run-sheet"),
+            ("trip-summary", "delivery/trip-summary"),
             ("final-summary", "delivery/history"),
         ):
             self.assertIn(f'"{legacy_route}": "{scoped_route}"', self.app)
@@ -141,7 +142,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             "route_group",
         ):
             self.assertNotIn(forbidden, self.delivery_renderer)
-        self.assertIn("Active Delivery Orders", self.delivery_renderer)
+        self.assertIn("Active Unassigned Delivery Orders", self.delivery_renderer)
         self.assertIn("Delivery Run Sheets", self.delivery_renderer)
 
     def test_opshop_renderer_contains_no_delivery_domain_labels_or_payload_fields(self):
@@ -171,6 +172,9 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             )
         )
         self.assertNotIn("Final Trip Summary", new_workspace_source)
+        self.assertIn("Trip Summary", self.delivery_renderer)
+        self.assertIn("Run Sheets", self.delivery_renderer)
+        self.assertIn("Saved History", self.delivery_renderer)
         self.assertIn("Manual Dispatch", self._read("index.html"))
         self.assertIn("Home", self.navigation_renderer)
         self.assertIn("Switch workspace", self.navigation_renderer)
@@ -184,6 +188,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             "workspaceMigrationStatusError",
             "deliveryBoard",
             "deliveryRunSheets",
+            "deliveryTripSummaryDate",
             "opshopBoard",
             "opshopPickupCollections",
             "sharedSpecifications",
@@ -192,6 +197,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             "deliveryActionError",
             "deliveryBusyActionKeys",
             "deliveryAssignmentDrafts",
+            "deliveryTripAddOrderDrafts",
             "deliveryVehicleDrafts",
             "isOpShopWorkspaceLoading",
             "opshopWorkspaceError",
@@ -203,7 +209,20 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             self.assertIn(f"{state_field}:", self.state)
 
     def test_delivery_workspace_wires_scoped_assignment_vehicle_and_lifecycle_actions(self):
-        self.assertIn("applyDeliveryOrderAssignment", self.delivery_renderer)
+        task_pool_block = self.delivery_renderer.split(
+            "function createDeliveryTaskPool", 1
+        )[1].split("function createOrderCard", 1)[0]
+        self.assertIn("Active Unassigned Delivery Orders", task_pool_block)
+        self.assertIn("Assign these orders from Trip Summary driver cards.", task_pool_block)
+        self.assertNotIn("createOrderAssignmentControls", self.delivery_renderer)
+        self.assertNotIn("Assigned driver", task_pool_block)
+        self.assertNotIn("Delivery trip", task_pool_block)
+        self.assertNotIn("applyDeliveryOrderAssignment", self.delivery_renderer)
+
+        self.assertIn("updateDeliveryTripSummaryDate", self.delivery_renderer)
+        self.assertIn("updateDeliveryTripAddOrderDraft", self.delivery_renderer)
+        self.assertIn("addDeliveryOrderToTrip", self.delivery_renderer)
+        self.assertIn("moveDeliveryOrderToTrip", self.delivery_renderer)
         self.assertIn("unassignDeliveryOrder", self.delivery_renderer)
         self.assertIn("applyDeliveryVehicleAssignment", self.delivery_renderer)
         self.assertIn("clearDeliveryVehicleAssignment", self.delivery_renderer)
@@ -211,16 +230,122 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("saveDeliveryRunSheet", self.delivery_renderer)
         self.assertIn("cancelDeliveryRunSheet", self.delivery_renderer)
         self.assertIn("exportDeliveryRunSheet", self.delivery_renderer)
-        self.assertIn("Ready to Generate", self.delivery_renderer)
-        self.assertIn("driver_id: draft.driver_id", self.workspace_actions)
-        self.assertIn("trip_no: draft.trip_no || \"trip1\"", self.workspace_actions)
+        self.assertNotIn("Ready to Generate", self.delivery_renderer)
+        self.assertIn("driver_id: driverId", self.workspace_actions)
+        self.assertIn("trip_no: tripNo", self.workspace_actions)
         self.assertIn("order_id: orderId", self.workspace_actions)
         self.assertIn("vehicle_id: vehicleId", self.workspace_actions)
         self.assertIn("saved_by_account_name: state.accountName || null", self.workspace_actions)
+        self.assertIn("Delivery date", self.delivery_renderer)
+        self.assertNotIn("input.min", self.delivery_renderer)
+        self.assertIn("Trip 1", self.delivery_renderer)
+        self.assertIn("Trip 2", self.delivery_renderer)
+        self.assertIn("Add Order", self.delivery_renderer)
+        self.assertIn("Move to Trip 2", self.delivery_renderer)
+        self.assertIn("Move to Trip 1", self.delivery_renderer)
+        self.assertIn("Generate Run Sheet", self.delivery_renderer)
+        self.assertIn('window.history.pushState(null, "", "#delivery/run-sheet")', self.workspace_actions)
+        self.assertIn("state.deliveryTripSummaryDate = nextDate", self.workspace_actions)
+        self.assertIn("state.deliveryTripSummaryDate = nextDate || state.dispatchDate", self.workspace_actions)
         self.assertIn("Trip 1 orders", self.delivery_renderer)
         self.assertIn("Trip 2 orders", self.delivery_renderer)
-        self.assertIn("Total orders", self.delivery_renderer)
+        self.assertIn("Saved Run Sheet History", self.delivery_renderer)
+        self.assertIn("Export Daily Run Sheet", self.delivery_renderer)
+        self.assertIn("View Run Sheet details / preview", self.delivery_renderer)
         self.assertIn("Vehicle", self.delivery_renderer)
+
+    def test_delivery_trip_summary_actions_use_scoped_payloads_and_allow_history_dates(self):
+        self._run_workspace_actions_script(
+            """
+            const state = {
+              isLoggedIn: true,
+              workspaceRoute: "delivery/trip-summary",
+              activeWorkspace: "delivery",
+              dispatchDate: "2026-06-24",
+              deliveryTripSummaryDate: "2026-06-24",
+              deliveryBoard: {
+                orders: [
+                  { order_id: "ORDER-1", delivery_date: "2026-06-22" },
+                  { order_id: "ORDER-2", delivery_date: "2026-06-22" },
+                ],
+                assignments: [],
+                driver_vehicle_assignments: [],
+              },
+              deliveryRunSheets: [],
+              deliveryActionError: "",
+              deliveryBusyActionKeys: {},
+              deliveryAssignmentDrafts: {},
+              deliveryTripAddOrderDrafts: {},
+              deliveryVehicleDrafts: {},
+              opshopBoard: { opshop_pickups: [], countryside_route_groups: [] },
+              opshopPickupCollections: [],
+              opshopActionError: "",
+              opshopBusyActionKeys: {},
+              opshopAssignmentDrafts: {},
+              countrysideRouteGroupDrafts: {},
+            };
+            const assignedPayloads = [];
+            const generatedPayloads = [];
+            const api = {
+              getWorkspaceMigrationStatus: async () => ({}),
+              getDeliveryWorkspaceBoard: async () => state.deliveryBoard,
+              getOpShopWorkspaceBoard: async () => state.opshopBoard,
+              listDeliveryRunSheets: async () => [],
+              listOpShopPickupCollections: async () => [],
+              assignDeliveryWorkspaceOrder: async (payload) => {
+                assignedPayloads.push(payload);
+                return state.deliveryBoard;
+              },
+              createGeneratedDeliveryRunSheet: async (payload) => {
+                generatedPayloads.push(payload);
+                return { run_sheet_id: "DRS-1" };
+              },
+            };
+            const actions = createWorkspaceActions({
+              state,
+              renderWorkspace: () => {},
+              api,
+            });
+
+            actions.updateDeliveryTripSummaryDate("2026-06-22");
+            if (state.deliveryTripSummaryDate !== "2026-06-22") {
+              throw new Error("Trip Summary rejected historical delivery date");
+            }
+            actions.updateDeliveryTripAddOrderDraft("2026-06-22", "D001", "trip1", "ORDER-1");
+            await actions.addDeliveryOrderToTrip("2026-06-22", "D001", "trip1");
+            await actions.moveDeliveryOrderToTrip("ORDER-2", "D001", "trip2");
+            const expectedKeys = "dispatch_date,driver_id,order_id,trip_no";
+            for (const payload of assignedPayloads) {
+              if (Object.keys(payload).sort().join(",") !== expectedKeys) {
+                throw new Error("Delivery assignment payload contains unexpected fields");
+              }
+            }
+            if (assignedPayloads[0].dispatch_date !== "2026-06-24" ||
+                assignedPayloads[0].order_id !== "ORDER-1" ||
+                assignedPayloads[0].driver_id !== "D001" ||
+                assignedPayloads[0].trip_no !== "trip1") {
+              throw new Error("Add Order payload was not scoped correctly");
+            }
+            if (assignedPayloads[1].order_id !== "ORDER-2" ||
+                assignedPayloads[1].trip_no !== "trip2") {
+              throw new Error("Move Order payload was not scoped correctly");
+            }
+
+            await actions.generateDeliveryRunSheet({
+              delivery_date: "2026-06-22",
+              driver_id: "D001",
+            });
+            if (generatedPayloads[0].dispatch_date !== "2026-06-24" ||
+                generatedPayloads[0].delivery_date !== "2026-06-22" ||
+                generatedPayloads[0].driver_id !== "D001") {
+              throw new Error("Generate Run Sheet payload was not scoped correctly");
+            }
+            if (state.workspaceRoute !== "delivery/run-sheet" ||
+                window.location.hash !== "#delivery/run-sheet") {
+              throw new Error("Generate did not navigate to Delivery Run Sheets");
+            }
+            """
+        )
 
     def test_opshop_workspace_wires_scoped_assignment_route_and_collection_actions(self):
         self.assertIn("Apply Assignment Changes", self.opshop_renderer)
@@ -1010,7 +1135,14 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         module_uri = (FRONTEND_ROOT / "js/actions/workspace-actions.js").as_uri()
         script = textwrap.dedent(
             f"""
-            globalThis.window = {{ location: {{ protocol: "http:" }} }};
+            globalThis.window = {{
+              location: {{ protocol: "http:", hash: "" }},
+              history: {{
+                pushState: (_state, _title, url) => {{
+                  window.location.hash = String(url || "");
+                }},
+              }},
+            }};
             const {{ createWorkspaceActions }} = await import({module_uri!r});
             {body}
             """

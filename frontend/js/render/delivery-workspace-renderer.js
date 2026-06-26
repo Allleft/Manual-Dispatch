@@ -1,4 +1,4 @@
-import { createIcon } from "../utils/icon-utils.js";
+﻿import { createIcon } from "../utils/icon-utils.js";
 import {
   formatOptional,
   formatPluralLoadUnit,
@@ -7,6 +7,7 @@ import {
 
 const DELIVERY_TABS = [
   { route: "delivery/task-pool", label: "Task Pool" },
+  { route: "delivery/trip-summary", label: "Trip Summary" },
   { route: "delivery/run-sheet", label: "Run Sheets" },
   { route: "delivery/history", label: "Saved History" },
 ];
@@ -30,18 +31,12 @@ export function renderDeliveryWorkspace(
       content.append(createStatus(state.deliveryActionError, "error"));
     }
     if (state.workspaceRoute === "delivery/task-pool") {
-      content.append(createDeliveryTaskPool(state.deliveryBoard, state, actions));
+      content.append(createDeliveryTaskPool(state.deliveryBoard));
+    } else if (state.workspaceRoute === "delivery/trip-summary") {
+      content.append(createDeliveryTripSummary(state.deliveryBoard, state, actions));
     } else {
       const savedOnly = state.workspaceRoute === "delivery/history";
-      content.append(
-        createRunSheetList(
-          state.deliveryBoard,
-          state.deliveryRunSheets,
-          savedOnly,
-          state,
-          actions,
-        ),
-      );
+      content.append(createRunSheetList(state.deliveryRunSheets, savedOnly, state, actions));
     }
   }
 
@@ -68,7 +63,7 @@ function createWorkspacePage(state, onDispatchDateChange) {
   const title = document.createElement("h2");
   title.textContent = "Order Delivery";
   const description = document.createElement("p");
-  description.textContent = "Assign orders and manage independent Delivery Run Sheet records.";
+  description.textContent = "Plan driver trips, generate Delivery Run Sheets, and review saved history.";
   copy.append(kicker, title, description);
   titleGroup.append(icon, copy);
   heading.append(titleGroup, createDateControl(state, onDispatchDateChange));
@@ -110,56 +105,52 @@ function createTab(tab, activeRoute) {
 }
 
 
-function createDeliveryTaskPool(board, state, actions) {
+function createDeliveryTaskPool(board) {
   if (!board) {
     return createEmptyState("No Delivery workspace data loaded.", "document");
   }
   const wrapper = document.createElement("div");
   wrapper.className = "workspace-stack";
   const assignments = assignmentMap(board);
-  const drivers = driverMap(board);
-  const assignedCount = (board.orders || []).filter((order) => assignments.has(order.order_id)).length;
-  const totalPallets = (board.orders || []).reduce(
+  const unassignedOrders = (board.orders || []).filter(
+    (order) => !assignments.has(order.order_id),
+  );
+  const totalPallets = unassignedOrders.reduce(
     (total, order) => total + Number(order.pallet_quantity || 0),
     0,
   );
-  const totalBags = (board.orders || []).reduce(
+  const totalBags = unassignedOrders.reduce(
     (total, order) => total + Number(order.loose_bags_quantity || 0),
     0,
   );
 
   wrapper.append(
     createMetricGrid([
-      ["Active orders", (board.orders || []).length, "document"],
-      ["Assigned", assignedCount, "user"],
+      ["Unassigned orders", unassignedOrders.length, "document"],
       ["Pallets", totalPallets, "box"],
       ["Loose bags", totalBags, "bag"],
     ]),
   );
 
   const ordersSection = createSectionHeading(
-    "Active Delivery Orders",
-    `${(board.orders || []).length} orders in this dispatch workspace`,
+    "Active Unassigned Delivery Orders",
+    "Assign these orders from Trip Summary driver cards.",
   );
   const orderGrid = document.createElement("div");
   orderGrid.className = "workspace-card-grid workspace-order-grid";
-  if (!(board.orders || []).length) {
-    orderGrid.append(createEmptyState("No active Delivery Orders are available.", "document"));
+  if (!unassignedOrders.length) {
+    orderGrid.append(createEmptyState("No unassigned Delivery Orders are available.", "document"));
   } else {
-    board.orders.forEach((order) => {
-      orderGrid.append(
-        createOrderCard(order, assignments.get(order.order_id), drivers, state, actions),
-      );
+    unassignedOrders.forEach((order) => {
+      orderGrid.append(createOrderCard(order));
     });
   }
   wrapper.append(ordersSection, orderGrid);
-
-  wrapper.append(createDeliveryContext(board, drivers, state, actions));
   return wrapper;
 }
 
 
-function createOrderCard(order, assignment, drivers, state, actions) {
+function createOrderCard(order) {
   const card = document.createElement("article");
   card.className = "workspace-record-card workspace-order-card";
   const top = document.createElement("div");
@@ -180,116 +171,137 @@ function createOrderCard(order, assignment, drivers, state, actions) {
   const facts = document.createElement("dl");
   facts.className = "workspace-fact-grid";
   appendFact(facts, "Delivery date", order.delivery_date);
-  appendFact(
-    facts,
-    "Assigned driver",
-    assignment ? formatOptional(drivers.get(assignment.driver_id)?.name, assignment.driver_id) : "Unassigned",
-  );
-  appendFact(facts, "Delivery trip", assignment ? assignment.trip_no : "Not assigned");
   appendFact(facts, "Load", formatLoad(order));
+  appendFact(facts, "Suburb", order.suburb);
 
-  const controls = createOrderAssignmentControls(order, assignment, state, actions);
-  const products = document.createElement("div");
-  products.className = "workspace-product-lines";
-  const productTitle = document.createElement("strong");
-  productTitle.textContent = "Products";
-  const list = document.createElement("ul");
-  (order.product_lines || []).forEach((line) => {
-    const item = document.createElement("li");
-    item.textContent = `${formatOptional(line.product_name)} - ${line.quantity} ${formatPluralLoadUnit(line.unit, line.quantity)}`;
-    list.append(item);
-  });
-  if (!list.children.length) {
-    const item = document.createElement("li");
-    item.textContent = "No product lines recorded";
-    list.append(item);
-  }
-  products.append(productTitle, list);
-  card.append(top, facts, controls, products);
+  const products = createProductLines(order);
+  card.append(top, facts, products);
   return card;
 }
 
 
-function createOrderAssignmentControls(order, assignment, state, actions) {
-  const controls = document.createElement("div");
-  controls.className = "workspace-action-row workspace-action-row-stacked";
-  const draft = getOrderDraft(order.order_id, assignment, state);
-  const driverSelect = createSelect(
-    "Driver",
-    draft.driver_id,
-    [{ value: "", label: "Select driver" }].concat(
-      (state.deliveryBoard?.drivers || []).map((driver) => ({
-        value: driver.driver_id,
-        label: driver.name,
-      })),
-    ),
-    (value) => actions.updateDeliveryAssignmentDraft(order.order_id, "driver_id", value),
-  );
-  const tripSelect = createSelect(
-    "Trip",
-    draft.trip_no || "trip1",
-    [
-      { value: "trip1", label: "trip1" },
-      { value: "trip2", label: "trip2" },
-    ],
-    (value) => actions.updateDeliveryAssignmentDraft(order.order_id, "trip_no", value),
-  );
-  const assignButton = createActionButton(
-    assignment ? "Update" : "Assign",
-    () => actions.applyDeliveryOrderAssignment(order.order_id),
-    {
-      disabled: !draft.driver_id || isBusy(state, `delivery-assignment:${order.order_id}`),
-      primary: true,
-    },
-  );
-  controls.append(driverSelect, tripSelect, assignButton);
-  if (assignment) {
-    controls.append(
-      createActionButton(
-        "Unassign",
-        () => actions.unassignDeliveryOrder(order.order_id),
-        {
-          disabled: isBusy(state, `delivery-unassign:${order.order_id}`),
-        },
-      ),
-    );
+function createDeliveryTripSummary(board, state, actions) {
+  if (!board) {
+    return createEmptyState("No Delivery workspace data loaded.", "document");
   }
-  return controls;
-}
+  const wrapper = document.createElement("div");
+  wrapper.className = "workspace-stack workspace-trip-summary";
+  const deliveryDate = scopedDeliveryDate(state);
+  wrapper.append(createTripSummaryToolbar(deliveryDate, state, actions));
 
-
-function createDeliveryContext(board, drivers, state, actions) {
-  const section = document.createElement("section");
-  section.className = "workspace-context-panel workspace-context-panel-delivery";
-  section.append(
-    createSectionHeading(
-      "Driver and Vehicle Context",
-      "Vehicle selections grouped by driver and delivery date",
-    ),
+  const assignments = assignmentMap(board);
+  const unassignedOrders = ordersForDeliveryDate(board, deliveryDate).filter(
+    (order) => !assignments.has(order.order_id),
   );
-  const list = document.createElement("div");
-  list.className = "workspace-context-list";
-  const contexts = deliveryVehicleContexts(board);
-  if (!contexts.length) {
-    list.append(createEmptyState("No assigned orders need vehicle selection yet.", "truck"));
+  wrapper.append(
+    createMetricGrid([
+      ["Delivery date", deliveryDate, "calendar"],
+      ["Unassigned", unassignedOrders.length, "document"],
+      ["Drivers", (board.drivers || []).length, "user"],
+    ]),
+  );
+
+  const grid = document.createElement("div");
+  grid.className = "workspace-card-grid workspace-driver-grid";
+  if (!(board.drivers || []).length) {
+    grid.append(createEmptyState("No drivers are available for Trip Summary.", "user"));
   } else {
-    contexts.forEach((context) =>
-      list.append(createVehicleControlRow(context, board, drivers, state, actions)),
-    );
+    (board.drivers || []).forEach((driver) => {
+      grid.append(createDriverTripSummaryCard(driver, board, deliveryDate, unassignedOrders, state, actions));
+    });
   }
-  section.append(list);
-  return section;
+  wrapper.append(grid);
+  return wrapper;
 }
 
 
-function createVehicleControlRow(context, board, drivers, state, actions) {
-  const row = document.createElement("div");
-  row.className = "workspace-context-row workspace-context-row-actions";
-  const title = document.createElement("strong");
-  title.textContent = `${formatOptional(drivers.get(context.driver_id)?.name, context.driver_id)} - ${context.delivery_date}`;
-  const lock = findVehicleLock(board, context.delivery_date, context.driver_id);
-  const currentAssignment = findVehicleAssignment(board, context.delivery_date, context.driver_id);
-  const draftKey = `${context.delivery_date}|${context.driver_id}`;
+function createTripSummaryToolbar(deliveryDate, state, actions) {
+  const panel = document.createElement("section");
+  panel.className = "workspace-context-panel workspace-context-panel-delivery";
+  const heading = createSectionHeading(
+    "Delivery Trip Summary",
+    "Choose a delivery date, assign orders to driver trips, select vehicles, and generate run sheets.",
+  );
+  const field = document.createElement("label");
+  field.className = "workspace-date-control workspace-delivery-date-control";
+  field.textContent = "Delivery date";
+  const input = document.createElement("input");
+  input.type = "date";
+  input.value = deliveryDate;
+  input.disabled = state.isDeliveryWorkspaceLoading;
+  input.addEventListener("change", () => actions.updateDeliveryTripSummaryDate(input.value));
+  field.append(input);
+  panel.append(heading, field);
+  return panel;
+}
+
+
+function createDriverTripSummaryCard(driver, board, deliveryDate, unassignedOrders, state, actions) {
+  const card = document.createElement("article");
+  card.className = "workspace-record-card workspace-driver-card";
+  const top = document.createElement("div");
+  top.className = "workspace-record-card-top";
+  const title = document.createElement("div");
+  const heading = document.createElement("h3");
+  heading.textContent = formatOptional(driver.name, driver.driver_id);
+  const badges = document.createElement("div");
+  badges.className = "workspace-inline-badges";
+  badges.append(createBadge(driver.is_available === false ? "Unavailable" : "Available"));
+  if (driver.pallet_only) {
+    badges.append(createBadge("Pallet only"));
+  }
+  title.append(heading, badges);
+  top.append(title);
+  card.append(top);
+
+  const driverOrders = assignedOrdersForDriver(board, deliveryDate, driver.driver_id);
+  const runSheet = findRunSheetForDriver(state.deliveryRunSheets, deliveryDate, driver.driver_id);
+  const isLocked = Boolean(runSheet && ["GENERATED", "SAVED"].includes(runSheet.status));
+  const totals = orderTotals(driverOrders);
+  const facts = document.createElement("dl");
+  facts.className = "workspace-fact-grid";
+  appendFact(facts, "Pallet total", totals.pallets);
+  appendFact(facts, "Loose-bag total", totals.bags);
+  appendFact(facts, "Trip 1 orders", driverOrders.filter((item) => item.assignment.trip_no !== "trip2").length);
+  appendFact(facts, "Trip 2 orders", driverOrders.filter((item) => item.assignment.trip_no === "trip2").length);
+  card.append(facts, createDriverVehicleControl(driver, board, deliveryDate, isLocked, state, actions));
+
+  if (isLocked) {
+    card.append(createStatus(
+      runSheet.status === "SAVED"
+        ? "Saved Delivery Run Sheet locks this driver and delivery date."
+        : "Generated Delivery Run Sheet is shown on the Run Sheets page.",
+      "loading",
+    ));
+  }
+
+  card.append(
+    createTripPanel("trip1", driver, board, deliveryDate, unassignedOrders, isLocked, state, actions),
+    createTripPanel("trip2", driver, board, deliveryDate, unassignedOrders, isLocked, state, actions),
+  );
+
+  const actionsRow = document.createElement("div");
+  actionsRow.className = "workspace-action-row";
+  if (driverOrders.length && !isLocked) {
+    actionsRow.append(createActionButton(
+      "Generate Run Sheet",
+      () => actions.generateDeliveryRunSheet({ delivery_date: deliveryDate, driver_id: driver.driver_id }),
+      {
+        disabled: isBusy(state, `delivery-generate:${deliveryDate}:${driver.driver_id}`),
+        primary: true,
+      },
+    ));
+  }
+  card.append(actionsRow);
+  return card;
+}
+
+
+function createDriverVehicleControl(driver, board, deliveryDate, isLocked, state, actions) {
+  const section = document.createElement("div");
+  section.className = "workspace-context-row workspace-context-row-actions";
+  const currentAssignment = findVehicleAssignment(board, deliveryDate, driver.driver_id);
+  const draftKey = `${deliveryDate}|${driver.driver_id}`;
   const selectedVehicleId =
     state.deliveryVehicleDrafts[draftKey] ?? currentAssignment?.vehicle_id ?? "";
   const vehicleSelect = createSelect(
@@ -302,110 +314,161 @@ function createVehicleControlRow(context, board, drivers, state, actions) {
       })),
     ),
     (value) => actions.updateDeliveryVehicleDraft(
-      context.delivery_date,
-      context.driver_id,
+      deliveryDate,
+      driver.driver_id,
       value,
     ),
   );
-  const isLocked = Boolean(lock);
   vehicleSelect.querySelector("select").disabled = isLocked;
   const applyButton = createActionButton(
     "Save vehicle",
-    () => actions.applyDeliveryVehicleAssignment(context.delivery_date, context.driver_id),
+    () => actions.applyDeliveryVehicleAssignment(deliveryDate, driver.driver_id),
     {
-      disabled: isLocked || !selectedVehicleId || isBusy(state, `delivery-vehicle:${context.delivery_date}:${context.driver_id}`),
+      disabled: isLocked || !selectedVehicleId || isBusy(state, `delivery-vehicle:${deliveryDate}:${driver.driver_id}`),
     },
   );
   const clearButton = createActionButton(
-    "Clear",
-    () => actions.clearDeliveryVehicleAssignment(context.delivery_date, context.driver_id),
+    "Clear Vehicle",
+    () => actions.clearDeliveryVehicleAssignment(deliveryDate, driver.driver_id),
     {
-      disabled: isLocked || !currentAssignment || isBusy(state, `delivery-vehicle-clear:${context.delivery_date}:${context.driver_id}`),
+      disabled: isLocked || !currentAssignment || isBusy(state, `delivery-vehicle-clear:${deliveryDate}:${driver.driver_id}`),
     },
   );
-  const message = document.createElement("span");
-  message.textContent = isLocked
-    ? "Saved Delivery Run Sheet locks this vehicle selection."
-    : `${context.order_count} assigned orders`;
-  row.append(title, message, vehicleSelect, applyButton, clearButton);
+  section.append(vehicleSelect, applyButton, clearButton);
+  return section;
+}
+
+
+function createTripPanel(tripNo, driver, board, deliveryDate, unassignedOrders, isLocked, state, actions) {
+  const panel = document.createElement("section");
+  panel.className = "workspace-trip-panel";
+  const title = document.createElement("h4");
+  title.textContent = tripNo === "trip2" ? "Trip 2" : "Trip 1";
+  panel.append(title);
+  const assigned = assignedOrdersForDriver(board, deliveryDate, driver.driver_id).filter(
+    (item) => (tripNo === "trip2" ? item.assignment.trip_no === "trip2" : item.assignment.trip_no !== "trip2"),
+  );
+  if (!assigned.length) {
+    panel.append(createEmptyState(`No orders assigned to ${title.textContent}.`, "document"));
+  } else {
+    assigned.forEach((item) => panel.append(createAssignedOrderRow(item.order, item.assignment, driver, isLocked, state, actions)));
+  }
+  if (!isLocked) {
+    panel.append(createAddOrderControl(deliveryDate, driver, tripNo, unassignedOrders, state, actions));
+  }
+  return panel;
+}
+
+
+function createAssignedOrderRow(order, assignment, driver, isLocked, state, actions) {
+  const row = document.createElement("article");
+  row.className = "workspace-record-card workspace-order-row-card";
+  const title = document.createElement("div");
+  const heading = document.createElement("h5");
+  heading.textContent = formatOptional(order.company_name);
+  const meta = document.createElement("p");
+  meta.textContent = `${formatOptional(order.invoice_number, order.order_id)} - ${formatOptional(order.suburb)} - ${formatLoad(order)}`;
+  title.append(heading, meta);
+  const actionsRow = document.createElement("div");
+  actionsRow.className = "workspace-action-row";
+  const targetTrip = assignment.trip_no === "trip2" ? "trip1" : "trip2";
+  actionsRow.append(
+    createActionButton(
+      targetTrip === "trip2" ? "Move to Trip 2" : "Move to Trip 1",
+      () => actions.moveDeliveryOrderToTrip(order.order_id, driver.driver_id, targetTrip),
+      {
+        disabled: isLocked || isBusy(state, `delivery-move:${order.order_id}:${targetTrip}`),
+      },
+    ),
+    createActionButton(
+      "Unassign",
+      () => actions.unassignDeliveryOrder(order.order_id),
+      {
+        disabled: isLocked || isBusy(state, `delivery-unassign:${order.order_id}`),
+      },
+    ),
+  );
+  row.append(title, actionsRow);
   return row;
 }
 
 
-function createRunSheetList(board, runSheets, savedOnly, state, actions) {
+function createAddOrderControl(deliveryDate, driver, tripNo, unassignedOrders, state, actions) {
+  const key = `${deliveryDate}|${driver.driver_id}|${tripNo}`;
+  const selectedOrderId = state.deliveryTripAddOrderDrafts[key] || "";
+  const row = document.createElement("div");
+  row.className = "workspace-action-row workspace-add-order-row";
+  const select = createSelect(
+    "Add Order",
+    selectedOrderId,
+    [{ value: "", label: "Select unassigned order" }].concat(
+      unassignedOrders.map((order) => ({
+        value: order.order_id,
+        label: `${formatOptional(order.invoice_number, order.order_id)} - ${formatOptional(order.company_name)} - ${formatOptional(order.suburb)}`,
+      })),
+    ),
+    (value) => actions.updateDeliveryTripAddOrderDraft(deliveryDate, driver.driver_id, tripNo, value),
+  );
+  const button = createActionButton(
+    "Add Order",
+    () => actions.addDeliveryOrderToTrip(deliveryDate, driver.driver_id, tripNo),
+    {
+      disabled: !selectedOrderId || isBusy(state, `delivery-add-order:${deliveryDate}:${driver.driver_id}:${tripNo}`),
+      primary: true,
+    },
+  );
+  row.append(select, button);
+  return row;
+}
+
+
+function createRunSheetList(runSheets, savedOnly, state, actions) {
   const wrapper = document.createElement("div");
   wrapper.className = "workspace-stack";
   const filtered = (runSheets || []).filter(
     (runSheet) => !savedOnly || runSheet.status === "SAVED",
   );
-  if (!savedOnly && board) {
-    wrapper.append(createReadyRunSheetSection(board, runSheets, state, actions));
-  }
   wrapper.append(
     createSectionHeading(
-      savedOnly ? "Saved Delivery Run Sheet History" : "Delivery Run Sheets",
-      `${filtered.length} ${savedOnly ? "saved records" : "generated and saved records"}`,
+      savedOnly ? "Saved Run Sheet History" : "Delivery Run Sheets",
+      savedOnly
+        ? "Saved Delivery Run Sheets remain viewable and exportable."
+        : "Review generated documents, save them, or export saved Daily Run Sheets.",
     ),
   );
-  const grid = document.createElement("div");
-  grid.className = "workspace-card-grid workspace-run-sheet-grid";
-  if (!filtered.length) {
-    grid.append(
-      createEmptyState(
-        savedOnly ? "No saved Delivery Run Sheets for this dispatch date." : "No Delivery Run Sheets for this dispatch date.",
-        "history",
-      ),
-    );
-  } else {
-    filtered.forEach((runSheet) => grid.append(createRunSheetCard(runSheet, state, actions)));
+
+  if (savedOnly) {
+    wrapper.append(createRunSheetSection("Saved Run Sheets", filtered, state, actions));
+    return wrapper;
   }
-  wrapper.append(grid);
+  wrapper.append(
+    createRunSheetSection(
+      "Generated Run Sheets",
+      filtered.filter((runSheet) => runSheet.status === "GENERATED"),
+      state,
+      actions,
+    ),
+    createRunSheetSection(
+      "Saved Run Sheets",
+      filtered.filter((runSheet) => runSheet.status === "SAVED"),
+      state,
+      actions,
+    ),
+  );
   return wrapper;
 }
 
 
-function createReadyRunSheetSection(board, runSheets, state, actions) {
+function createRunSheetSection(titleText, runSheets, state, actions) {
   const section = document.createElement("section");
   section.className = "workspace-context-panel workspace-context-panel-delivery";
-  section.append(
-    createSectionHeading(
-      "Ready to Generate",
-      "Assigned order groups without a generated or saved Delivery Run Sheet",
-    ),
-  );
-  const candidates = readyDeliveryRunSheetCandidates(board, runSheets);
+  section.append(createSectionHeading(titleText, `${runSheets.length} records`));
   const grid = document.createElement("div");
   grid.className = "workspace-card-grid workspace-run-sheet-grid";
-  if (!candidates.length) {
-    grid.append(createEmptyState("No Delivery Run Sheet candidates are ready.", "document"));
+  if (!runSheets.length) {
+    grid.append(createEmptyState(`No ${titleText.toLowerCase()} for this dispatch date.`, "history"));
   } else {
-    candidates.forEach((candidate) => {
-      const card = document.createElement("article");
-      card.className = "workspace-record-card workspace-run-sheet-card";
-      const driver = (board.drivers || []).find((item) => item.driver_id === candidate.driver_id);
-      const heading = document.createElement("h3");
-      heading.textContent = formatOptional(driver?.name, candidate.driver_id);
-      const facts = document.createElement("dl");
-      facts.className = "workspace-fact-grid";
-      appendFact(facts, "Driver", formatOptional(driver?.name, candidate.driver_id));
-      appendFact(facts, "Delivery date", candidate.delivery_date);
-      appendFact(facts, "Trip 1 orders", candidate.trip1_order_count);
-      appendFact(facts, "Trip 2 orders", candidate.trip2_order_count);
-      appendFact(facts, "Total orders", candidate.orders.length);
-      appendFact(facts, "Total pallets", candidate.total_pallets);
-      appendFact(facts, "Total loose bags", candidate.total_loose_bags);
-      appendFact(facts, "Vehicle", candidate.vehicle_rego || "Not selected");
-      const button = createActionButton(
-        "Generate",
-        () => actions.generateDeliveryRunSheet(candidate),
-        {
-          disabled: isBusy(state, `delivery-generate:${candidate.delivery_date}:${candidate.driver_id}`),
-          primary: true,
-        },
-      );
-      card.append(heading, facts, button);
-      grid.append(card);
-    });
+    runSheets.forEach((runSheet) => grid.append(createRunSheetCard(runSheet, state, actions)));
   }
   section.append(grid);
   return section;
@@ -431,117 +494,94 @@ function createRunSheetCard(runSheet, state, actions) {
   );
   const facts = document.createElement("dl");
   facts.className = "workspace-fact-grid";
+  appendFact(facts, "Delivery date", runSheet.delivery_date);
+  appendFact(facts, "Driver", formatOptional(runSheet.driver_name_snapshot, runSheet.driver_id));
   appendFact(facts, "Vehicle", formatOptional(runSheet.vehicle_rego_snapshot, "Not selected"));
   appendFact(facts, "Trip 1 orders", tripCounts.get("trip1") || 0);
   appendFact(facts, "Trip 2 orders", tripCounts.get("trip2") || 0);
   appendFact(facts, "Total pallets", runSheet.total_pallets || 0);
-  appendFact(facts, "Total bags", runSheet.total_loose_bags || 0);
-  appendFact(
-    facts,
-    runSheet.status === "SAVED" ? "Saved" : "Generated",
-    runSheet.saved_at || runSheet.generated_at,
-  );
+  appendFact(facts, "Total loose bags", runSheet.total_loose_bags || 0);
+  appendFact(facts, "Generated", runSheet.generated_at);
+  if (runSheet.status === "SAVED") {
+    appendFact(facts, "Saved", runSheet.saved_at);
+    appendFact(facts, "Saved by", runSheet.saved_by_account_name || "Unknown");
+  }
   const actionsRow = document.createElement("div");
   actionsRow.className = "workspace-action-row";
   if (runSheet.status === "GENERATED") {
     actionsRow.append(
-      createActionButton("Save", () => actions.saveDeliveryRunSheet(runSheet.run_sheet_id), {
+      createActionButton("Save Run Sheet", () => actions.saveDeliveryRunSheet(runSheet.run_sheet_id), {
         disabled: isBusy(state, `delivery-save:${runSheet.run_sheet_id}`),
         primary: true,
       }),
-      createActionButton("Cancel", () => actions.cancelDeliveryRunSheet(runSheet.run_sheet_id), {
+      createActionButton("Cancel Generated", () => actions.cancelDeliveryRunSheet(runSheet.run_sheet_id), {
         disabled: isBusy(state, `delivery-cancel:${runSheet.run_sheet_id}`),
       }),
     );
   }
   if (runSheet.status === "SAVED") {
     actionsRow.append(
-      createActionButton("Export", () => actions.exportDeliveryRunSheet(runSheet.run_sheet_id), {
+      createActionButton("Export Daily Run Sheet", () => actions.exportDeliveryRunSheet(runSheet.run_sheet_id), {
         disabled: isBusy(state, `delivery-export:${runSheet.run_sheet_id}`),
         primary: true,
       }),
     );
   }
-  card.append(top, facts, actionsRow);
+  card.append(top, facts, createRunSheetPreview(runSheet), actionsRow);
   return card;
 }
 
 
-function readyDeliveryRunSheetCandidates(board, runSheets) {
-  const reservedKeys = new Set(
-    (runSheets || [])
-      .filter((runSheet) => ["GENERATED", "SAVED"].includes(runSheet.status))
-      .map((runSheet) => `${runSheet.delivery_date}|${runSheet.driver_id}`),
-  );
-  const orders = new Map((board.orders || []).map((order) => [order.order_id, order]));
-  const vehicles = new Map((board.vehicles || []).map((vehicle) => [vehicle.vehicle_id, vehicle]));
-  const vehicleAssignments = new Map(
-    (board.driver_vehicle_assignments || []).map((assignment) => [
-      `${assignment.delivery_date}|${assignment.driver_id}`,
-      assignment,
-    ]),
-  );
-  const groups = new Map();
-  (board.assignments || []).forEach((assignment) => {
-    const order = orders.get(assignment.task_id);
-    if (!order?.delivery_date) {
-      return;
-    }
-    const key = `${order.delivery_date}|${assignment.driver_id}`;
-    if (reservedKeys.has(key)) {
-      return;
-    }
-    if (!groups.has(key)) {
-      const vehicleAssignment = vehicleAssignments.get(key);
-      groups.set(key, {
-        delivery_date: order.delivery_date,
-        driver_id: assignment.driver_id,
-        orders: [],
-        trip1_order_count: 0,
-        trip2_order_count: 0,
-        total_pallets: 0,
-        total_loose_bags: 0,
-        vehicle_rego: vehicleAssignment
-          ? vehicles.get(vehicleAssignment.vehicle_id)?.rego || "Not selected"
-          : "Not selected",
-      });
-    }
-    const group = groups.get(key);
-    group.orders.push(order);
-    if (assignment.trip_no === "trip2") {
-      group.trip2_order_count += 1;
-    } else {
-      group.trip1_order_count += 1;
-    }
-    group.total_pallets += Number(order.pallet_quantity || 0);
-    group.total_loose_bags += Number(order.loose_bags_quantity || 0);
+function createRunSheetPreview(runSheet) {
+  const details = document.createElement("details");
+  details.className = "workspace-run-sheet-preview";
+  const summary = document.createElement("summary");
+  summary.textContent = "View Run Sheet details / preview";
+  details.append(summary);
+  (runSheet.trips || []).forEach((trip) => {
+    const title = document.createElement("h4");
+    title.textContent = trip.trip_no === "trip2" ? "Trip 2" : "Trip 1";
+    const list = document.createElement("ul");
+    (trip.orders || []).forEach((order) => {
+      const item = document.createElement("li");
+      item.textContent = `${formatOptional(order.company_name_snapshot)} - ${formatOptional(order.suburb_snapshot)} - ${formatOptional(order.invoice_number_snapshot, order.task_id)}`;
+      list.append(item);
+    });
+    details.append(title, list);
   });
-  return Array.from(groups.values()).sort((left, right) =>
-    `${left.delivery_date}|${left.driver_id}`.localeCompare(`${right.delivery_date}|${right.driver_id}`),
-  );
+  return details;
 }
 
 
-function deliveryVehicleContexts(board) {
+function ordersForDeliveryDate(board, deliveryDate) {
+  return (board.orders || []).filter((order) => order.delivery_date === deliveryDate);
+}
+
+
+function assignedOrdersForDriver(board, deliveryDate, driverId) {
   const orders = new Map((board.orders || []).map((order) => [order.order_id, order]));
-  const groups = new Map();
-  (board.assignments || []).forEach((assignment) => {
-    const order = orders.get(assignment.task_id);
-    if (!order?.delivery_date) {
-      return;
-    }
-    const key = `${order.delivery_date}|${assignment.driver_id}`;
-    if (!groups.has(key)) {
-      groups.set(key, {
-        delivery_date: order.delivery_date,
-        driver_id: assignment.driver_id,
-        order_count: 0,
-      });
-    }
-    groups.get(key).order_count += 1;
-  });
-  return Array.from(groups.values()).sort((left, right) =>
-    `${left.delivery_date}|${left.driver_id}`.localeCompare(`${right.delivery_date}|${right.driver_id}`),
+  return (board.assignments || [])
+    .filter((assignment) => assignment.driver_id === driverId)
+    .map((assignment) => ({ assignment, order: orders.get(assignment.task_id) }))
+    .filter((item) => item.order?.delivery_date === deliveryDate)
+    .sort((left, right) => {
+      const tripCompare = (left.assignment.trip_no || "trip1").localeCompare(right.assignment.trip_no || "trip1");
+      if (tripCompare) {
+        return tripCompare;
+      }
+      return formatOptional(left.order.invoice_number, left.order.order_id).localeCompare(
+        formatOptional(right.order.invoice_number, right.order.order_id),
+      );
+    });
+}
+
+
+function findRunSheetForDriver(runSheets, deliveryDate, driverId) {
+  return (runSheets || []).find(
+    (runSheet) =>
+      runSheet.delivery_date === deliveryDate &&
+      runSheet.driver_id === driverId &&
+      ["GENERATED", "SAVED"].includes(runSheet.status),
   );
 }
 
@@ -554,13 +594,6 @@ function findVehicleAssignment(board, deliveryDate, driverId) {
 }
 
 
-function findVehicleLock(board, deliveryDate, driverId) {
-  return (board.saved_vehicle_assignment_locks || []).find(
-    (lock) => lock.delivery_date === deliveryDate && lock.driver_id === driverId,
-  );
-}
-
-
 function assignmentMap(board) {
   return new Map(
     (board.assignments || []).map((assignment) => [assignment.task_id, assignment]),
@@ -568,21 +601,19 @@ function assignmentMap(board) {
 }
 
 
-function driverMap(board) {
-  return new Map((board.drivers || []).map((driver) => [driver.driver_id, driver]));
+function orderTotals(items) {
+  return items.reduce(
+    (totals, item) => ({
+      pallets: totals.pallets + Number(item.order?.pallet_quantity || 0),
+      bags: totals.bags + Number(item.order?.loose_bags_quantity || 0),
+    }),
+    { pallets: 0, bags: 0 },
+  );
 }
 
 
-function getOrderDraft(orderId, assignment, state) {
-  const draft = state.deliveryAssignmentDrafts[orderId] || {};
-  return {
-    driver_id: Object.prototype.hasOwnProperty.call(draft, "driver_id")
-      ? draft.driver_id
-      : assignment?.driver_id || "",
-    trip_no: Object.prototype.hasOwnProperty.call(draft, "trip_no")
-      ? draft.trip_no
-      : assignment?.trip_no || "trip1",
-  };
+function scopedDeliveryDate(state) {
+  return state.deliveryTripSummaryDate || state.dispatchDate;
 }
 
 
@@ -656,6 +687,27 @@ function appendFact(list, labelText, value) {
   detail.textContent = formatOptional(value);
   item.append(label, detail);
   list.append(item);
+}
+
+
+function createProductLines(order) {
+  const products = document.createElement("div");
+  products.className = "workspace-product-lines";
+  const productTitle = document.createElement("strong");
+  productTitle.textContent = "Product details";
+  const list = document.createElement("ul");
+  (order.product_lines || []).forEach((line) => {
+    const item = document.createElement("li");
+    item.textContent = `${formatOptional(line.product_name)} - ${line.quantity} ${formatPluralLoadUnit(line.unit, line.quantity)}`;
+    list.append(item);
+  });
+  if (!list.children.length) {
+    const item = document.createElement("li");
+    item.textContent = "No product lines recorded";
+    list.append(item);
+  }
+  products.append(productTitle, list);
+  return products;
 }
 
 

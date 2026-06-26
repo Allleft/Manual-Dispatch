@@ -223,6 +223,93 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertNotIn("Total Pallets", collection_values)
         self.assertNotIn("Demo Customer A", collection_values)
 
+    def test_delivery_export_uses_daily_run_sheet_form_layout(self):
+        self.service.assign_task(
+            AssignTaskRequest(
+                dispatch_date=self.dispatch_date,
+                task_type="ORDER",
+                task_id="ORD-002",
+                driver_id="D001",
+                trip_no="trip2",
+            )
+        )
+        run_sheet_id = self._generate_and_save_delivery()
+        workbook = load_workbook(
+            BytesIO(
+                self.client.get(
+                    f"/api/manual-dispatch/delivery/run-sheets/{run_sheet_id}/export-excel"
+                ).content
+            )
+        )
+        worksheet = workbook.active
+        self.assertEqual("Daily Run Sheet", worksheet.title)
+        self.assertEqual("landscape", worksheet.page_setup.orientation)
+        self.assertEqual(str(worksheet.PAPERSIZE_A4), str(worksheet.page_setup.paperSize))
+
+        values = [
+            cell.value
+            for row in worksheet.iter_rows()
+            for cell in row
+            if cell.value is not None
+        ]
+        self.assertIn("DAILY RUN SHEET", values)
+        self.assertIn("Date:", values)
+        self.assertIn(self.dispatch_date, values)
+        self.assertIn("Driver:", values)
+        self.assertIn("John", values)
+        self.assertIn("Start Time:", values)
+        self.assertIn(
+            "Time Loading Started (to be filled in by storeman):",
+            values,
+        )
+        self.assertIn(
+            "Time Loading Completed (to be filled in by storeman):",
+            values,
+        )
+        self.assertIn("Finish Time:", values)
+        self.assertNotIn("Final Trip Summary", values)
+        self.assertNotIn("Address", values)
+        self.assertNotIn("Product Details", values)
+        self.assertNotIn("Order #", values)
+
+        header_row = [cell.value for cell in worksheet[9]]
+        self.assertEqual(
+            [
+                "Customer Name",
+                "Suburb",
+                "Invoice #",
+                "BAGS",
+                "KGS",
+                "Pallets",
+                "COD",
+                "CQ",
+                "Time Out",
+                "Time In",
+                "Print Name",
+                "Comments / Signature",
+                "No. of Pallets Returned",
+            ],
+            header_row,
+        )
+
+        rows = list(worksheet.iter_rows(values_only=True))
+        customer_a_index = next(
+            index for index, row in enumerate(rows) if row[0] == "Demo Customer A"
+        )
+        trip_2_index = next(index for index, row in enumerate(rows) if row[0] == "TRIP 2")
+        customer_b_index = next(
+            index for index, row in enumerate(rows) if row[0] == "Demo Customer B"
+        )
+        self.assertLess(customer_a_index, trip_2_index)
+        self.assertLess(trip_2_index, customer_b_index)
+        customer_a_row = rows[customer_a_index]
+        self.assertEqual("INV-1001", customer_a_row[2])
+        self.assertEqual(0, customer_a_row[3])
+        self.assertIsNone(customer_a_row[4])
+        self.assertEqual(2, customer_a_row[5])
+        for manual_column in range(6, 13):
+            self.assertIsNone(customer_a_row[manual_column])
+
     def test_legacy_final_summary_schema_and_routes_remain_available(self):
         route_pairs = {
             (method, route.path)
