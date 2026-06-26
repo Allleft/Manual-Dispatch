@@ -70,6 +70,18 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
 
     def test_independent_routes_generate_list_get_save_cancel_and_export(self):
         expected_routes = {
+            ("GET", "/api/manual-dispatch/delivery/specifications"),
+            ("POST", "/api/manual-dispatch/delivery/drivers"),
+            ("PATCH", "/api/manual-dispatch/delivery/drivers/{driver_id}"),
+            ("DELETE", "/api/manual-dispatch/delivery/drivers/{driver_id}"),
+            ("POST", "/api/manual-dispatch/delivery/vehicles"),
+            ("PATCH", "/api/manual-dispatch/delivery/vehicles/{vehicle_id}"),
+            ("DELETE", "/api/manual-dispatch/delivery/vehicles/{vehicle_id}"),
+            ("POST", "/api/manual-dispatch/delivery/orders"),
+            ("PATCH", "/api/manual-dispatch/delivery/orders/{order_id}"),
+            ("POST", "/api/manual-dispatch/delivery/orders/{order_id}/cancel"),
+            ("POST", "/api/manual-dispatch/delivery/orders/import-attache-pdf-preview"),
+            ("POST", "/api/manual-dispatch/delivery/orders/import-attache-pdf-commit"),
             ("POST", "/api/manual-dispatch/delivery/run-sheets/generated"),
             ("GET", "/api/manual-dispatch/delivery/run-sheets"),
             ("GET", "/api/manual-dispatch/delivery/run-sheets/{run_sheet_id}"),

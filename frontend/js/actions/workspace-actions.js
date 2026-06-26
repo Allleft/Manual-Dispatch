@@ -6,19 +6,31 @@ import {
   apiCancelGeneratedDeliveryRunSheet,
   apiCancelGeneratedOpShopPickupCollection,
   apiClearDeliveryWorkspaceVehicle,
+  apiCommitDeliveryAttacheInvoices,
+  apiCancelDeliveryOrder,
+  apiCreateDeliveryDriver,
+  apiCreateDeliveryOrder,
+  apiCreateDeliveryVehicle,
   apiCreateGeneratedDeliveryRunSheet,
   apiCreateGeneratedOpShopPickupCollection,
+  apiDeleteDeliveryDriver,
+  apiDeleteDeliveryVehicle,
   apiExportDeliveryRunSheetExcel,
   apiExportOpShopPickupCollectionExcel,
+  apiGetDeliverySpecifications,
   apiGetDeliveryWorkspaceBoard,
   apiGetOpShopWorkspaceBoard,
   apiGetWorkspaceMigrationStatus,
   apiListDeliveryRunSheets,
   apiListOpShopPickupCollections,
+  apiPreviewDeliveryAttacheInvoices,
   apiSaveGeneratedDeliveryRunSheet,
   apiSaveGeneratedOpShopPickupCollection,
   apiUnassignDeliveryWorkspaceOrder,
   apiUnassignOpShopWorkspacePickup,
+  apiUpdateDeliveryDriver,
+  apiUpdateDeliveryOrder,
+  apiUpdateDeliveryVehicle,
 } from "../api/manual-dispatch-api.js";
 
 
@@ -41,22 +53,34 @@ const DEFAULT_API = {
   assignDeliveryWorkspaceOrder: apiAssignDeliveryWorkspaceOrder,
   assignDeliveryWorkspaceVehicle: apiAssignDeliveryWorkspaceVehicle,
   assignOpShopWorkspaceCountrysideRouteGroup: apiAssignOpShopWorkspaceCountrysideRouteGroup,
+  cancelDeliveryOrder: apiCancelDeliveryOrder,
   cancelGeneratedDeliveryRunSheet: apiCancelGeneratedDeliveryRunSheet,
   cancelGeneratedOpShopPickupCollection: apiCancelGeneratedOpShopPickupCollection,
   clearDeliveryWorkspaceVehicle: apiClearDeliveryWorkspaceVehicle,
+  commitDeliveryAttacheInvoices: apiCommitDeliveryAttacheInvoices,
+  createDeliveryDriver: apiCreateDeliveryDriver,
+  createDeliveryOrder: apiCreateDeliveryOrder,
+  createDeliveryVehicle: apiCreateDeliveryVehicle,
   createGeneratedDeliveryRunSheet: apiCreateGeneratedDeliveryRunSheet,
   createGeneratedOpShopPickupCollection: apiCreateGeneratedOpShopPickupCollection,
+  deleteDeliveryDriver: apiDeleteDeliveryDriver,
+  deleteDeliveryVehicle: apiDeleteDeliveryVehicle,
   exportDeliveryRunSheetExcel: apiExportDeliveryRunSheetExcel,
   exportOpShopPickupCollectionExcel: apiExportOpShopPickupCollectionExcel,
+  getDeliverySpecifications: apiGetDeliverySpecifications,
   getDeliveryWorkspaceBoard: apiGetDeliveryWorkspaceBoard,
   getOpShopWorkspaceBoard: apiGetOpShopWorkspaceBoard,
   getWorkspaceMigrationStatus: apiGetWorkspaceMigrationStatus,
   listDeliveryRunSheets: apiListDeliveryRunSheets,
   listOpShopPickupCollections: apiListOpShopPickupCollections,
+  previewDeliveryAttacheInvoices: apiPreviewDeliveryAttacheInvoices,
   saveGeneratedDeliveryRunSheet: apiSaveGeneratedDeliveryRunSheet,
   saveGeneratedOpShopPickupCollection: apiSaveGeneratedOpShopPickupCollection,
   unassignDeliveryWorkspaceOrder: apiUnassignDeliveryWorkspaceOrder,
   unassignOpShopWorkspacePickup: apiUnassignOpShopWorkspacePickup,
+  updateDeliveryDriver: apiUpdateDeliveryDriver,
+  updateDeliveryOrder: apiUpdateDeliveryOrder,
+  updateDeliveryVehicle: apiUpdateDeliveryVehicle,
 };
 
 
@@ -131,6 +155,26 @@ export function createWorkspaceActions({
     state.opshopBusyActionKeys = {};
     state.deliveryActionError = "";
     state.opshopActionError = "";
+    state.deliveryOrderDetailId = "";
+    state.deliveryOrderForm = {};
+    state.deliveryOrderFormMode = "";
+    state.deliveryOrderModalError = "";
+    state.deliveryAttacheImportState = {
+      isOpen: false,
+      isPreviewing: false,
+      isCommitting: false,
+      files: [],
+      rows: [],
+      error: "",
+      success: "",
+    };
+    state.deliverySpecificationModalOpen = false;
+    state.deliveryDriverForm = null;
+    state.deliveryDriverEditingId = "";
+    state.deliveryVehicleForm = null;
+    state.deliveryVehicleEditingId = "";
+    state.deliverySpecificationError = "";
+    state.deliverySpecificationBusyKey = "";
     if (typeof window !== "undefined") {
       if (window.location?.replace) {
         window.location.replace("#home");
@@ -285,6 +329,573 @@ export function createWorkspaceActions({
     state.deliveryTripSummaryDate = nextDate || state.dispatchDate;
     state.deliveryTripAddOrderDrafts = {};
     renderWorkspace();
+  }
+
+  function updateDeliveryTaskPoolFilter(field, value) {
+    state.deliveryTaskPoolFilters = {
+      ...(state.deliveryTaskPoolFilters || {}),
+      [field]: value,
+    };
+    renderWorkspace();
+  }
+
+  function clearDeliveryTaskPoolFilters() {
+    state.deliveryTaskPoolFilters = {
+      search: "",
+      delivery_date: "",
+      urgency: "All",
+    };
+    renderWorkspace();
+  }
+
+  function openDeliveryOrderDetail(orderId) {
+    state.deliveryOrderDetailId = orderId || "";
+    state.deliveryOrderFormMode = "";
+    state.deliveryOrderForm = {};
+    state.deliveryOrderModalError = "";
+    renderWorkspace();
+  }
+
+  function closeDeliveryOrderModal() {
+    state.deliveryOrderDetailId = "";
+    state.deliveryOrderFormMode = "";
+    state.deliveryOrderForm = {};
+    state.deliveryOrderModalError = "";
+    renderWorkspace();
+  }
+
+  function openAddDeliveryOrder() {
+    state.deliveryOrderDetailId = "";
+    state.deliveryOrderFormMode = "add";
+    state.deliveryOrderForm = defaultDeliveryOrderForm();
+    state.deliveryOrderModalError = "";
+    renderWorkspace();
+  }
+
+  function startEditDeliveryOrder(orderId) {
+    const order = findDeliveryOrder(orderId);
+    if (!order) {
+      state.deliveryOrderModalError = "Delivery Order is no longer available.";
+      renderWorkspace();
+      return;
+    }
+    state.deliveryOrderDetailId = orderId;
+    state.deliveryOrderFormMode = "edit";
+    state.deliveryOrderForm = deliveryOrderFormFromOrder(order);
+    state.deliveryOrderModalError = "";
+    renderWorkspace();
+  }
+
+  function cancelDeliveryOrderEdit() {
+    state.deliveryOrderFormMode = "";
+    state.deliveryOrderForm = {};
+    state.deliveryOrderModalError = "";
+    renderWorkspace();
+  }
+
+  function updateDeliveryOrderForm(field, value) {
+    state.deliveryOrderForm = {
+      ...(state.deliveryOrderForm || {}),
+      [field]: value,
+    };
+  }
+
+  function addDeliveryOrderProductLine() {
+    state.deliveryOrderForm = {
+      ...(state.deliveryOrderForm || {}),
+      product_lines: [
+        ...((state.deliveryOrderForm || {}).product_lines || []),
+        { product_name: "", quantity: 0, unit: "PALLETS" },
+      ],
+    };
+    renderWorkspace();
+  }
+
+  function updateDeliveryOrderProductLine(index, field, value) {
+    const lines = [...((state.deliveryOrderForm || {}).product_lines || [])];
+    lines[index] = {
+      ...(lines[index] || { product_name: "", quantity: 0, unit: "PALLETS" }),
+      [field]: field === "quantity" ? Number(value || 0) : value,
+    };
+    state.deliveryOrderForm = {
+      ...(state.deliveryOrderForm || {}),
+      product_lines: lines,
+    };
+  }
+
+  function removeDeliveryOrderProductLine(index) {
+    state.deliveryOrderForm = {
+      ...(state.deliveryOrderForm || {}),
+      product_lines: ((state.deliveryOrderForm || {}).product_lines || []).filter(
+        (_line, lineIndex) => lineIndex !== index,
+      ),
+    };
+    renderWorkspace();
+  }
+
+  async function saveDeliveryOrderForm() {
+    const mode = state.deliveryOrderFormMode;
+    const orderId = state.deliveryOrderDetailId;
+    const payload = deliveryOrderPayload(state.deliveryOrderForm || {});
+    const actionKey = mode === "edit"
+      ? `delivery-order-edit:${orderId}`
+      : "delivery-order-add";
+    await runDeliveryAction(actionKey, async (context) => {
+      if (mode === "edit") {
+        await api.updateDeliveryOrder(orderId, payload);
+      } else {
+        await api.createDeliveryOrder(payload);
+      }
+      if (isDeliveryMutationCurrent(context)) {
+        state.deliveryOrderDetailId = "";
+        state.deliveryOrderFormMode = "";
+        state.deliveryOrderForm = {};
+        state.deliveryOrderModalError = "";
+        await loadDeliveryRoute(context.route);
+      }
+    }, (error) => {
+      state.deliveryOrderModalError = `Unable to save Delivery Order. ${error.message}`;
+    });
+  }
+
+  async function cancelActiveDeliveryOrder(orderId) {
+    if (!confirmAction("Cancel this Delivery Order? It will disappear from the active Task Pool.")) {
+      return;
+    }
+    await runDeliveryAction(`delivery-order-cancel:${orderId}`, async (context) => {
+      await api.cancelDeliveryOrder(orderId);
+      if (isDeliveryMutationCurrent(context)) {
+        state.deliveryOrderDetailId = "";
+        state.deliveryOrderFormMode = "";
+        state.deliveryOrderForm = {};
+        state.deliveryOrderModalError = "";
+        await loadDeliveryRoute(context.route);
+      }
+    }, (error) => {
+      state.deliveryOrderModalError = `Unable to cancel Delivery Order. ${error.message}`;
+    });
+  }
+
+  function openDeliveryAttacheImport() {
+    state.deliveryAttacheImportState = {
+      isOpen: true,
+      isPreviewing: false,
+      isCommitting: false,
+      files: [],
+      rows: [],
+      error: "",
+      success: "",
+    };
+    renderWorkspace();
+  }
+
+  function closeDeliveryAttacheImport() {
+    state.deliveryAttacheImportState = {
+      isOpen: false,
+      isPreviewing: false,
+      isCommitting: false,
+      files: [],
+      rows: [],
+      error: "",
+      success: "",
+    };
+    renderWorkspace();
+  }
+
+  function updateDeliveryAttacheImportFiles(files) {
+    state.deliveryAttacheImportState = {
+      ...state.deliveryAttacheImportState,
+      files: Array.from(files || []),
+      error: "",
+      success: "",
+    };
+    renderWorkspace();
+  }
+
+  async function previewDeliveryAttacheImport() {
+    const importState = state.deliveryAttacheImportState || {};
+    if (importState.isPreviewing || !(importState.files || []).length) {
+      return;
+    }
+    state.deliveryAttacheImportState = {
+      ...importState,
+      isPreviewing: true,
+      error: "",
+      success: "",
+    };
+    renderWorkspace();
+    try {
+      const response = await api.previewDeliveryAttacheInvoices(importState.files);
+      state.deliveryAttacheImportState = {
+        ...state.deliveryAttacheImportState,
+        rows: (response.rows || []).map((row) => ({
+          ...row,
+          selected: Boolean(row.selected && row.importable && !row.is_duplicate),
+        })),
+      };
+    } catch (error) {
+      state.deliveryAttacheImportState = {
+        ...state.deliveryAttacheImportState,
+        error: `Unable to preview Attache invoices. ${error.message}`,
+      };
+    } finally {
+      state.deliveryAttacheImportState = {
+        ...state.deliveryAttacheImportState,
+        isPreviewing: false,
+      };
+      renderWorkspace();
+    }
+  }
+
+  function updateDeliveryAttacheImportRow(rowId, field, value) {
+    const current = state.deliveryAttacheImportState || {};
+    state.deliveryAttacheImportState = {
+      ...current,
+      rows: (current.rows || []).map((row) =>
+        row.row_id === rowId ? { ...row, [field]: value } : row,
+      ),
+    };
+  }
+
+  function updateDeliveryAttacheImportProductLine(rowId, lineIndex, field, value) {
+    const current = state.deliveryAttacheImportState || {};
+    state.deliveryAttacheImportState = {
+      ...current,
+      rows: (current.rows || []).map((row) => {
+        if (row.row_id !== rowId) {
+          return row;
+        }
+        const productLines = [...(row.product_lines || [])];
+        productLines[lineIndex] = {
+          ...(productLines[lineIndex] || { product_name: "", quantity: 0, unit: "PALLETS" }),
+          [field]: field === "quantity" ? Number(value || 0) : value,
+        };
+        return { ...row, product_lines: productLines };
+      }),
+    };
+  }
+
+  function addDeliveryAttacheImportProductLine(rowId) {
+    const current = state.deliveryAttacheImportState || {};
+    state.deliveryAttacheImportState = {
+      ...current,
+      rows: (current.rows || []).map((row) => {
+        if (row.row_id !== rowId) {
+          return row;
+        }
+        return {
+          ...row,
+          product_lines: [
+            ...(row.product_lines || []),
+            { product_name: "", quantity: 0, unit: "PALLETS" },
+          ],
+        };
+      }),
+    };
+    renderWorkspace();
+  }
+
+  function removeDeliveryAttacheImportProductLine(rowId, lineIndex) {
+    const current = state.deliveryAttacheImportState || {};
+    state.deliveryAttacheImportState = {
+      ...current,
+      rows: (current.rows || []).map((row) => {
+        if (row.row_id !== rowId) {
+          return row;
+        }
+        return {
+          ...row,
+          product_lines: (row.product_lines || []).filter(
+            (_line, index) => index !== lineIndex,
+          ),
+        };
+      }),
+    };
+    renderWorkspace();
+  }
+
+  function toggleDeliveryAttacheImportRow(rowId, selected) {
+    const current = state.deliveryAttacheImportState || {};
+    state.deliveryAttacheImportState = {
+      ...current,
+      rows: (current.rows || []).map((row) => {
+        if (row.row_id !== rowId || row.is_duplicate || !row.importable) {
+          return row;
+        }
+        return { ...row, selected };
+      }),
+    };
+    renderWorkspace();
+  }
+
+  async function commitDeliveryAttacheImport() {
+    const importState = state.deliveryAttacheImportState || {};
+    const selectedRows = (importState.rows || []).filter((row) => row.selected);
+    if (!selectedRows.length) {
+      state.deliveryAttacheImportState = {
+        ...importState,
+        error: "Select at least one non-duplicate invoice to import.",
+      };
+      renderWorkspace();
+      return;
+    }
+    await runDeliveryAction("delivery-attache-import", async (context) => {
+      state.deliveryAttacheImportState = {
+        ...state.deliveryAttacheImportState,
+        isCommitting: true,
+        error: "",
+        success: "",
+      };
+      renderWorkspace();
+      const response = await api.commitDeliveryAttacheInvoices({
+        rows: state.deliveryAttacheImportState.rows || [],
+      });
+      if (isDeliveryMutationCurrent(context)) {
+        state.deliveryAttacheImportState = {
+          ...state.deliveryAttacheImportState,
+          isCommitting: false,
+          rows: (state.deliveryAttacheImportState.rows || []).map((row) =>
+            row.selected ? { ...row, selected: false } : row,
+          ),
+          success:
+            `Imported ${response.imported_count || 0} Delivery Orders. `
+            + `${response.skipped_count || 0} rows skipped.`,
+        };
+        await loadDeliveryRoute(context.route);
+      }
+    }, (error) => {
+      state.deliveryAttacheImportState = {
+        ...state.deliveryAttacheImportState,
+        isCommitting: false,
+        error: `Unable to import Attache invoices. ${error.message}`,
+      };
+    });
+  }
+
+  async function openDeliverySpecifications() {
+    state.deliverySpecificationModalOpen = true;
+    state.deliverySpecificationError = "";
+    state.deliveryDriverForm = null;
+    state.deliveryDriverEditingId = "";
+    state.deliveryVehicleForm = null;
+    state.deliveryVehicleEditingId = "";
+    renderWorkspace();
+    await refreshDeliverySpecifications();
+  }
+
+  function closeDeliverySpecifications() {
+    state.deliverySpecificationModalOpen = false;
+    state.deliverySpecificationError = "";
+    state.deliverySpecificationBusyKey = "";
+    state.deliveryDriverForm = null;
+    state.deliveryDriverEditingId = "";
+    state.deliveryVehicleForm = null;
+    state.deliveryVehicleEditingId = "";
+    renderWorkspace();
+  }
+
+  function setDeliverySpecificationTab(tab) {
+    state.deliverySpecificationTab = tab === "vehicles" ? "vehicles" : "drivers";
+    state.deliverySpecificationError = "";
+    renderWorkspace();
+  }
+
+  async function refreshDeliverySpecifications() {
+    try {
+      state.deliverySpecifications = await api.getDeliverySpecifications();
+    } catch (error) {
+      if (await handleWorkspaceMigrationGuard(error)) {
+        return;
+      }
+      state.deliverySpecificationError =
+        `Unable to load Delivery specifications. ${error.message}`;
+    } finally {
+      renderWorkspace();
+    }
+  }
+
+  function startAddDeliveryDriver() {
+    state.deliverySpecificationTab = "drivers";
+    state.deliveryDriverEditingId = "";
+    state.deliveryDriverForm = defaultDeliveryDriverForm();
+    state.deliverySpecificationError = "";
+    renderWorkspace();
+  }
+
+  function startEditDeliveryDriver(driverId) {
+    const driver = (state.deliverySpecifications?.drivers || state.deliveryBoard?.drivers || [])
+      .find((item) => item.driver_id === driverId);
+    state.deliverySpecificationTab = "drivers";
+    state.deliveryDriverEditingId = driverId;
+    state.deliveryDriverForm = defaultDeliveryDriverForm(driver || {});
+    state.deliverySpecificationError = "";
+    renderWorkspace();
+  }
+
+  function cancelDeliveryDriverForm() {
+    state.deliveryDriverEditingId = "";
+    state.deliveryDriverForm = null;
+    renderWorkspace();
+  }
+
+  function updateDeliveryDriverForm(field, value) {
+    state.deliveryDriverForm = {
+      ...(state.deliveryDriverForm || {}),
+      [field]: value,
+    };
+  }
+
+  async function saveDeliveryDriver() {
+    const payload = deliveryDriverPayload(state.deliveryDriverForm || {});
+    const editingId = state.deliveryDriverEditingId;
+    await runDeliveryAction(
+      editingId ? `delivery-driver-edit:${editingId}` : "delivery-driver-add",
+      async (context) => {
+        if (editingId) {
+          await api.updateDeliveryDriver(editingId, payload);
+        } else {
+          await api.createDeliveryDriver(payload);
+        }
+        if (isDeliveryMutationCurrent(context)) {
+          state.deliveryDriverEditingId = "";
+          state.deliveryDriverForm = null;
+          await refreshDeliverySpecifications();
+          await loadDeliveryRoute(context.route);
+        }
+      },
+      (error) => {
+        state.deliverySpecificationError = `Unable to save Driver. ${error.message}`;
+      },
+    );
+  }
+
+  async function deleteDeliveryDriver(driverId) {
+    if (!confirmAction("Delete this Delivery driver?")) {
+      return;
+    }
+    await runDeliveryAction(`delivery-driver-delete:${driverId}`, async (context) => {
+      await api.deleteDeliveryDriver(driverId);
+      if (isDeliveryMutationCurrent(context)) {
+        await refreshDeliverySpecifications();
+        await loadDeliveryRoute(context.route);
+      }
+    }, (error) => {
+      state.deliverySpecificationError = `Unable to delete Driver. ${error.message}`;
+    });
+  }
+
+  async function toggleDeliveryDriverAvailability(driverId, isAvailable) {
+    const driver = (state.deliverySpecifications?.drivers || []).find(
+      (item) => item.driver_id === driverId,
+    );
+    if (!driver) {
+      return;
+    }
+    await runDeliveryAction(`delivery-driver-toggle:${driverId}`, async (context) => {
+      await api.updateDeliveryDriver(driverId, {
+        ...defaultDeliveryDriverForm(driver),
+        is_available: isAvailable,
+      });
+      if (isDeliveryMutationCurrent(context)) {
+        await refreshDeliverySpecifications();
+        await loadDeliveryRoute(context.route);
+      }
+    }, (error) => {
+      state.deliverySpecificationError =
+        `Unable to update Driver availability. ${error.message}`;
+    });
+  }
+
+  function startAddDeliveryVehicle() {
+    state.deliverySpecificationTab = "vehicles";
+    state.deliveryVehicleEditingId = "";
+    state.deliveryVehicleForm = defaultDeliveryVehicleForm();
+    state.deliverySpecificationError = "";
+    renderWorkspace();
+  }
+
+  function startEditDeliveryVehicle(vehicleId) {
+    const vehicle = (state.deliverySpecifications?.vehicles || state.deliveryBoard?.vehicles || [])
+      .find((item) => item.vehicle_id === vehicleId);
+    state.deliverySpecificationTab = "vehicles";
+    state.deliveryVehicleEditingId = vehicleId;
+    state.deliveryVehicleForm = defaultDeliveryVehicleForm(vehicle || {});
+    state.deliverySpecificationError = "";
+    renderWorkspace();
+  }
+
+  function cancelDeliveryVehicleForm() {
+    state.deliveryVehicleEditingId = "";
+    state.deliveryVehicleForm = null;
+    renderWorkspace();
+  }
+
+  function updateDeliveryVehicleForm(field, value) {
+    state.deliveryVehicleForm = {
+      ...(state.deliveryVehicleForm || {}),
+      [field]: value,
+    };
+  }
+
+  async function saveDeliveryVehicle() {
+    const payload = deliveryVehiclePayload(state.deliveryVehicleForm || {});
+    const editingId = state.deliveryVehicleEditingId;
+    await runDeliveryAction(
+      editingId ? `delivery-vehicle-edit:${editingId}` : "delivery-vehicle-add",
+      async (context) => {
+        if (editingId) {
+          await api.updateDeliveryVehicle(editingId, payload);
+        } else {
+          await api.createDeliveryVehicle(payload);
+        }
+        if (isDeliveryMutationCurrent(context)) {
+          state.deliveryVehicleEditingId = "";
+          state.deliveryVehicleForm = null;
+          await refreshDeliverySpecifications();
+          await loadDeliveryRoute(context.route);
+        }
+      },
+      (error) => {
+        state.deliverySpecificationError = `Unable to save Vehicle. ${error.message}`;
+      },
+    );
+  }
+
+  async function deleteDeliveryVehicle(vehicleId) {
+    if (!confirmAction("Delete this Delivery vehicle?")) {
+      return;
+    }
+    await runDeliveryAction(`delivery-vehicle-delete:${vehicleId}`, async (context) => {
+      await api.deleteDeliveryVehicle(vehicleId);
+      if (isDeliveryMutationCurrent(context)) {
+        await refreshDeliverySpecifications();
+        await loadDeliveryRoute(context.route);
+      }
+    }, (error) => {
+      state.deliverySpecificationError = `Unable to delete Vehicle. ${error.message}`;
+    });
+  }
+
+  async function toggleDeliveryVehicleAvailability(vehicleId, isAvailable) {
+    const vehicle = (state.deliverySpecifications?.vehicles || []).find(
+      (item) => item.vehicle_id === vehicleId,
+    );
+    if (!vehicle) {
+      return;
+    }
+    await runDeliveryAction(`delivery-vehicle-toggle:${vehicleId}`, async (context) => {
+      await api.updateDeliveryVehicle(vehicleId, {
+        ...defaultDeliveryVehicleForm(vehicle),
+        is_available: isAvailable,
+      });
+      if (isDeliveryMutationCurrent(context)) {
+        await refreshDeliverySpecifications();
+        await loadDeliveryRoute(context.route);
+      }
+    }, (error) => {
+      state.deliverySpecificationError =
+        `Unable to update Vehicle availability. ${error.message}`;
+    });
   }
 
   function updateDeliveryAssignmentDraft(orderId, field, value) {
@@ -614,7 +1225,7 @@ export function createWorkspaceActions({
     });
   }
 
-  async function runDeliveryAction(actionKey, callback) {
+  async function runDeliveryAction(actionKey, callback, onError = null) {
     const context = captureMutationContext();
     const token = nextActionToken();
     state.deliveryBusyActionKeys = state.deliveryBusyActionKeys || {};
@@ -628,7 +1239,11 @@ export function createWorkspaceActions({
         return;
       }
       if (isDeliveryMutationCurrent(context)) {
-        state.deliveryActionError = error.message;
+        if (typeof onError === "function") {
+          onError(error);
+        } else {
+          state.deliveryActionError = error.message;
+        }
       }
     } finally {
       if (clearBusyAction(state.deliveryBusyActionKeys, actionKey, token)) {
@@ -672,6 +1287,12 @@ export function createWorkspaceActions({
   function findDeliveryAssignment(orderId) {
     return (state.deliveryBoard?.assignments || []).find(
       (assignment) => assignment.task_id === orderId,
+    );
+  }
+
+  function findDeliveryOrder(orderId) {
+    return (state.deliveryBoard?.orders || []).find(
+      (order) => order.order_id === orderId,
     );
   }
 
@@ -739,6 +1360,26 @@ export function createWorkspaceActions({
     state.deliveryAssignmentDrafts = {};
     state.deliveryTripAddOrderDrafts = {};
     state.deliveryVehicleDrafts = {};
+    state.deliveryOrderDetailId = "";
+    state.deliveryOrderForm = {};
+    state.deliveryOrderFormMode = "";
+    state.deliveryOrderModalError = "";
+    state.deliveryAttacheImportState = {
+      isOpen: false,
+      isPreviewing: false,
+      isCommitting: false,
+      files: [],
+      rows: [],
+      error: "",
+      success: "",
+    };
+    state.deliverySpecificationModalOpen = false;
+    state.deliveryDriverForm = null;
+    state.deliveryDriverEditingId = "";
+    state.deliveryVehicleForm = null;
+    state.deliveryVehicleEditingId = "";
+    state.deliverySpecificationError = "";
+    state.deliverySpecificationBusyKey = "";
     state.opshopAssignmentDrafts = {};
     state.countrysideRouteGroupDrafts = {};
     state.deliveryActionError = "";
@@ -805,31 +1446,179 @@ export function createWorkspaceActions({
   }
 
   return {
+    addDeliveryAttacheImportProductLine,
+    addDeliveryOrderProductLine,
+    cancelActiveDeliveryOrder,
+    cancelDeliveryDriverForm,
     applyDeliveryOrderAssignment,
     applyDeliveryVehicleAssignment,
     addDeliveryOrderToTrip,
     applyOpShopAssignmentChanges,
     assignCountrysideRouteGroup,
     cancelDeliveryRunSheet,
+    cancelDeliveryOrderEdit,
+    cancelDeliveryVehicleForm,
+    clearDeliveryTaskPoolFilters,
     cancelOpShopPickupCollection,
     clearDeliveryVehicleAssignment,
+    closeDeliveryAttacheImport,
+    closeDeliveryOrderModal,
+    closeDeliverySpecifications,
+    commitDeliveryAttacheImport,
+    deleteDeliveryDriver,
+    deleteDeliveryVehicle,
     exportDeliveryRunSheet,
     exportOpShopPickupCollection,
     generateDeliveryRunSheet,
     generateOpShopPickupCollection,
     loadWorkspaceRoute,
     moveDeliveryOrderToTrip,
+    openAddDeliveryOrder,
+    openDeliveryAttacheImport,
+    openDeliveryOrderDetail,
+    openDeliverySpecifications,
+    previewDeliveryAttacheImport,
+    removeDeliveryOrderProductLine,
+    removeDeliveryAttacheImportProductLine,
     saveDeliveryRunSheet,
+    saveDeliveryDriver,
+    saveDeliveryOrderForm,
+    saveDeliveryVehicle,
     saveOpShopPickupCollection,
+    setDeliverySpecificationTab,
+    startAddDeliveryDriver,
+    startAddDeliveryVehicle,
+    startEditDeliveryDriver,
+    startEditDeliveryOrder,
+    startEditDeliveryVehicle,
+    toggleDeliveryAttacheImportRow,
+    toggleDeliveryDriverAvailability,
+    toggleDeliveryVehicleAvailability,
     unassignDeliveryOrder,
     unassignOpShopPickup,
     updateCountrysideRouteGroupDraft,
     updateDeliveryAssignmentDraft,
+    updateDeliveryAttacheImportFiles,
+    updateDeliveryAttacheImportProductLine,
+    updateDeliveryAttacheImportRow,
+    updateDeliveryDriverForm,
+    updateDeliveryOrderForm,
+    updateDeliveryOrderProductLine,
+    updateDeliveryTaskPoolFilter,
     updateDeliveryTripAddOrderDraft,
     updateDeliveryTripSummaryDate,
     updateDeliveryVehicleDraft,
+    updateDeliveryVehicleForm,
     updateDispatchDate,
     updateOpShopAssignmentDraft,
+  };
+}
+
+
+function defaultDeliveryOrderForm(order = {}) {
+  return {
+    invoice_number: order.invoice_number || "",
+    order_no: order.order_no || "",
+    company_name: order.company_name || "",
+    phone: order.phone || "",
+    delivery_address: order.delivery_address || "",
+    suburb: order.suburb || "",
+    postcode: order.postcode || "",
+    delivery_date: order.delivery_date || "",
+    start_time: order.start_time || "",
+    end_time: order.end_time || "",
+    zone: order.zone || "",
+    urgency: order.urgency || "Normal",
+    preferred_driver_id: order.preferred_driver_id || "",
+    pallet_quantity: String(order.pallet_quantity ?? 0),
+    loose_bags_quantity: String(order.loose_bags_quantity ?? 0),
+    note: order.note || "",
+    product_lines: (order.product_lines || []).map((line) => ({
+      product_name: line.product_name || "",
+      quantity: Number(line.quantity || 0),
+      unit: line.unit || "PALLETS",
+    })),
+  };
+}
+
+
+function deliveryOrderFormFromOrder(order) {
+  return defaultDeliveryOrderForm(order);
+}
+
+
+function deliveryOrderPayload(form) {
+  return {
+    invoice_number: form.invoice_number || null,
+    order_no: form.order_no || null,
+    company_name: form.company_name || "",
+    phone: form.phone || null,
+    delivery_address: form.delivery_address || "",
+    suburb: form.suburb || "",
+    postcode: form.postcode || "",
+    delivery_date: form.delivery_date || "",
+    start_time: form.start_time || null,
+    end_time: form.end_time || null,
+    zone: form.zone || "",
+    urgency: form.urgency || "Normal",
+    preferred_driver_id: form.preferred_driver_id || null,
+    pallet_quantity: Number(form.pallet_quantity || 0),
+    loose_bags_quantity: Number(form.loose_bags_quantity || 0),
+    note: form.note || null,
+    product_lines: (form.product_lines || []).map((line) => ({
+      product_name: line.product_name || "",
+      quantity: Number(line.quantity || 0),
+      unit: line.unit || "PALLETS",
+    })),
+  };
+}
+
+
+function defaultDeliveryDriverForm(driver = {}) {
+  return {
+    name: driver.name || "",
+    license_no: driver.license_no || "",
+    email: driver.email || "",
+    phone_number: driver.phone_number || "",
+    start_time: driver.start_time || "",
+    end_time: driver.end_time || "",
+    is_available: driver.is_available !== false,
+    pallet_only: Boolean(driver.pallet_only),
+    preferred_zone: driver.preferred_zone || "",
+  };
+}
+
+
+function deliveryDriverPayload(form) {
+  return {
+    ...form,
+    is_available: form.is_available !== false,
+    pallet_only: Boolean(form.pallet_only),
+  };
+}
+
+
+function defaultDeliveryVehicleForm(vehicle = {}) {
+  return {
+    rego: vehicle.rego || "",
+    type: vehicle.type || "",
+    is_available: vehicle.is_available !== false,
+    pallet_capacity: String(vehicle.pallet_capacity ?? 0),
+    tub_capacity: String(vehicle.tub_capacity ?? 0),
+    trolley_capacity: String(vehicle.trolley_capacity ?? 0),
+    stillage_capacity: String(vehicle.stillage_capacity ?? 0),
+  };
+}
+
+
+function deliveryVehiclePayload(form) {
+  return {
+    ...form,
+    is_available: form.is_available !== false,
+    pallet_capacity: Number(form.pallet_capacity || 0),
+    tub_capacity: Number(form.tub_capacity || 0),
+    trolley_capacity: Number(form.trolley_capacity || 0),
+    stillage_capacity: Number(form.stillage_capacity || 0),
   };
 }
 

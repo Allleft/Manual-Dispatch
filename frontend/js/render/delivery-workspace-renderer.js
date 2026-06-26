@@ -1,4 +1,4 @@
-﻿import { createIcon } from "../utils/icon-utils.js";
+import { createIcon } from "../utils/icon-utils.js";
 import {
   formatOptional,
   formatPluralLoadUnit,
@@ -31,7 +31,7 @@ export function renderDeliveryWorkspace(
       content.append(createStatus(state.deliveryActionError, "error"));
     }
     if (state.workspaceRoute === "delivery/task-pool") {
-      content.append(createDeliveryTaskPool(state.deliveryBoard));
+      content.append(createDeliveryTaskPool(state.deliveryBoard, state, actions));
     } else if (state.workspaceRoute === "delivery/trip-summary") {
       content.append(createDeliveryTripSummary(state.deliveryBoard, state, actions));
     } else {
@@ -41,6 +41,11 @@ export function renderDeliveryWorkspace(
   }
 
   page.append(content);
+  page.append(
+    createDeliveryOrderModal(state, actions),
+    createDeliveryAttacheImportModal(state, actions),
+    createDeliverySpecificationModal(state, actions),
+  );
   root.append(page);
 }
 
@@ -105,7 +110,7 @@ function createTab(tab, activeRoute) {
 }
 
 
-function createDeliveryTaskPool(board) {
+function createDeliveryTaskPool(board, state, actions) {
   if (!board) {
     return createEmptyState("No Delivery workspace data loaded.", "document");
   }
@@ -115,6 +120,7 @@ function createDeliveryTaskPool(board) {
   const unassignedOrders = (board.orders || []).filter(
     (order) => !assignments.has(order.order_id),
   );
+  const filteredOrders = filterDeliveryTaskPoolOrders(unassignedOrders, state.deliveryTaskPoolFilters);
   const totalPallets = unassignedOrders.reduce(
     (total, order) => total + Number(order.pallet_quantity || 0),
     0,
@@ -132,6 +138,9 @@ function createDeliveryTaskPool(board) {
     ]),
   );
 
+  wrapper.append(createDeliveryTaskPoolActions(actions, state));
+  wrapper.append(createDeliveryTaskPoolFilters(unassignedOrders, filteredOrders, state, actions));
+
   const ordersSection = createSectionHeading(
     "Active Unassigned Delivery Orders",
     "Assign these orders from Trip Summary driver cards.",
@@ -140,9 +149,11 @@ function createDeliveryTaskPool(board) {
   orderGrid.className = "workspace-card-grid workspace-order-grid";
   if (!unassignedOrders.length) {
     orderGrid.append(createEmptyState("No unassigned Delivery Orders are available.", "document"));
+  } else if (!filteredOrders.length) {
+    orderGrid.append(createEmptyState("No unassigned Delivery Orders match the filters.", "document"));
   } else {
-    unassignedOrders.forEach((order) => {
-      orderGrid.append(createOrderCard(order));
+    filteredOrders.forEach((order) => {
+      orderGrid.append(createOrderCard(order, actions));
     });
   }
   wrapper.append(ordersSection, orderGrid);
@@ -150,9 +161,72 @@ function createDeliveryTaskPool(board) {
 }
 
 
-function createOrderCard(order) {
+function createDeliveryTaskPoolActions(actions, state) {
+  const row = document.createElement("div");
+  row.className = "workspace-action-row workspace-task-pool-actions";
+  row.append(
+    createActionButton("Add Order", actions.openAddDeliveryOrder, {
+      primary: true,
+      disabled: state.isDeliveryWorkspaceLoading,
+    }),
+    createActionButton("Import Attache Invoices", actions.openDeliveryAttacheImport, {
+      disabled: state.isDeliveryWorkspaceLoading,
+    }),
+    createActionButton("Driver & Vehicle Specification", actions.openDeliverySpecifications, {
+      disabled: state.isDeliveryWorkspaceLoading,
+    }),
+  );
+  return row;
+}
+
+
+function createDeliveryTaskPoolFilters(unassignedOrders, filteredOrders, state, actions) {
+  const panel = document.createElement("section");
+  panel.className = "workspace-context-panel workspace-delivery-filter-bar";
+  const filters = state.deliveryTaskPoolFilters || {};
+  const search = createTextInput(
+    "Search",
+    filters.search || "",
+    "Invoice, order #, company, phone, address, suburb, postcode, product, notes",
+    (value) => actions.updateDeliveryTaskPoolFilter("search", value),
+  );
+  const date = createTextInput(
+    "Delivery Date",
+    filters.delivery_date || "",
+    "",
+    (value) => actions.updateDeliveryTaskPoolFilter("delivery_date", value),
+    { type: "date" },
+  );
+  const urgency = createSelect(
+    "Urgency",
+    filters.urgency || "All",
+    ["All", "Normal", "Urgent"].map((item) => ({ value: item, label: item })),
+    (value) => actions.updateDeliveryTaskPoolFilter("urgency", value),
+  );
+  const clear = createActionButton("Clear filters", actions.clearDeliveryTaskPoolFilters, {
+    disabled: !hasDeliveryTaskPoolFilters(filters),
+  });
+  const count = document.createElement("span");
+  count.className = "workspace-filter-count";
+  count.textContent = `${filteredOrders.length} of ${unassignedOrders.length} visible`;
+  panel.append(search, date, urgency, clear, count);
+  return panel;
+}
+
+
+function createOrderCard(order, actions) {
   const card = document.createElement("article");
   card.className = "workspace-record-card workspace-order-card";
+  card.tabIndex = 0;
+  card.setAttribute("role", "button");
+  card.setAttribute("aria-label", `View Delivery Order ${formatOptional(order.invoice_number, order.order_id)}`);
+  card.addEventListener("click", () => actions.openDeliveryOrderDetail(order.order_id));
+  card.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      actions.openDeliveryOrderDetail(order.order_id);
+    }
+  });
   const top = document.createElement("div");
   top.className = "workspace-record-card-top";
   const identity = document.createElement("div");
@@ -177,6 +251,54 @@ function createOrderCard(order) {
   const products = createProductLines(order);
   card.append(top, facts, products);
   return card;
+}
+
+
+function filterDeliveryTaskPoolOrders(orders, filters = {}) {
+  const search = normalizeSearch(filters.search || "");
+  const deliveryDate = filters.delivery_date || "";
+  const urgency = filters.urgency || "All";
+  return (orders || []).filter((order) => {
+    if (deliveryDate && order.delivery_date !== deliveryDate) {
+      return false;
+    }
+    if (urgency && urgency !== "All" && order.urgency !== urgency) {
+      return false;
+    }
+    if (!search) {
+      return true;
+    }
+    return deliveryOrderSearchText(order).includes(search);
+  });
+}
+
+
+function deliveryOrderSearchText(order) {
+  return normalizeSearch([
+    order.invoice_number,
+    order.order_no,
+    order.company_name,
+    order.phone,
+    order.delivery_address,
+    order.suburb,
+    order.postcode,
+    order.note,
+    ...(order.product_lines || []).map((line) => line.product_name),
+  ].filter(Boolean).join(" "));
+}
+
+
+function normalizeSearch(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+
+function hasDeliveryTaskPoolFilters(filters = {}) {
+  return Boolean(
+    (filters.search || "").trim()
+    || filters.delivery_date
+    || (filters.urgency && filters.urgency !== "All")
+  );
 }
 
 
@@ -563,6 +685,390 @@ function createRunSheetPreview(runSheet) {
 }
 
 
+function createDeliveryOrderModal(state, actions) {
+  const formMode = state.deliveryOrderFormMode;
+  const order = (state.deliveryBoard?.orders || []).find(
+    (item) => item.order_id === state.deliveryOrderDetailId,
+  );
+  if (!formMode && !order) {
+    return document.createDocumentFragment();
+  }
+
+  const modal = createWorkspaceModal(
+    formMode === "add" ? "Add Delivery Order" : "Delivery Order Detail",
+    formMode === "add" ? actions.closeDeliveryOrderModal : actions.closeDeliveryOrderModal,
+  );
+  const body = modal.querySelector(".workspace-modal-body");
+  if (state.deliveryOrderModalError) {
+    body.append(createStatus(state.deliveryOrderModalError, "error"));
+  }
+
+  if (formMode) {
+    body.append(createDeliveryOrderForm(state, actions, formMode));
+  } else {
+    const locked = isOrderCapturedByRunSheet(order, state.deliveryRunSheets);
+    body.append(
+      createDeliveryOrderReadOnly(order, state),
+      createDeliveryOrderActions(order, locked, state, actions),
+    );
+  }
+  return modal;
+}
+
+
+function createDeliveryOrderReadOnly(order, state) {
+  const section = document.createElement("section");
+  section.className = "workspace-modal-section";
+  section.append(createSectionHeading("General Information", "Delivery Order details from the scoped Delivery board."));
+  const facts = document.createElement("dl");
+  facts.className = "workspace-fact-grid workspace-modal-fact-grid";
+  appendFact(facts, "Invoice Number", order.invoice_number);
+  appendFact(facts, "Order Number", order.order_no);
+  appendFact(facts, "Company Name", order.company_name);
+  appendFact(facts, "Phone", order.phone);
+  appendFact(facts, "Delivery Address", order.delivery_address);
+  appendFact(facts, "Suburb", order.suburb);
+  appendFact(facts, "Postcode", order.postcode);
+  appendFact(facts, "Delivery Date", order.delivery_date);
+  appendFact(facts, "Time Window", [order.start_time, order.end_time].filter(Boolean).join(" - "));
+  appendFact(facts, "Zone", order.zone);
+  appendFact(facts, "Urgency", order.urgency);
+  appendFact(facts, "Preferred Driver", driverName(state.deliveryBoard, order.preferred_driver_id));
+  appendFact(facts, "Notes", order.note);
+  section.append(facts, createProductLines(order), createLoadSummary(order));
+  if (isOrderCapturedByRunSheet(order, state.deliveryRunSheets)) {
+    section.append(createStatus("This Delivery Order is captured by a Generated or Saved Delivery Run Sheet. Edit and Cancel are locked.", "loading"));
+  }
+  return section;
+}
+
+
+function createDeliveryOrderActions(order, locked, state, actions) {
+  const row = document.createElement("div");
+  row.className = "workspace-action-row";
+  row.append(
+    createActionButton("Edit Order", () => actions.startEditDeliveryOrder(order.order_id), {
+      disabled: locked || isBusy(state, `delivery-order-edit:${order.order_id}`),
+      primary: true,
+    }),
+    createActionButton("Cancel Order", () => actions.cancelActiveDeliveryOrder(order.order_id), {
+      disabled: locked || isBusy(state, `delivery-order-cancel:${order.order_id}`),
+    }),
+  );
+  return row;
+}
+
+
+function createDeliveryOrderForm(state, actions, formMode) {
+  const form = document.createElement("form");
+  form.className = "workspace-modal-section workspace-order-form";
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    actions.saveDeliveryOrderForm();
+  });
+  const fields = document.createElement("div");
+  fields.className = "workspace-form-grid";
+  const formState = state.deliveryOrderForm || {};
+  [
+    ["Invoice Number", "invoice_number"],
+    ["Order Number", "order_no"],
+    ["Company Name", "company_name"],
+    ["Phone", "phone"],
+    ["Delivery Address", "delivery_address"],
+    ["Suburb", "suburb"],
+    ["Postcode", "postcode"],
+    ["Delivery Date", "delivery_date", "date"],
+    ["Start Time", "start_time", "time"],
+    ["End Time", "end_time", "time"],
+    ["Zone", "zone"],
+    ["Pallet Quantity", "pallet_quantity", "number"],
+    ["Loose Bags Quantity", "loose_bags_quantity", "number"],
+  ].forEach(([label, field, type]) => {
+    fields.append(createBoundInput(label, formState[field], (value) =>
+      actions.updateDeliveryOrderForm(field, value), { type: type || "text" }));
+  });
+  fields.append(createBoundSelect("Urgency", formState.urgency || "Normal", [
+    { value: "Normal", label: "Normal" },
+    { value: "Urgent", label: "Urgent" },
+  ], (value) => actions.updateDeliveryOrderForm("urgency", value)));
+  fields.append(createBoundSelect("Preferred Driver", formState.preferred_driver_id || "", [
+    { value: "", label: "No preferred driver" },
+    ...((state.deliveryBoard?.drivers || []).map((driver) => ({
+      value: driver.driver_id,
+      label: driver.name,
+    }))),
+  ], (value) => actions.updateDeliveryOrderForm("preferred_driver_id", value)));
+  fields.append(createBoundTextarea("Notes", formState.note || "", (value) =>
+    actions.updateDeliveryOrderForm("note", value)));
+  form.append(fields, createProductLineEditor(formState.product_lines || [], actions));
+  const row = document.createElement("div");
+  row.className = "workspace-action-row";
+  row.append(
+    createActionButton(formMode === "edit" ? "Save Order" : "Add Order", () => actions.saveDeliveryOrderForm(), {
+      disabled: isBusy(state, formMode === "edit"
+        ? `delivery-order-edit:${state.deliveryOrderDetailId}`
+        : "delivery-order-add"),
+      primary: true,
+    }),
+    createActionButton("Cancel editing", formMode === "edit"
+      ? actions.cancelDeliveryOrderEdit
+      : actions.closeDeliveryOrderModal),
+  );
+  form.append(row);
+  return form;
+}
+
+
+function createProductLineEditor(lines, actions) {
+  const section = document.createElement("section");
+  section.className = "workspace-product-line-editor";
+  const title = document.createElement("h4");
+  title.textContent = "Product Lines";
+  const list = document.createElement("div");
+  list.className = "workspace-product-line-list";
+  (lines || []).forEach((line, index) => {
+    const row = document.createElement("div");
+    row.className = "workspace-product-line-row";
+    row.append(
+      createBoundInput("Product Name", line.product_name || "", (value) =>
+        actions.updateDeliveryOrderProductLine(index, "product_name", value)),
+      createBoundInput("Quantity", line.quantity ?? 0, (value) =>
+        actions.updateDeliveryOrderProductLine(index, "quantity", value), { type: "number" }),
+      createBoundSelect("Unit", line.unit || "PALLETS", [
+        { value: "PALLETS", label: "PALLETS" },
+        { value: "BAGS", label: "BAGS" },
+        { value: "CARTONS", label: "CARTONS" },
+      ], (value) => actions.updateDeliveryOrderProductLine(index, "unit", value)),
+      createActionButton("Remove", () => actions.removeDeliveryOrderProductLine(index)),
+    );
+    list.append(row);
+  });
+  section.append(title, list, createActionButton("Add Product Line", actions.addDeliveryOrderProductLine));
+  return section;
+}
+
+
+function createDeliveryAttacheImportModal(state, actions) {
+  const importState = state.deliveryAttacheImportState || {};
+  if (!importState.isOpen) {
+    return document.createDocumentFragment();
+  }
+  const modal = createWorkspaceModal("Import Attache Invoices", actions.closeDeliveryAttacheImport);
+  const body = modal.querySelector(".workspace-modal-body");
+  const controls = document.createElement("section");
+  controls.className = "workspace-modal-section";
+  const fileInput = document.createElement("input");
+  fileInput.type = "file";
+  fileInput.accept = "application/pdf,.pdf";
+  fileInput.multiple = true;
+  fileInput.addEventListener("change", () => actions.updateDeliveryAttacheImportFiles(fileInput.files));
+  const selected = document.createElement("p");
+  selected.className = "workspace-muted";
+  selected.textContent = `${(importState.files || []).length} PDF file(s) selected`;
+  controls.append(fileInput, selected, createActionButton("Preview Import", actions.previewDeliveryAttacheImport, {
+    disabled: importState.isPreviewing || !(importState.files || []).length,
+    primary: true,
+  }));
+  body.append(controls);
+  if (importState.error) {
+    body.append(createStatus(importState.error, "error"));
+  }
+  if (importState.success) {
+    body.append(createStatus(importState.success, "loading"));
+  }
+  body.append(createDeliveryAttachePreview(importState, actions));
+  return modal;
+}
+
+
+function createDeliveryAttachePreview(importState, actions) {
+  const section = document.createElement("section");
+  section.className = "workspace-modal-section";
+  if (!(importState.rows || []).length) {
+    section.append(createEmptyState("No invoice previews yet.", "document"));
+    return section;
+  }
+  const table = document.createElement("table");
+  table.className = "workspace-table workspace-attache-table";
+  const header = document.createElement("tr");
+  [
+    "Import",
+    "Invoice",
+    "Order",
+    "Customer",
+    "Phone",
+    "Address",
+    "Suburb",
+    "Postcode",
+    "Date",
+    "Start",
+    "End",
+    "Urgency",
+    "Pallets",
+    "Bags",
+    "Notes",
+    "Product Lines",
+    "Warnings",
+  ].forEach((label) => {
+    const th = document.createElement("th");
+    th.textContent = label;
+    header.append(th);
+  });
+  const thead = document.createElement("thead");
+  thead.append(header);
+  const tbody = document.createElement("tbody");
+  (importState.rows || []).forEach((row) => {
+    const tr = document.createElement("tr");
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = Boolean(row.selected);
+    checkbox.disabled = importState.isCommitting || row.is_duplicate || !row.importable;
+    checkbox.addEventListener("change", () => actions.toggleDeliveryAttacheImportRow(row.row_id, checkbox.checked));
+    tr.append(createTableCell(checkbox));
+    tr.append(createTableCell(createInlineInput(row.invoice_number, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "invoice_number", value))));
+    tr.append(createTableCell(createInlineInput(row.order_no, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "order_no", value))));
+    tr.append(createTableCell(createInlineInput(row.company_name, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "company_name", value))));
+    tr.append(createTableCell(createInlineInput(row.phone, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "phone", value))));
+    tr.append(createTableCell(createInlineInput(row.delivery_address, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "delivery_address", value))));
+    tr.append(createTableCell(createInlineInput(row.suburb, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "suburb", value))));
+    tr.append(createTableCell(createInlineInput(row.postcode, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "postcode", value))));
+    tr.append(createTableCell(createInlineInput(row.delivery_date, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "delivery_date", value), "date")));
+    tr.append(createTableCell(createInlineInput(row.start_time, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "start_time", value), "time")));
+    tr.append(createTableCell(createInlineInput(row.end_time, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "end_time", value), "time")));
+    tr.append(createTableCell(createInlineSelect(row.urgency || "Normal", [
+      { value: "Normal", label: "Normal" },
+      { value: "Urgent", label: "Urgent" },
+    ], (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "urgency", value))));
+    tr.append(createTableCell(createInlineInput(row.pallet_quantity, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "pallet_quantity", Number(value || 0)), "number")));
+    tr.append(createTableCell(createInlineInput(row.loose_bags_quantity, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "loose_bags_quantity", Number(value || 0)), "number")));
+    tr.append(createTableCell(createInlineTextarea(row.note, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "note", value))));
+    tr.append(createTableCell(createAttacheProductLineEditor(row, actions)));
+    tr.append(createTableCell((row.warnings || []).join("; ")));
+    tbody.append(tr);
+  });
+  table.append(thead, tbody);
+  section.append(table, createActionButton("Confirm Import", actions.commitDeliveryAttacheImport, {
+    disabled: importState.isCommitting || !(importState.rows || []).some((row) => row.selected),
+    primary: true,
+  }));
+  return section;
+}
+
+
+function createDeliverySpecificationModal(state, actions) {
+  if (!state.deliverySpecificationModalOpen) {
+    return document.createDocumentFragment();
+  }
+  const modal = createWorkspaceModal("Driver & Vehicle Specification", actions.closeDeliverySpecifications);
+  const body = modal.querySelector(".workspace-modal-body");
+  const tabs = document.createElement("div");
+  tabs.className = "workspace-action-row";
+  tabs.append(
+    createActionButton("Drivers", () => actions.setDeliverySpecificationTab("drivers"), {
+      primary: state.deliverySpecificationTab !== "vehicles",
+    }),
+    createActionButton("Vehicles", () => actions.setDeliverySpecificationTab("vehicles"), {
+      primary: state.deliverySpecificationTab === "vehicles",
+    }),
+  );
+  body.append(tabs);
+  if (state.deliverySpecificationError) {
+    body.append(createStatus(state.deliverySpecificationError, "error"));
+  }
+  body.append(
+    state.deliverySpecificationTab === "vehicles"
+      ? createVehicleSpecificationPanel(state, actions)
+      : createDriverSpecificationPanel(state, actions),
+  );
+  return modal;
+}
+
+
+function createDriverSpecificationPanel(state, actions) {
+  const section = document.createElement("section");
+  section.className = "workspace-modal-section";
+  section.append(createActionButton("Add Driver", actions.startAddDeliveryDriver, { primary: true }));
+  if (state.deliveryDriverForm) {
+    section.append(createDriverForm(state, actions));
+  }
+  const list = document.createElement("div");
+  list.className = "workspace-spec-list";
+  (state.deliverySpecifications?.drivers || []).forEach((driver) => {
+    const row = document.createElement("article");
+    row.className = "workspace-record-card";
+    row.append(
+      document.createTextNode(`${driver.driver_id} - ${driver.name} - ${driver.license_no || ""} - ${driver.email || ""} - ${driver.phone_number || ""}`),
+      createSpecAvailability(driver.is_available !== false, (checked) =>
+        actions.toggleDeliveryDriverAvailability(driver.driver_id, checked)),
+      createActionButton("Edit Driver", () => actions.startEditDeliveryDriver(driver.driver_id)),
+      createActionButton("Delete Driver", () => actions.deleteDeliveryDriver(driver.driver_id)),
+    );
+    list.append(row);
+  });
+  section.append(list);
+  return section;
+}
+
+
+function createVehicleSpecificationPanel(state, actions) {
+  const section = document.createElement("section");
+  section.className = "workspace-modal-section";
+  section.append(createActionButton("Add Vehicle", actions.startAddDeliveryVehicle, { primary: true }));
+  if (state.deliveryVehicleForm) {
+    section.append(createVehicleForm(state, actions));
+  }
+  const list = document.createElement("div");
+  list.className = "workspace-spec-list";
+  (state.deliverySpecifications?.vehicles || []).forEach((vehicle) => {
+    const row = document.createElement("article");
+    row.className = "workspace-record-card";
+    row.append(
+      document.createTextNode(`${vehicle.vehicle_id} - ${vehicle.rego} - ${vehicle.type || ""} - ${vehicle.pallet_capacity} pallets`),
+      createSpecAvailability(vehicle.is_available !== false, (checked) =>
+        actions.toggleDeliveryVehicleAvailability(vehicle.vehicle_id, checked)),
+      createActionButton("Edit Vehicle", () => actions.startEditDeliveryVehicle(vehicle.vehicle_id)),
+      createActionButton("Delete Vehicle", () => actions.deleteDeliveryVehicle(vehicle.vehicle_id)),
+    );
+    list.append(row);
+  });
+  section.append(list);
+  return section;
+}
+
+
+function createDriverForm(state, actions) {
+  const form = document.createElement("div");
+  form.className = "workspace-form-grid";
+  const item = state.deliveryDriverForm || {};
+  [["Name", "name"], ["License No", "license_no"], ["Email", "email"], ["Phone Number", "phone_number"], ["Start", "start_time", "time"], ["End", "end_time", "time"]].forEach(([label, field, type]) => {
+    form.append(createBoundInput(label, item[field], (value) => actions.updateDeliveryDriverForm(field, value), { type: type || "text" }));
+  });
+  form.append(
+    createBoundCheckbox("Available", item.is_available !== false, (value) => actions.updateDeliveryDriverForm("is_available", value)),
+    createBoundCheckbox("Pallet Only", Boolean(item.pallet_only), (value) => actions.updateDeliveryDriverForm("pallet_only", value)),
+    createActionButton("Save Driver", actions.saveDeliveryDriver, { primary: true }),
+    createActionButton("Cancel", actions.cancelDeliveryDriverForm),
+  );
+  return form;
+}
+
+
+function createVehicleForm(state, actions) {
+  const form = document.createElement("div");
+  form.className = "workspace-form-grid";
+  const item = state.deliveryVehicleForm || {};
+  [["Rego", "rego"], ["Type", "type"], ["Pallet Capacity", "pallet_capacity", "number"], ["Tub Capacity", "tub_capacity", "number"], ["Trolley Capacity", "trolley_capacity", "number"], ["Stillage Capacity", "stillage_capacity", "number"]].forEach(([label, field, type]) => {
+    form.append(createBoundInput(label, item[field], (value) => actions.updateDeliveryVehicleForm(field, value), { type: type || "text" }));
+  });
+  form.append(
+    createBoundCheckbox("Available", item.is_available !== false, (value) => actions.updateDeliveryVehicleForm("is_available", value)),
+    createActionButton("Save Vehicle", actions.saveDeliveryVehicle, { primary: true }),
+    createActionButton("Cancel", actions.cancelDeliveryVehicleForm),
+  );
+  return form;
+}
+
+
 function ordersForDeliveryDate(board, deliveryDate) {
   return (board.orders || []).filter((order) => order.delivery_date === deliveryDate);
 }
@@ -643,6 +1149,226 @@ function createSelect(labelText, value, options, onChange) {
   select.addEventListener("change", () => onChange(select.value));
   label.append(text, select);
   return label;
+}
+
+
+function createBoundInput(labelText, value, onInput, { type = "text" } = {}) {
+  const label = document.createElement("label");
+  label.className = "workspace-field";
+  const text = document.createElement("span");
+  text.textContent = labelText;
+  const input = document.createElement("input");
+  input.type = type;
+  if (type === "number") {
+    input.setAttribute("min", "0");
+  }
+  input.value = value ?? "";
+  input.addEventListener("input", () => onInput(input.value));
+  label.append(text, input);
+  return label;
+}
+
+
+function createBoundTextarea(labelText, value, onInput) {
+  const label = document.createElement("label");
+  label.className = "workspace-field workspace-field-wide";
+  const text = document.createElement("span");
+  text.textContent = labelText;
+  const input = document.createElement("textarea");
+  input.value = value ?? "";
+  input.addEventListener("input", () => onInput(input.value));
+  label.append(text, input);
+  return label;
+}
+
+
+function createBoundSelect(labelText, value, options, onChange) {
+  return createSelect(labelText, value, options, onChange);
+}
+
+
+function createBoundCheckbox(labelText, checked, onChange) {
+  const label = document.createElement("label");
+  label.className = "workspace-field workspace-checkbox-field";
+  const input = document.createElement("input");
+  input.type = "checkbox";
+  input.checked = Boolean(checked);
+  input.addEventListener("change", () => onChange(input.checked));
+  label.append(input, document.createTextNode(labelText));
+  return label;
+}
+
+
+function createTextInput(labelText, value, placeholder, onInput, { type = "text" } = {}) {
+  const label = document.createElement("label");
+  label.className = "workspace-field";
+  const text = document.createElement("span");
+  text.textContent = labelText;
+  const input = document.createElement("input");
+  input.type = type;
+  input.value = value || "";
+  input.placeholder = placeholder || "";
+  input.addEventListener("input", () => onInput(input.value));
+  label.append(text, input);
+  return label;
+}
+
+
+function createWorkspaceModal(titleText, onClose) {
+  const root = document.createElement("div");
+  root.className = "workspace-modal-backdrop";
+  const modal = document.createElement("article");
+  modal.className = "workspace-modal";
+  modal.tabIndex = -1;
+  modal.setAttribute("role", "dialog");
+  modal.setAttribute("aria-modal", "true");
+  modal.addEventListener("click", (event) => event.stopPropagation());
+  modal.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      onClose();
+    }
+  });
+  const header = document.createElement("header");
+  header.className = "workspace-modal-header";
+  const title = document.createElement("h3");
+  title.textContent = titleText;
+  const close = createActionButton("Close", onClose);
+  header.append(title, close);
+  const body = document.createElement("div");
+  body.className = "workspace-modal-body";
+  modal.append(header, body);
+  root.append(modal);
+  if (typeof window !== "undefined" && typeof window.setTimeout === "function") {
+    window.setTimeout(() => modal.focus(), 0);
+  }
+  return root;
+}
+
+
+function createLoadSummary(order) {
+  const section = document.createElement("section");
+  section.className = "workspace-modal-section";
+  section.append(createSectionHeading("Load Summary", "Delivery totals remain Delivery Order only."));
+  const facts = document.createElement("dl");
+  facts.className = "workspace-fact-grid";
+  appendFact(facts, "Pallet quantity", order.pallet_quantity);
+  appendFact(facts, "Loose bag quantity", order.loose_bags_quantity);
+  section.append(facts);
+  return section;
+}
+
+
+function isOrderCapturedByRunSheet(order, runSheets) {
+  if (!order) {
+    return false;
+  }
+  return (runSheets || []).some((runSheet) =>
+    ["GENERATED", "SAVED"].includes(runSheet.status)
+    && (runSheet.trips || []).some((trip) =>
+      (trip.orders || []).some((snapshot) => snapshot.task_id === order.order_id),
+    ),
+  );
+}
+
+
+function driverName(board, driverId) {
+  if (!driverId) {
+    return "No preferred driver";
+  }
+  return (board?.drivers || []).find((driver) => driver.driver_id === driverId)?.name || driverId;
+}
+
+
+function createTableCell(content) {
+  const cell = document.createElement("td");
+  if (content && typeof content === "object" && typeof content.nodeType === "number") {
+    cell.append(content);
+  } else {
+    cell.textContent = formatOptional(content, "");
+  }
+  return cell;
+}
+
+
+function createInlineInput(value, onInput, type = "text") {
+  const input = document.createElement("input");
+  input.type = type;
+  if (type === "number") {
+    input.setAttribute("min", "0");
+  }
+  input.value = value ?? "";
+  input.addEventListener("input", () => onInput(input.value));
+  return input;
+}
+
+
+function createInlineTextarea(value, onInput) {
+  const input = document.createElement("textarea");
+  input.className = "workspace-inline-textarea";
+  input.value = value ?? "";
+  input.addEventListener("input", () => onInput(input.value));
+  return input;
+}
+
+
+function createInlineSelect(value, options, onChange) {
+  const select = document.createElement("select");
+  select.value = value || "";
+  options.forEach((option) => {
+    const item = document.createElement("option");
+    item.value = option.value;
+    item.textContent = option.label;
+    select.append(item);
+  });
+  select.addEventListener("change", () => onChange(select.value));
+  return select;
+}
+
+
+function createAttacheProductLineEditor(row, actions) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "workspace-attache-products";
+  (row.product_lines || []).forEach((line, index) => {
+    const lineRow = document.createElement("div");
+    lineRow.className = "workspace-attache-product-row";
+    lineRow.append(
+      createInlineInput(line.product_name, (value) =>
+        actions.updateDeliveryAttacheImportProductLine(row.row_id, index, "product_name", value)),
+      createInlineInput(line.quantity, (value) =>
+        actions.updateDeliveryAttacheImportProductLine(row.row_id, index, "quantity", value), "number"),
+      createInlineSelect(line.unit || "PALLETS", [
+        { value: "PALLETS", label: "PALLETS" },
+        { value: "BAGS", label: "BAGS" },
+        { value: "CARTONS", label: "CARTONS" },
+      ], (value) =>
+        actions.updateDeliveryAttacheImportProductLine(row.row_id, index, "unit", value)),
+      createActionButton("Remove", () =>
+        actions.removeDeliveryAttacheImportProductLine(row.row_id, index)),
+    );
+    wrapper.append(lineRow);
+  });
+  if (!(row.product_lines || []).length) {
+    const empty = document.createElement("p");
+    empty.className = "workspace-muted";
+    empty.textContent = "No product lines parsed.";
+    wrapper.append(empty);
+  }
+  wrapper.append(createActionButton("Add Product Line", () =>
+    actions.addDeliveryAttacheImportProductLine(row.row_id)));
+  return wrapper;
+}
+
+
+function productLineSummary(row) {
+  return (row.product_lines || [])
+    .map((line) => `${formatOptional(line.product_name)} - ${line.quantity} ${formatPluralLoadUnit(line.unit, line.quantity)}`)
+    .join("; ") || "No product lines";
+}
+
+
+function createSpecAvailability(checked, onChange) {
+  return createBoundCheckbox("Available", checked, onChange);
 }
 
 

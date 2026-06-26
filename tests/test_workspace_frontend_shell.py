@@ -88,6 +88,12 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             "/api/manual-dispatch/delivery/assignments/unassign",
             "/api/manual-dispatch/delivery/vehicle-assignments",
             "/api/manual-dispatch/delivery/vehicle-assignments/clear",
+            "/api/manual-dispatch/delivery/specifications",
+            "/api/manual-dispatch/delivery/drivers",
+            "/api/manual-dispatch/delivery/vehicles",
+            "/api/manual-dispatch/delivery/orders",
+            "/api/manual-dispatch/delivery/orders/import-attache-pdf-preview",
+            "/api/manual-dispatch/delivery/orders/import-attache-pdf-commit",
             "/api/manual-dispatch/delivery/run-sheets/generated",
             "/api/manual-dispatch/opshop/pickups/assignments/apply",
             "/api/manual-dispatch/opshop/pickups/assignments/unassign",
@@ -131,6 +137,10 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             )
         )
         self.assertNotIn('"/api/manual-dispatch/board"', new_workspace_source)
+        self.assertNotIn('"/api/manual-dispatch/orders"', new_workspace_source)
+        self.assertNotIn('"/api/manual-dispatch/drivers"', new_workspace_source)
+        self.assertNotIn('"/api/manual-dispatch/vehicles"', new_workspace_source)
+        self.assertNotIn("import-attache-pdf-preview\", formData);", new_workspace_source)
         self.assertNotIn("final-summaries", new_workspace_source)
         self.assertNotIn("fetch(", new_workspace_source)
 
@@ -205,8 +215,92 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             "opshopBusyActionKeys",
             "opshopAssignmentDrafts",
             "countrysideRouteGroupDrafts",
+            "deliveryTaskPoolFilters",
+            "deliveryOrderDetailId",
+            "deliveryOrderForm",
+            "deliveryOrderFormMode",
+            "deliveryOrderModalError",
+            "deliveryAttacheImportState",
+            "deliverySpecificationModalOpen",
+            "deliverySpecificationTab",
+            "deliveryDriverForm",
+            "deliveryVehicleForm",
+            "deliverySpecificationError",
+            "deliverySpecificationBusyKey",
         ):
             self.assertIn(f"{state_field}:", self.state)
+
+    def test_delivery_stage_6d_tools_are_scoped_to_delivery_workspace(self):
+        for label in (
+            "Search",
+            "Delivery Date",
+            "Phone",
+            "Address",
+            "Postcode",
+            "Start",
+            "End",
+            "Urgency",
+            "Notes",
+            "Clear filters",
+            "Add Order",
+            "Import Attache Invoices",
+            "Driver & Vehicle Specification",
+            "Delivery Order Detail",
+            "General Information",
+            "Product Lines",
+            "Load Summary",
+            "PALLETS",
+            "BAGS",
+            "CARTONS",
+            "Preview Import",
+            "Confirm Import",
+            "Drivers",
+            "Vehicles",
+        ):
+            self.assertIn(label, self.delivery_renderer)
+
+        for action in (
+            "updateDeliveryTaskPoolFilter",
+            "clearDeliveryTaskPoolFilters",
+            "openDeliveryOrderDetail",
+            "openAddDeliveryOrder",
+            "saveDeliveryOrderForm",
+            "cancelActiveDeliveryOrder",
+            "openDeliveryAttacheImport",
+            "previewDeliveryAttacheImport",
+            "commitDeliveryAttacheImport",
+            "addDeliveryAttacheImportProductLine",
+            "removeDeliveryAttacheImportProductLine",
+            "updateDeliveryAttacheImportProductLine",
+            "openDeliverySpecifications",
+            "saveDeliveryDriver",
+            "saveDeliveryVehicle",
+        ):
+            self.assertIn(action, self.workspace_actions)
+
+        for api_helper in (
+            "apiGetDeliverySpecifications",
+            "apiCreateDeliveryOrder",
+            "apiUpdateDeliveryOrder",
+            "apiCancelDeliveryOrder",
+            "apiPreviewDeliveryAttacheInvoices",
+            "apiCommitDeliveryAttacheInvoices",
+            "apiCreateDeliveryDriver",
+            "apiUpdateDeliveryDriver",
+            "apiDeleteDeliveryDriver",
+            "apiCreateDeliveryVehicle",
+            "apiUpdateDeliveryVehicle",
+            "apiDeleteDeliveryVehicle",
+        ):
+            self.assertIn(api_helper, self.api)
+
+        self.assertIn("filterDeliveryTaskPoolOrders", self.delivery_renderer)
+        self.assertIn("deliveryOrderSearchText", self.delivery_renderer)
+        self.assertIn("order.product_lines", self.delivery_renderer)
+        self.assertIn("createAttacheProductLineEditor", self.delivery_renderer)
+        self.assertIn("updateDeliveryAttacheImportProductLine", self.delivery_renderer)
+        self.assertIn("isOrderCapturedByRunSheet", self.delivery_renderer)
+        self.assertIn("state.deliveryTaskPoolFilters", self.delivery_renderer)
 
     def test_delivery_workspace_wires_scoped_assignment_vehicle_and_lifecycle_actions(self):
         task_pool_block = self.delivery_renderer.split(

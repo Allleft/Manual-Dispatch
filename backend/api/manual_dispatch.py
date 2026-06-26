@@ -105,6 +105,99 @@ def get_shared_specifications():
     return to_dict(service.get_shared_specifications())
 
 
+@router.get("/delivery/specifications")
+def get_delivery_specifications():
+    return to_dict(service.get_delivery_specifications())
+
+
+@router.post("/delivery/drivers")
+def create_delivery_driver(request: CreateDriverRequest):
+    try:
+        return to_dict(service.create_delivery_driver(request))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.patch("/delivery/drivers/{driver_id}")
+def update_delivery_driver(driver_id: str, request: UpdateDriverRequest):
+    try:
+        return to_dict(service.update_delivery_driver(driver_id, request))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.delete("/delivery/drivers/{driver_id}")
+def delete_delivery_driver(driver_id: str):
+    try:
+        return to_dict(service.delete_delivery_driver(driver_id))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.post("/delivery/vehicles")
+def create_delivery_vehicle(request: CreateVehicleRequest):
+    try:
+        return to_dict(service.create_delivery_vehicle(request))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.patch("/delivery/vehicles/{vehicle_id}")
+def update_delivery_vehicle(vehicle_id: str, request: UpdateVehicleRequest):
+    try:
+        return to_dict(service.update_delivery_vehicle(vehicle_id, request))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.delete("/delivery/vehicles/{vehicle_id}")
+def delete_delivery_vehicle(vehicle_id: str):
+    try:
+        return to_dict(service.delete_delivery_vehicle(vehicle_id))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.post("/delivery/orders")
+def create_delivery_order(request: CreateOrderRequest):
+    try:
+        return to_dict(service.create_delivery_order(request))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.patch("/delivery/orders/{order_id}")
+def update_delivery_order(order_id: str, request: UpdateOrderRequest):
+    try:
+        return to_dict(service.update_delivery_order(order_id, request))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.post("/delivery/orders/{order_id}/cancel")
+def cancel_delivery_order(order_id: str):
+    try:
+        return to_dict(service.cancel_delivery_order(order_id))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.post("/delivery/orders/import-attache-pdf-preview")
+async def preview_delivery_attache_invoice_pdf_import(files: List[UploadFile] = File(...)):
+    return to_dict(await _preview_attache_invoice_pdf_import(files))
+
+
+@router.post("/delivery/orders/import-attache-pdf-commit")
+def commit_delivery_attache_invoice_pdf_import(
+    request: CommitAttacheInvoicePdfImportRequest,
+):
+    try:
+        service._ensure_workspace_ready("delivery")
+        return _commit_attache_invoice_pdf_import(request, service.create_delivery_order)
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
 @router.post("/delivery/assignments")
 def assign_delivery_workspace_order(payload: dict = Body(...)):
     try:
@@ -292,32 +385,15 @@ def create_order(request: CreateOrderRequest):
 
 @router.post("/orders/import-attache-pdf-preview")
 async def preview_attache_invoice_pdf_import(files: List[UploadFile] = File(...)):
-    rows = []
-    existing_invoice_numbers = _existing_invoice_numbers()
-
-    for uploaded_file in files:
-        filename = uploaded_file.filename or "invoice.pdf"
-        try:
-            parsed = parse_attache_invoice_pdf_bytes(
-                await uploaded_file.read(),
-                source_filename=filename,
-            )
-            if parsed.invoice_number and parsed.invoice_number in existing_invoice_numbers:
-                parsed = with_duplicate_warning(parsed)
-            rows.append(parsed)
-        except ValueError as error:
-            rows.append(
-                _failed_attache_preview_row(
-                    filename,
-                    str(error),
-                )
-            )
-
-    return to_dict(AttacheInvoicePdfPreviewResponse(rows=rows))
+    return to_dict(await _preview_attache_invoice_pdf_import(files))
 
 
 @router.post("/orders/import-attache-pdf-commit")
 def commit_attache_invoice_pdf_import(request: CommitAttacheInvoicePdfImportRequest):
+    return _commit_attache_invoice_pdf_import(request, service.create_order)
+
+
+def _commit_attache_invoice_pdf_import(request, create_order):
     created_orders = []
     skipped_rows = []
     existing_invoice_numbers = _existing_invoice_numbers()
@@ -335,7 +411,7 @@ def commit_attache_invoice_pdf_import(request: CommitAttacheInvoicePdfImportRequ
             continue
 
         try:
-            created = service.create_order(
+            created = create_order(
                 CreateOrderRequest(
                     invoice_number=row.invoice_number,
                     order_no=row.order_no,
@@ -359,6 +435,8 @@ def commit_attache_invoice_pdf_import(request: CommitAttacheInvoicePdfImportRequ
             created_orders.append(to_dict(created))
             if created.invoice_number:
                 existing_invoice_numbers.add(created.invoice_number)
+        except WorkspaceMigrationRequiredError:
+            raise
         except ValueError as error:
             skipped_rows.append({"row_id": row_id, "reason": str(error)})
 
@@ -972,6 +1050,31 @@ def _existing_invoice_numbers():
         for order in service.repository.list_orders()
         if order.invoice_number
     }
+
+
+async def _preview_attache_invoice_pdf_import(files):
+    rows = []
+    existing_invoice_numbers = _existing_invoice_numbers()
+
+    for uploaded_file in files:
+        filename = uploaded_file.filename or "invoice.pdf"
+        try:
+            parsed = parse_attache_invoice_pdf_bytes(
+                await uploaded_file.read(),
+                source_filename=filename,
+            )
+            if parsed.invoice_number and parsed.invoice_number in existing_invoice_numbers:
+                parsed = with_duplicate_warning(parsed)
+            rows.append(parsed)
+        except ValueError as error:
+            rows.append(
+                _failed_attache_preview_row(
+                    filename,
+                    str(error),
+                )
+            )
+
+    return AttacheInvoicePdfPreviewResponse(rows=rows)
 
 
 def _failed_attache_preview_row(source_filename, message):

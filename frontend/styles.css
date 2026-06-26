@@ -5014,3 +5014,192 @@ select:disabled {
     width: 100%;
   }
 }
+
+.workspace-task-pool-actions {
+  justify-content: flex-end;
+}
+
+.workspace-delivery-filter-bar {
+  grid-template-columns: minmax(220px, 1.7fr) minmax(160px, 0.8fr) minmax(130px, 0.7fr) auto auto;
+  align-items: end;
+}
+
+.workspace-filter-count,
+.workspace-muted {
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 760;
+}
+
+.workspace-order-card[role="button"] {
+  cursor: pointer;
+}
+
+.workspace-order-card[role="button"]:focus-visible {
+  outline: 3px solid rgba(31, 101, 232, 0.2);
+  outline-offset: 2px;
+}
+
+.workspace-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.42);
+  backdrop-filter: blur(4px);
+}
+
+.workspace-modal {
+  width: min(1120px, calc(100vw - 2rem));
+  max-height: min(88vh, 920px);
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 1.15rem;
+  background: #fff;
+  box-shadow: var(--shadow-lg);
+}
+
+.workspace-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.85rem;
+}
+
+.workspace-modal-header h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: clamp(1.45rem, 2.2vw, 2rem);
+}
+
+.workspace-modal-body,
+.workspace-modal-section,
+.workspace-order-form,
+.workspace-product-line-editor,
+.workspace-product-line-list,
+.workspace-spec-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.workspace-modal-section {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 0.85rem;
+  background: #fbfcff;
+}
+
+.workspace-modal-fact-grid,
+.workspace-form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.workspace-field textarea {
+  min-height: 5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0.55rem 0.62rem;
+  color: var(--ink);
+  background: #fff;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 760;
+  text-transform: none;
+}
+
+.workspace-field-wide {
+  grid-column: 1 / -1;
+}
+
+.workspace-checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.42rem;
+  text-transform: none;
+}
+
+.workspace-product-line-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.4fr) minmax(90px, 0.5fr) minmax(120px, 0.6fr) auto;
+  gap: 0.55rem;
+  align-items: end;
+}
+
+.workspace-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.workspace-table th,
+.workspace-table td {
+  border-bottom: 1px solid var(--line);
+  padding: 0.5rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.workspace-table input,
+.workspace-table select,
+.workspace-table textarea {
+  width: 100%;
+  min-width: 92px;
+  border: 1px solid var(--line);
+  border-radius: 0.55rem;
+  padding: 0.42rem;
+  color: var(--ink);
+  background: #fff;
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.workspace-table textarea {
+  min-height: 4.2rem;
+  resize: vertical;
+}
+
+.workspace-attache-table {
+  display: block;
+  overflow: auto;
+  max-height: 48vh;
+}
+
+.workspace-attache-products,
+.workspace-attache-product-row {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.workspace-attache-products {
+  min-width: 420px;
+}
+
+.workspace-attache-product-row {
+  grid-template-columns: minmax(150px, 1fr) 72px 108px auto;
+  align-items: start;
+  padding-bottom: 0.45rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.workspace-attache-product-row:last-of-type {
+  border-bottom: 0;
+}
+
+@media (max-width: 900px) {
+  .workspace-delivery-filter-bar,
+  .workspace-modal-fact-grid,
+  .workspace-form-grid,
+  .workspace-product-line-row,
+  .workspace-attache-product-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .workspace-task-pool-actions {
+    justify-content: flex-start;
+  }
+}

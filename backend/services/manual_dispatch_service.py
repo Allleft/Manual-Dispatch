@@ -8,6 +8,9 @@ from backend.services.manual_dispatch.board_service import BoardService
 from backend.services.manual_dispatch.delivery_run_sheet_service import (
     DeliveryRunSheetService,
 )
+from backend.services.manual_dispatch.delivery_run_sheet_lock import (
+    ensure_order_not_reserved,
+)
 from backend.services.manual_dispatch.delivery_workspace_board_service import (
     DeliveryWorkspaceBoardService,
 )
@@ -119,6 +122,9 @@ class ManualDispatchService:
             drivers=self.repository.list_specification_drivers(),
             vehicles=self.repository.list_specification_vehicles(),
         )
+
+    def get_delivery_specifications(self):
+        return self.get_shared_specifications()
 
     def assign_delivery_workspace_order(self, request):
         self._ensure_workspace_ready("delivery")
@@ -259,6 +265,20 @@ class ManualDispatchService:
     def cancel_order(self, order_id):
         return self.order_service.cancel_order(order_id)
 
+    def create_delivery_order(self, request):
+        self._ensure_workspace_ready("delivery")
+        return self.order_service.create_order(request)
+
+    def update_delivery_order(self, order_id, request):
+        self._ensure_workspace_ready("delivery")
+        ensure_order_not_reserved(self.repository, None, order_id)
+        return self.order_service.update_order(order_id, request)
+
+    def cancel_delivery_order(self, order_id):
+        self._ensure_workspace_ready("delivery")
+        ensure_order_not_reserved(self.repository, None, order_id)
+        return self.order_service.cancel_order(order_id)
+
     def ensure_opshop_pickup_tasks_for_window(self, request):
         return self.opshop_pickup_service.ensure_opshop_pickup_tasks_for_window(request)
 
@@ -372,6 +392,52 @@ class ManualDispatchService:
 
     def delete_vehicle(self, vehicle_id):
         return self.specification_service.delete_vehicle(vehicle_id)
+
+    def create_delivery_driver(self, request):
+        self._ensure_workspace_ready("delivery")
+        return self.specification_service.create_driver(request)
+
+    def update_delivery_driver(self, driver_id, request):
+        self._ensure_workspace_ready("delivery")
+        return self.specification_service.update_driver(driver_id, request)
+
+    def delete_delivery_driver(self, driver_id):
+        self._ensure_workspace_ready("delivery")
+        self._ensure_driver_not_used_by_delivery_run_sheet(driver_id)
+        return self.specification_service.delete_driver(driver_id)
+
+    def create_delivery_vehicle(self, request):
+        self._ensure_workspace_ready("delivery")
+        return self.specification_service.create_vehicle(request)
+
+    def update_delivery_vehicle(self, vehicle_id, request):
+        self._ensure_workspace_ready("delivery")
+        return self.specification_service.update_vehicle(vehicle_id, request)
+
+    def delete_delivery_vehicle(self, vehicle_id):
+        self._ensure_workspace_ready("delivery")
+        self._ensure_vehicle_not_used_by_delivery_run_sheet(vehicle_id)
+        return self.specification_service.delete_vehicle(vehicle_id)
+
+    def _ensure_driver_not_used_by_delivery_run_sheet(self, driver_id):
+        if any(
+            run_sheet.driver_id == driver_id
+            for run_sheet in self.repository.list_delivery_run_sheets()
+        ):
+            raise ValueError(
+                "Driver has Delivery Run Sheet history and cannot be deleted. "
+                "Set Availability off instead."
+            )
+
+    def _ensure_vehicle_not_used_by_delivery_run_sheet(self, vehicle_id):
+        if any(
+            run_sheet.vehicle_id == vehicle_id
+            for run_sheet in self.repository.list_delivery_run_sheets()
+        ):
+            raise ValueError(
+                "Vehicle has Delivery Run Sheet history and cannot be deleted. "
+                "Set Availability off instead."
+            )
 
     def save_final_trip_summary(self, request):
         return self.final_summary_service.save_final_trip_summary(request)

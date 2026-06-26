@@ -50,7 +50,12 @@ def ensure_delivery_run_sheet_key_mutable(
 
 
 def ensure_order_not_reserved(repository, dispatch_date, order_id):
-    for run_sheet in repository.list_delivery_run_sheets(dispatch_date):
+    run_sheets = (
+        repository.list_delivery_run_sheets(dispatch_date)
+        if dispatch_date
+        else repository.list_delivery_run_sheets()
+    )
+    for run_sheet in run_sheets:
         if any(
             order.task_type == "ORDER" and order.task_id == order_id
             for trip in run_sheet.trips
