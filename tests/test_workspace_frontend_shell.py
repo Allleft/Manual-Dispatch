@@ -152,7 +152,8 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             "route_group",
         ):
             self.assertNotIn(forbidden, self.delivery_renderer)
-        self.assertIn("Active Unassigned Delivery Orders", self.delivery_renderer)
+        self.assertIn("Delivery Orders", self.delivery_renderer)
+        self.assertIn("Filter active unassigned Orders", self.delivery_renderer)
         self.assertIn("Delivery Run Sheets", self.delivery_renderer)
 
     def test_opshop_renderer_contains_no_delivery_domain_labels_or_payload_fields(self):
@@ -207,7 +208,6 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             "deliveryActionError",
             "deliveryBusyActionKeys",
             "deliveryAssignmentDrafts",
-            "deliveryTripAddOrderDrafts",
             "deliveryVehicleDrafts",
             "isOpShopWorkspaceLoading",
             "opshopWorkspaceError",
@@ -229,6 +229,8 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             "deliverySpecificationBusyKey",
         ):
             self.assertIn(f"{state_field}:", self.state)
+        self.assertIn('step: "files"', self.state)
+        self.assertIn("expandedRowIds: {}", self.state)
 
     def test_delivery_stage_6d_tools_are_scoped_to_delivery_workspace(self):
         for label in (
@@ -245,7 +247,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             "Add Order",
             "Import Attache Invoices",
             "Driver & Vehicle Specification",
-            "Delivery Order Detail",
+            "Delivery Order",
             "General Information",
             "Product Lines",
             "Load Summary",
@@ -254,8 +256,12 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             "CARTONS",
             "Preview Import",
             "Confirm Import",
+            "Back to files",
+            "Select all ready",
             "Drivers",
             "Vehicles",
+            "Driver ID",
+            "Vehicle ID",
         ):
             self.assertIn(label, self.delivery_renderer)
 
@@ -269,6 +275,11 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             "openDeliveryAttacheImport",
             "previewDeliveryAttacheImport",
             "commitDeliveryAttacheImport",
+            "backDeliveryAttacheImportToFiles",
+            "selectAllReadyDeliveryAttacheRows",
+            "clearDeliveryAttacheImportSelection",
+            "removeDeliveryAttacheImportFile",
+            "toggleDeliveryAttacheImportExpanded",
             "addDeliveryAttacheImportProductLine",
             "removeDeliveryAttacheImportProductLine",
             "updateDeliveryAttacheImportProductLine",
@@ -301,21 +312,33 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("updateDeliveryAttacheImportProductLine", self.delivery_renderer)
         self.assertIn("isOrderCapturedByRunSheet", self.delivery_renderer)
         self.assertIn("state.deliveryTaskPoolFilters", self.delivery_renderer)
+        self.assertIn("deliveryAttachePreviewRequestVersion", self.workspace_actions)
+        self.assertIn("deliverySpecificationRequestVersion", self.workspace_actions)
+        self.assertIn('state.workspaceRoute === "delivery/task-pool"', self.workspace_actions)
+        self.assertIn("state.deliveryAttacheImportState?.isOpen", self.workspace_actions)
+        self.assertIn("clearDeliveryTaskPoolModals", self.workspace_actions)
 
     def test_delivery_workspace_wires_scoped_assignment_vehicle_and_lifecycle_actions(self):
         task_pool_block = self.delivery_renderer.split(
             "function createDeliveryTaskPool", 1
         )[1].split("function createOrderCard", 1)[0]
-        self.assertIn("Active Unassigned Delivery Orders", task_pool_block)
-        self.assertIn("Assign these orders from Trip Summary driver cards.", task_pool_block)
-        self.assertNotIn("createOrderAssignmentControls", self.delivery_renderer)
-        self.assertNotIn("Assigned driver", task_pool_block)
-        self.assertNotIn("Delivery trip", task_pool_block)
-        self.assertNotIn("applyDeliveryOrderAssignment", self.delivery_renderer)
+        panel_block = self.delivery_renderer.split(
+            "function createDeliveryTaskPoolPanel", 1
+        )[1].split("function createOrderCard", 1)[0]
+        self.assertIn("Delivery Orders", panel_block)
+        self.assertIn("Filter active unassigned Orders", panel_block)
+        self.assertLess(panel_block.index('"Add Order"'), panel_block.index('"Import Attache Invoices"'))
+        self.assertLess(panel_block.index('"Import Attache Invoices"'), panel_block.index('"Driver & Vehicle Specification"'))
+        self.assertIn("createOrderAssignmentControls", self.delivery_renderer)
+        self.assertIn('"Driver"', self.delivery_renderer)
+        self.assertIn('"Trip"', self.delivery_renderer)
+        self.assertIn('"Assign"', self.delivery_renderer)
+        self.assertIn("applyDeliveryOrderAssignment", self.delivery_renderer)
 
         self.assertIn("updateDeliveryTripSummaryDate", self.delivery_renderer)
-        self.assertIn("updateDeliveryTripAddOrderDraft", self.delivery_renderer)
-        self.assertIn("addDeliveryOrderToTrip", self.delivery_renderer)
+        self.assertNotIn("updateDeliveryTripAddOrderDraft", self.delivery_renderer)
+        self.assertNotIn("addDeliveryOrderToTrip", self.delivery_renderer)
+        self.assertNotIn("createAddOrderControl", self.delivery_renderer)
         self.assertIn("moveDeliveryOrderToTrip", self.delivery_renderer)
         self.assertIn("unassignDeliveryOrder", self.delivery_renderer)
         self.assertIn("applyDeliveryVehicleAssignment", self.delivery_renderer)
@@ -355,6 +378,14 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("Not selected", self.delivery_renderer)
         self.assertIn("Select a vehicle to view", self.delivery_renderer)
         self.assertIn("workspace-vehicle-capacity-summary", self.delivery_renderer)
+        action_block = self.delivery_renderer.split(
+            "function createDeliveryOrderActions", 1
+        )[1].split("function createDeliveryOrderForm", 1)[0]
+        self.assertLess(action_block.index('"Close"'), action_block.index('"Edit Order"'))
+        self.assertLess(action_block.index('"Edit Order"'), action_block.index('"Cancel Order"'))
+        self.assertIn("workspace-modal-action-danger", action_block)
+        self.assertIn("createWorkspaceModal", self.delivery_renderer)
+        self.assertIn("trapModalFocus", self.delivery_renderer)
 
     def test_delivery_trip_summary_actions_use_scoped_payloads_and_allow_history_dates(self):
         self._run_workspace_actions_script(
@@ -377,7 +408,6 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
               deliveryActionError: "",
               deliveryBusyActionKeys: {},
               deliveryAssignmentDrafts: {},
-              deliveryTripAddOrderDrafts: {},
               deliveryVehicleDrafts: {},
               opshopBoard: { opshop_pickups: [], countryside_route_groups: [] },
               opshopPickupCollections: [],
@@ -420,8 +450,9 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             if (state.deliveryTripSummaryDate !== "2026-06-22") {
               throw new Error("Trip Summary rejected historical delivery date");
             }
-            actions.updateDeliveryTripAddOrderDraft("2026-06-22", "D001", "trip1", "ORDER-1");
-            await actions.addDeliveryOrderToTrip("2026-06-22", "D001", "trip1");
+            actions.updateDeliveryAssignmentDraft("ORDER-1", "driver_id", "D001");
+            actions.updateDeliveryAssignmentDraft("ORDER-1", "trip_no", "trip1");
+            await actions.applyDeliveryOrderAssignment("ORDER-1");
             await actions.moveDeliveryOrderToTrip("ORDER-2", "D001", "trip2");
             const expectedKeys = "dispatch_date,driver_id,order_id,trip_no";
             for (const payload of assignedPayloads) {
@@ -472,7 +503,6 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
                 deliveryActionError: "",
                 deliveryBusyActionKeys: {},
                 deliveryAssignmentDrafts: {},
-                deliveryTripAddOrderDrafts: {},
                 deliveryVehicleDrafts: {},
                 opshopBoard: { opshop_pickups: [], countryside_route_groups: [] },
                 opshopPickupCollections: [],

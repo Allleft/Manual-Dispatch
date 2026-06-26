@@ -26,7 +26,6 @@ export const state = {
   deliveryActionError: "",
   deliveryBusyActionKeys: {},
   deliveryAssignmentDrafts: {},
-  deliveryTripAddOrderDrafts: {},
   deliveryVehicleDrafts: {},
   deliveryTaskPoolFilters: {
     search: "",
@@ -41,8 +40,10 @@ export const state = {
     isOpen: false,
     isPreviewing: false,
     isCommitting: false,
+    step: "files",
     files: [],
     rows: [],
+    expandedRowIds: {},
     error: "",
     success: "",
   },

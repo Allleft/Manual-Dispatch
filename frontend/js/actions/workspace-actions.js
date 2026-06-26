@@ -94,6 +94,8 @@ export function createWorkspaceActions({
   let migrationStatusRequestVersion = 0;
   let deliveryWorkspaceRequestVersion = 0;
   let opshopWorkspaceRequestVersion = 0;
+  let deliveryAttachePreviewRequestVersion = 0;
+  let deliverySpecificationRequestVersion = 0;
   let actionTokenCounter = 0;
 
   async function loadWorkspaceRoute(route = state.workspaceRoute) {
@@ -159,15 +161,7 @@ export function createWorkspaceActions({
     state.deliveryOrderForm = {};
     state.deliveryOrderFormMode = "";
     state.deliveryOrderModalError = "";
-    state.deliveryAttacheImportState = {
-      isOpen: false,
-      isPreviewing: false,
-      isCommitting: false,
-      files: [],
-      rows: [],
-      error: "",
-      success: "",
-    };
+    state.deliveryAttacheImportState = defaultDeliveryAttacheImportState();
     state.deliverySpecificationModalOpen = false;
     state.deliveryDriverForm = null;
     state.deliveryDriverEditingId = "";
@@ -217,6 +211,9 @@ export function createWorkspaceActions({
       state.dispatchDate === dispatchDate &&
       requestVersion === deliveryWorkspaceRequestVersion;
 
+    if (route !== "delivery/task-pool") {
+      clearDeliveryTaskPoolModals();
+    }
     state.isDeliveryWorkspaceLoading = true;
     state.deliveryWorkspaceError = "";
     state.deliveryActionError = "";
@@ -327,7 +324,6 @@ export function createWorkspaceActions({
 
   function updateDeliveryTripSummaryDate(nextDate) {
     state.deliveryTripSummaryDate = nextDate || state.dispatchDate;
-    state.deliveryTripAddOrderDrafts = {};
     renderWorkspace();
   }
 
@@ -357,6 +353,9 @@ export function createWorkspaceActions({
   }
 
   function closeDeliveryOrderModal() {
+    if (state.deliveryOrderFormMode && !confirmAction("Discard unsaved Delivery Order changes?")) {
+      return;
+    }
     state.deliveryOrderDetailId = "";
     state.deliveryOrderFormMode = "";
     state.deliveryOrderForm = {};
@@ -387,6 +386,9 @@ export function createWorkspaceActions({
   }
 
   function cancelDeliveryOrderEdit() {
+    if (!confirmAction("Discard unsaved Delivery Order changes?")) {
+      return;
+    }
     state.deliveryOrderFormMode = "";
     state.deliveryOrderForm = {};
     state.deliveryOrderModalError = "";
@@ -478,27 +480,17 @@ export function createWorkspaceActions({
 
   function openDeliveryAttacheImport() {
     state.deliveryAttacheImportState = {
+      ...defaultDeliveryAttacheImportState(),
       isOpen: true,
-      isPreviewing: false,
-      isCommitting: false,
-      files: [],
-      rows: [],
-      error: "",
-      success: "",
     };
     renderWorkspace();
   }
 
   function closeDeliveryAttacheImport() {
-    state.deliveryAttacheImportState = {
-      isOpen: false,
-      isPreviewing: false,
-      isCommitting: false,
-      files: [],
-      rows: [],
-      error: "",
-      success: "",
-    };
+    if (hasDeliveryAttacheDraft() && !confirmAction("Discard the current Attaché invoice import?")) {
+      return;
+    }
+    state.deliveryAttacheImportState = defaultDeliveryAttacheImportState();
     renderWorkspace();
   }
 
@@ -506,6 +498,23 @@ export function createWorkspaceActions({
     state.deliveryAttacheImportState = {
       ...state.deliveryAttacheImportState,
       files: Array.from(files || []),
+      rows: [],
+      step: "files",
+      expandedRowIds: {},
+      error: "",
+      success: "",
+    };
+    renderWorkspace();
+  }
+
+  function removeDeliveryAttacheImportFile(index) {
+    const current = state.deliveryAttacheImportState || {};
+    state.deliveryAttacheImportState = {
+      ...current,
+      files: (current.files || []).filter((_file, fileIndex) => fileIndex !== index),
+      rows: [],
+      step: "files",
+      expandedRowIds: {},
       error: "",
       success: "",
     };
@@ -517,34 +526,65 @@ export function createWorkspaceActions({
     if (importState.isPreviewing || !(importState.files || []).length) {
       return;
     }
+    const context = captureMutationContext();
+    const requestVersion = ++deliveryAttachePreviewRequestVersion;
+    const isCurrent = () =>
+      isDeliveryMutationCurrent(context) &&
+      state.workspaceRoute === "delivery/task-pool" &&
+      state.deliveryAttacheImportState?.isOpen &&
+      requestVersion === deliveryAttachePreviewRequestVersion;
     state.deliveryAttacheImportState = {
       ...importState,
       isPreviewing: true,
+      step: "files",
       error: "",
       success: "",
     };
     renderWorkspace();
     try {
       const response = await api.previewDeliveryAttacheInvoices(importState.files);
+      if (!isCurrent()) {
+        return;
+      }
       state.deliveryAttacheImportState = {
         ...state.deliveryAttacheImportState,
+        step: "review",
         rows: (response.rows || []).map((row) => ({
           ...row,
           selected: Boolean(row.selected && row.importable && !row.is_duplicate),
         })),
+        expandedRowIds: {},
       };
     } catch (error) {
+      if (!isCurrent()) {
+        return;
+      }
       state.deliveryAttacheImportState = {
         ...state.deliveryAttacheImportState,
         error: `Unable to preview Attache invoices. ${error.message}`,
       };
     } finally {
-      state.deliveryAttacheImportState = {
-        ...state.deliveryAttacheImportState,
-        isPreviewing: false,
-      };
-      renderWorkspace();
+      if (isCurrent()) {
+        state.deliveryAttacheImportState = {
+          ...state.deliveryAttacheImportState,
+          isPreviewing: false,
+        };
+        renderWorkspace();
+      }
     }
+  }
+
+  function backDeliveryAttacheImportToFiles() {
+    const current = state.deliveryAttacheImportState || {};
+    state.deliveryAttacheImportState = {
+      ...current,
+      step: "files",
+      rows: [],
+      expandedRowIds: {},
+      error: "",
+      success: "",
+    };
+    renderWorkspace();
   }
 
   function updateDeliveryAttacheImportRow(rowId, field, value) {
@@ -628,6 +668,42 @@ export function createWorkspaceActions({
     renderWorkspace();
   }
 
+  function toggleDeliveryAttacheImportExpanded(rowId) {
+    const current = state.deliveryAttacheImportState || {};
+    const expandedRowIds = { ...(current.expandedRowIds || {}) };
+    if (expandedRowIds[rowId]) {
+      delete expandedRowIds[rowId];
+    } else {
+      expandedRowIds[rowId] = true;
+    }
+    state.deliveryAttacheImportState = {
+      ...current,
+      expandedRowIds,
+    };
+    renderWorkspace();
+  }
+
+  function selectAllReadyDeliveryAttacheRows() {
+    const current = state.deliveryAttacheImportState || {};
+    state.deliveryAttacheImportState = {
+      ...current,
+      rows: (current.rows || []).map((row) => ({
+        ...row,
+        selected: Boolean(row.importable && !row.is_duplicate),
+      })),
+    };
+    renderWorkspace();
+  }
+
+  function clearDeliveryAttacheImportSelection() {
+    const current = state.deliveryAttacheImportState || {};
+    state.deliveryAttacheImportState = {
+      ...current,
+      rows: (current.rows || []).map((row) => ({ ...row, selected: false })),
+    };
+    renderWorkspace();
+  }
+
   async function commitDeliveryAttacheImport() {
     const importState = state.deliveryAttacheImportState || {};
     const selectedRows = (importState.rows || []).filter((row) => row.selected);
@@ -650,7 +726,7 @@ export function createWorkspaceActions({
       const response = await api.commitDeliveryAttacheInvoices({
         rows: state.deliveryAttacheImportState.rows || [],
       });
-      if (isDeliveryMutationCurrent(context)) {
+      if (isDeliveryMutationCurrent(context) && state.deliveryAttacheImportState?.isOpen) {
         state.deliveryAttacheImportState = {
           ...state.deliveryAttacheImportState,
           isCommitting: false,
@@ -673,6 +749,7 @@ export function createWorkspaceActions({
   }
 
   async function openDeliverySpecifications() {
+    deliverySpecificationRequestVersion += 1;
     state.deliverySpecificationModalOpen = true;
     state.deliverySpecificationError = "";
     state.deliveryDriverForm = null;
@@ -684,6 +761,7 @@ export function createWorkspaceActions({
   }
 
   function closeDeliverySpecifications() {
+    deliverySpecificationRequestVersion += 1;
     state.deliverySpecificationModalOpen = false;
     state.deliverySpecificationError = "";
     state.deliverySpecificationBusyKey = "";
@@ -701,16 +779,31 @@ export function createWorkspaceActions({
   }
 
   async function refreshDeliverySpecifications() {
+    const context = captureMutationContext();
+    const requestVersion = deliverySpecificationRequestVersion;
+    const isCurrent = () =>
+      isDeliveryMutationCurrent(context) &&
+      state.workspaceRoute === "delivery/task-pool" &&
+      state.deliverySpecificationModalOpen &&
+      requestVersion === deliverySpecificationRequestVersion;
     try {
-      state.deliverySpecifications = await api.getDeliverySpecifications();
+      const specifications = await api.getDeliverySpecifications();
+      if (!isCurrent()) {
+        return;
+      }
+      state.deliverySpecifications = specifications;
     } catch (error) {
       if (await handleWorkspaceMigrationGuard(error)) {
         return;
       }
-      state.deliverySpecificationError =
-        `Unable to load Delivery specifications. ${error.message}`;
+      if (isCurrent()) {
+        state.deliverySpecificationError =
+          `Unable to load Delivery specifications. ${error.message}`;
+      }
     } finally {
-      renderWorkspace();
+      if (isCurrent()) {
+        renderWorkspace();
+      }
     }
   }
 
@@ -912,6 +1005,11 @@ export function createWorkspaceActions({
 
   async function applyDeliveryOrderAssignment(orderId) {
     const draft = getDeliveryAssignmentDraft(orderId);
+    if (!draft.driver_id || !draft.trip_no) {
+      state.deliveryActionError = "Select a Driver and Trip before assigning this Delivery Order.";
+      renderWorkspace();
+      return;
+    }
     await runDeliveryAction(`delivery-assignment:${orderId}`, async (context) => {
       await api.assignDeliveryWorkspaceOrder({
         dispatch_date: context.dispatchDate,
@@ -922,38 +1020,6 @@ export function createWorkspaceActions({
       if (isDeliveryMutationCurrent(context)) {
         const { [orderId]: _removed, ...remaining } = state.deliveryAssignmentDrafts;
         state.deliveryAssignmentDrafts = remaining;
-        await loadDeliveryRoute(context.route);
-      }
-    });
-  }
-
-  function updateDeliveryTripAddOrderDraft(deliveryDate, driverId, tripNo, orderId) {
-    const key = deliveryTripAddOrderKey(deliveryDate, driverId, tripNo);
-    state.deliveryTripAddOrderDrafts = {
-      ...state.deliveryTripAddOrderDrafts,
-      [key]: orderId,
-    };
-    renderWorkspace();
-  }
-
-  async function addDeliveryOrderToTrip(deliveryDate, driverId, tripNo) {
-    const key = deliveryTripAddOrderKey(deliveryDate, driverId, tripNo);
-    const orderId = state.deliveryTripAddOrderDrafts[key] || "";
-    if (!orderId) {
-      state.deliveryActionError = "Select an unassigned Delivery Order before adding it to a trip.";
-      renderWorkspace();
-      return;
-    }
-    await runDeliveryAction(`delivery-add-order:${deliveryDate}:${driverId}:${tripNo}`, async (context) => {
-      await api.assignDeliveryWorkspaceOrder({
-        dispatch_date: context.dispatchDate,
-        order_id: orderId,
-        driver_id: driverId,
-        trip_no: tripNo,
-      });
-      if (isDeliveryMutationCurrent(context)) {
-        const { [key]: _removed, ...remaining } = state.deliveryTripAddOrderDrafts;
-        state.deliveryTripAddOrderDrafts = remaining;
         await loadDeliveryRoute(context.route);
       }
     });
@@ -1280,7 +1346,7 @@ export function createWorkspaceActions({
     const current = state.deliveryAssignmentDrafts[orderId] || {};
     return {
       driver_id: current.driver_id ?? assignment?.driver_id ?? "",
-      trip_no: current.trip_no ?? assignment?.trip_no ?? "trip1",
+      trip_no: current.trip_no ?? assignment?.trip_no ?? "",
     };
   }
 
@@ -1303,12 +1369,6 @@ export function createWorkspaceActions({
         orderIds.has(orderId),
       ),
     );
-    state.deliveryTripAddOrderDrafts = Object.fromEntries(
-      Object.entries(state.deliveryTripAddOrderDrafts || {}).filter(([, orderId]) =>
-        orderIds.has(orderId),
-      ),
-    );
-
     const vehicleKeys = new Set();
     (state.deliveryBoard?.driver_vehicle_assignments || []).forEach((assignment) => {
       vehicleKeys.add(deliveryVehicleKey(assignment.delivery_date, assignment.driver_id));
@@ -1358,21 +1418,12 @@ export function createWorkspaceActions({
 
   function clearWorkspaceDraftsForDispatchDateChange() {
     state.deliveryAssignmentDrafts = {};
-    state.deliveryTripAddOrderDrafts = {};
     state.deliveryVehicleDrafts = {};
     state.deliveryOrderDetailId = "";
     state.deliveryOrderForm = {};
     state.deliveryOrderFormMode = "";
     state.deliveryOrderModalError = "";
-    state.deliveryAttacheImportState = {
-      isOpen: false,
-      isPreviewing: false,
-      isCommitting: false,
-      files: [],
-      rows: [],
-      error: "",
-      success: "",
-    };
+    state.deliveryAttacheImportState = defaultDeliveryAttacheImportState();
     state.deliverySpecificationModalOpen = false;
     state.deliveryDriverForm = null;
     state.deliveryDriverEditingId = "";
@@ -1386,6 +1437,30 @@ export function createWorkspaceActions({
     state.opshopActionError = "";
     state.deliveryBusyActionKeys = {};
     state.opshopBusyActionKeys = {};
+  }
+
+  function clearDeliveryTaskPoolModals() {
+    state.deliveryOrderDetailId = "";
+    state.deliveryOrderForm = {};
+    state.deliveryOrderFormMode = "";
+    state.deliveryOrderModalError = "";
+    state.deliveryAttacheImportState = defaultDeliveryAttacheImportState();
+    state.deliverySpecificationModalOpen = false;
+    state.deliveryDriverForm = null;
+    state.deliveryDriverEditingId = "";
+    state.deliveryVehicleForm = null;
+    state.deliveryVehicleEditingId = "";
+    state.deliverySpecificationError = "";
+    state.deliverySpecificationBusyKey = "";
+  }
+
+  function hasDeliveryAttacheDraft() {
+    const current = state.deliveryAttacheImportState || {};
+    return Boolean(
+      current.isOpen &&
+      !current.success &&
+      ((current.files || []).length || (current.rows || []).length),
+    );
   }
 
   function changedOpShopAssignmentDrafts(pickups) {
@@ -1448,17 +1523,18 @@ export function createWorkspaceActions({
   return {
     addDeliveryAttacheImportProductLine,
     addDeliveryOrderProductLine,
+    backDeliveryAttacheImportToFiles,
     cancelActiveDeliveryOrder,
     cancelDeliveryDriverForm,
     applyDeliveryOrderAssignment,
     applyDeliveryVehicleAssignment,
-    addDeliveryOrderToTrip,
     applyOpShopAssignmentChanges,
     assignCountrysideRouteGroup,
     cancelDeliveryRunSheet,
     cancelDeliveryOrderEdit,
     cancelDeliveryVehicleForm,
     clearDeliveryTaskPoolFilters,
+    clearDeliveryAttacheImportSelection,
     cancelOpShopPickupCollection,
     clearDeliveryVehicleAssignment,
     closeDeliveryAttacheImport,
@@ -1480,6 +1556,7 @@ export function createWorkspaceActions({
     previewDeliveryAttacheImport,
     removeDeliveryOrderProductLine,
     removeDeliveryAttacheImportProductLine,
+    removeDeliveryAttacheImportFile,
     saveDeliveryRunSheet,
     saveDeliveryDriver,
     saveDeliveryOrderForm,
@@ -1491,7 +1568,9 @@ export function createWorkspaceActions({
     startEditDeliveryDriver,
     startEditDeliveryOrder,
     startEditDeliveryVehicle,
+    selectAllReadyDeliveryAttacheRows,
     toggleDeliveryAttacheImportRow,
+    toggleDeliveryAttacheImportExpanded,
     toggleDeliveryDriverAvailability,
     toggleDeliveryVehicleAvailability,
     unassignDeliveryOrder,
@@ -1505,7 +1584,6 @@ export function createWorkspaceActions({
     updateDeliveryOrderForm,
     updateDeliveryOrderProductLine,
     updateDeliveryTaskPoolFilter,
-    updateDeliveryTripAddOrderDraft,
     updateDeliveryTripSummaryDate,
     updateDeliveryVehicleDraft,
     updateDeliveryVehicleForm,
@@ -1538,6 +1616,21 @@ function defaultDeliveryOrderForm(order = {}) {
       quantity: Number(line.quantity || 0),
       unit: line.unit || "PALLETS",
     })),
+  };
+}
+
+
+function defaultDeliveryAttacheImportState() {
+  return {
+    isOpen: false,
+    isPreviewing: false,
+    isCommitting: false,
+    step: "files",
+    files: [],
+    rows: [],
+    expandedRowIds: {},
+    error: "",
+    success: "",
   };
 }
 
@@ -1630,11 +1723,6 @@ function currentOpShopDriverId(pickup) {
 
 function deliveryVehicleKey(deliveryDate, driverId) {
   return `${deliveryDate || ""}|${driverId || ""}`;
-}
-
-
-function deliveryTripAddOrderKey(deliveryDate, driverId, tripNo) {
-  return `${deliveryDate || ""}|${driverId || ""}|${tripNo || ""}`;
 }
 
 
