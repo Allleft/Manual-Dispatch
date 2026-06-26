@@ -729,6 +729,13 @@
   grid-column: span 2;
 }
 
+.workspace-vehicle-capacity-summary {
+  grid-column: span 2;
+  color: var(--delivery-strong);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
 .workspace-assignment-bar {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;

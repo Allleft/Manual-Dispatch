@@ -65,6 +65,7 @@ export function createWorkspaceActions({
   renderWorkspace,
   api = DEFAULT_API,
   confirmAction = defaultConfirmAction,
+  navigateWorkspaceRoute = null,
 }) {
   let migrationStatusRequestVersion = 0;
   let deliveryWorkspaceRequestVersion = 0;
@@ -433,7 +434,9 @@ export function createWorkspaceActions({
           delivery_date: candidate.delivery_date,
           driver_id: candidate.driver_id,
         });
-        await navigateToDeliveryRunSheets(context);
+        if (isDeliveryMutationCurrent(context)) {
+          await navigateToDeliveryRunSheets();
+        }
       },
     );
   }
@@ -769,15 +772,13 @@ export function createWorkspaceActions({
     return `action-${actionTokenCounter}`;
   }
 
-  async function navigateToDeliveryRunSheets(context) {
-    if (!context || context.activeWorkspace !== "delivery") {
+  async function navigateToDeliveryRunSheets() {
+    if (typeof navigateWorkspaceRoute === "function") {
+      await navigateWorkspaceRoute("delivery/run-sheet");
       return;
     }
     state.workspaceRoute = "delivery/run-sheet";
     state.activeWorkspace = "delivery";
-    if (typeof window !== "undefined" && window.history?.pushState) {
-      window.history.pushState(null, "", "#delivery/run-sheet");
-    }
     await loadDeliveryRoute("delivery/run-sheet");
   }
 

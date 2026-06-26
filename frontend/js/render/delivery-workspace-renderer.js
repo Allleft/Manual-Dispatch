@@ -304,6 +304,9 @@ function createDriverVehicleControl(driver, board, deliveryDate, isLocked, state
   const draftKey = `${deliveryDate}|${driver.driver_id}`;
   const selectedVehicleId =
     state.deliveryVehicleDrafts[draftKey] ?? currentAssignment?.vehicle_id ?? "";
+  const selectedVehicle = (board.vehicles || []).find(
+    (vehicle) => vehicle.vehicle_id === selectedVehicleId,
+  );
   const vehicleSelect = createSelect(
     "Vehicle",
     selectedVehicleId,
@@ -334,7 +337,14 @@ function createDriverVehicleControl(driver, board, deliveryDate, isLocked, state
       disabled: isLocked || !currentAssignment || isBusy(state, `delivery-vehicle-clear:${deliveryDate}:${driver.driver_id}`),
     },
   );
-  section.append(vehicleSelect, applyButton, clearButton);
+  const vehicleSummary = document.createElement("div");
+  vehicleSummary.className = "workspace-vehicle-capacity-summary";
+  const selectedVehicleLabel = selectedVehicle?.rego || "Not selected";
+  const capacityLabel = selectedVehicle
+    ? `${selectedVehicle.pallet_capacity ?? 0} pallets`
+    : "Select a vehicle to view";
+  vehicleSummary.textContent = `Selected vehicle: ${selectedVehicleLabel} | Capacity: ${capacityLabel}`;
+  section.append(vehicleSelect, vehicleSummary, applyButton, clearButton);
   return section;
 }
 

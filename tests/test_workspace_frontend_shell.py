@@ -244,7 +244,10 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("Move to Trip 2", self.delivery_renderer)
         self.assertIn("Move to Trip 1", self.delivery_renderer)
         self.assertIn("Generate Run Sheet", self.delivery_renderer)
-        self.assertIn('window.history.pushState(null, "", "#delivery/run-sheet")', self.workspace_actions)
+        self.assertIn("navigateWorkspaceRoute: setWorkspaceRoute", self.app)
+        self.assertIn("navigateWorkspaceRoute = null", self.workspace_actions)
+        self.assertIn('await navigateWorkspaceRoute("delivery/run-sheet")', self.workspace_actions)
+        self.assertNotIn('window.history.pushState(null, "", "#delivery/run-sheet")', self.workspace_actions)
         self.assertIn("state.deliveryTripSummaryDate = nextDate", self.workspace_actions)
         self.assertIn("state.deliveryTripSummaryDate = nextDate || state.dispatchDate", self.workspace_actions)
         self.assertIn("Trip 1 orders", self.delivery_renderer)
@@ -253,6 +256,11 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("Export Daily Run Sheet", self.delivery_renderer)
         self.assertIn("View Run Sheet details / preview", self.delivery_renderer)
         self.assertIn("Vehicle", self.delivery_renderer)
+        self.assertIn("Selected vehicle:", self.delivery_renderer)
+        self.assertIn("Capacity:", self.delivery_renderer)
+        self.assertIn("Not selected", self.delivery_renderer)
+        self.assertIn("Select a vehicle to view", self.delivery_renderer)
+        self.assertIn("workspace-vehicle-capacity-summary", self.delivery_renderer)
 
     def test_delivery_trip_summary_actions_use_scoped_payloads_and_allow_history_dates(self):
         self._run_workspace_actions_script(
@@ -286,6 +294,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             };
             const assignedPayloads = [];
             const generatedPayloads = [];
+            const navigatedRoutes = [];
             const api = {
               getWorkspaceMigrationStatus: async () => ({}),
               getDeliveryWorkspaceBoard: async () => state.deliveryBoard,
@@ -305,6 +314,12 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
               state,
               renderWorkspace: () => {},
               api,
+              navigateWorkspaceRoute: (route) => {
+                navigatedRoutes.push(route);
+                state.workspaceRoute = route;
+                state.activeWorkspace = route.split("/")[0];
+                window.location.hash = `#${route}`;
+              },
             });
 
             actions.updateDeliveryTripSummaryDate("2026-06-22");
@@ -341,9 +356,71 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
               throw new Error("Generate Run Sheet payload was not scoped correctly");
             }
             if (state.workspaceRoute !== "delivery/run-sheet" ||
-                window.location.hash !== "#delivery/run-sheet") {
+                window.location.hash !== "#delivery/run-sheet" ||
+                navigatedRoutes.join(",") !== "delivery/run-sheet") {
               throw new Error("Generate did not navigate to Delivery Run Sheets");
             }
+            """
+        )
+
+    def test_stale_delivery_generate_responses_do_not_navigate(self):
+        self._run_workspace_actions_script(
+            """
+            async function runScenario(mutator) {
+              const state = {
+                isLoggedIn: true,
+                workspaceRoute: "delivery/trip-summary",
+                activeWorkspace: "delivery",
+                dispatchDate: "2026-06-24",
+                deliveryTripSummaryDate: "2026-06-24",
+                deliveryBoard: { orders: [], assignments: [], driver_vehicle_assignments: [] },
+                deliveryRunSheets: [],
+                deliveryActionError: "",
+                deliveryBusyActionKeys: {},
+                deliveryAssignmentDrafts: {},
+                deliveryTripAddOrderDrafts: {},
+                deliveryVehicleDrafts: {},
+                opshopBoard: { opshop_pickups: [], countryside_route_groups: [] },
+                opshopPickupCollections: [],
+                opshopActionError: "",
+                opshopBusyActionKeys: {},
+                opshopAssignmentDrafts: {},
+                countrysideRouteGroupDrafts: {},
+              };
+              let resolveGenerate;
+              const api = {
+                createGeneratedDeliveryRunSheet: async () => new Promise((resolve) => {
+                  resolveGenerate = () => resolve({ run_sheet_id: "DRS-1" });
+                }),
+              };
+              const navigatedRoutes = [];
+              const actions = createWorkspaceActions({
+                state,
+                renderWorkspace: () => {},
+                api,
+                navigateWorkspaceRoute: (route) => {
+                  navigatedRoutes.push(route);
+                  state.workspaceRoute = route;
+                },
+              });
+              const pending = actions.generateDeliveryRunSheet({
+                delivery_date: "2026-06-24",
+                driver_id: "D001",
+              });
+              mutator(state);
+              resolveGenerate();
+              await pending;
+              if (navigatedRoutes.length !== 0) {
+                throw new Error("Stale Generate response navigated unexpectedly");
+              }
+            }
+
+            await runScenario((state) => { state.dispatchDate = "2026-06-25"; });
+            await runScenario((state) => { state.workspaceRoute = "delivery/task-pool"; });
+            await runScenario((state) => {
+              state.workspaceRoute = "opshop/regular";
+              state.activeWorkspace = "opshop";
+            });
             """
         )
 

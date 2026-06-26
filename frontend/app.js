@@ -1115,6 +1115,7 @@ const authActions = createAuthActions({
 });
 
 const workspaceActions = createWorkspaceActions({
+  navigateWorkspaceRoute: setWorkspaceRoute,
   renderWorkspace,
   state,
 });
