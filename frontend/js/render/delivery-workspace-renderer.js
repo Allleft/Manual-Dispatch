@@ -396,7 +396,7 @@ function createTripSummaryToolbar(deliveryDate, state, actions) {
   panel.className = "workspace-context-panel workspace-context-panel-delivery";
   const heading = createSectionHeading(
     "Delivery Trip Summary",
-    "Choose a delivery date, assign orders to driver trips, select vehicles, and generate run sheets.",
+    "Review driver trips, manage assigned orders, select vehicles, and generate Delivery Run Sheets.",
   );
   const field = document.createElement("label");
   field.className = "workspace-date-control workspace-delivery-date-control";
@@ -947,6 +947,41 @@ function createDeliveryAttacheFileStep(importState, actions) {
   controls.append(createSectionHeading("Step 1: Select PDF invoices", "PDF invoices only. Choose one or more Attache invoice PDFs."));
   const dropZone = document.createElement("div");
   dropZone.className = "workspace-attache-dropzone";
+  let dragDepth = 0;
+  const setDragActive = (active) => {
+    dropZone.classList.toggle("workspace-attache-dropzone-active", active);
+  };
+  dropZone.addEventListener("dragenter", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    dragDepth += 1;
+    setDragActive(true);
+  });
+  dropZone.addEventListener("dragover", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = "copy";
+    }
+    setDragActive(true);
+  });
+  dropZone.addEventListener("dragleave", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (!dragDepth) {
+      setDragActive(false);
+    }
+  });
+  dropZone.addEventListener("drop", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    dragDepth = 0;
+    setDragActive(false);
+    actions.updateDeliveryAttacheImportFiles(event.dataTransfer?.files || [], {
+      source: "drop",
+    });
+  });
   const fileInput = document.createElement("input");
   fileInput.type = "file";
   fileInput.accept = "application/pdf,.pdf";
@@ -962,7 +997,7 @@ function createDeliveryAttacheFileStep(importState, actions) {
   selected.textContent = `${(importState.files || []).length} file${(importState.files || []).length === 1 ? "" : "s"} selected`;
   const helper = document.createElement("p");
   helper.className = "workspace-muted";
-  helper.textContent = "Drop files here in supported browsers, or use Choose PDF files.";
+  helper.textContent = "Drop PDF files here, or use Choose PDF files.";
   dropZone.append(fileInput, fileButton, selected, helper);
   const fileList = document.createElement("div");
   fileList.className = "workspace-attache-file-list";
@@ -1212,6 +1247,12 @@ function createDriverSpecificationPanel(state, actions) {
   }
   const wrap = document.createElement("div");
   wrap.className = "workspace-spec-table-wrap";
+  const drivers = state.deliverySpecifications?.drivers || [];
+  if (!drivers.length) {
+    wrap.append(createEmptyState("No Drivers available.", "user"));
+    section.append(wrap);
+    return section;
+  }
   const table = document.createElement("table");
   table.className = "workspace-table workspace-spec-table";
   table.append(createTableHeader([
@@ -1227,7 +1268,7 @@ function createDriverSpecificationPanel(state, actions) {
     "Actions",
   ]));
   const body = document.createElement("tbody");
-  (state.deliverySpecifications?.drivers || []).forEach((driver) => {
+  drivers.forEach((driver) => {
     const row = document.createElement("tr");
     row.append(
       createTableCell(createSpecAvailability(driver.is_available !== false, (checked) =>
@@ -1265,6 +1306,12 @@ function createVehicleSpecificationPanel(state, actions) {
   }
   const wrap = document.createElement("div");
   wrap.className = "workspace-spec-table-wrap";
+  const vehicles = state.deliverySpecifications?.vehicles || [];
+  if (!vehicles.length) {
+    wrap.append(createEmptyState("No Vehicles available.", "truck"));
+    section.append(wrap);
+    return section;
+  }
   const table = document.createElement("table");
   table.className = "workspace-table workspace-spec-table";
   table.append(createTableHeader([
@@ -1279,7 +1326,7 @@ function createVehicleSpecificationPanel(state, actions) {
     "Actions",
   ]));
   const body = document.createElement("tbody");
-  (state.deliverySpecifications?.vehicles || []).forEach((vehicle) => {
+  vehicles.forEach((vehicle) => {
     const row = document.createElement("tr");
     row.append(
       createTableCell(createSpecAvailability(vehicle.is_available !== false, (checked) =>
@@ -1548,6 +1595,8 @@ function createWorkspaceModal(titleText, onClose, {
   const close = createActionButton("Close", requestClose, {
     iconName: "x",
     className: "workspace-modal-close",
+    iconOnly: true,
+    accessibleLabel: "Close",
   });
   header.append(titleGroup, close);
   const body = document.createElement("div");
@@ -1758,6 +1807,8 @@ function createActionButton(label, onClick, {
   primary = false,
   iconName = "",
   className = "",
+  iconOnly = false,
+  accessibleLabel = "",
 } = {}) {
   const button = document.createElement("button");
   button.type = "button";
@@ -1769,7 +1820,13 @@ function createActionButton(label, onClick, {
   if (iconName) {
     button.append(createIcon(iconName));
   }
-  button.append(document.createTextNode(label));
+  if (iconOnly) {
+    const description = accessibleLabel || label;
+    button.setAttribute("aria-label", description);
+    button.title = description;
+  } else {
+    button.append(document.createTextNode(label));
+  }
   button.addEventListener("click", (event) => {
     event.stopPropagation();
     onClick(event);

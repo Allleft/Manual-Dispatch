@@ -5482,6 +5482,10 @@ select:disabled {
 
 .workspace-modal-close {
   flex: 0 0 auto;
+  width: 2.5rem;
+  min-width: 2.5rem;
+  min-height: 2.5rem !important;
+  padding: 0.5rem !important;
 }
 
 .workspace-modal-body {
@@ -5569,6 +5573,13 @@ select:disabled {
   border-radius: 16px;
   padding: 1rem;
   background: #f8fbff;
+  transition: border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+}
+
+.workspace-attache-dropzone-active {
+  border-color: var(--delivery);
+  background: #eef5ff;
+  box-shadow: inset 0 0 0 2px rgba(31, 101, 232, 0.12);
 }
 
 .workspace-attache-file-list {

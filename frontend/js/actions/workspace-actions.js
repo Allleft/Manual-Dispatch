@@ -149,6 +149,7 @@ export function createWorkspaceActions({
   }
 
   async function loadMigrationStatusForHome(message = "") {
+    invalidateDeliveryAttachePreview();
     state.workspaceRoute = "home";
     state.activeWorkspace = "";
     state.isDeliveryWorkspaceLoading = false;
@@ -479,6 +480,7 @@ export function createWorkspaceActions({
   }
 
   function openDeliveryAttacheImport() {
+    invalidateDeliveryAttachePreview();
     state.deliveryAttacheImportState = {
       ...defaultDeliveryAttacheImportState(),
       isOpen: true,
@@ -490,24 +492,38 @@ export function createWorkspaceActions({
     if (hasDeliveryAttacheDraft() && !confirmAction("Discard the current Attaché invoice import?")) {
       return;
     }
+    invalidateDeliveryAttachePreview();
     state.deliveryAttacheImportState = defaultDeliveryAttacheImportState();
     renderWorkspace();
   }
 
-  function updateDeliveryAttacheImportFiles(files) {
+  function updateDeliveryAttacheImportFiles(files, { source = "chooser" } = {}) {
+    invalidateDeliveryAttachePreview();
+    const selectedFiles = Array.from(files || []);
+    const pdfFiles = selectedFiles.filter(isPdfFile);
+    const rejectedCount = selectedFiles.length - pdfFiles.length;
+    let error = "";
+    if (selectedFiles.length && !pdfFiles.length) {
+      error = source === "drop"
+        ? "No PDF files were dropped. Drop one or more PDF files."
+        : "No PDF files were selected. Choose one or more PDF files.";
+    } else if (rejectedCount) {
+      error = `${rejectedCount} non-PDF file${rejectedCount === 1 ? " was" : "s were"} ignored.`;
+    }
     state.deliveryAttacheImportState = {
       ...state.deliveryAttacheImportState,
-      files: Array.from(files || []),
+      files: pdfFiles,
       rows: [],
       step: "files",
       expandedRowIds: {},
-      error: "",
+      error,
       success: "",
     };
     renderWorkspace();
   }
 
   function removeDeliveryAttacheImportFile(index) {
+    invalidateDeliveryAttachePreview();
     const current = state.deliveryAttacheImportState || {};
     state.deliveryAttacheImportState = {
       ...current,
@@ -575,6 +591,7 @@ export function createWorkspaceActions({
   }
 
   function backDeliveryAttacheImportToFiles() {
+    invalidateDeliveryAttachePreview();
     const current = state.deliveryAttacheImportState || {};
     state.deliveryAttacheImportState = {
       ...current,
@@ -1417,6 +1434,7 @@ export function createWorkspaceActions({
   }
 
   function clearWorkspaceDraftsForDispatchDateChange() {
+    invalidateDeliveryAttachePreview();
     state.deliveryAssignmentDrafts = {};
     state.deliveryVehicleDrafts = {};
     state.deliveryOrderDetailId = "";
@@ -1440,6 +1458,7 @@ export function createWorkspaceActions({
   }
 
   function clearDeliveryTaskPoolModals() {
+    invalidateDeliveryAttachePreview();
     state.deliveryOrderDetailId = "";
     state.deliveryOrderForm = {};
     state.deliveryOrderFormMode = "";
@@ -1461,6 +1480,10 @@ export function createWorkspaceActions({
       !current.success &&
       ((current.files || []).length || (current.rows || []).length),
     );
+  }
+
+  function invalidateDeliveryAttachePreview() {
+    deliveryAttachePreviewRequestVersion += 1;
   }
 
   function changedOpShopAssignmentDrafts(pickups) {
@@ -1632,6 +1655,16 @@ function defaultDeliveryAttacheImportState() {
     error: "",
     success: "",
   };
+}
+
+
+function isPdfFile(file) {
+  if (!file) {
+    return false;
+  }
+  const name = String(file.name || "").toLowerCase();
+  const type = String(file.type || "").toLowerCase();
+  return type === "application/pdf" || name.endsWith(".pdf");
 }
 
 

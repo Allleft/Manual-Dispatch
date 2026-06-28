@@ -318,6 +318,149 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("state.deliveryAttacheImportState?.isOpen", self.workspace_actions)
         self.assertIn("clearDeliveryTaskPoolModals", self.workspace_actions)
 
+    def test_stage_6d_2_delivery_modal_and_upload_contracts(self):
+        order_actions = self.delivery_renderer.split(
+            "function createDeliveryOrderActions", 1
+        )[1].split("function createDeliveryOrderForm", 1)[0]
+        modal_helper = self.delivery_renderer.split(
+            "function createWorkspaceModal", 1
+        )[1].split("function trapModalFocus", 1)[0]
+        button_helper = self.delivery_renderer.split(
+            "function createActionButton", 1
+        )[1].split("function createMetricGrid", 1)[0]
+        upload_step = self.delivery_renderer.split(
+            "function createDeliveryAttacheFileStep", 1
+        )[1].split("function createDeliveryAttachePreview", 1)[0]
+
+        self.assertEqual(1, order_actions.count('createActionButton("Close"'))
+        self.assertIn('iconOnly: true', modal_helper)
+        self.assertIn('accessibleLabel: "Close"', modal_helper)
+        self.assertIn('button.setAttribute("aria-label", description)', button_helper)
+        self.assertIn('button.title = description', button_helper)
+        self.assertIn('dropZone.addEventListener("dragenter"', upload_step)
+        self.assertIn('dropZone.addEventListener("dragover"', upload_step)
+        self.assertIn('dropZone.addEventListener("dragleave"', upload_step)
+        self.assertIn('dropZone.addEventListener("drop"', upload_step)
+        self.assertIn('event.preventDefault()', upload_step)
+        self.assertIn('event.dataTransfer?.files || []', upload_step)
+        self.assertIn('source: "drop"', upload_step)
+        self.assertIn('workspace-attache-dropzone-active', upload_step)
+        self.assertIn(
+            "Review driver trips, manage assigned orders, select vehicles, and generate Delivery Run Sheets.",
+            self.delivery_renderer,
+        )
+        self.assertNotIn(
+            "assign orders to driver trips, select vehicles",
+            self.delivery_renderer,
+        )
+        self.assertIn('No Drivers available.', self.delivery_renderer)
+        self.assertIn('No Vehicles available.', self.delivery_renderer)
+        self.assertIn('function invalidateDeliveryAttachePreview()', self.workspace_actions)
+        self.assertIn('No PDF files were dropped.', self.workspace_actions)
+
+    def test_attache_preview_is_invalidated_by_close_files_and_navigation(self):
+        self._run_workspace_actions_script(
+            """
+            function deferred() {
+              let resolve;
+              const promise = new Promise((done) => { resolve = done; });
+              return { promise, resolve };
+            }
+
+            const previews = [deferred(), deferred(), deferred()];
+            let previewIndex = 0;
+            const state = {
+              isLoggedIn: true,
+              workspaceRoute: "delivery/task-pool",
+              activeWorkspace: "delivery",
+              dispatchDate: "2026-06-24",
+              deliveryBoard: { orders: [], assignments: [], driver_vehicle_assignments: [] },
+              deliveryRunSheets: [],
+              deliveryActionError: "",
+              deliveryBusyActionKeys: {},
+              deliveryAssignmentDrafts: {},
+              deliveryVehicleDrafts: {},
+              deliveryTaskPoolFilters: { search: "", delivery_date: "", urgency: "All" },
+              deliveryOrderDetailId: "",
+              deliveryOrderForm: {},
+              deliveryOrderFormMode: "",
+              deliveryOrderModalError: "",
+              deliveryAttacheImportState: {},
+              deliverySpecificationModalOpen: false,
+              deliveryDriverForm: null,
+              deliveryDriverEditingId: "",
+              deliveryVehicleForm: null,
+              deliveryVehicleEditingId: "",
+              deliverySpecificationError: "",
+              deliverySpecificationBusyKey: "",
+              opshopAssignmentDrafts: {},
+              countrysideRouteGroupDrafts: {},
+              opshopBusyActionKeys: {},
+            };
+            const api = {
+              previewDeliveryAttacheInvoices: async () => previews[previewIndex++].promise,
+              getDeliveryWorkspaceBoard: async () => state.deliveryBoard,
+              listDeliveryRunSheets: async () => [],
+            };
+            const actions = createWorkspaceActions({
+              state,
+              renderWorkspace: () => {},
+              confirmAction: () => true,
+              api,
+            });
+            const pdf = (name) => ({ name, type: "application/pdf" });
+
+            actions.openDeliveryAttacheImport();
+            actions.updateDeliveryAttacheImportFiles([pdf("old.pdf")]);
+            const closedPreview = actions.previewDeliveryAttacheImport();
+            actions.closeDeliveryAttacheImport();
+            actions.openDeliveryAttacheImport();
+            previews[0].resolve({ rows: [{ row_id: "STALE-CLOSE" }] });
+            await closedPreview;
+            if ((state.deliveryAttacheImportState.rows || []).length) {
+              throw new Error("closed Preview populated a reopened Import modal");
+            }
+
+            actions.updateDeliveryAttacheImportFiles([pdf("first.pdf")]);
+            const replacedPreview = actions.previewDeliveryAttacheImport();
+            actions.updateDeliveryAttacheImportFiles([pdf("replacement.pdf")]);
+            previews[1].resolve({ rows: [{ row_id: "STALE-FILES" }] });
+            await replacedPreview;
+            if (state.deliveryAttacheImportState.files[0].name !== "replacement.pdf") {
+              throw new Error("replacement file selection was overwritten");
+            }
+            if ((state.deliveryAttacheImportState.rows || []).length) {
+              throw new Error("replaced-file Preview populated stale rows");
+            }
+
+            actions.updateDeliveryAttacheImportFiles([pdf("route.pdf")]);
+            const routedPreview = actions.previewDeliveryAttacheImport();
+            state.workspaceRoute = "delivery/trip-summary";
+            await actions.loadWorkspaceRoute("delivery/trip-summary");
+            previews[2].resolve({ rows: [{ row_id: "STALE-ROUTE" }] });
+            await routedPreview;
+            if (state.deliveryAttacheImportState.isOpen) {
+              throw new Error("navigation did not close the Import modal");
+            }
+            if ((state.deliveryAttacheImportState.rows || []).length) {
+              throw new Error("route-stale Preview populated rows");
+            }
+
+            state.workspaceRoute = "delivery/task-pool";
+            actions.openDeliveryAttacheImport();
+            actions.updateDeliveryAttacheImportFiles(
+              [{ name: "notes.txt", type: "text/plain" }],
+              { source: "drop" },
+            );
+            if ((state.deliveryAttacheImportState.files || []).length) {
+              throw new Error("non-PDF drop was accepted");
+            }
+            if (!state.deliveryAttacheImportState.error.includes("No PDF files were dropped")) {
+              throw new Error("non-PDF drop did not show a clear validation error");
+            }
+            """
+        )
+
     def test_delivery_workspace_wires_scoped_assignment_vehicle_and_lifecycle_actions(self):
         task_pool_block = self.delivery_renderer.split(
             "function createDeliveryTaskPool", 1
