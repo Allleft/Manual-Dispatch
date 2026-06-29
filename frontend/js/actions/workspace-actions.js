@@ -100,8 +100,10 @@ export function createWorkspaceActions({
   let deliveryAttachePreviewRequestVersion = 0;
   let deliverySpecificationRequestVersion = 0;
   let deliveryVehicleMutationVersion = 0;
+  let deliveryVehicleQueueIdCounter = 0;
   let actionTokenCounter = 0;
   const deliveryVehicleQueues = new Map();
+  const deliveryVehiclePhysicalTails = new Map();
 
   async function loadWorkspaceRoute(route = state.workspaceRoute) {
     if (route !== "delivery/trip-summary") {
@@ -1115,7 +1117,12 @@ export function createWorkspaceActions({
       renderWorkspace();
       return;
     }
-    if (!vehicleId && !currentAssignment && !deliveryVehicleQueues.has(key)) {
+    if (
+      !vehicleId
+      && !currentAssignment
+      && !deliveryVehicleQueues.has(key)
+      && !deliveryVehiclePhysicalTails.has(key)
+    ) {
       removeDeliveryVehicleDraft(key);
       renderWorkspace();
       retryAvailableDeliveryVehicleClaims(key);
@@ -1126,38 +1133,75 @@ export function createWorkspaceActions({
 
   function queueDeliveryVehicleUpdate(deliveryDate, driverId) {
     const key = deliveryVehicleKey(deliveryDate, driverId);
-    if (deliveryVehicleQueues.has(key)) {
-      return deliveryVehicleQueues.get(key);
+    const existingEntry = deliveryVehicleQueues.get(key);
+    if (existingEntry?.mutationVersion === deliveryVehicleMutationVersion) {
+      return existingEntry.promise;
     }
+    const entry = {
+      queueId: ++deliveryVehicleQueueIdCounter,
+      mutationVersion: deliveryVehicleMutationVersion,
+      dispatchDate: state.dispatchDate,
+      deliveryDate,
+      promise: null,
+    };
     state.deliveryVehiclePendingKeys = {
       ...(state.deliveryVehiclePendingKeys || {}),
       [key]: true,
     };
     renderWorkspace();
-    const queueVersion = deliveryVehicleMutationVersion;
-    const queue = processDeliveryVehicleQueue(deliveryDate, driverId)
+    deliveryVehicleQueues.set(key, entry);
+    entry.promise = enqueueDeliveryVehiclePhysicalWrite(
+      key,
+      () => processDeliveryVehicleQueue(entry, deliveryDate, driverId),
+    )
+      .catch((error) => {
+        if (isDeliveryVehicleQueueCurrent(key, entry)) {
+          state.deliveryVehicleErrors = {
+            ...(state.deliveryVehicleErrors || {}),
+            [key]: error.message || "Unable to update Vehicle.",
+          };
+        }
+      })
       .finally(() => {
+        if (deliveryVehicleQueues.get(key) !== entry) {
+          return;
+        }
         deliveryVehicleQueues.delete(key);
         const { [key]: _removed, ...remaining } = state.deliveryVehiclePendingKeys || {};
         state.deliveryVehiclePendingKeys = remaining;
         if (
-          state.isLoggedIn
+          entry.mutationVersion === deliveryVehicleMutationVersion
+          && state.isLoggedIn
           && state.activeWorkspace === "delivery"
           && state.workspaceRoute === "delivery/trip-summary"
         ) {
           renderWorkspace();
-          if (queueVersion !== deliveryVehicleMutationVersion) {
-            retryAvailableDeliveryVehicleClaims(key);
-          }
         }
       });
-    deliveryVehicleQueues.set(key, queue);
-    return queue;
+    return entry.promise;
   }
 
-  async function processDeliveryVehicleQueue(deliveryDate, driverId) {
+  function enqueueDeliveryVehiclePhysicalWrite(key, operation) {
+    const previousTail = deliveryVehiclePhysicalTails.get(key);
+    const operationPromise = previousTail
+      ? previousTail.catch(() => {}).then(operation)
+      : Promise.resolve(operation());
+    const settledTail = operationPromise.catch(() => {});
+    deliveryVehiclePhysicalTails.set(key, settledTail);
+    settledTail.finally(() => {
+      if (deliveryVehiclePhysicalTails.get(key) === settledTail) {
+        deliveryVehiclePhysicalTails.delete(key);
+      }
+    });
+    return operationPromise;
+  }
+
+  async function processDeliveryVehicleQueue(entry, deliveryDate, driverId) {
     const key = deliveryVehicleKey(deliveryDate, driverId);
-    while (Object.prototype.hasOwnProperty.call(state.deliveryVehicleDrafts || {}, key)) {
+    while (
+      isDeliveryVehicleQueueCurrent(key, entry)
+      && Object.prototype.hasOwnProperty.call(state.deliveryVehicleDrafts || {}, key)
+    ) {
       const vehicleId = state.deliveryVehicleDrafts[key];
       const conflicts = getDeliveryVehicleConflictDriverNames({
         board: state.deliveryBoard,
@@ -1182,7 +1226,6 @@ export function createWorkspaceActions({
       const context = {
         ...captureMutationContext(),
         deliveryDate: state.deliveryTripSummaryDate,
-        vehicleMutationVersion: deliveryVehicleMutationVersion,
       };
       let updatedBoard;
       try {
@@ -1199,10 +1242,10 @@ export function createWorkspaceActions({
             driver_id: driverId,
           });
       } catch (error) {
-        if (await handleWorkspaceMigrationGuard(error)) {
+        if (!isDeliveryVehicleQueueCurrent(key, entry)) {
           return;
         }
-        if (!isDeliveryVehicleMutationCurrent(context)) {
+        if (await handleWorkspaceMigrationGuard(error)) {
           return;
         }
         if (state.deliveryVehicleDrafts?.[key] === vehicleId) {
@@ -1214,7 +1257,7 @@ export function createWorkspaceActions({
         }
         continue;
       }
-      if (!isDeliveryVehicleMutationCurrent(context)) {
+      if (!isDeliveryVehicleQueueCurrent(key, entry)) {
         return;
       }
       applyDeliveryVehicleBoardUpdate(updatedBoard, deliveryDate, driverId);
@@ -1252,6 +1295,18 @@ export function createWorkspaceActions({
           queueDeliveryVehicleUpdate(deliveryDate, driverId);
         }
       });
+  }
+
+  function isDeliveryVehicleQueueCurrent(key, entry) {
+    return (
+      deliveryVehicleQueues.get(key) === entry
+      && entry.mutationVersion === deliveryVehicleMutationVersion
+      && state.isLoggedIn
+      && state.workspaceRoute === "delivery/trip-summary"
+      && state.activeWorkspace === "delivery"
+      && state.dispatchDate === entry.dispatchDate
+      && (state.deliveryTripSummaryDate || entry.deliveryDate) === entry.deliveryDate
+    );
   }
 
   function updateDeliveryVehicleClaim(key, vehicleId) {
@@ -1783,16 +1838,9 @@ export function createWorkspaceActions({
     );
   }
 
-  function isDeliveryVehicleMutationCurrent(context) {
-    return (
-      isDeliveryMutationCurrent(context)
-      && state.deliveryTripSummaryDate === context.deliveryDate
-      && deliveryVehicleMutationVersion === context.vehicleMutationVersion
-    );
-  }
-
   function clearDeliveryVehicleTransientState() {
     deliveryVehicleMutationVersion += 1;
+    deliveryVehicleQueues.clear();
     state.deliveryVehicleDrafts = {};
     state.deliveryVehicleClaims = {};
     state.deliveryVehicleErrors = {};

@@ -5343,6 +5343,26 @@ select:disabled {
   box-shadow: 0 9px 22px rgba(19, 68, 163, 0.045);
 }
 
+.workspace-order-card-urgent {
+  border-color: var(--danger);
+  background: linear-gradient(135deg, var(--danger-soft), #fff 58%);
+  box-shadow: 0 9px 22px rgba(157, 47, 31, 0.08);
+}
+
+.workspace-order-card-urgent[role="button"]:focus-visible {
+  outline-color: var(--danger);
+}
+
+.workspace-page-delivery .workspace-order-badge-urgent,
+.workspace-order-chip-urgent {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.workspace-page-delivery .workspace-order-badge-urgent {
+  box-shadow: inset 0 0 0 1px rgba(157, 47, 31, 0.2);
+}
+
 .workspace-order-card-body {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(170px, 0.72fr);

@@ -8,6 +8,11 @@ import {
   formatDeliveryVehicleOptionLabel,
   getDeliveryVehicleConflictDriverNames,
 } from "../utils/delivery-vehicle-utils.js";
+import {
+  isDeliveryOrderUrgent,
+  normalizeDeliveryOrderUrgency,
+  sortDeliveryTaskPoolOrders,
+} from "../utils/delivery-order-priority-utils.js";
 
 
 const DELIVERY_TABS = [
@@ -125,7 +130,9 @@ function createDeliveryTaskPool(board, state, actions) {
   const unassignedOrders = (board.orders || []).filter(
     (order) => !assignments.has(order.order_id),
   );
-  const filteredOrders = filterDeliveryTaskPoolOrders(unassignedOrders, state.deliveryTaskPoolFilters);
+  const filteredOrders = sortDeliveryTaskPoolOrders(
+    filterDeliveryTaskPoolOrders(unassignedOrders, state.deliveryTaskPoolFilters),
+  );
 
   wrapper.append(createDeliveryTaskPoolPanel(unassignedOrders, filteredOrders, state, actions));
   const orderGrid = document.createElement("div");
@@ -225,6 +232,9 @@ function createDeliveryTaskPoolPanel(unassignedOrders, filteredOrders, state, ac
 function createOrderCard(order, board, state, actions) {
   const card = document.createElement("article");
   card.className = "workspace-record-card workspace-order-card";
+  const urgency = normalizeDeliveryOrderUrgency(order.urgency);
+  const isUrgent = isDeliveryOrderUrgent(urgency);
+  card.classList.toggle("workspace-order-card-urgent", isUrgent);
   card.tabIndex = 0;
   card.setAttribute("role", "button");
   card.setAttribute("aria-label", `View Delivery Order ${formatOptional(order.invoice_number, order.order_id)}`);
@@ -250,13 +260,17 @@ function createOrderCard(order, board, state, actions) {
   suburb.className = "workspace-order-suburb";
   suburb.textContent = formatOptional(order.suburb);
   identity.append(eyebrow, orderNumber, title, suburb);
-  top.append(identity, createBadge(formatOptional(order.urgency, "Normal")));
+  const urgencyBadge = createBadge(urgency);
+  urgencyBadge.classList.toggle("workspace-order-badge-urgent", isUrgent);
+  top.append(identity, urgencyBadge);
 
   const chips = document.createElement("div");
   chips.className = "workspace-order-chip-row";
+  const urgencyChip = createChip(urgency);
+  urgencyChip.classList.toggle("workspace-order-chip-urgent", isUrgent);
   chips.append(
     createChip(`Load: ${formatLoad(order)}`),
-    createChip(formatOptional(order.urgency, "Normal")),
+    urgencyChip,
     createChip(`Delivery Date: ${formatOptional(order.delivery_date)}`),
     createChip(`Start: ${formatOptional(order.start_time, "-")}`),
   );
@@ -322,12 +336,15 @@ function createOrderAssignmentControls(order, board, state, actions) {
 function filterDeliveryTaskPoolOrders(orders, filters = {}) {
   const search = normalizeSearch(filters.search || "");
   const deliveryDate = filters.delivery_date || "";
-  const urgency = filters.urgency || "All";
+  const urgency = String(filters.urgency || "All").trim();
   return (orders || []).filter((order) => {
     if (deliveryDate && order.delivery_date !== deliveryDate) {
       return false;
     }
-    if (urgency && urgency !== "All" && order.urgency !== urgency) {
+    if (
+      urgency.toLowerCase() !== "all"
+      && normalizeDeliveryOrderUrgency(order.urgency) !== normalizeDeliveryOrderUrgency(urgency)
+    ) {
       return false;
     }
     if (!search) {

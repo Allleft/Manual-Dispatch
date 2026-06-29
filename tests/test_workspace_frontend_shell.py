@@ -25,9 +25,13 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.delivery_vehicle_utils = self._read(
             "js/utils/delivery-vehicle-utils.js"
         )
+        self.delivery_order_priority_utils = self._read(
+            "js/utils/delivery-order-priority-utils.js"
+        )
         self.opshop_renderer = self._read(
             "js/render/opshop-workspace-renderer.js"
         )
+        self.styles = self._read("styles.css")
 
     def test_login_defaults_to_home_and_logged_out_routes_do_not_load(self):
         self.assertIn(
@@ -704,6 +708,118 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         )
         self.assertEqual(0, result.returncode, result.stderr or result.stdout)
 
+    def test_delivery_task_pool_priority_normalization_sorting_and_source_safety(self):
+        module_uri = (
+            FRONTEND_ROOT / "js/utils/delivery-order-priority-utils.js"
+        ).as_uri()
+        script = textwrap.dedent(
+            f"""
+            const {{
+              isDeliveryOrderUrgent,
+              normalizeDeliveryOrderUrgency,
+              sortDeliveryTaskPoolOrders,
+            }} = await import({module_uri!r});
+
+            for (const value of ["Urgent", "URGENT", "urgent", " urgent "]) {{
+              if (normalizeDeliveryOrderUrgency(value) !== "Urgent") {{
+                throw new Error(`Urgency was not normalized: ${{value}}`);
+              }}
+              if (!isDeliveryOrderUrgent({{ urgency: value }})) {{
+                throw new Error(`Urgency was not detected: ${{value}}`);
+              }}
+            }}
+            for (const value of ["", null, "priority", "normal"]) {{
+              if (normalizeDeliveryOrderUrgency(value) !== "Normal") {{
+                throw new Error(`Non-urgent value was not canonical Normal: ${{value}}`);
+              }}
+            }}
+
+            const orders = [
+              {{ order_id: "N-EARLY", urgency: "Normal", delivery_date: "2026-06-01", start_time: "07:00", invoice_number: "1" }},
+              {{ order_id: "U-MISSING-DATE", urgency: " urgent ", delivery_date: "", start_time: "06:00", invoice_number: "9" }},
+              {{ order_id: "U-LATE-TIME", urgency: "URGENT", delivery_date: "2026-06-03", start_time: "10:00", invoice_number: "5" }},
+              {{ order_id: "U-EARLY-TIME", urgency: "Urgent", delivery_date: "2026-06-03", start_time: "08:00", invoice_number: "8" }},
+              {{ order_id: "U-MISSING-TIME", urgency: "urgent", delivery_date: "2026-06-03", start_time: "", invoice_number: "2" }},
+              {{ order_id: "U-EARLIER-DATE", urgency: "urgent", delivery_date: "2026-06-02", start_time: "15:00", invoice_number: "7" }},
+              {{ order_id: "FALLBACK-B", urgency: "Normal", delivery_date: "bad", start_time: "bad", invoice_number: "20", order_no: "B" }},
+              {{ order_id: "FALLBACK-A2", urgency: "Normal", delivery_date: "bad", start_time: "bad", invoice_number: "20", order_no: "A" }},
+              {{ order_id: "FALLBACK-A1", urgency: "Normal", delivery_date: "bad", start_time: "bad", invoice_number: "20", order_no: "A" }},
+              {{ order_id: "STABLE", urgency: "Normal", delivery_date: "bad", start_time: "bad", invoice_number: "30", order_no: "S" }},
+              {{ order_id: "STABLE", urgency: "Normal", delivery_date: "bad", start_time: "bad", invoice_number: "30", order_no: "S" }},
+            ];
+            const before = orders.map((order) => order.order_id).join(",");
+            const sorted = sortDeliveryTaskPoolOrders(orders);
+            const expected = [
+              "U-EARLIER-DATE",
+              "U-EARLY-TIME",
+              "U-LATE-TIME",
+              "U-MISSING-TIME",
+              "U-MISSING-DATE",
+              "N-EARLY",
+              "FALLBACK-A1",
+              "FALLBACK-A2",
+              "FALLBACK-B",
+              "STABLE",
+              "STABLE",
+            ].join(",");
+            if (sorted.map((order) => order.order_id).join(",") !== expected) {{
+              throw new Error(`Unexpected priority order: ${{sorted.map((order) => order.order_id).join(",")}}`);
+            }}
+            if (orders.map((order) => order.order_id).join(",") !== before) {{
+              throw new Error("Priority sort mutated the scoped board Orders array");
+            }}
+            if (sorted === orders) {{
+              throw new Error("Priority sort returned the source array");
+            }}
+            """
+        )
+        result = subprocess.run(
+            ["node", "--input-type=module", "--eval", script],
+            cwd=PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(0, result.returncode, result.stderr or result.stdout)
+
+    def test_delivery_task_pool_applies_priority_after_filters_and_urgent_styles(self):
+        task_pool_block = self.delivery_renderer.split(
+            "function createDeliveryTaskPool", 1
+        )[1].split("function createDeliveryTaskPoolPanel", 1)[0]
+        self.assertIn("sortDeliveryTaskPoolOrders(", task_pool_block)
+        self.assertIn("filterDeliveryTaskPoolOrders(unassignedOrders", task_pool_block)
+        self.assertIn(
+            "const filteredOrders = sortDeliveryTaskPoolOrders(\n"
+            "    filterDeliveryTaskPoolOrders(unassignedOrders",
+            task_pool_block,
+        )
+        self.assertIn("normalizeDeliveryOrderUrgency(order.urgency)", self.delivery_renderer)
+        self.assertIn("normalizeDeliveryOrderUrgency(urgency)", self.delivery_renderer)
+        self.assertIn('card.classList.toggle("workspace-order-card-urgent", isUrgent)', self.delivery_renderer)
+        self.assertIn('urgencyBadge.classList.toggle("workspace-order-badge-urgent", isUrgent)', self.delivery_renderer)
+        self.assertIn('urgencyChip.classList.toggle("workspace-order-chip-urgent", isUrgent)', self.delivery_renderer)
+        self.assertIn('card.setAttribute("role", "button")', self.delivery_renderer)
+        self.assertIn(
+            'controls.addEventListener("click", (event) => event.stopPropagation())',
+            self.delivery_renderer,
+        )
+        self.assertIn(
+            'controls.addEventListener("keydown", (event) => event.stopPropagation())',
+            self.delivery_renderer,
+        )
+        self.assertIn('const driverSelect = createSelect(', self.delivery_renderer)
+        self.assertIn('const tripSelect = createSelect(', self.delivery_renderer)
+        self.assertIn('"Assign",', self.delivery_renderer)
+        self.assertIn("workspace-order-card-urgent", self.styles)
+        self.assertIn("workspace-order-badge-urgent", self.styles)
+        self.assertIn("workspace-order-chip-urgent", self.styles)
+        urgent_css = self.styles.split(".workspace-order-card-urgent", 1)[1].split(
+            ".workspace-order-card-body", 1
+        )[0]
+        self.assertIn("var(--danger)", urgent_css)
+        self.assertIn("var(--danger-soft)", urgent_css)
+        self.assertNotIn("opshop", urgent_css.lower())
+
     def test_vehicle_autosave_serializes_latest_intent_per_driver(self):
         self._run_workspace_actions_script(
             """
@@ -761,6 +877,9 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
               const actions = createWorkspaceActions({ state, renderWorkspace: () => {}, api });
               const first = actions.updateDeliveryVehicleSelection("2026-06-29", "A", "V1");
               await Promise.resolve();
+              const intermediate = actions.updateDeliveryVehicleSelection(
+                "2026-06-29", "A", "V2",
+              );
               const latest = actions.updateDeliveryVehicleSelection(
                 "2026-06-29", "A", latestVehicleId,
               );
@@ -768,7 +887,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
                 throw new Error("latest Vehicle write was sent before the first completed");
               }
               firstResponse.resolve();
-              await Promise.all([first, latest]);
+              await Promise.all([first, intermediate, latest]);
               const finalVehicle = state.deliveryBoard.driver_vehicle_assignments[0]?.vehicle_id || "";
               if (writes.join(",") !== `V1,${latestVehicleId}` || finalVehicle !== latestVehicleId) {
                 throw new Error(`serialized Vehicle writes did not finish at ${latestVehicleId || "blank"}`);
@@ -790,6 +909,230 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertLess(
             load_route_block.index('route !== "delivery/trip-summary"'),
             load_route_block.index("!state.isLoggedIn"),
+        )
+
+    def test_vehicle_queue_route_exit_keeps_physical_writes_serial_and_new_intent_current(self):
+        self._run_workspace_actions_script(
+            """
+            function deferred() {
+              let resolve;
+              const promise = new Promise((done) => { resolve = done; });
+              return { promise, resolve };
+            }
+            async function flush() {
+              for (let index = 0; index < 8; index += 1) {
+                await Promise.resolve();
+              }
+            }
+
+            async function runScenario(finalVehicleId, failFirst) {
+              const firstGate = deferred();
+              const secondGate = deferred();
+              let persistedVehicleId = "";
+              let activeWrites = 0;
+              let maxActiveWrites = 0;
+              const writes = [];
+              const board = () => ({
+                orders: [], assignments: [],
+                drivers: [{ driver_id: "A", name: "Driver A" }],
+                vehicles: [
+                  { vehicle_id: "V1", rego: "ONE", pallet_capacity: 10 },
+                  { vehicle_id: "V2", rego: "TWO", pallet_capacity: 20 },
+                ],
+                driver_vehicle_assignments: persistedVehicleId ? [{
+                  dispatch_date: "2026-06-29",
+                  delivery_date: "2026-06-29",
+                  driver_id: "A",
+                  vehicle_id: persistedVehicleId,
+                }] : [],
+              });
+              const state = {
+                isLoggedIn: true,
+                workspaceRoute: "delivery/trip-summary",
+                activeWorkspace: "delivery",
+                dispatchDate: "2026-06-29",
+                deliveryTripSummaryDate: "2026-06-29",
+                deliveryBoard: board(), deliveryRunSheets: [],
+                deliveryAssignmentDrafts: {}, deliveryVehicleDrafts: {},
+                deliveryVehicleClaims: {}, deliveryVehicleClaimSequence: 0,
+                deliveryVehicleErrors: {}, deliveryVehiclePendingKeys: {},
+                deliveryBusyActionKeys: {}, deliveryActionError: "",
+              };
+              async function write(vehicleId) {
+                const writeIndex = writes.length;
+                writes.push(vehicleId);
+                activeWrites += 1;
+                maxActiveWrites = Math.max(maxActiveWrites, activeWrites);
+                try {
+                  await (writeIndex === 0 ? firstGate.promise : secondGate.promise);
+                  if (writeIndex === 0 && failFirst) {
+                    throw new Error("old V1 failed");
+                  }
+                  persistedVehicleId = vehicleId;
+                  return board();
+                } finally {
+                  activeWrites -= 1;
+                }
+              }
+              const api = {
+                assignDeliveryWorkspaceVehicle: async (payload) => write(payload.vehicle_id),
+                clearDeliveryWorkspaceVehicle: async () => write(""),
+                getDeliveryWorkspaceBoard: async () => board(),
+                listDeliveryRunSheets: async () => [],
+              };
+              const actions = createWorkspaceActions({ state, renderWorkspace: () => {}, api });
+              const key = "2026-06-29|A";
+
+              const first = actions.updateDeliveryVehicleSelection("2026-06-29", "A", "V1");
+              await flush();
+              if (writes.join(",") !== "V1" || !state.deliveryVehiclePendingKeys[key]) {
+                throw new Error("old V1 did not enter its physical and logical queues");
+              }
+              state.deliveryVehicleErrors[key] = "old error";
+              state.workspaceRoute = "delivery/task-pool";
+              await actions.loadWorkspaceRoute("delivery/task-pool");
+              for (const field of [
+                "deliveryVehicleDrafts",
+                "deliveryVehicleClaims",
+                "deliveryVehicleErrors",
+                "deliveryVehiclePendingKeys",
+              ]) {
+                if (Object.keys(state[field] || {}).length) {
+                  throw new Error(`${field} survived route exit`);
+                }
+              }
+
+              state.workspaceRoute = "delivery/trip-summary";
+              state.activeWorkspace = "delivery";
+              await actions.loadWorkspaceRoute("delivery/trip-summary");
+              const latest = actions.updateDeliveryVehicleSelection(
+                "2026-06-29", "A", finalVehicleId,
+              );
+              if (state.deliveryVehicleDrafts[key] !== finalVehicleId) {
+                throw new Error("new route intent did not appear immediately");
+              }
+              if (!state.deliveryVehiclePendingKeys[key]) {
+                throw new Error("new route intent did not become pending immediately");
+              }
+              if (writes.join(",") !== "V1" || maxActiveWrites !== 1) {
+                throw new Error("new route intent overlapped the old physical write");
+              }
+
+              firstGate.resolve();
+              await flush();
+              const expectedWrites = `V1,${finalVehicleId}`;
+              if (writes.join(",") !== expectedWrites) {
+                throw new Error(`new physical write did not follow V1: ${writes.join(",")}`);
+              }
+              if (!state.deliveryVehiclePendingKeys[key]) {
+                throw new Error("old logical finalizer removed the new pending state");
+              }
+              if (state.deliveryVehicleDrafts[key] !== finalVehicleId) {
+                throw new Error("old response removed or replaced the new draft");
+              }
+              if (maxActiveWrites !== 1) {
+                throw new Error("same Driver/date physical writes were concurrent");
+              }
+
+              secondGate.resolve();
+              await Promise.all([first, latest]);
+              const displayedVehicleId =
+                state.deliveryBoard.driver_vehicle_assignments[0]?.vehicle_id || "";
+              if (persistedVehicleId !== finalVehicleId || displayedVehicleId !== finalVehicleId) {
+                throw new Error(`latest intent was not final: ${persistedVehicleId}/${displayedVehicleId}`);
+              }
+              if (
+                state.deliveryVehiclePendingKeys[key]
+                || Object.prototype.hasOwnProperty.call(state.deliveryVehicleDrafts, key)
+                || state.deliveryVehicleErrors[key]
+              ) {
+                throw new Error("completed latest queue left transient UI state");
+              }
+              await actions.loadWorkspaceRoute("delivery/trip-summary");
+              const refreshedVehicleId =
+                state.deliveryBoard.driver_vehicle_assignments[0]?.vehicle_id || "";
+              if (refreshedVehicleId !== finalVehicleId) {
+                throw new Error("refresh did not preserve the latest persisted Vehicle");
+              }
+            }
+
+            await runScenario("V2", false);
+            await runScenario("", false);
+            await runScenario("V2", true);
+            await runScenario("", true);
+            """
+        )
+
+    def test_vehicle_queue_logout_invalidates_old_response_before_immediate_login(self):
+        self._run_workspace_actions_script(
+            """
+            function deferred() {
+              let resolve;
+              const promise = new Promise((done) => { resolve = done; });
+              return { promise, resolve };
+            }
+            async function flush() {
+              for (let index = 0; index < 8; index += 1) {
+                await Promise.resolve();
+              }
+            }
+            const firstGate = deferred();
+            const secondGate = deferred();
+            const writes = [];
+            let persistedVehicleId = "";
+            const board = () => ({
+              orders: [], assignments: [],
+              drivers: [{ driver_id: "A", name: "Driver A" }], vehicles: [],
+              driver_vehicle_assignments: persistedVehicleId ? [{
+                delivery_date: "2026-06-29", driver_id: "A", vehicle_id: persistedVehicleId,
+              }] : [],
+            });
+            const state = {
+              isLoggedIn: true, workspaceRoute: "delivery/trip-summary",
+              activeWorkspace: "delivery", dispatchDate: "2026-06-29",
+              deliveryTripSummaryDate: "2026-06-29", deliveryBoard: board(),
+              deliveryVehicleDrafts: {}, deliveryVehicleClaims: {},
+              deliveryVehicleClaimSequence: 0, deliveryVehicleErrors: {},
+              deliveryVehiclePendingKeys: {}, deliveryBusyActionKeys: {},
+            };
+            const api = {
+              assignDeliveryWorkspaceVehicle: async (payload) => {
+                const index = writes.length;
+                writes.push(payload.vehicle_id);
+                await (index === 0 ? firstGate.promise : secondGate.promise);
+                persistedVehicleId = payload.vehicle_id;
+                return board();
+              },
+            };
+            const actions = createWorkspaceActions({ state, renderWorkspace: () => {}, api });
+            const oldWrite = actions.updateDeliveryVehicleSelection("2026-06-29", "A", "V1");
+            await flush();
+            state.isLoggedIn = false;
+            actions.resetDeliveryVehicleTransientState();
+            state.isLoggedIn = true;
+            state.workspaceRoute = "delivery/trip-summary";
+            state.activeWorkspace = "delivery";
+            const newWrite = actions.updateDeliveryVehicleSelection("2026-06-29", "A", "V2");
+            if (state.deliveryVehicleDrafts["2026-06-29|A"] !== "V2") {
+              throw new Error("new login did not own the current Vehicle draft");
+            }
+            firstGate.resolve();
+            await flush();
+            if (writes.join(",") !== "V1,V2") {
+              throw new Error("new login Vehicle write did not follow the old physical tail");
+            }
+            if (state.deliveryBoard.driver_vehicle_assignments.length) {
+              throw new Error("old login response overwrote the new session board");
+            }
+            if (!state.deliveryVehiclePendingKeys["2026-06-29|A"]) {
+              throw new Error("old login finalizer removed new login pending state");
+            }
+            secondGate.resolve();
+            await Promise.all([oldWrite, newWrite]);
+            if (state.deliveryBoard.driver_vehicle_assignments[0]?.vehicle_id !== "V2") {
+              throw new Error("new login did not finish with V2");
+            }
+            """
         )
         self._run_workspace_actions_script(
             """
