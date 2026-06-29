@@ -122,6 +122,7 @@ class WorkspaceScopedMutationsTest(unittest.TestCase):
                 "trip_no": "trip3",
             },
         )
+
         arbitrary_type = self.client.post(
             "/api/manual-dispatch/delivery/assignments",
             json={
@@ -212,6 +213,44 @@ class WorkspaceScopedMutationsTest(unittest.TestCase):
             },
         )
         self.assertEqual(404, order_as_pickup.status_code)
+
+    def test_scoped_vehicle_assignment_rejects_same_date_duplicate_and_allows_other_date(self):
+        first = self.client.post(
+            "/api/manual-dispatch/delivery/vehicle-assignments",
+            json={
+                "dispatch_date": self.dispatch_date,
+                "delivery_date": self.dispatch_date,
+                "driver_id": "DRIVER-1",
+                "vehicle_id": "VEHICLE-1",
+            },
+        )
+        self.assertEqual(200, first.status_code, first.text)
+
+        duplicate = self.client.post(
+            "/api/manual-dispatch/delivery/vehicle-assignments",
+            json={
+                "dispatch_date": self.dispatch_date,
+                "delivery_date": self.dispatch_date,
+                "driver_id": "DRIVER-2",
+                "vehicle_id": "VEHICLE-1",
+            },
+        )
+        self.assertEqual(400, duplicate.status_code, duplicate.text)
+        self.assertEqual(
+            "Vehicle TEST01 is already assigned to Driver 1 for this delivery date.",
+            duplicate.json()["detail"],
+        )
+
+        other_date = self.client.post(
+            "/api/manual-dispatch/delivery/vehicle-assignments",
+            json={
+                "dispatch_date": self.dispatch_date,
+                "delivery_date": "2026-06-17",
+                "driver_id": "DRIVER-2",
+                "vehicle_id": "VEHICLE-1",
+            },
+        )
+        self.assertEqual(200, other_date.status_code, other_date.text)
 
     def test_generated_delivery_reserves_captured_target_and_vehicle_mutations(self):
         self._assign_order("ORDER-1", "DRIVER-1")

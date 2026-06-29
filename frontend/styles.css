@@ -719,14 +719,8 @@
   font-size: 0.8rem;
 }
 
-.workspace-context-row-actions {
-  grid-template-columns: minmax(160px, 1.2fr) minmax(120px, 1fr);
-  align-items: end;
-  gap: 0.55rem;
-}
-
-.workspace-context-row-actions .workspace-field {
-  grid-column: span 2;
+.workspace-vehicle-control {
+  gap: 0.35rem;
 }
 
 .workspace-field select.workspace-vehicle-select-invalid {
@@ -741,11 +735,18 @@
 }
 
 .workspace-vehicle-conflict-warning {
-  grid-column: 1 / -1;
   margin: 0;
   color: #a62f2f;
   font-size: 0.78rem;
   font-weight: 850;
+  line-height: 1.35;
+}
+
+.workspace-vehicle-update-status {
+  margin: 0;
+  color: #315b92;
+  font-size: 0.78rem;
+  font-weight: 800;
   line-height: 1.35;
 }
 

@@ -33,7 +33,6 @@ import {
   apiUpdateDeliveryVehicle,
 } from "../api/manual-dispatch-api.js";
 import {
-  formatDeliveryVehicleConflictMessage,
   getDeliveryVehicleConflictDriverNames,
 } from "../utils/delivery-vehicle-utils.js";
 
@@ -174,6 +173,7 @@ export function createWorkspaceActions({
     state.deliveryVehicleEditingId = "";
     state.deliverySpecificationError = "";
     state.deliverySpecificationBusyKey = "";
+    state.deliveryVehicleErrors = {};
     if (typeof window !== "undefined") {
       if (window.location?.replace) {
         window.location.replace("#home");
@@ -1074,24 +1074,18 @@ export function createWorkspaceActions({
     });
   }
 
-  function updateDeliveryVehicleDraft(deliveryDate, driverId, vehicleId) {
+  async function updateDeliveryVehicleSelection(deliveryDate, driverId, vehicleId) {
     const key = deliveryVehicleKey(deliveryDate, driverId);
     state.deliveryVehicleDrafts = {
-      ...state.deliveryVehicleDrafts,
+      ...(state.deliveryVehicleDrafts || {}),
       [key]: vehicleId,
     };
+    clearDeliveryVehicleError(key);
     renderWorkspace();
-  }
-
-  async function applyDeliveryVehicleAssignment(deliveryDate, driverId) {
-    const key = deliveryVehicleKey(deliveryDate, driverId);
     const currentAssignment = (state.deliveryBoard?.driver_vehicle_assignments || []).find(
       (assignment) =>
         assignment.delivery_date === deliveryDate && assignment.driver_id === driverId,
     );
-    const vehicleId = Object.prototype.hasOwnProperty.call(state.deliveryVehicleDrafts, key)
-      ? state.deliveryVehicleDrafts[key]
-      : currentAssignment?.vehicle_id || "";
     const conflictDriverNames = getDeliveryVehicleConflictDriverNames({
       board: state.deliveryBoard,
       drafts: state.deliveryVehicleDrafts,
@@ -1100,52 +1094,113 @@ export function createWorkspaceActions({
       vehicleId,
     });
     if (conflictDriverNames.length) {
-      state.deliveryActionError = formatDeliveryVehicleConflictMessage(conflictDriverNames);
       renderWorkspace();
       return;
     }
-    await runDeliveryAction(`delivery-vehicle:${deliveryDate}:${driverId}`, async (context) => {
-      await api.assignDeliveryWorkspaceVehicle({
-        dispatch_date: context.dispatchDate,
-        delivery_date: deliveryDate,
-        driver_id: driverId,
-        vehicle_id: vehicleId,
-      });
-      if (isDeliveryMutationCurrent(context)) {
-        const { [key]: _removed, ...remaining } = state.deliveryVehicleDrafts;
-        state.deliveryVehicleDrafts = remaining;
-        await loadDeliveryRoute(context.route);
-      }
-    });
+    if (!vehicleId && !currentAssignment) {
+      removeDeliveryVehicleDraft(key);
+      renderWorkspace();
+      await retryAvailableDeliveryVehicleDrafts(key);
+      return;
+    }
+    await persistDeliveryVehicleSelection(deliveryDate, driverId, vehicleId);
   }
 
-  async function clearDeliveryVehicleAssignment(deliveryDate, driverId) {
+  async function persistDeliveryVehicleSelection(
+    deliveryDate,
+    driverId,
+    vehicleId,
+    { retryPending = true } = {},
+  ) {
     const key = deliveryVehicleKey(deliveryDate, driverId);
-    const currentAssignment = (state.deliveryBoard?.driver_vehicle_assignments || []).find(
-      (assignment) =>
-        assignment.delivery_date === deliveryDate && assignment.driver_id === driverId,
-    );
-    if (
-      Object.prototype.hasOwnProperty.call(state.deliveryVehicleDrafts, key)
-      && !currentAssignment
-    ) {
-      const { [key]: _removed, ...remaining } = state.deliveryVehicleDrafts;
-      state.deliveryVehicleDrafts = remaining;
-      renderWorkspace();
-      return;
-    }
-    await runDeliveryAction(`delivery-vehicle-clear:${deliveryDate}:${driverId}`, async (context) => {
-      await api.clearDeliveryWorkspaceVehicle({
-        dispatch_date: context.dispatchDate,
-        delivery_date: deliveryDate,
-        driver_id: driverId,
-      });
-      if (isDeliveryMutationCurrent(context)) {
-        const { [key]: _removed, ...remaining } = state.deliveryVehicleDrafts;
-        state.deliveryVehicleDrafts = remaining;
-        await loadDeliveryRoute(context.route);
+    const actionKey = `delivery-vehicle-update:${deliveryDate}:${driverId}`;
+    let saved = false;
+    await runDeliveryAction(actionKey, async (context) => {
+      const updatedBoard = vehicleId
+        ? await api.assignDeliveryWorkspaceVehicle({
+          dispatch_date: context.dispatchDate,
+          delivery_date: deliveryDate,
+          driver_id: driverId,
+          vehicle_id: vehicleId,
+        })
+        : await api.clearDeliveryWorkspaceVehicle({
+          dispatch_date: context.dispatchDate,
+          delivery_date: deliveryDate,
+          driver_id: driverId,
+        });
+      if (
+        isDeliveryMutationCurrent(context)
+        && state.deliveryVehicleDrafts?.[key] === vehicleId
+      ) {
+        state.deliveryBoard = updatedBoard || state.deliveryBoard;
+        removeDeliveryVehicleDraft(key);
+        clearDeliveryVehicleError(key);
+        saved = true;
+      }
+    }, (error) => {
+      if (state.deliveryVehicleDrafts?.[key] === vehicleId) {
+        state.deliveryVehicleErrors = {
+          ...(state.deliveryVehicleErrors || {}),
+          [key]: error.message,
+        };
       }
     });
+    if (saved && retryPending) {
+      await retryAvailableDeliveryVehicleDrafts(key);
+    }
+  }
+
+  async function retryAvailableDeliveryVehicleDrafts(excludedKey) {
+    const pendingDrafts = Object.entries({ ...(state.deliveryVehicleDrafts || {}) });
+    for (const [key, vehicleId] of pendingDrafts) {
+      if (!vehicleId || key === excludedKey) {
+        continue;
+      }
+      const separatorIndex = key.indexOf("|");
+      if (separatorIndex < 0) {
+        continue;
+      }
+      const deliveryDate = key.slice(0, separatorIndex);
+      const driverId = key.slice(separatorIndex + 1);
+      const actionKey = `delivery-vehicle-update:${deliveryDate}:${driverId}`;
+      if (state.deliveryBusyActionKeys?.[actionKey]) {
+        continue;
+      }
+      const currentAssignment = (state.deliveryBoard?.driver_vehicle_assignments || []).find(
+        (assignment) =>
+          assignment.delivery_date === deliveryDate && assignment.driver_id === driverId,
+      );
+      if (currentAssignment?.vehicle_id === vehicleId) {
+        removeDeliveryVehicleDraft(key);
+        clearDeliveryVehicleError(key);
+        continue;
+      }
+      const conflicts = getDeliveryVehicleConflictDriverNames({
+        board: state.deliveryBoard,
+        drafts: state.deliveryVehicleDrafts,
+        deliveryDate,
+        driverId,
+        vehicleId,
+      });
+      if (!conflicts.length) {
+        await persistDeliveryVehicleSelection(
+          deliveryDate,
+          driverId,
+          vehicleId,
+          { retryPending: false },
+        );
+      }
+    }
+  }
+
+  function removeDeliveryVehicleDraft(key) {
+    const { [key]: _removed, ...remaining } = state.deliveryVehicleDrafts || {};
+    state.deliveryVehicleDrafts = remaining;
+  }
+
+  function clearDeliveryVehicleError(key) {
+    const { [key]: _removed, ...remaining } = state.deliveryVehicleErrors || {};
+    state.deliveryVehicleErrors = remaining;
   }
 
   async function generateDeliveryRunSheet(candidate) {
@@ -1432,6 +1487,11 @@ export function createWorkspaceActions({
         vehicleKeys.has(key),
       ),
     );
+    state.deliveryVehicleErrors = Object.fromEntries(
+      Object.entries(state.deliveryVehicleErrors || {}).filter(([key]) =>
+        vehicleKeys.has(key),
+      ),
+    );
   }
 
   function pruneOpShopDrafts() {
@@ -1466,6 +1526,7 @@ export function createWorkspaceActions({
     invalidateDeliveryAttachePreview();
     state.deliveryAssignmentDrafts = {};
     state.deliveryVehicleDrafts = {};
+    state.deliveryVehicleErrors = {};
     state.deliveryOrderDetailId = "";
     state.deliveryOrderForm = {};
     state.deliveryOrderFormMode = "";
@@ -1579,7 +1640,6 @@ export function createWorkspaceActions({
     cancelActiveDeliveryOrder,
     cancelDeliveryDriverForm,
     applyDeliveryOrderAssignment,
-    applyDeliveryVehicleAssignment,
     applyOpShopAssignmentChanges,
     assignCountrysideRouteGroup,
     cancelDeliveryRunSheet,
@@ -1588,7 +1648,6 @@ export function createWorkspaceActions({
     clearDeliveryTaskPoolFilters,
     clearDeliveryAttacheImportSelection,
     cancelOpShopPickupCollection,
-    clearDeliveryVehicleAssignment,
     closeDeliveryAttacheImport,
     closeDeliveryOrderModal,
     closeDeliverySpecifications,
@@ -1637,7 +1696,7 @@ export function createWorkspaceActions({
     updateDeliveryOrderProductLine,
     updateDeliveryTaskPoolFilter,
     updateDeliveryTripSummaryDate,
-    updateDeliveryVehicleDraft,
+    updateDeliveryVehicleSelection,
     updateDeliveryVehicleForm,
     updateDispatchDate,
     updateOpShopAssignmentDraft,

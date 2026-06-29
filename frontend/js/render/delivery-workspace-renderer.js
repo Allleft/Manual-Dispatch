@@ -480,9 +480,10 @@ function createDriverTripSummaryCard(driver, board, deliveryDate, state, actions
 
 function createDriverVehicleControl(driver, board, deliveryDate, isLocked, state, actions) {
   const section = document.createElement("div");
-  section.className = "workspace-context-row workspace-context-row-actions";
+  section.className = "workspace-context-row workspace-vehicle-control";
   const currentAssignment = findVehicleAssignment(board, deliveryDate, driver.driver_id);
   const draftKey = `${deliveryDate}|${driver.driver_id}`;
+  const busyKey = `delivery-vehicle-update:${deliveryDate}:${driver.driver_id}`;
   const selectedVehicleId =
     state.deliveryVehicleDrafts[draftKey] ?? currentAssignment?.vehicle_id ?? "";
   const conflictDriverNames = getDeliveryVehicleConflictDriverNames({
@@ -492,12 +493,11 @@ function createDriverVehicleControl(driver, board, deliveryDate, isLocked, state
     driverId: driver.driver_id,
     vehicleId: selectedVehicleId,
   });
-  const conflictMessage = formatDeliveryVehicleConflictMessage(conflictDriverNames);
+  const localConflictMessage = formatDeliveryVehicleConflictMessage(conflictDriverNames);
+  const backendConflictMessage = state.deliveryVehicleErrors?.[draftKey] || "";
+  const conflictMessage = localConflictMessage || backendConflictMessage;
   const hasVehicleConflict = Boolean(conflictMessage);
-  const hasVehicleDraft = Object.prototype.hasOwnProperty.call(
-    state.deliveryVehicleDrafts,
-    draftKey,
-  );
+  const isUpdatingVehicle = isBusy(state, busyKey);
   const vehicleSelect = createSelect(
     "Vehicle",
     selectedVehicleId,
@@ -516,7 +516,7 @@ function createDriverVehicleControl(driver, board, deliveryDate, isLocked, state
         ),
       })),
     ),
-    (value) => actions.updateDeliveryVehicleDraft(
+    (value) => actions.updateDeliveryVehicleSelection(
       deliveryDate,
       driver.driver_id,
       value,
@@ -525,26 +525,12 @@ function createDriverVehicleControl(driver, board, deliveryDate, isLocked, state
   const select = vehicleSelect.querySelector("select");
   const warningId = `delivery-vehicle-conflict-${deliveryDate}-${driver.driver_id}`
     .replace(/[^a-zA-Z0-9_-]/g, "-");
-  select.disabled = isLocked;
+  select.disabled = isLocked || isUpdatingVehicle;
   select.classList.toggle("workspace-vehicle-select-invalid", hasVehicleConflict);
   select.setAttribute("aria-invalid", hasVehicleConflict ? "true" : "false");
   if (hasVehicleConflict) {
     select.setAttribute("aria-describedby", warningId);
   }
-  const applyButton = createActionButton(
-    "Save vehicle",
-    () => actions.applyDeliveryVehicleAssignment(deliveryDate, driver.driver_id),
-    {
-      disabled: isLocked || !selectedVehicleId || hasVehicleConflict || isBusy(state, `delivery-vehicle:${deliveryDate}:${driver.driver_id}`),
-    },
-  );
-  const clearButton = createActionButton(
-    "Clear Vehicle",
-    () => actions.clearDeliveryVehicleAssignment(deliveryDate, driver.driver_id),
-    {
-      disabled: isLocked || (!currentAssignment && !hasVehicleDraft) || isBusy(state, `delivery-vehicle-clear:${deliveryDate}:${driver.driver_id}`),
-    },
-  );
   section.append(vehicleSelect);
   if (hasVehicleConflict) {
     const warning = document.createElement("p");
@@ -554,7 +540,13 @@ function createDriverVehicleControl(driver, board, deliveryDate, isLocked, state
     warning.textContent = conflictMessage;
     section.append(warning);
   }
-  section.append(applyButton, clearButton);
+  if (isUpdatingVehicle) {
+    const loading = document.createElement("p");
+    loading.className = "workspace-vehicle-update-status";
+    loading.setAttribute("role", "status");
+    loading.textContent = "Updating vehicle...";
+    section.append(loading);
+  }
   return section;
 }
 

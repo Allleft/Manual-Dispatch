@@ -1,3 +1,5 @@
+from threading import Lock
+
 from backend.services.manual_dispatch.delivery_run_sheet_lock import (
     ensure_delivery_run_sheet_key_mutable,
     ensure_order_not_reserved,
@@ -13,6 +15,7 @@ class DeliveryWorkspaceMutationService:
         self.repository = repository
         self.validator = validator
         self.board_service = board_service
+        self._vehicle_assignment_lock = Lock()
 
     def assign_order(self, request):
         dispatch_date = clean_required_iso_date(request.dispatch_date, "dispatch_date")
@@ -86,12 +89,34 @@ class DeliveryWorkspaceMutationService:
             driver_id,
             delivery_date,
         )
-        self.repository.upsert_driver_vehicle_assignment(
-            dispatch_date,
-            delivery_date,
-            driver_id,
-            vehicle_id,
-        )
+        with self._vehicle_assignment_lock:
+            conflict = next(
+                (
+                    assignment
+                    for assignment in self.repository.list_driver_vehicle_assignments(
+                        dispatch_date
+                    )
+                    if assignment.delivery_date == delivery_date
+                    and assignment.vehicle_id == vehicle_id
+                    and assignment.driver_id != driver_id
+                ),
+                None,
+            )
+            if conflict:
+                vehicle = self.repository.get_vehicle(vehicle_id)
+                driver = self.repository.get_driver(conflict.driver_id)
+                vehicle_name = vehicle.rego if vehicle else vehicle_id
+                driver_name = driver.name if driver else conflict.driver_id
+                raise ValueError(
+                    f"Vehicle {vehicle_name} is already assigned to "
+                    f"{driver_name} for this delivery date."
+                )
+            self.repository.upsert_driver_vehicle_assignment(
+                dispatch_date,
+                delivery_date,
+                driver_id,
+                vehicle_id,
+            )
         return self.board_service.get_board(dispatch_date)
 
     def clear_vehicle(self, request):

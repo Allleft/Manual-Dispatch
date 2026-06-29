@@ -27,6 +27,7 @@ export const state = {
   deliveryBusyActionKeys: {},
   deliveryAssignmentDrafts: {},
   deliveryVehicleDrafts: {},
+  deliveryVehicleErrors: {},
   deliveryTaskPoolFilters: {
     search: "",
     delivery_date: "",
