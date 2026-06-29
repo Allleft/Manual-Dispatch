@@ -783,6 +783,87 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             """
         )
 
+    def test_leaving_trip_summary_clears_vehicle_intent_and_reloads_saved_state(self):
+        load_route_block = self.workspace_actions.split(
+            "async function loadWorkspaceRoute", 1
+        )[1].split("async function loadMigrationStatus", 1)[0]
+        self.assertLess(
+            load_route_block.index('route !== "delivery/trip-summary"'),
+            load_route_block.index("!state.isLoggedIn"),
+        )
+        self._run_workspace_actions_script(
+            """
+            function deferred() {
+              let resolve;
+              const promise = new Promise((done) => { resolve = done; });
+              return { promise, resolve };
+            }
+
+            const vehicleWrite = deferred();
+            let persistedVehicleId = "";
+            const board = () => ({
+              orders: [], assignments: [],
+              drivers: [{ driver_id: "A", name: "Driver A" }],
+              vehicles: [{ vehicle_id: "V1", rego: "ONE", pallet_capacity: 12 }],
+              driver_vehicle_assignments: persistedVehicleId ? [{
+                dispatch_date: "2026-06-29",
+                delivery_date: "2026-06-29",
+                driver_id: "A",
+                vehicle_id: persistedVehicleId,
+              }] : [],
+            });
+            const state = {
+              isLoggedIn: true,
+              workspaceRoute: "delivery/trip-summary",
+              activeWorkspace: "delivery",
+              dispatchDate: "2026-06-29",
+              deliveryTripSummaryDate: "2026-06-29",
+              deliveryBoard: board(), deliveryRunSheets: [],
+              deliveryAssignmentDrafts: {}, deliveryVehicleDrafts: {},
+              deliveryVehicleClaims: {}, deliveryVehicleClaimSequence: 0,
+              deliveryVehicleErrors: {}, deliveryVehiclePendingKeys: {},
+              deliveryBusyActionKeys: {}, deliveryActionError: "",
+            };
+            const api = {
+              assignDeliveryWorkspaceVehicle: async () => vehicleWrite.promise,
+              getDeliveryWorkspaceBoard: async () => board(),
+              listDeliveryRunSheets: async () => [],
+            };
+            const actions = createWorkspaceActions({ state, renderWorkspace: () => {}, api });
+            const pending = actions.updateDeliveryVehicleSelection("2026-06-29", "A", "V1");
+            await Promise.resolve();
+            if (!state.deliveryVehiclePendingKeys["2026-06-29|A"]) {
+              throw new Error("Vehicle write was not pending before route exit");
+            }
+
+            state.workspaceRoute = "delivery/task-pool";
+            await actions.loadWorkspaceRoute("delivery/task-pool");
+            for (const field of [
+              "deliveryVehicleDrafts",
+              "deliveryVehicleClaims",
+              "deliveryVehicleErrors",
+              "deliveryVehiclePendingKeys",
+            ]) {
+              if (Object.keys(state[field] || {}).length) {
+                throw new Error(`${field} survived Trip Summary exit`);
+              }
+            }
+
+            persistedVehicleId = "V1";
+            vehicleWrite.resolve(board());
+            await pending;
+            if ((state.deliveryBoard.driver_vehicle_assignments || []).length) {
+              throw new Error("stale Vehicle response overwrote the current route board");
+            }
+
+            state.workspaceRoute = "delivery/trip-summary";
+            await actions.loadWorkspaceRoute("delivery/trip-summary");
+            if (state.deliveryBoard.driver_vehicle_assignments[0]?.vehicle_id !== "V1") {
+              throw new Error("Trip Summary did not reload the persisted scoped board state");
+            }
+            """
+        )
+
     def test_delivery_order_mutations_update_in_place_preserve_scroll_and_default_trip_one(self):
         self._run_workspace_actions_script(
             """

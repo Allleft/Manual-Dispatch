@@ -104,11 +104,11 @@ export function createWorkspaceActions({
   const deliveryVehicleQueues = new Map();
 
   async function loadWorkspaceRoute(route = state.workspaceRoute) {
-    if (!state.isLoggedIn) {
-      return;
-    }
     if (route !== "delivery/trip-summary") {
       clearDeliveryVehicleTransientState();
+    }
+    if (!state.isLoggedIn) {
+      return;
     }
     if (route === "home") {
       await loadMigrationStatus();
