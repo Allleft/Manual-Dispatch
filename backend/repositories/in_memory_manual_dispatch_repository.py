@@ -1432,6 +1432,32 @@ class InMemoryManualDispatchRepository:
         self.driver_vehicle_assignments.append(assignment)
         return assignment
 
+    def upsert_delivery_workspace_vehicle_assignment(
+        self, dispatch_date, delivery_date, driver_id, vehicle_id
+    ):
+        conflict = next(
+            (
+                assignment
+                for assignment in self.driver_vehicle_assignments
+                if assignment.dispatch_date == dispatch_date
+                and assignment.delivery_date == delivery_date
+                and assignment.vehicle_id == vehicle_id
+                and assignment.driver_id != driver_id
+            ),
+            None,
+        )
+        if conflict:
+            return None, conflict.driver_id
+        return (
+            self.upsert_driver_vehicle_assignment(
+                dispatch_date,
+                delivery_date,
+                driver_id,
+                vehicle_id,
+            ),
+            None,
+        )
+
     def remove_driver_vehicle_assignment(self, dispatch_date, driver_id, delivery_date=None):
         before_count = len(self.driver_vehicle_assignments)
         self.driver_vehicle_assignments = [

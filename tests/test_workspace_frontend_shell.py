@@ -212,6 +212,10 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             "deliveryBusyActionKeys",
             "deliveryAssignmentDrafts",
             "deliveryVehicleDrafts",
+            "deliveryVehicleClaims",
+            "deliveryVehicleClaimSequence",
+            "deliveryVehicleErrors",
+            "deliveryVehiclePendingKeys",
             "isOpShopWorkspaceLoading",
             "opshopWorkspaceError",
             "opshopActionError",
@@ -234,6 +238,21 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             self.assertIn(f"{state_field}:", self.state)
         self.assertIn('step: "files"', self.state)
         self.assertIn("expandedRowIds: {}", self.state)
+        for transient_field in (
+            "deliveryVehicleDrafts",
+            "deliveryVehicleClaims",
+            "deliveryVehicleErrors",
+            "deliveryVehiclePendingKeys",
+        ):
+            self.assertIn(f"state.{transient_field} = {{}}", self.auth_actions)
+        self.assertIn(
+            "workspaceActions.resetDeliveryVehicleTransientState()",
+            self.app,
+        )
+        self.assertIn(
+            "resetDeliveryVehicleTransientState: clearDeliveryVehicleTransientState",
+            self.workspace_actions,
+        )
 
     def test_delivery_stage_6d_tools_are_scoped_to_delivery_workspace(self):
         for label in (
@@ -511,7 +530,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn('await navigateWorkspaceRoute("delivery/run-sheet")', self.workspace_actions)
         self.assertNotIn('window.history.pushState(null, "", "#delivery/run-sheet")', self.workspace_actions)
         self.assertIn("state.deliveryTripSummaryDate = nextDate", self.workspace_actions)
-        self.assertIn("state.deliveryTripSummaryDate = nextDate || state.dispatchDate", self.workspace_actions)
+        self.assertIn("state.deliveryTripSummaryDate = deliveryDate", self.workspace_actions)
         self.assertIn("Trip 1 orders", self.delivery_renderer)
         self.assertIn("Trip 2 orders", self.delivery_renderer)
         self.assertIn("Saved Run Sheet History", self.delivery_renderer)
@@ -560,6 +579,9 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         )
         self.assertIn("api.clearDeliveryWorkspaceVehicle", vehicle_action)
         self.assertIn("deliveryVehicleErrors", vehicle_action)
+        self.assertIn("deliveryVehicleClaims", vehicle_action)
+        self.assertIn("deliveryVehiclePendingKeys", vehicle_control)
+        self.assertIn("deliveryVehicleQueues", vehicle_action)
         self.assertNotIn("applyDeliveryVehicleAssignment", self.workspace_actions)
         self.assertNotIn("clearDeliveryVehicleAssignment", self.workspace_actions)
         self.assertIn("pallet capacity", self.delivery_vehicle_utils)
@@ -596,10 +618,10 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
                 {{ delivery_date: "2026-06-30", driver_id: "C", vehicle_id: "V1" }},
               ],
             }};
-            const find = (board, drafts, date, driver, vehicle) =>
+            const find = (board, claims, date, driver, vehicle) =>
               getDeliveryVehicleConflictDriverNames({{
                 board,
-                drafts,
+                claims,
                 deliveryDate: date,
                 driverId: driver,
                 vehicleId: vehicle,
@@ -615,21 +637,36 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             if (find(savedBoard, {{}}, "2026-06-28", "A", "V1").length) {{
               throw new Error("assignment on a different Delivery Date was blocked");
             }}
-            if (find(savedBoard, {{ "2026-06-29|B": "V2" }}, "2026-06-29", "A", "V1").join(",") !== "Driver B") {{
+            if (find(savedBoard, {{ "2026-06-29|B": {{ vehicle_id: "V2", sequence: 1 }} }}, "2026-06-29", "A", "V1").join(",") !== "Driver B") {{
               throw new Error("unsaved replacement draft released a still-saved vehicle");
             }}
 
-            const draftConflict = find(
+            const firstClaimWins = find(
               {{ drivers, driver_vehicle_assignments: [] }},
-              {{ "2026-06-29|B": "V1" }},
+              {{
+                "2026-06-29|A": {{ vehicle_id: "V1", sequence: 1 }},
+                "2026-06-29|B": {{ vehicle_id: "V1", sequence: 2 }},
+              }},
+              "2026-06-29",
+              "B",
+              "V1",
+            );
+            if (firstClaimWins.join(",") !== "Driver A") {{
+              throw new Error("later local claim did not yield to the earliest claimant");
+            }}
+            if (find(
+              {{ drivers, driver_vehicle_assignments: [] }},
+              {{
+                "2026-06-29|A": {{ vehicle_id: "V1", sequence: 1 }},
+                "2026-06-29|B": {{ vehicle_id: "V1", sequence: 2 }},
+              }},
               "2026-06-29",
               "A",
               "V1",
-            );
-            if (draftConflict.join(",") !== "Driver B") {{
-              throw new Error("same-date unsaved draft conflict was not detected");
+            ).length) {{
+              throw new Error("later claim incorrectly invalidated the first claimant");
             }}
-            if (find(savedBoard, {{ "2026-06-29|A": "V2" }}, "2026-06-29", "A", "V2").length) {{
+            if (find(savedBoard, {{ "2026-06-29|A": {{ vehicle_id: "V2", sequence: 1 }} }}, "2026-06-29", "A", "V2").length) {{
               throw new Error("available replacement vehicle kept a stale conflict");
             }}
 
@@ -667,6 +704,287 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         )
         self.assertEqual(0, result.returncode, result.stderr or result.stdout)
 
+    def test_vehicle_autosave_serializes_latest_intent_per_driver(self):
+        self._run_workspace_actions_script(
+            """
+            function deferred() {
+              let resolve;
+              const promise = new Promise((done) => { resolve = done; });
+              return { promise, resolve };
+            }
+
+            async function runScenario(latestVehicleId) {
+              const firstResponse = deferred();
+              const state = {
+                isLoggedIn: true,
+                workspaceRoute: "delivery/trip-summary",
+                activeWorkspace: "delivery",
+                dispatchDate: "2026-06-29",
+                deliveryTripSummaryDate: "2026-06-29",
+                deliveryBoard: {
+                  orders: [], assignments: [],
+                  drivers: [{ driver_id: "A", name: "Driver A" }],
+                  vehicles: [], driver_vehicle_assignments: [],
+                },
+                deliveryVehicleDrafts: {}, deliveryVehicleClaims: {},
+                deliveryVehicleClaimSequence: 0, deliveryVehicleErrors: {},
+                deliveryVehiclePendingKeys: {}, deliveryBusyActionKeys: {},
+              };
+              const writes = [];
+              let activeWrites = 0;
+              let maxActiveWrites = 0;
+              const updateBoard = (vehicleId) => ({
+                ...state.deliveryBoard,
+                driver_vehicle_assignments: vehicleId ? [{
+                  delivery_date: "2026-06-29", driver_id: "A", vehicle_id: vehicleId,
+                }] : [],
+              });
+              const api = {
+                assignDeliveryWorkspaceVehicle: async (payload) => {
+                  activeWrites += 1;
+                  maxActiveWrites = Math.max(maxActiveWrites, activeWrites);
+                  writes.push(payload.vehicle_id);
+                  if (writes.length === 1) {
+                    await firstResponse.promise;
+                  }
+                  activeWrites -= 1;
+                  return updateBoard(payload.vehicle_id);
+                },
+                clearDeliveryWorkspaceVehicle: async () => {
+                  activeWrites += 1;
+                  maxActiveWrites = Math.max(maxActiveWrites, activeWrites);
+                  writes.push("");
+                  activeWrites -= 1;
+                  return updateBoard("");
+                },
+              };
+              const actions = createWorkspaceActions({ state, renderWorkspace: () => {}, api });
+              const first = actions.updateDeliveryVehicleSelection("2026-06-29", "A", "V1");
+              await Promise.resolve();
+              const latest = actions.updateDeliveryVehicleSelection(
+                "2026-06-29", "A", latestVehicleId,
+              );
+              if (writes.join(",") !== "V1") {
+                throw new Error("latest Vehicle write was sent before the first completed");
+              }
+              firstResponse.resolve();
+              await Promise.all([first, latest]);
+              const finalVehicle = state.deliveryBoard.driver_vehicle_assignments[0]?.vehicle_id || "";
+              if (writes.join(",") !== `V1,${latestVehicleId}` || finalVehicle !== latestVehicleId) {
+                throw new Error(`serialized Vehicle writes did not finish at ${latestVehicleId || "blank"}`);
+              }
+              if (maxActiveWrites !== 1 || Object.keys(state.deliveryVehicleDrafts).length) {
+                throw new Error("same-Driver Vehicle writes overlapped or left stale intent");
+              }
+            }
+
+            await runScenario("V2");
+            await runScenario("");
+            """
+        )
+
+    def test_delivery_order_mutations_update_in_place_preserve_scroll_and_default_trip_one(self):
+        self._run_workspace_actions_script(
+            """
+            window.scrollX = 18;
+            window.scrollY = 640;
+            const restored = [];
+            window.requestAnimationFrame = (callback) => callback();
+            window.scrollTo = (x, y) => restored.push([x, y]);
+            const state = {
+              isLoggedIn: true,
+              workspaceRoute: "delivery/task-pool",
+              activeWorkspace: "delivery",
+              dispatchDate: "2026-06-29",
+              deliveryTripSummaryDate: "2026-06-29",
+              deliveryBoard: {
+                orders: [{ order_id: "ORDER-1", delivery_date: "2026-06-29" }],
+                assignments: [], drivers: [], driver_vehicle_assignments: [],
+              },
+              deliveryActionError: "", deliveryBusyActionKeys: {},
+              deliveryAssignmentDrafts: { "ORDER-1": { driver_id: "A" } },
+              deliveryVehicleDrafts: {}, deliveryVehicleClaims: {},
+              deliveryVehicleErrors: {}, deliveryVehiclePendingKeys: {},
+            };
+            const payloads = [];
+            const boardWithTrip = (tripNo) => ({
+              ...state.deliveryBoard,
+              assignments: [{ task_id: "ORDER-1", driver_id: "A", trip_no: tripNo }],
+            });
+            const api = {
+              assignDeliveryWorkspaceOrder: async (payload) => {
+                payloads.push(payload);
+                return boardWithTrip(payload.trip_no);
+              },
+              unassignDeliveryWorkspaceOrder: async () => ({
+                ...state.deliveryBoard, assignments: [],
+              }),
+            };
+            const actions = createWorkspaceActions({ state, renderWorkspace: () => {}, api });
+
+            await actions.applyDeliveryOrderAssignment("ORDER-1");
+            if (payloads[0].trip_no !== "trip1" || state.deliveryBoard.assignments[0].trip_no !== "trip1") {
+              throw new Error("Task Pool Order did not default to Trip 1");
+            }
+            if (state.deliveryAssignmentDrafts["ORDER-1"]) {
+              throw new Error("successful in-place Assign kept its draft");
+            }
+
+            state.workspaceRoute = "delivery/trip-summary";
+            await actions.moveDeliveryOrderToTrip("ORDER-1", "A", "trip2");
+            if (state.deliveryBoard.assignments[0].trip_no !== "trip2") {
+              throw new Error("Move did not update the returned board in place");
+            }
+            await actions.unassignDeliveryOrder("ORDER-1");
+            if (state.deliveryBoard.assignments.length) {
+              throw new Error("Unassign did not update the returned board in place");
+            }
+            if (!restored.length || restored.some(([x, y]) => x !== 18 || y !== 640)) {
+              throw new Error("Delivery mutation renders did not preserve window scroll");
+            }
+
+            actions.updateDeliveryAssignmentDraft("ORDER-1", "trip_no", "trip2");
+            if (state.deliveryAssignmentDrafts["ORDER-1"].trip_no !== "trip2") {
+              throw new Error("explicit Trip 2 draft did not survive re-render");
+            }
+            """
+        )
+
+    def test_vehicle_autosave_queues_are_independent_across_drivers_and_merge_responses(self):
+        self._run_workspace_actions_script(
+            """
+            function deferred() {
+              let resolve;
+              const promise = new Promise((done) => { resolve = done; });
+              return { promise, resolve };
+            }
+            const responses = { A: deferred(), B: deferred() };
+            const state = {
+              isLoggedIn: true,
+              workspaceRoute: "delivery/trip-summary",
+              activeWorkspace: "delivery",
+              dispatchDate: "2026-06-29",
+              deliveryTripSummaryDate: "2026-06-29",
+              deliveryBoard: {
+                orders: [], assignments: [],
+                drivers: [
+                  { driver_id: "A", name: "Driver A" },
+                  { driver_id: "B", name: "Driver B" },
+                ],
+                vehicles: [], driver_vehicle_assignments: [],
+              },
+              deliveryVehicleDrafts: {}, deliveryVehicleClaims: {},
+              deliveryVehicleClaimSequence: 0, deliveryVehicleErrors: {},
+              deliveryVehiclePendingKeys: {}, deliveryBusyActionKeys: {},
+            };
+            let activeWrites = 0;
+            let maxActiveWrites = 0;
+            const api = {
+              assignDeliveryWorkspaceVehicle: async (payload) => {
+                activeWrites += 1;
+                maxActiveWrites = Math.max(maxActiveWrites, activeWrites);
+                const board = await responses[payload.driver_id].promise;
+                activeWrites -= 1;
+                return board;
+              },
+            };
+            const actions = createWorkspaceActions({ state, renderWorkspace: () => {}, api });
+            const first = actions.updateDeliveryVehicleSelection("2026-06-29", "A", "V1");
+            const second = actions.updateDeliveryVehicleSelection("2026-06-29", "B", "V2");
+            await Promise.resolve();
+            if (maxActiveWrites !== 2) {
+              throw new Error("different Driver Vehicle queues did not run independently");
+            }
+            responses.B.resolve({
+              ...state.deliveryBoard,
+              driver_vehicle_assignments: [{
+                delivery_date: "2026-06-29", driver_id: "B", vehicle_id: "V2",
+              }],
+            });
+            await Promise.resolve();
+            responses.A.resolve({
+              ...state.deliveryBoard,
+              driver_vehicle_assignments: [{
+                delivery_date: "2026-06-29", driver_id: "A", vehicle_id: "V1",
+              }],
+            });
+            await Promise.all([first, second]);
+            const saved = state.deliveryBoard.driver_vehicle_assignments
+              .map((item) => `${item.driver_id}:${item.vehicle_id}`)
+              .sort()
+              .join(",");
+            if (saved !== "A:V1,B:V2") {
+              throw new Error(`out-of-order Driver responses lost an assignment: ${saved}`);
+            }
+            """
+        )
+
+    def test_order_mutation_blocks_do_not_reload_delivery_route(self):
+        for function_name, next_function in (
+            ("applyDeliveryOrderAssignment", "moveDeliveryOrderToTrip"),
+            ("moveDeliveryOrderToTrip", "unassignDeliveryOrder"),
+            ("unassignDeliveryOrder", "updateDeliveryVehicleSelection"),
+        ):
+            block = self.workspace_actions.split(
+                f"async function {function_name}", 1
+            )[1].split(f"async function {next_function}", 1)[0]
+            self.assertNotIn("loadDeliveryRoute", block)
+            self.assertIn("state.deliveryBoard = updatedBoard", block)
+            self.assertIn("renderDeliveryWorkspacePreservingScroll", block)
+
+        assignment_controls = self.delivery_renderer.split(
+            "function createOrderAssignmentControls", 1
+        )[1].split("function filterDeliveryTaskPoolOrders", 1)[0]
+        self.assertIn('const selectedTripNo = draft.trip_no || "trip1"', assignment_controls)
+        self.assertIn('draft.driver_id || ""', assignment_controls)
+        self.assertIn("!draft.driver_id", assignment_controls)
+
+    def test_stale_order_mutation_does_not_replace_board_or_restore_old_scroll(self):
+        self._run_workspace_actions_script(
+            """
+            let resolveAssignment;
+            window.scrollX = 4;
+            window.scrollY = 500;
+            const restored = [];
+            window.requestAnimationFrame = (callback) => callback();
+            window.scrollTo = (x, y) => restored.push([x, y]);
+            const state = {
+              isLoggedIn: true,
+              workspaceRoute: "delivery/task-pool",
+              activeWorkspace: "delivery",
+              dispatchDate: "2026-06-29",
+              deliveryBoard: {
+                marker: "current", orders: [{ order_id: "ORDER-1" }],
+                assignments: [], driver_vehicle_assignments: [],
+              },
+              deliveryActionError: "", deliveryBusyActionKeys: {},
+              deliveryAssignmentDrafts: {
+                "ORDER-1": { driver_id: "A", trip_no: "trip1" },
+              },
+              deliveryVehicleDrafts: {}, deliveryVehicleClaims: {},
+              deliveryVehicleErrors: {}, deliveryVehiclePendingKeys: {},
+            };
+            const api = {
+              assignDeliveryWorkspaceOrder: async () => new Promise((resolve) => {
+                resolveAssignment = resolve;
+              }),
+            };
+            const actions = createWorkspaceActions({ state, renderWorkspace: () => {}, api });
+            const pending = actions.applyDeliveryOrderAssignment("ORDER-1");
+            const restoresBeforeDateChange = restored.length;
+            state.dispatchDate = "2026-06-30";
+            state.deliveryBoard = { marker: "new-date", orders: [], assignments: [] };
+            resolveAssignment({ marker: "stale", orders: [], assignments: [] });
+            await pending;
+            if (state.deliveryBoard.marker !== "new-date") {
+              throw new Error("stale Order mutation replaced the current board");
+            }
+            if (restored.length !== restoresBeforeDateChange) {
+              throw new Error("stale Order mutation restored scroll from the old date");
+            }
+            """
+        )
+
     def test_vehicle_selector_auto_saves_preserves_first_claim_and_retries_released_draft(self):
         self._run_workspace_actions_script(
             """
@@ -699,7 +1017,10 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
               deliveryBusyActionKeys: {},
               deliveryAssignmentDrafts: {},
               deliveryVehicleDrafts: {},
+              deliveryVehicleClaims: {},
+              deliveryVehicleClaimSequence: 0,
               deliveryVehicleErrors: {},
+              deliveryVehiclePendingKeys: {},
               opshopBusyActionKeys: {},
             };
             const firstAssignment = deferred();
@@ -743,8 +1064,8 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
                 state.deliveryVehicleDrafts["2026-06-29|B"] !== "V1") {
               throw new Error("first or later local claimant was not preserved");
             }
-            if (!state.deliveryBusyActionKeys["delivery-vehicle-update:2026-06-29:A"] ||
-                state.deliveryBusyActionKeys["delivery-vehicle-update:2026-06-29:B"]) {
+            if (!state.deliveryVehiclePendingKeys["2026-06-29|A"] ||
+                state.deliveryVehiclePendingKeys["2026-06-29|B"]) {
               throw new Error("automatic save did not isolate busy state to the affected Driver");
             }
 
@@ -762,6 +1083,8 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             }
 
             await actions.updateDeliveryVehicleSelection("2026-06-29", "A", "");
+            await Promise.resolve();
+            await Promise.resolve();
             if (clearCalls !== 1) {
               throw new Error("blank selection did not call the scoped clear API");
             }
@@ -793,7 +1116,10 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
               deliveryBusyActionKeys: {},
               deliveryAssignmentDrafts: {},
               deliveryVehicleDrafts: {},
+              deliveryVehicleClaims: {},
+              deliveryVehicleClaimSequence: 0,
               deliveryVehicleErrors: {},
+              deliveryVehiclePendingKeys: {},
               opshopBusyActionKeys: {},
             };
             let assignCalls = 0;
@@ -1299,6 +1625,11 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
               deliveryBusyActionKeys: { "delivery-assignment:ORDER-1": "old" },
               deliveryAssignmentDrafts: { "ORDER-1": { driver_id: "DRIVER-1" } },
               deliveryVehicleDrafts: { "2026-06-24|DRIVER-1": "VEHICLE-1" },
+              deliveryVehicleClaims: {
+                "2026-06-24|DRIVER-1": { vehicle_id: "VEHICLE-1", sequence: 1 },
+              },
+              deliveryVehicleErrors: { "2026-06-24|DRIVER-1": "old" },
+              deliveryVehiclePendingKeys: { "2026-06-24|DRIVER-1": true },
               opshopBoard: { opshop_pickups: [], countryside_route_groups: [] },
               opshopPickupCollections: [],
               opshopActionError: "old opshop error",
@@ -1339,6 +1670,9 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             for (const [name, value] of Object.entries({
               deliveryAssignmentDrafts: state.deliveryAssignmentDrafts,
               deliveryVehicleDrafts: state.deliveryVehicleDrafts,
+              deliveryVehicleClaims: state.deliveryVehicleClaims,
+              deliveryVehicleErrors: state.deliveryVehicleErrors,
+              deliveryVehiclePendingKeys: state.deliveryVehiclePendingKeys,
               opshopAssignmentDrafts: state.opshopAssignmentDrafts,
               countrysideRouteGroupDrafts: state.countrysideRouteGroupDrafts,
               deliveryBusyActionKeys: state.deliveryBusyActionKeys,

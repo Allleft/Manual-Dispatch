@@ -283,6 +283,7 @@ function createOrderAssignmentControls(order, board, state, actions) {
   controls.addEventListener("click", (event) => event.stopPropagation());
   controls.addEventListener("keydown", (event) => event.stopPropagation());
   const draft = state.deliveryAssignmentDrafts?.[order.order_id] || {};
+  const selectedTripNo = draft.trip_no || "trip1";
   const driverSelect = createSelect(
     "Driver",
     draft.driver_id || "",
@@ -296,7 +297,7 @@ function createOrderAssignmentControls(order, board, state, actions) {
   );
   const tripSelect = createSelect(
     "Trip",
-    draft.trip_no || "",
+    selectedTripNo,
     [
       { value: "", label: "Select trip" },
       { value: "trip1", label: "Trip 1" },
@@ -308,7 +309,7 @@ function createOrderAssignmentControls(order, board, state, actions) {
     "Assign",
     () => actions.applyDeliveryOrderAssignment(order.order_id),
     {
-      disabled: !draft.driver_id || !draft.trip_no || isBusy(state, `delivery-assignment:${order.order_id}`),
+      disabled: !draft.driver_id || !selectedTripNo || isBusy(state, `delivery-assignment:${order.order_id}`),
       primary: true,
       iconName: "plus",
     },
@@ -483,12 +484,11 @@ function createDriverVehicleControl(driver, board, deliveryDate, isLocked, state
   section.className = "workspace-context-row workspace-vehicle-control";
   const currentAssignment = findVehicleAssignment(board, deliveryDate, driver.driver_id);
   const draftKey = `${deliveryDate}|${driver.driver_id}`;
-  const busyKey = `delivery-vehicle-update:${deliveryDate}:${driver.driver_id}`;
   const selectedVehicleId =
     state.deliveryVehicleDrafts[draftKey] ?? currentAssignment?.vehicle_id ?? "";
   const conflictDriverNames = getDeliveryVehicleConflictDriverNames({
     board,
-    drafts: state.deliveryVehicleDrafts,
+    claims: state.deliveryVehicleClaims,
     deliveryDate,
     driverId: driver.driver_id,
     vehicleId: selectedVehicleId,
@@ -497,7 +497,7 @@ function createDriverVehicleControl(driver, board, deliveryDate, isLocked, state
   const backendConflictMessage = state.deliveryVehicleErrors?.[draftKey] || "";
   const conflictMessage = localConflictMessage || backendConflictMessage;
   const hasVehicleConflict = Boolean(conflictMessage);
-  const isUpdatingVehicle = isBusy(state, busyKey);
+  const isUpdatingVehicle = Boolean(state.deliveryVehiclePendingKeys?.[draftKey]);
   const vehicleSelect = createSelect(
     "Vehicle",
     selectedVehicleId,
@@ -508,7 +508,7 @@ function createDriverVehicleControl(driver, board, deliveryDate, isLocked, state
           vehicle,
           getDeliveryVehicleConflictDriverNames({
             board,
-            drafts: state.deliveryVehicleDrafts,
+            claims: state.deliveryVehicleClaims,
             deliveryDate,
             driverId: driver.driver_id,
             vehicleId: vehicle.vehicle_id,

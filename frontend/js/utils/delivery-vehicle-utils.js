@@ -1,6 +1,6 @@
 export function getDeliveryVehicleConflictDriverNames({
   board,
-  drafts,
+  claims,
   deliveryDate,
   driverId,
   vehicleId,
@@ -10,21 +10,7 @@ export function getDeliveryVehicleConflictDriverNames({
   }
 
   const scopedBoard = board || {};
-  const scopedDrafts = drafts || {};
-  const driverIds = new Set(
-    (scopedBoard.drivers || []).map((driver) => driver.driver_id),
-  );
-  (scopedBoard.driver_vehicle_assignments || []).forEach((assignment) => {
-    if (assignment.delivery_date === deliveryDate) {
-      driverIds.add(assignment.driver_id);
-    }
-  });
-  const draftPrefix = `${deliveryDate}|`;
-  Object.keys(scopedDrafts).forEach((key) => {
-    if (key.startsWith(draftPrefix)) {
-      driverIds.add(key.slice(draftPrefix.length));
-    }
-  });
+  const scopedClaims = claims || {};
 
   const driverNames = new Map(
     (scopedBoard.drivers || []).map((driver) => [
@@ -32,21 +18,42 @@ export function getDeliveryVehicleConflictDriverNames({
       driver.name || driver.driver_id,
     ]),
   );
-  return Array.from(driverIds)
-    .filter((candidateDriverId) => candidateDriverId && candidateDriverId !== driverId)
-    .filter((candidateDriverId) => {
-      const savedConflict = (scopedBoard.driver_vehicle_assignments || []).some(
-        (assignment) =>
-          assignment.delivery_date === deliveryDate
-          && assignment.driver_id === candidateDriverId
-          && assignment.vehicle_id === vehicleId,
-      );
-      const draftKey = `${deliveryDate}|${candidateDriverId}`;
-      const draftConflict = Object.prototype.hasOwnProperty.call(scopedDrafts, draftKey)
-        && scopedDrafts[draftKey] === vehicleId;
-      return savedConflict || draftConflict;
-    })
-    .map((candidateDriverId) => driverNames.get(candidateDriverId) || candidateDriverId);
+  const savedAssignments = (scopedBoard.driver_vehicle_assignments || []).filter(
+    (assignment) =>
+      assignment.delivery_date === deliveryDate
+      && assignment.vehicle_id === vehicleId,
+  );
+  const savedConflictDriverIds = savedAssignments
+    .map((assignment) => assignment.driver_id)
+    .filter((candidateDriverId) => candidateDriverId && candidateDriverId !== driverId);
+  if (savedConflictDriverIds.length) {
+    return savedConflictDriverIds.map(
+      (candidateDriverId) => driverNames.get(candidateDriverId) || candidateDriverId,
+    );
+  }
+  if (savedAssignments.some((assignment) => assignment.driver_id === driverId)) {
+    return [];
+  }
+
+  const currentKey = `${deliveryDate}|${driverId}`;
+  const currentClaim = scopedClaims[currentKey];
+  const currentSequence = currentClaim?.vehicle_id === vehicleId
+    ? Number(currentClaim.sequence)
+    : Number.POSITIVE_INFINITY;
+  const claimPrefix = `${deliveryDate}|`;
+  const earlierClaim = Object.entries(scopedClaims)
+    .filter(([key, claim]) =>
+      key.startsWith(claimPrefix)
+      && key !== currentKey
+      && claim?.vehicle_id === vehicleId
+      && Number(claim.sequence) < currentSequence,
+    )
+    .sort((left, right) => Number(left[1].sequence) - Number(right[1].sequence))[0];
+  if (!earlierClaim) {
+    return [];
+  }
+  const claimantDriverId = earlierClaim[0].slice(claimPrefix.length);
+  return [driverNames.get(claimantDriverId) || claimantDriverId];
 }
 
 

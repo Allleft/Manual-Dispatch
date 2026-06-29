@@ -3,7 +3,9 @@ import os
 import shutil
 import unittest
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Barrier
 
 from backend.repositories.sqlite_manual_dispatch_repository import (
     SQLiteManualDispatchRepository,
@@ -251,6 +253,33 @@ class WorkspaceScopedMutationsTest(unittest.TestCase):
             },
         )
         self.assertEqual(200, other_date.status_code, other_date.text)
+
+    def test_scoped_vehicle_assignment_transaction_allows_only_one_concurrent_driver(self):
+        barrier = Barrier(2)
+
+        def assign(driver_id):
+            barrier.wait()
+            try:
+                self._assign_vehicle(driver_id, "VEHICLE-1")
+                return "saved", driver_id
+            except ValueError as error:
+                return "rejected", str(error)
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            results = list(executor.map(assign, ("DRIVER-1", "DRIVER-2")))
+
+        self.assertEqual(["rejected", "saved"], sorted(result[0] for result in results))
+        rejection = next(result[1] for result in results if result[0] == "rejected")
+        self.assertIn("already assigned", rejection)
+        assignments = [
+            assignment
+            for assignment in self.repository.list_driver_vehicle_assignments(
+                self.dispatch_date
+            )
+            if assignment.delivery_date == self.dispatch_date
+            and assignment.vehicle_id == "VEHICLE-1"
+        ]
+        self.assertEqual(1, len(assignments))
 
     def test_generated_delivery_reserves_captured_target_and_vehicle_mutations(self):
         self._assign_order("ORDER-1", "DRIVER-1")

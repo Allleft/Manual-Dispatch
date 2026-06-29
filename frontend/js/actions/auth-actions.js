@@ -79,6 +79,10 @@ export function createAuthActions({
     state.registerError = "";
     state.resetError = "";
     state.authSuccessMessage = "";
+    state.deliveryVehicleDrafts = {};
+    state.deliveryVehicleClaims = {};
+    state.deliveryVehicleErrors = {};
+    state.deliveryVehiclePendingKeys = {};
     clearAccountSession();
     renderBoard();
   }

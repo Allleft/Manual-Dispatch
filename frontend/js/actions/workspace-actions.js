@@ -99,11 +99,16 @@ export function createWorkspaceActions({
   let opshopWorkspaceRequestVersion = 0;
   let deliveryAttachePreviewRequestVersion = 0;
   let deliverySpecificationRequestVersion = 0;
+  let deliveryVehicleMutationVersion = 0;
   let actionTokenCounter = 0;
+  const deliveryVehicleQueues = new Map();
 
   async function loadWorkspaceRoute(route = state.workspaceRoute) {
     if (!state.isLoggedIn) {
       return;
+    }
+    if (route !== "delivery/trip-summary") {
+      clearDeliveryVehicleTransientState();
     }
     if (route === "home") {
       await loadMigrationStatus();
@@ -173,7 +178,7 @@ export function createWorkspaceActions({
     state.deliveryVehicleEditingId = "";
     state.deliverySpecificationError = "";
     state.deliverySpecificationBusyKey = "";
-    state.deliveryVehicleErrors = {};
+    clearDeliveryVehicleTransientState();
     if (typeof window !== "undefined") {
       if (window.location?.replace) {
         window.location.replace("#home");
@@ -328,7 +333,11 @@ export function createWorkspaceActions({
   }
 
   function updateDeliveryTripSummaryDate(nextDate) {
-    state.deliveryTripSummaryDate = nextDate || state.dispatchDate;
+    const deliveryDate = nextDate || state.dispatchDate;
+    if (deliveryDate !== state.deliveryTripSummaryDate) {
+      clearDeliveryVehicleTransientState();
+    }
+    state.deliveryTripSummaryDate = deliveryDate;
     renderWorkspace();
   }
 
@@ -1032,46 +1041,54 @@ export function createWorkspaceActions({
       return;
     }
     await runDeliveryAction(`delivery-assignment:${orderId}`, async (context) => {
-      await api.assignDeliveryWorkspaceOrder({
+      const updatedBoard = await api.assignDeliveryWorkspaceOrder({
         dispatch_date: context.dispatchDate,
         order_id: orderId,
         driver_id: draft.driver_id,
         trip_no: draft.trip_no || "trip1",
       });
       if (isDeliveryMutationCurrent(context)) {
+        state.deliveryBoard = updatedBoard;
         const { [orderId]: _removed, ...remaining } = state.deliveryAssignmentDrafts;
         state.deliveryAssignmentDrafts = remaining;
-        await loadDeliveryRoute(context.route);
+        pruneDeliveryDrafts();
+        renderDeliveryWorkspacePreservingScroll();
       }
-    });
+    }, null, { preserveScroll: true });
   }
 
   async function moveDeliveryOrderToTrip(orderId, driverId, tripNo) {
     await runDeliveryAction(`delivery-move:${orderId}:${tripNo}`, async (context) => {
-      await api.assignDeliveryWorkspaceOrder({
+      const updatedBoard = await api.assignDeliveryWorkspaceOrder({
         dispatch_date: context.dispatchDate,
         order_id: orderId,
         driver_id: driverId,
         trip_no: tripNo,
       });
       if (isDeliveryMutationCurrent(context)) {
-        await loadDeliveryRoute(context.route);
+        state.deliveryBoard = updatedBoard;
+        const { [orderId]: _removed, ...remaining } = state.deliveryAssignmentDrafts;
+        state.deliveryAssignmentDrafts = remaining;
+        pruneDeliveryDrafts();
+        renderDeliveryWorkspacePreservingScroll();
       }
-    });
+    }, null, { preserveScroll: true });
   }
 
   async function unassignDeliveryOrder(orderId) {
     await runDeliveryAction(`delivery-unassign:${orderId}`, async (context) => {
-      await api.unassignDeliveryWorkspaceOrder({
+      const updatedBoard = await api.unassignDeliveryWorkspaceOrder({
         dispatch_date: context.dispatchDate,
         order_id: orderId,
       });
       if (isDeliveryMutationCurrent(context)) {
+        state.deliveryBoard = updatedBoard;
         const { [orderId]: _removed, ...remaining } = state.deliveryAssignmentDrafts;
         state.deliveryAssignmentDrafts = remaining;
-        await loadDeliveryRoute(context.route);
+        pruneDeliveryDrafts();
+        renderDeliveryWorkspacePreservingScroll();
       }
-    });
+    }, null, { preserveScroll: true });
   }
 
   async function updateDeliveryVehicleSelection(deliveryDate, driverId, vehicleId) {
@@ -1080,6 +1097,7 @@ export function createWorkspaceActions({
       ...(state.deliveryVehicleDrafts || {}),
       [key]: vehicleId,
     };
+    updateDeliveryVehicleClaim(key, vehicleId);
     clearDeliveryVehicleError(key);
     renderWorkspace();
     const currentAssignment = (state.deliveryBoard?.driver_vehicle_assignments || []).find(
@@ -1088,7 +1106,7 @@ export function createWorkspaceActions({
     );
     const conflictDriverNames = getDeliveryVehicleConflictDriverNames({
       board: state.deliveryBoard,
-      drafts: state.deliveryVehicleDrafts,
+      claims: state.deliveryVehicleClaims,
       deliveryDate,
       driverId,
       vehicleId,
@@ -1097,74 +1115,59 @@ export function createWorkspaceActions({
       renderWorkspace();
       return;
     }
-    if (!vehicleId && !currentAssignment) {
+    if (!vehicleId && !currentAssignment && !deliveryVehicleQueues.has(key)) {
       removeDeliveryVehicleDraft(key);
       renderWorkspace();
-      await retryAvailableDeliveryVehicleDrafts(key);
+      retryAvailableDeliveryVehicleClaims(key);
       return;
     }
-    await persistDeliveryVehicleSelection(deliveryDate, driverId, vehicleId);
+    return queueDeliveryVehicleUpdate(deliveryDate, driverId);
   }
 
-  async function persistDeliveryVehicleSelection(
-    deliveryDate,
-    driverId,
-    vehicleId,
-    { retryPending = true } = {},
-  ) {
+  function queueDeliveryVehicleUpdate(deliveryDate, driverId) {
     const key = deliveryVehicleKey(deliveryDate, driverId);
-    const actionKey = `delivery-vehicle-update:${deliveryDate}:${driverId}`;
-    let saved = false;
-    await runDeliveryAction(actionKey, async (context) => {
-      const updatedBoard = vehicleId
-        ? await api.assignDeliveryWorkspaceVehicle({
-          dispatch_date: context.dispatchDate,
-          delivery_date: deliveryDate,
-          driver_id: driverId,
-          vehicle_id: vehicleId,
-        })
-        : await api.clearDeliveryWorkspaceVehicle({
-          dispatch_date: context.dispatchDate,
-          delivery_date: deliveryDate,
-          driver_id: driverId,
-        });
-      if (
-        isDeliveryMutationCurrent(context)
-        && state.deliveryVehicleDrafts?.[key] === vehicleId
-      ) {
-        state.deliveryBoard = updatedBoard || state.deliveryBoard;
-        removeDeliveryVehicleDraft(key);
-        clearDeliveryVehicleError(key);
-        saved = true;
-      }
-    }, (error) => {
-      if (state.deliveryVehicleDrafts?.[key] === vehicleId) {
-        state.deliveryVehicleErrors = {
-          ...(state.deliveryVehicleErrors || {}),
-          [key]: error.message,
-        };
-      }
-    });
-    if (saved && retryPending) {
-      await retryAvailableDeliveryVehicleDrafts(key);
+    if (deliveryVehicleQueues.has(key)) {
+      return deliveryVehicleQueues.get(key);
     }
+    state.deliveryVehiclePendingKeys = {
+      ...(state.deliveryVehiclePendingKeys || {}),
+      [key]: true,
+    };
+    renderWorkspace();
+    const queueVersion = deliveryVehicleMutationVersion;
+    const queue = processDeliveryVehicleQueue(deliveryDate, driverId)
+      .finally(() => {
+        deliveryVehicleQueues.delete(key);
+        const { [key]: _removed, ...remaining } = state.deliveryVehiclePendingKeys || {};
+        state.deliveryVehiclePendingKeys = remaining;
+        if (
+          state.isLoggedIn
+          && state.activeWorkspace === "delivery"
+          && state.workspaceRoute === "delivery/trip-summary"
+        ) {
+          renderWorkspace();
+          if (queueVersion !== deliveryVehicleMutationVersion) {
+            retryAvailableDeliveryVehicleClaims(key);
+          }
+        }
+      });
+    deliveryVehicleQueues.set(key, queue);
+    return queue;
   }
 
-  async function retryAvailableDeliveryVehicleDrafts(excludedKey) {
-    const pendingDrafts = Object.entries({ ...(state.deliveryVehicleDrafts || {}) });
-    for (const [key, vehicleId] of pendingDrafts) {
-      if (!vehicleId || key === excludedKey) {
-        continue;
-      }
-      const separatorIndex = key.indexOf("|");
-      if (separatorIndex < 0) {
-        continue;
-      }
-      const deliveryDate = key.slice(0, separatorIndex);
-      const driverId = key.slice(separatorIndex + 1);
-      const actionKey = `delivery-vehicle-update:${deliveryDate}:${driverId}`;
-      if (state.deliveryBusyActionKeys?.[actionKey]) {
-        continue;
+  async function processDeliveryVehicleQueue(deliveryDate, driverId) {
+    const key = deliveryVehicleKey(deliveryDate, driverId);
+    while (Object.prototype.hasOwnProperty.call(state.deliveryVehicleDrafts || {}, key)) {
+      const vehicleId = state.deliveryVehicleDrafts[key];
+      const conflicts = getDeliveryVehicleConflictDriverNames({
+        board: state.deliveryBoard,
+        claims: state.deliveryVehicleClaims,
+        deliveryDate,
+        driverId,
+        vehicleId,
+      });
+      if (conflicts.length) {
+        return;
       }
       const currentAssignment = (state.deliveryBoard?.driver_vehicle_assignments || []).find(
         (assignment) =>
@@ -1172,25 +1175,102 @@ export function createWorkspaceActions({
       );
       if (currentAssignment?.vehicle_id === vehicleId) {
         removeDeliveryVehicleDraft(key);
+        removeDeliveryVehicleClaim(key);
         clearDeliveryVehicleError(key);
+        return;
+      }
+      const context = {
+        ...captureMutationContext(),
+        deliveryDate: state.deliveryTripSummaryDate,
+        vehicleMutationVersion: deliveryVehicleMutationVersion,
+      };
+      let updatedBoard;
+      try {
+        updatedBoard = vehicleId
+          ? await api.assignDeliveryWorkspaceVehicle({
+            dispatch_date: context.dispatchDate,
+            delivery_date: deliveryDate,
+            driver_id: driverId,
+            vehicle_id: vehicleId,
+          })
+          : await api.clearDeliveryWorkspaceVehicle({
+            dispatch_date: context.dispatchDate,
+            delivery_date: deliveryDate,
+            driver_id: driverId,
+          });
+      } catch (error) {
+        if (await handleWorkspaceMigrationGuard(error)) {
+          return;
+        }
+        if (!isDeliveryVehicleMutationCurrent(context)) {
+          return;
+        }
+        if (state.deliveryVehicleDrafts?.[key] === vehicleId) {
+          state.deliveryVehicleErrors = {
+            ...(state.deliveryVehicleErrors || {}),
+            [key]: error.message,
+          };
+          return;
+        }
         continue;
       }
-      const conflicts = getDeliveryVehicleConflictDriverNames({
-        board: state.deliveryBoard,
-        drafts: state.deliveryVehicleDrafts,
-        deliveryDate,
-        driverId,
-        vehicleId,
-      });
-      if (!conflicts.length) {
-        await persistDeliveryVehicleSelection(
-          deliveryDate,
-          driverId,
-          vehicleId,
-          { retryPending: false },
-        );
+      if (!isDeliveryVehicleMutationCurrent(context)) {
+        return;
+      }
+      applyDeliveryVehicleBoardUpdate(updatedBoard, deliveryDate, driverId);
+      if (state.deliveryVehicleDrafts?.[key] === vehicleId) {
+        removeDeliveryVehicleDraft(key);
+        removeDeliveryVehicleClaim(key);
+        clearDeliveryVehicleError(key);
+        retryAvailableDeliveryVehicleClaims(key);
+        return;
       }
     }
+  }
+
+  function retryAvailableDeliveryVehicleClaims(excludedKey) {
+    Object.entries(state.deliveryVehicleClaims || {})
+      .sort((left, right) => Number(left[1].sequence) - Number(right[1].sequence))
+      .forEach(([key, claim]) => {
+        if (!claim?.vehicle_id || key === excludedKey || deliveryVehicleQueues.has(key)) {
+          return;
+        }
+        const separatorIndex = key.indexOf("|");
+        if (separatorIndex < 0) {
+          return;
+        }
+        const deliveryDate = key.slice(0, separatorIndex);
+        const driverId = key.slice(separatorIndex + 1);
+        const conflicts = getDeliveryVehicleConflictDriverNames({
+          board: state.deliveryBoard,
+          claims: state.deliveryVehicleClaims,
+          deliveryDate,
+          driverId,
+          vehicleId: claim.vehicle_id,
+        });
+        if (!conflicts.length) {
+          queueDeliveryVehicleUpdate(deliveryDate, driverId);
+        }
+      });
+  }
+
+  function updateDeliveryVehicleClaim(key, vehicleId) {
+    if (!vehicleId) {
+      removeDeliveryVehicleClaim(key);
+      return;
+    }
+    const existing = state.deliveryVehicleClaims?.[key];
+    if (existing?.vehicle_id === vehicleId) {
+      return;
+    }
+    state.deliveryVehicleClaimSequence = Number(state.deliveryVehicleClaimSequence || 0) + 1;
+    state.deliveryVehicleClaims = {
+      ...(state.deliveryVehicleClaims || {}),
+      [key]: {
+        vehicle_id: vehicleId,
+        sequence: state.deliveryVehicleClaimSequence,
+      },
+    };
   }
 
   function removeDeliveryVehicleDraft(key) {
@@ -1198,9 +1278,33 @@ export function createWorkspaceActions({
     state.deliveryVehicleDrafts = remaining;
   }
 
+  function removeDeliveryVehicleClaim(key) {
+    const { [key]: _removed, ...remaining } = state.deliveryVehicleClaims || {};
+    state.deliveryVehicleClaims = remaining;
+  }
+
   function clearDeliveryVehicleError(key) {
     const { [key]: _removed, ...remaining } = state.deliveryVehicleErrors || {};
     state.deliveryVehicleErrors = remaining;
+  }
+
+  function applyDeliveryVehicleBoardUpdate(updatedBoard, deliveryDate, driverId) {
+    if (!updatedBoard) {
+      return;
+    }
+    const otherAssignments = (state.deliveryBoard?.driver_vehicle_assignments || []).filter(
+      (assignment) =>
+        assignment.delivery_date !== deliveryDate || assignment.driver_id !== driverId,
+    );
+    const updatedAssignment = (updatedBoard.driver_vehicle_assignments || []).filter(
+      (assignment) =>
+        assignment.delivery_date === deliveryDate && assignment.driver_id === driverId,
+    );
+    state.deliveryBoard = {
+      ...(state.deliveryBoard || {}),
+      ...updatedBoard,
+      driver_vehicle_assignments: otherAssignments.concat(updatedAssignment),
+    };
   }
 
   async function generateDeliveryRunSheet(candidate) {
@@ -1392,13 +1496,22 @@ export function createWorkspaceActions({
     });
   }
 
-  async function runDeliveryAction(actionKey, callback, onError = null) {
+  async function runDeliveryAction(
+    actionKey,
+    callback,
+    onError = null,
+    { preserveScroll = false } = {},
+  ) {
     const context = captureMutationContext();
     const token = nextActionToken();
     state.deliveryBusyActionKeys = state.deliveryBusyActionKeys || {};
     setBusyAction(state.deliveryBusyActionKeys, actionKey, token);
     state.deliveryActionError = "";
-    renderWorkspace();
+    if (preserveScroll) {
+      renderDeliveryWorkspacePreservingScroll();
+    } else {
+      renderWorkspace();
+    }
     try {
       await callback(context);
     } catch (error) {
@@ -1414,7 +1527,13 @@ export function createWorkspaceActions({
       }
     } finally {
       if (clearBusyAction(state.deliveryBusyActionKeys, actionKey, token)) {
-        renderWorkspace();
+        if (!preserveScroll || isDeliveryMutationCurrent(context)) {
+          if (preserveScroll) {
+            renderDeliveryWorkspacePreservingScroll();
+          } else {
+            renderWorkspace();
+          }
+        }
       }
     }
   }
@@ -1447,8 +1566,23 @@ export function createWorkspaceActions({
     const current = state.deliveryAssignmentDrafts[orderId] || {};
     return {
       driver_id: current.driver_id ?? assignment?.driver_id ?? "",
-      trip_no: current.trip_no ?? assignment?.trip_no ?? "",
+      trip_no: current.trip_no ?? assignment?.trip_no ?? "trip1",
     };
+  }
+
+  function renderDeliveryWorkspacePreservingScroll() {
+    if (
+      typeof window === "undefined"
+      || typeof window.requestAnimationFrame !== "function"
+      || typeof window.scrollTo !== "function"
+    ) {
+      renderWorkspace();
+      return;
+    }
+    const scrollX = Number(window.scrollX || 0);
+    const scrollY = Number(window.scrollY || 0);
+    renderWorkspace();
+    window.requestAnimationFrame(() => window.scrollTo(scrollX, scrollY));
   }
 
   function findDeliveryAssignment(orderId) {
@@ -1482,14 +1616,42 @@ export function createWorkspaceActions({
         vehicleKeys.add(deliveryVehicleKey(order.delivery_date, assignment.driver_id));
       }
     });
+    (state.deliveryBoard?.drivers || []).forEach((driver) => {
+      vehicleKeys.add(deliveryVehicleKey(
+        state.deliveryTripSummaryDate || state.dispatchDate,
+        driver.driver_id,
+      ));
+    });
     state.deliveryVehicleDrafts = Object.fromEntries(
-      Object.entries(state.deliveryVehicleDrafts || {}).filter(([key]) =>
-        vehicleKeys.has(key),
+      Object.entries(state.deliveryVehicleDrafts || {}).filter(([key, vehicleId]) => {
+        if (!vehicleKeys.has(key)) {
+          return false;
+        }
+        const separatorIndex = key.indexOf("|");
+        const deliveryDate = key.slice(0, separatorIndex);
+        const driverId = key.slice(separatorIndex + 1);
+        return !(state.deliveryBoard?.driver_vehicle_assignments || []).some(
+          (assignment) =>
+            assignment.delivery_date === deliveryDate
+            && assignment.driver_id === driverId
+            && assignment.vehicle_id === vehicleId,
+        );
+      }),
+    );
+    state.deliveryVehicleClaims = Object.fromEntries(
+      Object.entries(state.deliveryVehicleClaims || {}).filter(([key, claim]) =>
+        vehicleKeys.has(key)
+        && state.deliveryVehicleDrafts?.[key] === claim?.vehicle_id,
       ),
     );
     state.deliveryVehicleErrors = Object.fromEntries(
       Object.entries(state.deliveryVehicleErrors || {}).filter(([key]) =>
         vehicleKeys.has(key),
+      ),
+    );
+    state.deliveryVehiclePendingKeys = Object.fromEntries(
+      Object.entries(state.deliveryVehiclePendingKeys || {}).filter(([key]) =>
+        vehicleKeys.has(key) && deliveryVehicleQueues.has(key),
       ),
     );
   }
@@ -1525,8 +1687,7 @@ export function createWorkspaceActions({
   function clearWorkspaceDraftsForDispatchDateChange() {
     invalidateDeliveryAttachePreview();
     state.deliveryAssignmentDrafts = {};
-    state.deliveryVehicleDrafts = {};
-    state.deliveryVehicleErrors = {};
+    clearDeliveryVehicleTransientState();
     state.deliveryOrderDetailId = "";
     state.deliveryOrderForm = {};
     state.deliveryOrderFormMode = "";
@@ -1622,6 +1783,22 @@ export function createWorkspaceActions({
     );
   }
 
+  function isDeliveryVehicleMutationCurrent(context) {
+    return (
+      isDeliveryMutationCurrent(context)
+      && state.deliveryTripSummaryDate === context.deliveryDate
+      && deliveryVehicleMutationVersion === context.vehicleMutationVersion
+    );
+  }
+
+  function clearDeliveryVehicleTransientState() {
+    deliveryVehicleMutationVersion += 1;
+    state.deliveryVehicleDrafts = {};
+    state.deliveryVehicleClaims = {};
+    state.deliveryVehicleErrors = {};
+    state.deliveryVehiclePendingKeys = {};
+  }
+
   function isOpShopMutationCurrent(context) {
     return (
       state.isLoggedIn &&
@@ -1665,6 +1842,7 @@ export function createWorkspaceActions({
     openDeliveryOrderDetail,
     openDeliverySpecifications,
     previewDeliveryAttacheImport,
+    resetDeliveryVehicleTransientState: clearDeliveryVehicleTransientState,
     removeDeliveryOrderProductLine,
     removeDeliveryAttacheImportProductLine,
     removeDeliveryAttacheImportFile,

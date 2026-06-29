@@ -2495,6 +2495,55 @@ class SQLiteManualDispatchRepository:
             vehicle_id=vehicle_id,
         )
 
+    def upsert_delivery_workspace_vehicle_assignment(
+        self, dispatch_date, delivery_date, driver_id, vehicle_id
+    ):
+        timestamp = self._timestamp()
+        with connect(self.db_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            conflict = connection.execute(
+                """
+                SELECT driver_id
+                FROM manual_driver_vehicle_assignments
+                WHERE dispatch_date = ?
+                    AND delivery_date = ?
+                    AND vehicle_id = ?
+                    AND driver_id != ?
+                LIMIT 1
+                """,
+                (dispatch_date, delivery_date, vehicle_id, driver_id),
+            ).fetchone()
+            if conflict:
+                connection.rollback()
+                return None, conflict["driver_id"]
+            connection.execute(
+                """
+                INSERT INTO manual_driver_vehicle_assignments (
+                    dispatch_date,
+                    delivery_date,
+                    driver_id,
+                    vehicle_id,
+                    created_at,
+                    updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(dispatch_date, delivery_date, driver_id)
+                DO UPDATE SET
+                    vehicle_id = excluded.vehicle_id,
+                    updated_at = excluded.updated_at
+                """,
+                (dispatch_date, delivery_date, driver_id, vehicle_id, timestamp, timestamp),
+            )
+            connection.commit()
+        return (
+            ManualDriverVehicleAssignment(
+                dispatch_date=dispatch_date,
+                delivery_date=delivery_date,
+                driver_id=driver_id,
+                vehicle_id=vehicle_id,
+            ),
+            None,
+        )
+
     def remove_driver_vehicle_assignment(self, dispatch_date, driver_id, delivery_date=None):
         with connect(self.db_path) as connection:
             if delivery_date:

@@ -241,7 +241,12 @@ function initializeBoardViewRouting() {
 }
 
 function renderAccountStatus() {
-  renderAccountStatusView({ onLogout: authActions.logoutAccount });
+  renderAccountStatusView({
+    onLogout: () => {
+      workspaceActions.resetDeliveryVehicleTransientState();
+      authActions.logoutAccount();
+    },
+  });
 }
 
 function renderWorkspaceNavigation() {
