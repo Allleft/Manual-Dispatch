@@ -729,11 +729,24 @@
   grid-column: span 2;
 }
 
-.workspace-vehicle-capacity-summary {
-  grid-column: span 2;
-  color: var(--delivery-strong);
-  font-size: 0.82rem;
-  font-weight: 800;
+.workspace-field select.workspace-vehicle-select-invalid {
+  border-color: #c43d3d;
+  color: #8f2525;
+  background: #fff5f5;
+  box-shadow: 0 0 0 1px rgba(196, 61, 61, 0.12);
+}
+
+.workspace-field select.workspace-vehicle-select-invalid:focus-visible {
+  outline-color: rgba(196, 61, 61, 0.25);
+}
+
+.workspace-vehicle-conflict-warning {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #a62f2f;
+  font-size: 0.78rem;
+  font-weight: 850;
+  line-height: 1.35;
 }
 
 .workspace-assignment-bar {
@@ -5403,7 +5416,6 @@ select:disabled {
 }
 
 .workspace-trip-summary .workspace-status-card,
-.workspace-vehicle-capacity-summary,
 .workspace-trip-summary .workspace-context-row {
   border-color: rgba(31, 101, 232, 0.14);
   background: #f8fbff;

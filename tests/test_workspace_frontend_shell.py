@@ -22,6 +22,9 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.delivery_renderer = self._read(
             "js/render/delivery-workspace-renderer.js"
         )
+        self.delivery_vehicle_utils = self._read(
+            "js/utils/delivery-vehicle-utils.js"
+        )
         self.opshop_renderer = self._read(
             "js/render/opshop-workspace-renderer.js"
         )
@@ -516,11 +519,11 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("Export Daily Run Sheet", self.delivery_renderer)
         self.assertIn("View Run Sheet details / preview", self.delivery_renderer)
         self.assertIn("Vehicle", self.delivery_renderer)
-        self.assertIn("Selected vehicle:", self.delivery_renderer)
-        self.assertIn("Capacity:", self.delivery_renderer)
-        self.assertIn("Not selected", self.delivery_renderer)
-        self.assertIn("Select a vehicle to view", self.delivery_renderer)
-        self.assertIn("workspace-vehicle-capacity-summary", self.delivery_renderer)
+        self.assertIn('label: "Select vehicle"', self.delivery_renderer)
+        self.assertIn("formatDeliveryVehicleOptionLabel", self.delivery_renderer)
+        self.assertNotIn("Selected vehicle:", self.delivery_renderer)
+        self.assertNotIn("Capacity:", self.delivery_renderer)
+        self.assertNotIn("workspace-vehicle-capacity-summary", self.delivery_renderer)
         action_block = self.delivery_renderer.split(
             "function createDeliveryOrderActions", 1
         )[1].split("function createDeliveryOrderForm", 1)[0]
@@ -529,6 +532,198 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("workspace-modal-action-danger", action_block)
         self.assertIn("createWorkspaceModal", self.delivery_renderer)
         self.assertIn("trapModalFocus", self.delivery_renderer)
+
+    def test_delivery_vehicle_selector_labels_and_duplicate_state_contract(self):
+        vehicle_control = self.delivery_renderer.split(
+            "function createDriverVehicleControl", 1
+        )[1].split("function createTripPanel", 1)[0]
+        apply_action = self.workspace_actions.split(
+            "async function applyDeliveryVehicleAssignment", 1
+        )[1].split("async function clearDeliveryVehicleAssignment", 1)[0]
+
+        self.assertIn("formatDeliveryVehicleOptionLabel", vehicle_control)
+        self.assertIn("getDeliveryVehicleConflictDriverNames", vehicle_control)
+        self.assertIn("workspace-vehicle-select-invalid", vehicle_control)
+        self.assertIn('select.setAttribute("aria-invalid"', vehicle_control)
+        self.assertIn('select.setAttribute("aria-describedby"', vehicle_control)
+        self.assertIn("workspace-vehicle-conflict-warning", vehicle_control)
+        self.assertIn("hasVehicleConflict", vehicle_control)
+        self.assertIn("!currentAssignment && !hasVehicleDraft", vehicle_control)
+        self.assertNotIn("vehicleSummary", vehicle_control)
+        self.assertIn("getDeliveryVehicleConflictDriverNames", apply_action)
+        self.assertLess(
+            apply_action.index("if (conflictDriverNames.length)"),
+            apply_action.index("api.assignDeliveryWorkspaceVehicle"),
+        )
+        self.assertIn("pallet capacity", self.delivery_vehicle_utils)
+        self.assertIn("assigned to", self.delivery_vehicle_utils)
+        create_select = self.delivery_renderer.split(
+            "function createSelect", 1
+        )[1].split("function createBoundInput", 1)[0]
+        self.assertLess(
+            create_select.index("options.forEach"),
+            create_select.index('select.value = value || ""'),
+        )
+
+    def test_delivery_vehicle_conflicts_cover_saved_drafts_dates_and_current_driver(self):
+        module_uri = (
+            FRONTEND_ROOT / "js/utils/delivery-vehicle-utils.js"
+        ).as_uri()
+        script = textwrap.dedent(
+            f"""
+            const {{
+              formatDeliveryVehicleConflictMessage,
+              formatDeliveryVehicleOptionLabel,
+              getDeliveryVehicleConflictDriverNames,
+            }} = await import({module_uri!r});
+
+            const drivers = [
+              {{ driver_id: "A", name: "Driver A" }},
+              {{ driver_id: "B", name: "Driver B" }},
+              {{ driver_id: "C", name: "Driver C" }},
+            ];
+            const savedBoard = {{
+              drivers,
+              driver_vehicle_assignments: [
+                {{ delivery_date: "2026-06-29", driver_id: "B", vehicle_id: "V1" }},
+                {{ delivery_date: "2026-06-30", driver_id: "C", vehicle_id: "V1" }},
+              ],
+            }};
+            const find = (board, drafts, date, driver, vehicle) =>
+              getDeliveryVehicleConflictDriverNames({{
+                board,
+                drafts,
+                deliveryDate: date,
+                driverId: driver,
+                vehicleId: vehicle,
+              }});
+
+            const savedConflict = find(savedBoard, {{}}, "2026-06-29", "A", "V1");
+            if (savedConflict.join(",") !== "Driver B") {{
+              throw new Error("same-date saved assignment conflict was not detected");
+            }}
+            if (find(savedBoard, {{}}, "2026-06-29", "B", "V1").length) {{
+              throw new Error("current Driver's own assignment was treated as duplicate");
+            }}
+            if (find(savedBoard, {{}}, "2026-06-28", "A", "V1").length) {{
+              throw new Error("assignment on a different Delivery Date was blocked");
+            }}
+            if (find(savedBoard, {{ "2026-06-29|B": "V2" }}, "2026-06-29", "A", "V1").join(",") !== "Driver B") {{
+              throw new Error("unsaved replacement draft released a still-saved vehicle");
+            }}
+
+            const draftConflict = find(
+              {{ drivers, driver_vehicle_assignments: [] }},
+              {{ "2026-06-29|B": "V1" }},
+              "2026-06-29",
+              "A",
+              "V1",
+            );
+            if (draftConflict.join(",") !== "Driver B") {{
+              throw new Error("same-date unsaved draft conflict was not detected");
+            }}
+            if (find(savedBoard, {{ "2026-06-29|A": "V2" }}, "2026-06-29", "A", "V2").length) {{
+              throw new Error("available replacement vehicle kept a stale conflict");
+            }}
+
+            const multiple = find(
+              {{
+                drivers,
+                driver_vehicle_assignments: [
+                  {{ delivery_date: "2026-06-29", driver_id: "B", vehicle_id: "V1" }},
+                  {{ delivery_date: "2026-06-29", driver_id: "C", vehicle_id: "V1" }},
+                ],
+              }},
+              {{}},
+              "2026-06-29",
+              "A",
+              "V1",
+            );
+            if (formatDeliveryVehicleConflictMessage(multiple) !==
+                "This vehicle is already assigned to: Driver B, Driver C.") {{
+              throw new Error("multiple-driver conflict warning is incorrect");
+            }}
+            if (formatDeliveryVehicleOptionLabel(
+              {{ vehicle_id: "V1", rego: "1AW4P1", pallet_capacity: 28 }},
+              ["Driver B"],
+            ) !== "1AW4P1 — 28 pallet capacity — assigned to Driver B") {{
+              throw new Error("vehicle option label is incorrect");
+            }}
+            """
+        )
+        result = subprocess.run(
+            ["node", "--input-type=module", "--eval", script],
+            cwd=PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(0, result.returncode, result.stderr or result.stdout)
+
+    def test_duplicate_vehicle_guard_blocks_api_and_clear_removes_draft(self):
+        self._run_workspace_actions_script(
+            """
+            const state = {
+              isLoggedIn: true,
+              workspaceRoute: "delivery/trip-summary",
+              activeWorkspace: "delivery",
+              dispatchDate: "2026-06-29",
+              deliveryBoard: {
+                orders: [],
+                assignments: [],
+                drivers: [
+                  { driver_id: "A", name: "Driver A" },
+                  { driver_id: "B", name: "Driver B" },
+                ],
+                vehicles: [
+                  { vehicle_id: "V1", rego: "ONE", pallet_capacity: 12 },
+                  { vehicle_id: "V2", rego: "TWO", pallet_capacity: 20 },
+                ],
+                driver_vehicle_assignments: [
+                  { delivery_date: "2026-06-29", driver_id: "B", vehicle_id: "V1" },
+                ],
+              },
+              deliveryRunSheets: [],
+              deliveryActionError: "",
+              deliveryBusyActionKeys: {},
+              deliveryAssignmentDrafts: {},
+              deliveryVehicleDrafts: { "2026-06-29|A": "V1" },
+              opshopBusyActionKeys: {},
+            };
+            let assignCalls = 0;
+            let clearCalls = 0;
+            const api = {
+              assignDeliveryWorkspaceVehicle: async () => { assignCalls += 1; },
+              clearDeliveryWorkspaceVehicle: async () => { clearCalls += 1; },
+              getDeliveryWorkspaceBoard: async () => state.deliveryBoard,
+              listDeliveryRunSheets: async () => [],
+            };
+            const actions = createWorkspaceActions({
+              state,
+              renderWorkspace: () => {},
+              api,
+            });
+
+            await actions.applyDeliveryVehicleAssignment("2026-06-29", "A");
+            if (assignCalls !== 0) {
+              throw new Error("duplicate vehicle assignment reached the scoped API");
+            }
+            if (!state.deliveryActionError.includes("Driver B")) {
+              throw new Error("duplicate vehicle guard did not name the conflicting Driver");
+            }
+
+            await actions.clearDeliveryVehicleAssignment("2026-06-29", "A");
+            if (clearCalls !== 0 || state.deliveryVehicleDrafts["2026-06-29|A"] !== undefined) {
+              throw new Error("Clear Vehicle did not remove the unsaved conflicting draft locally");
+            }
+
+            actions.updateDeliveryVehicleDraft("2026-06-29", "A", "V2");
+            await actions.applyDeliveryVehicleAssignment("2026-06-29", "A");
+            if (assignCalls !== 1) {
+              throw new Error("available vehicle did not reach the scoped API");
+            }
+            """
+        )
 
     def test_delivery_trip_summary_actions_use_scoped_payloads_and_allow_history_dates(self):
         self._run_workspace_actions_script(

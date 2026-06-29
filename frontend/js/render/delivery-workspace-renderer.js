@@ -3,6 +3,11 @@ import {
   formatOptional,
   formatPluralLoadUnit,
 } from "../utils/format-utils.js";
+import {
+  formatDeliveryVehicleConflictMessage,
+  formatDeliveryVehicleOptionLabel,
+  getDeliveryVehicleConflictDriverNames,
+} from "../utils/delivery-vehicle-utils.js";
 
 
 const DELIVERY_TABS = [
@@ -480,8 +485,18 @@ function createDriverVehicleControl(driver, board, deliveryDate, isLocked, state
   const draftKey = `${deliveryDate}|${driver.driver_id}`;
   const selectedVehicleId =
     state.deliveryVehicleDrafts[draftKey] ?? currentAssignment?.vehicle_id ?? "";
-  const selectedVehicle = (board.vehicles || []).find(
-    (vehicle) => vehicle.vehicle_id === selectedVehicleId,
+  const conflictDriverNames = getDeliveryVehicleConflictDriverNames({
+    board,
+    drafts: state.deliveryVehicleDrafts,
+    deliveryDate,
+    driverId: driver.driver_id,
+    vehicleId: selectedVehicleId,
+  });
+  const conflictMessage = formatDeliveryVehicleConflictMessage(conflictDriverNames);
+  const hasVehicleConflict = Boolean(conflictMessage);
+  const hasVehicleDraft = Object.prototype.hasOwnProperty.call(
+    state.deliveryVehicleDrafts,
+    draftKey,
   );
   const vehicleSelect = createSelect(
     "Vehicle",
@@ -489,7 +504,16 @@ function createDriverVehicleControl(driver, board, deliveryDate, isLocked, state
     [{ value: "", label: "Select vehicle" }].concat(
       (board.vehicles || []).map((vehicle) => ({
         value: vehicle.vehicle_id,
-        label: vehicle.rego,
+        label: formatDeliveryVehicleOptionLabel(
+          vehicle,
+          getDeliveryVehicleConflictDriverNames({
+            board,
+            drafts: state.deliveryVehicleDrafts,
+            deliveryDate,
+            driverId: driver.driver_id,
+            vehicleId: vehicle.vehicle_id,
+          }),
+        ),
       })),
     ),
     (value) => actions.updateDeliveryVehicleDraft(
@@ -498,29 +522,39 @@ function createDriverVehicleControl(driver, board, deliveryDate, isLocked, state
       value,
     ),
   );
-  vehicleSelect.querySelector("select").disabled = isLocked;
+  const select = vehicleSelect.querySelector("select");
+  const warningId = `delivery-vehicle-conflict-${deliveryDate}-${driver.driver_id}`
+    .replace(/[^a-zA-Z0-9_-]/g, "-");
+  select.disabled = isLocked;
+  select.classList.toggle("workspace-vehicle-select-invalid", hasVehicleConflict);
+  select.setAttribute("aria-invalid", hasVehicleConflict ? "true" : "false");
+  if (hasVehicleConflict) {
+    select.setAttribute("aria-describedby", warningId);
+  }
   const applyButton = createActionButton(
     "Save vehicle",
     () => actions.applyDeliveryVehicleAssignment(deliveryDate, driver.driver_id),
     {
-      disabled: isLocked || !selectedVehicleId || isBusy(state, `delivery-vehicle:${deliveryDate}:${driver.driver_id}`),
+      disabled: isLocked || !selectedVehicleId || hasVehicleConflict || isBusy(state, `delivery-vehicle:${deliveryDate}:${driver.driver_id}`),
     },
   );
   const clearButton = createActionButton(
     "Clear Vehicle",
     () => actions.clearDeliveryVehicleAssignment(deliveryDate, driver.driver_id),
     {
-      disabled: isLocked || !currentAssignment || isBusy(state, `delivery-vehicle-clear:${deliveryDate}:${driver.driver_id}`),
+      disabled: isLocked || (!currentAssignment && !hasVehicleDraft) || isBusy(state, `delivery-vehicle-clear:${deliveryDate}:${driver.driver_id}`),
     },
   );
-  const vehicleSummary = document.createElement("div");
-  vehicleSummary.className = "workspace-vehicle-capacity-summary";
-  const selectedVehicleLabel = selectedVehicle?.rego || "Not selected";
-  const capacityLabel = selectedVehicle
-    ? `${selectedVehicle.pallet_capacity ?? 0} pallets`
-    : "Select a vehicle to view";
-  vehicleSummary.textContent = `Selected vehicle: ${selectedVehicleLabel} | Capacity: ${capacityLabel}`;
-  section.append(vehicleSelect, vehicleSummary, applyButton, clearButton);
+  section.append(vehicleSelect);
+  if (hasVehicleConflict) {
+    const warning = document.createElement("p");
+    warning.id = warningId;
+    warning.className = "workspace-vehicle-conflict-warning";
+    warning.setAttribute("role", "alert");
+    warning.textContent = conflictMessage;
+    section.append(warning);
+  }
+  section.append(applyButton, clearButton);
   return section;
 }
 
@@ -1457,13 +1491,13 @@ function createSelect(labelText, value, options, onChange) {
   const text = document.createElement("span");
   text.textContent = labelText;
   const select = document.createElement("select");
-  select.value = value || "";
   options.forEach((option) => {
     const item = document.createElement("option");
     item.value = option.value;
     item.textContent = option.label;
     select.append(item);
   });
+  select.value = value || "";
   select.addEventListener("change", () => onChange(select.value));
   label.append(text, select);
   return label;
@@ -1744,13 +1778,13 @@ function createInlineTextarea(value, onInput) {
 
 function createInlineSelect(value, options, onChange) {
   const select = document.createElement("select");
-  select.value = value || "";
   options.forEach((option) => {
     const item = document.createElement("option");
     item.value = option.value;
     item.textContent = option.label;
     select.append(item);
   });
+  select.value = value || "";
   select.addEventListener("change", () => onChange(select.value));
   return select;
 }

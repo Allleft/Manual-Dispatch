@@ -32,6 +32,10 @@ import {
   apiUpdateDeliveryOrder,
   apiUpdateDeliveryVehicle,
 } from "../api/manual-dispatch-api.js";
+import {
+  formatDeliveryVehicleConflictMessage,
+  getDeliveryVehicleConflictDriverNames,
+} from "../utils/delivery-vehicle-utils.js";
 
 
 const DELIVERY_ROUTES = new Set([
@@ -1088,6 +1092,18 @@ export function createWorkspaceActions({
     const vehicleId = Object.prototype.hasOwnProperty.call(state.deliveryVehicleDrafts, key)
       ? state.deliveryVehicleDrafts[key]
       : currentAssignment?.vehicle_id || "";
+    const conflictDriverNames = getDeliveryVehicleConflictDriverNames({
+      board: state.deliveryBoard,
+      drafts: state.deliveryVehicleDrafts,
+      deliveryDate,
+      driverId,
+      vehicleId,
+    });
+    if (conflictDriverNames.length) {
+      state.deliveryActionError = formatDeliveryVehicleConflictMessage(conflictDriverNames);
+      renderWorkspace();
+      return;
+    }
     await runDeliveryAction(`delivery-vehicle:${deliveryDate}:${driverId}`, async (context) => {
       await api.assignDeliveryWorkspaceVehicle({
         dispatch_date: context.dispatchDate,
@@ -1105,6 +1121,19 @@ export function createWorkspaceActions({
 
   async function clearDeliveryVehicleAssignment(deliveryDate, driverId) {
     const key = deliveryVehicleKey(deliveryDate, driverId);
+    const currentAssignment = (state.deliveryBoard?.driver_vehicle_assignments || []).find(
+      (assignment) =>
+        assignment.delivery_date === deliveryDate && assignment.driver_id === driverId,
+    );
+    if (
+      Object.prototype.hasOwnProperty.call(state.deliveryVehicleDrafts, key)
+      && !currentAssignment
+    ) {
+      const { [key]: _removed, ...remaining } = state.deliveryVehicleDrafts;
+      state.deliveryVehicleDrafts = remaining;
+      renderWorkspace();
+      return;
+    }
     await runDeliveryAction(`delivery-vehicle-clear:${deliveryDate}:${driverId}`, async (context) => {
       await api.clearDeliveryWorkspaceVehicle({
         dispatch_date: context.dispatchDate,
