@@ -52,7 +52,9 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             "delivery/trip-summary",
             "delivery/run-sheet",
             "delivery/history",
-            "opshop/task-pool",
+            "opshop/task-pool/regular",
+            "opshop/task-pool/oncall",
+            "opshop/task-pool/countryside",
             "opshop/trip-summary",
             "opshop/regular",
             "opshop/oncall",
@@ -67,9 +69,11 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             ("task-pool", "delivery/task-pool"),
             ("trip-summary", "delivery/trip-summary"),
             ("final-summary", "delivery/history"),
-            ("opshop/regular", "opshop/task-pool"),
-            ("opshop/oncall", "opshop/task-pool"),
-            ("opshop/countryside", "opshop/task-pool"),
+            ("opshop", "opshop/task-pool/regular"),
+            ("opshop/task-pool", "opshop/task-pool/regular"),
+            ("opshop/regular", "opshop/task-pool/regular"),
+            ("opshop/oncall", "opshop/task-pool/oncall"),
+            ("opshop/countryside", "opshop/task-pool/countryside"),
             ("opshop/history", "opshop/collections"),
         ):
             self.assertIn(f'"{legacy_route}": "{scoped_route}"', self.app)
@@ -78,7 +82,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
 
     def test_home_is_navigation_only_and_does_not_fetch_board_data(self):
         self.assertIn('href: "#delivery/task-pool"', self.home_renderer)
-        self.assertIn('href: "#opshop/task-pool"', self.home_renderer)
+        self.assertIn('href: "#opshop/task-pool/regular"', self.home_renderer)
         self.assertNotIn("fetch(", self.home_renderer)
         self.assertNotIn("apiGet", self.home_renderer)
         self.assertNotIn("apiList", self.home_renderer)
@@ -1771,7 +1775,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertNotIn("trip_no", opshop_apply_block)
 
     def test_opshop_workspace_uses_three_stage_workflow_and_internal_task_pool_tabs(self):
-        self.assertIn('{ route: "opshop/task-pool", label: "Task Pool" }', self.opshop_renderer)
+        self.assertIn('{ route: "opshop/task-pool/regular", label: "Task Pool" }', self.opshop_renderer)
         self.assertIn('{ route: "opshop/trip-summary", label: "Trip Summary" }', self.opshop_renderer)
         self.assertIn('{ route: "opshop/collections", label: "Pickup Collections" }', self.opshop_renderer)
         top_tabs = self.opshop_renderer.split("const OPSHOP_TABS", 1)[1].split("];", 1)[0]
@@ -1784,18 +1788,22 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn('button.setAttribute("aria-selected"', self.opshop_renderer)
         self.assertIn("actions.updateOpShopTaskPoolView(item.view)", self.opshop_renderer)
         self.assertIn('"Manage Templates",\n    "#opshop/templates"', self.opshop_renderer)
-        self.assertIn('createRouteActionLink("Back to Task Pool", "#opshop/task-pool")', self.opshop_renderer)
+        self.assertIn('state.opshopTaskPoolReturnRoute || "opshop/task-pool/regular"', self.opshop_renderer)
         self.assertIn('opshopTaskPoolView: "regular"', self.state)
+        self.assertIn('opshopTaskPoolReturnRoute: "opshop/task-pool/regular"', self.state)
         self.assertIn("function updateOpShopTaskPoolView(view)", self.workspace_actions)
         task_pool_view_action = self.workspace_actions.split(
             "function updateOpShopTaskPoolView", 1
         )[1].split("function updateOpShopTripSummaryDate", 1)[0]
-        self.assertIn("renderWorkspace();", task_pool_view_action)
+        self.assertIn("navigateWorkspaceRoute(route)", task_pool_view_action)
         self.assertNotIn("loadOpShopRoute", task_pool_view_action)
         self.assertNotIn("window.location", task_pool_view_action)
-        self.assertIn('"opshop/regular": "regular"', self.app)
-        self.assertIn('"opshop/oncall": "oncall"', self.app)
-        self.assertIn('"opshop/countryside": "countryside"', self.app)
+        self.assertIn('"opshop/task-pool/regular": "regular"', self.app)
+        self.assertIn('"opshop/task-pool/oncall": "oncall"', self.app)
+        self.assertIn('"opshop/task-pool/countryside": "countryside"', self.app)
+        self.assertIn('!OPSHOP_TASK_POOL_ROUTE_VIEWS[redirectedRoute]', self.app)
+        self.assertIn("const isSubtypeOnlyChange", self.app)
+        self.assertIn("if (!isSubtypeOnlyChange)", self.app)
 
     def test_opshop_trip_summary_groups_pickups_and_preserves_collection_locks(self):
         self.assertIn('state.workspaceRoute === "opshop/trip-summary"', self.opshop_renderer)

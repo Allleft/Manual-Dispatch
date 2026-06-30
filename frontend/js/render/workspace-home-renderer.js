@@ -15,7 +15,7 @@ const WORKSPACES = [
   },
   {
     className: "opshop",
-    href: "#opshop/task-pool",
+    href: "#opshop/task-pool/regular",
     icon: "store",
     kicker: "Pickup operations",
     title: "OP SHOP Pickup",

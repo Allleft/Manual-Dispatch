@@ -21,6 +21,7 @@ export const state = {
   opshopBoard: null,
   opshopPickupCollections: [],
   opshopTaskPoolView: "regular",
+  opshopTaskPoolReturnRoute: "opshop/task-pool/regular",
   opshopTripSummaryDate: DEFAULT_DISPATCH_DATE,
   sharedSpecifications: { drivers: [], vehicles: [] },
   isDeliveryWorkspaceLoading: false,

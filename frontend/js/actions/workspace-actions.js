@@ -44,7 +44,9 @@ const DELIVERY_ROUTES = new Set([
   "delivery/history",
 ]);
 const OPSHOP_ROUTES = new Set([
-  "opshop/task-pool",
+  "opshop/task-pool/regular",
+  "opshop/task-pool/oncall",
+  "opshop/task-pool/countryside",
   "opshop/trip-summary",
   "opshop/regular",
   "opshop/oncall",
@@ -341,6 +343,15 @@ export function createWorkspaceActions({
     if (!["regular", "oncall", "countryside"].includes(view)) {
       return;
     }
+    const route = `opshop/task-pool/${view}`;
+    if (state.workspaceRoute === route) {
+      return;
+    }
+    if (typeof navigateWorkspaceRoute === "function") {
+      navigateWorkspaceRoute(route);
+      return;
+    }
+    state.workspaceRoute = route;
     state.opshopTaskPoolView = view;
     renderWorkspace();
   }

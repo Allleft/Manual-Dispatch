@@ -3,7 +3,7 @@ import { formatOptional } from "../utils/format-utils.js";
 
 
 const OPSHOP_TABS = [
-  { route: "opshop/task-pool", label: "Task Pool" },
+  { route: "opshop/task-pool/regular", label: "Task Pool" },
   { route: "opshop/trip-summary", label: "Trip Summary" },
   { route: "opshop/collections", label: "Pickup Collections" },
 ];
@@ -32,7 +32,7 @@ export function renderOpShopWorkspace(
       content.append(createStatus(state.opshopActionError, "error"));
     }
     if (state.workspaceRoute === "opshop/templates") {
-      content.append(createTemplateList(state.opshopBoard));
+      content.append(createTemplateList(state.opshopBoard, state));
     } else if (state.workspaceRoute === "opshop/trip-summary") {
       content.append(createOpShopTripSummary(
         state.opshopBoard,
@@ -85,7 +85,8 @@ function createWorkspacePage(state, onDispatchDateChange) {
   nav.className = "workspace-tabs workspace-tabs-opshop";
   nav.setAttribute("aria-label", "OP SHOP Pickup workspace");
   const activeRoute = state.workspaceRoute === "opshop/templates"
-    ? "opshop/task-pool"
+    || state.workspaceRoute.startsWith("opshop/task-pool/")
+    ? "opshop/task-pool/regular"
     : state.workspaceRoute;
   OPSHOP_TABS.forEach((tab) => nav.append(createTab(tab, activeRoute)));
 
@@ -432,7 +433,7 @@ function createRouteGroupAssignmentForm(group, routeTemplates, state, actions) {
 }
 
 
-function createTemplateList(board) {
+function createTemplateList(board, state) {
   if (!board) {
     return createEmptyState("No OP SHOP template data loaded.", "store");
   }
@@ -446,7 +447,10 @@ function createTemplateList(board) {
       "Manage OP SHOP Templates",
       `${templates.length} active Regular, Oncall, and Countryside templates`,
     ),
-    createRouteActionLink("Back to Task Pool", "#opshop/task-pool"),
+    createRouteActionLink(
+      "Back to Task Pool",
+      `#${state.opshopTaskPoolReturnRoute || "opshop/task-pool/regular"}`,
+    ),
   );
   wrapper.append(toolbar);
   const grid = document.createElement("div");
