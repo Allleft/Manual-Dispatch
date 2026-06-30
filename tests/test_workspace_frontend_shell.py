@@ -1848,6 +1848,49 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             template_update,
         )
 
+    def test_opshop_templates_reuse_countryside_route_management(self):
+        countryside_renderer = self._read(
+            "js/render/opshop-countryside-pickup-list-modal-renderer.js"
+        )
+        countryside_actions = self._read(
+            "js/actions/opshop-countryside-pickup-actions.js"
+        )
+        self.assertIn(
+            "createCountrysideRouteManagementPanel",
+            self.opshop_renderer,
+        )
+        self.assertIn(
+            "export function createCountrysideRouteManagementPanel",
+            countryside_renderer,
+        )
+        self.assertIn("Countryside Route Management", self.opshop_renderer)
+        for label in (
+            "New Route",
+            "Rename",
+            "Disable",
+            "Add OP SHOP to this route",
+            "Move",
+            "Remove",
+            "Route Template Detail",
+        ):
+            self.assertIn(label, countryside_renderer)
+        for action in (
+            "createCountrysideRouteGroup",
+            "renameCountrysideRouteGroup",
+            "disableCountrysideRouteGroup",
+            "addCountrysideRouteTemplate",
+            "moveCountrysideRouteTemplate",
+            "removeCountrysideRouteTemplate",
+        ):
+            self.assertIn(action, self.app)
+        self.assertIn("loadManagementData", self.app)
+        self.assertIn("refreshScopedBoard = null", countryside_actions)
+        self.assertIn('state.activeWorkspace === "opshop"', countryside_actions)
+        self.assertIn("await refreshScopedBoard();", countryside_actions)
+        self.assertIn('state.opshopBoard?.drivers || []', countryside_renderer)
+        self.assertNotIn("fetch(", countryside_renderer)
+        self.assertIn(".opshop-countryside-management-panel", self.styles)
+
     def test_opshop_trip_summary_groups_pickups_and_preserves_collection_locks(self):
         self.assertIn('state.workspaceRoute === "opshop/trip-summary"', self.opshop_renderer)
         self.assertIn("function createOpShopTripSummary(", self.opshop_renderer)

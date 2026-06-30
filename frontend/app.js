@@ -206,6 +206,7 @@ function activateWorkspaceRoute(route) {
   }
   if (route === "opshop/templates") {
     opShopTemplateActions.loadTemplates();
+    countrysideOpShopPickupActions.loadManagementData();
   }
 }
 
@@ -334,6 +335,25 @@ function renderWorkspace() {
       startEditTemplate: opShopTemplateActions.startEditTemplate,
       toggleTemplateIncludeInactive: opShopTemplateActions.toggleIncludeInactive,
       updateTemplateForm: opShopTemplateActions.updateTemplateForm,
+      addCountrysideRouteTemplate: countrysideOpShopPickupActions.handleAddRouteTemplate,
+      cancelCountrysideRouteGroupForm: countrysideOpShopPickupActions.cancelRouteGroupForm,
+      cancelCountrysideRouteTemplateForm: countrysideOpShopPickupActions.cancelRouteTemplateForm,
+      closeCountrysideRouteTemplateDetail: countrysideOpShopPickupActions.closeRouteTemplateDetail,
+      createCountrysideRouteGroup: countrysideOpShopPickupActions.handleCreateRouteGroup,
+      disableCountrysideRouteGroup: countrysideOpShopPickupActions.handleDisableRouteGroup,
+      moveCountrysideRouteTemplate: countrysideOpShopPickupActions.handleMoveRouteTemplate,
+      openCountrysideRouteTemplateDetail: countrysideOpShopPickupActions.openRouteTemplateDetail,
+      removeCountrysideRouteTemplate: countrysideOpShopPickupActions.handleRemoveRouteTemplate,
+      renameCountrysideRouteGroup: countrysideOpShopPickupActions.handleRenameRouteGroup,
+      selectCountrysideRouteGroup: countrysideOpShopPickupActions.setSelectedRouteGroup,
+      startAddCountrysideRouteTemplate: countrysideOpShopPickupActions.startAddRouteTemplate,
+      startDisableCountrysideRouteGroup: countrysideOpShopPickupActions.startDisableRouteGroup,
+      startMoveCountrysideRouteTemplate: countrysideOpShopPickupActions.startMoveRouteTemplate,
+      startNewCountrysideRouteGroup: countrysideOpShopPickupActions.startNewRouteGroup,
+      startRemoveCountrysideRouteTemplate: countrysideOpShopPickupActions.startRemoveRouteTemplate,
+      startRenameCountrysideRouteGroup: countrysideOpShopPickupActions.startRenameRouteGroup,
+      updateCountrysideRouteGroupForm: countrysideOpShopPickupActions.updateRouteGroupForm,
+      updateCountrysideRouteTemplateForm: countrysideOpShopPickupActions.updateRouteTemplateForm,
     },
     onDispatchDateChange: workspaceActions.updateDispatchDate,
   });
@@ -1218,6 +1238,7 @@ const oncallOpShopPickupActions = createOncallOpShopPickupActions({
 
 const countrysideOpShopPickupActions = createCountrysideOpShopPickupActions({
   loadBoard,
+  refreshScopedBoard: () => workspaceActions.loadWorkspaceRoute(state.workspaceRoute),
   renderBoard,
   state,
 });

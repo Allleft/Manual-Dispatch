@@ -1,6 +1,7 @@
 import { createIcon } from "../utils/icon-utils.js";
 import { formatOptional } from "../utils/format-utils.js";
 import { createOpShopTemplateManagementPanel } from "./opshop-template-management-modal-renderer.js";
+import { createCountrysideRouteManagementPanel } from "./opshop-countryside-pickup-list-modal-renderer.js";
 
 
 const OPSHOP_TABS = [
@@ -464,6 +465,31 @@ function createTemplateManagementPage(state, actions) {
       onStartEdit: actions.startEditTemplate,
       onToggleIncludeInactive: actions.toggleTemplateIncludeInactive,
       onUpdateForm: actions.updateTemplateForm,
+    }),
+    createSectionHeading(
+      "Countryside Route Management",
+      "Create and maintain route groups and their ON_CALL + COUNTRYSIDE template memberships.",
+    ),
+    createCountrysideRouteManagementPanel({
+      onAddRouteTemplate: actions.addCountrysideRouteTemplate,
+      onCancelRouteGroupForm: actions.cancelCountrysideRouteGroupForm,
+      onCancelRouteTemplateForm: actions.cancelCountrysideRouteTemplateForm,
+      onCloseRouteTemplateDetail: actions.closeCountrysideRouteTemplateDetail,
+      onCreateRouteGroup: actions.createCountrysideRouteGroup,
+      onDisableRouteGroup: actions.disableCountrysideRouteGroup,
+      onMoveRouteTemplate: actions.moveCountrysideRouteTemplate,
+      onOpenRouteTemplateDetail: actions.openCountrysideRouteTemplateDetail,
+      onRemoveRouteTemplate: actions.removeCountrysideRouteTemplate,
+      onRenameRouteGroup: actions.renameCountrysideRouteGroup,
+      onSelectRouteGroup: actions.selectCountrysideRouteGroup,
+      onStartAddRouteTemplate: actions.startAddCountrysideRouteTemplate,
+      onStartDisableRouteGroup: actions.startDisableCountrysideRouteGroup,
+      onStartMoveRouteTemplate: actions.startMoveCountrysideRouteTemplate,
+      onStartNewRouteGroup: actions.startNewCountrysideRouteGroup,
+      onStartRemoveRouteTemplate: actions.startRemoveCountrysideRouteTemplate,
+      onStartRenameRouteGroup: actions.startRenameCountrysideRouteGroup,
+      onUpdateRouteGroupForm: actions.updateCountrysideRouteGroupForm,
+      onUpdateRouteTemplateForm: actions.updateCountrysideRouteTemplateForm,
     }),
   );
   return wrapper;

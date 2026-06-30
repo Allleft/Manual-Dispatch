@@ -21,6 +21,7 @@ import {
 
 export function createCountrysideOpShopPickupActions({
   loadBoard,
+  refreshScopedBoard = null,
   renderBoard,
   state,
 }) {
@@ -123,6 +124,11 @@ export function createCountrysideOpShopPickupActions({
       state.isCountrysideOpShopPickupListLoading = false;
       renderBoard();
     }
+  }
+
+  async function loadManagementData() {
+    state.countrysideRouteManagementError = "";
+    await Promise.all([loadRouteGroups(), loadScheduleCandidates(), loadRouteMemberships()]);
   }
 
   function startAddPickupTask() {
@@ -615,6 +621,10 @@ export function createCountrysideOpShopPickupActions({
 
   async function refreshCountrysideRouteData() {
     await Promise.all([loadRouteGroups(), loadScheduleCandidates(), loadRouteMemberships()]);
+    if (state.activeWorkspace === "opshop" && typeof refreshScopedBoard === "function") {
+      await refreshScopedBoard();
+      return;
+    }
     await loadBoard(state.dispatchDate, { force: true });
     initializeAssignedDriverSelections();
   }
@@ -682,6 +692,7 @@ export function createCountrysideOpShopPickupActions({
     handleRenameRouteGroup,
     handleUpdatePickupTask,
     loadRouteGroups,
+    loadManagementData,
     loadRouteMemberships,
     loadScheduleCandidates,
     closeRouteTemplateDetail,

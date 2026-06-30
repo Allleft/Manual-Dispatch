@@ -70,6 +70,66 @@ export function renderCountrysideOpShopPickupListModal({
   modal.append(
     createModalHeader({ onCloseList, onStartAdd }),
     createListSummary(),
+    createCountrysideRouteManagementPanel({
+      onAddRouteTemplate,
+      onCancelRouteGroupForm,
+      onCancelRouteTemplateForm,
+      onCloseRouteTemplateDetail,
+      onCreateRouteGroup,
+      onDisableRouteGroup,
+      onMoveRouteTemplate,
+      onOpenRouteTemplateDetail,
+      onRemoveRouteTemplate,
+      onRenameRouteGroup,
+      onSelectRouteGroup,
+      onStartAddRouteTemplate,
+      onStartDisableRouteGroup,
+      onStartMoveRouteTemplate,
+      onStartNewRouteGroup,
+      onStartRemoveRouteTemplate,
+      onStartRenameRouteGroup,
+      onUpdateRouteGroupForm,
+      onUpdateRouteTemplateForm,
+    }),
+    createActiveForm({
+      onCancelForm,
+      onConfirmDelete,
+      onCreatePickup,
+      onStartDelete,
+      onUpdateForm,
+      onUpdatePickup,
+    }),
+    createPickupGroups({ onOpenDetail, onStartEdit, onUpdateAssignedDriver }),
+  );
+
+  backdrop.append(modal);
+  root.append(backdrop);
+}
+
+export function createCountrysideRouteManagementPanel({
+  onAddRouteTemplate,
+  onCancelRouteGroupForm,
+  onCancelRouteTemplateForm,
+  onCloseRouteTemplateDetail,
+  onCreateRouteGroup,
+  onDisableRouteGroup,
+  onMoveRouteTemplate,
+  onOpenRouteTemplateDetail,
+  onRemoveRouteTemplate,
+  onRenameRouteGroup,
+  onSelectRouteGroup,
+  onStartAddRouteTemplate,
+  onStartDisableRouteGroup,
+  onStartMoveRouteTemplate,
+  onStartNewRouteGroup,
+  onStartRemoveRouteTemplate,
+  onStartRenameRouteGroup,
+  onUpdateRouteGroupForm,
+  onUpdateRouteTemplateForm,
+}) {
+  const panel = document.createElement("section");
+  panel.className = "opshop-countryside-management-panel";
+  panel.append(
     createRouteGroupManagement({
       onSelectRouteGroup,
       onStartDisableRouteGroup,
@@ -84,14 +144,6 @@ export function renderCountrysideOpShopPickupListModal({
       onRenameRouteGroup,
       onUpdateRouteGroupForm,
     }),
-    createActiveForm({
-      onCancelForm,
-      onConfirmDelete,
-      onCreatePickup,
-      onStartDelete,
-      onUpdateForm,
-      onUpdatePickup,
-    }),
     createRouteTemplateForm({
       onAddRouteTemplate,
       onCancelRouteTemplateForm,
@@ -100,17 +152,14 @@ export function renderCountrysideOpShopPickupListModal({
       onUpdateRouteTemplateForm,
     }),
     createRouteTemplateDetailPanel({ onCloseRouteTemplateDetail }),
-    createPickupGroups({ onOpenDetail, onStartEdit, onUpdateAssignedDriver }),
     createRouteTemplatesSection({
+      onOpenRouteTemplateDetail,
       onStartAddRouteTemplate,
       onStartMoveRouteTemplate,
-      onOpenRouteTemplateDetail,
       onStartRemoveRouteTemplate,
     }),
   );
-
-  backdrop.append(modal);
-  root.append(backdrop);
+  return panel;
 }
 
 function createModalHeader({ onCloseList, onStartAdd }) {
@@ -741,7 +790,7 @@ function createDriverSelect(labelText, value, onChange, options = {}) {
     state.isCountrysideOpShopPickupSaving ||
     state.isCountrysideRouteTemplateSaving;
   select.append(createOption("", "Unassigned", !value));
-  state.drivers.forEach((driver) => {
+  getCountrysideDrivers().forEach((driver) => {
     const hasSavedFinalSummary = options.pickupDate
       ? isDriverFinalizedForPickup(driver.driver_id, options.pickupDate)
       : false;
@@ -758,6 +807,13 @@ function createDriverSelect(labelText, value, onChange, options = {}) {
 
   label.append(select);
   return label;
+}
+
+function getCountrysideDrivers() {
+  if (state.activeWorkspace === "opshop") {
+    return state.opshopBoard?.drivers || [];
+  }
+  return state.drivers;
 }
 
 function createTextField(labelText, field, value, onUpdate, options = {}) {
