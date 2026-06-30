@@ -44,6 +44,8 @@ const DELIVERY_ROUTES = new Set([
   "delivery/history",
 ]);
 const OPSHOP_ROUTES = new Set([
+  "opshop/task-pool",
+  "opshop/trip-summary",
   "opshop/regular",
   "opshop/oncall",
   "opshop/countryside",
@@ -283,7 +285,7 @@ export function createWorkspaceActions({
     state.opshopActionError = "";
     renderWorkspace();
     try {
-      if (route === "opshop/collections") {
+      if (route === "opshop/collections" || route === "opshop/trip-summary") {
         const [board, collections] = await Promise.all([
           api.getOpShopWorkspaceBoard(dispatchDate),
           api.listOpShopPickupCollections(dispatchDate, ""),
@@ -331,7 +333,21 @@ export function createWorkspaceActions({
     clearWorkspaceDraftsForDispatchDateChange();
     state.dispatchDate = nextDate;
     state.deliveryTripSummaryDate = nextDate;
+    state.opshopTripSummaryDate = nextDate;
     await loadWorkspaceRoute(state.workspaceRoute);
+  }
+
+  function updateOpShopTaskPoolView(view) {
+    if (!["regular", "oncall", "countryside"].includes(view)) {
+      return;
+    }
+    state.opshopTaskPoolView = view;
+    renderWorkspace();
+  }
+
+  function updateOpShopTripSummaryDate(nextDate) {
+    state.opshopTripSummaryDate = nextDate || state.dispatchDate;
+    renderWorkspace();
   }
 
   function updateDeliveryTripSummaryDate(nextDate) {
@@ -1926,6 +1942,8 @@ export function createWorkspaceActions({
     updateDeliveryVehicleForm,
     updateDispatchDate,
     updateOpShopAssignmentDraft,
+    updateOpShopTaskPoolView,
+    updateOpShopTripSummaryDate,
   };
 }
 

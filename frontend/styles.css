@@ -405,6 +405,53 @@
   background: var(--accent);
 }
 
+.workspace-subtabs {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  width: fit-content;
+  gap: 0.35rem;
+  border: 1px solid rgba(39, 93, 69, 0.18);
+  border-radius: 999px;
+  padding: 0.3rem;
+  background: #f8fbf9;
+}
+
+.workspace-subtab {
+  min-height: 38px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0.48rem 0.9rem;
+  color: var(--muted);
+  background: transparent;
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.workspace-subtab:hover,
+.workspace-subtab:focus-visible {
+  color: var(--accent-strong);
+  background: #fff;
+}
+
+.workspace-subtab:focus-visible {
+  outline: 3px solid rgba(39, 93, 69, 0.2);
+  outline-offset: 1px;
+}
+
+.workspace-subtab-active {
+  color: #fff;
+  background: var(--accent);
+}
+
+.workspace-subtab-active:hover,
+.workspace-subtab-active:focus-visible {
+  color: #fff;
+  background: var(--accent-strong);
+}
+
 .workspace-status {
   margin-bottom: 0.85rem;
   border: 1px solid var(--line);
@@ -699,6 +746,80 @@
   background: #f8fbf9;
 }
 
+.workspace-opshop-task-pool-toolbar,
+.workspace-template-toolbar,
+.workspace-opshop-trip-toolbar {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.workspace-route-action-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.workspace-opshop-driver-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.workspace-opshop-driver-card {
+  align-content: start;
+}
+
+.workspace-opshop-trip-group {
+  display: grid;
+  gap: 0.5rem;
+  border: 1px solid rgba(39, 93, 69, 0.15);
+  border-radius: var(--radius-sm);
+  padding: 0.65rem;
+  background: #fbfdfb;
+}
+
+.workspace-opshop-trip-group h4 {
+  margin: 0;
+  color: var(--accent-strong);
+  font-size: 0.86rem;
+}
+
+.workspace-opshop-trip-group .workspace-empty-state {
+  padding: 0.65rem;
+}
+
+.workspace-opshop-trip-pickup-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.7rem;
+  box-shadow: none;
+}
+
+.workspace-opshop-trip-pickup-row h5,
+.workspace-opshop-trip-pickup-row p {
+  margin: 0;
+}
+
+.workspace-opshop-trip-pickup-row h5 {
+  font-size: 0.92rem;
+}
+
+.workspace-opshop-trip-pickup-row p {
+  margin-top: 0.18rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.workspace-opshop-trip-notes {
+  max-width: 60ch;
+}
+
+.workspace-collection-section {
+  gap: 0.85rem;
+}
+
 .workspace-context-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -851,6 +972,24 @@
   .workspace-section-heading {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .workspace-opshop-task-pool-toolbar,
+  .workspace-template-toolbar,
+  .workspace-opshop-trip-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .workspace-subtabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+    border-radius: var(--radius-md);
+  }
+
+  .workspace-subtab {
+    padding-right: 0.45rem;
+    padding-left: 0.45rem;
   }
 
   .workspace-date-control {

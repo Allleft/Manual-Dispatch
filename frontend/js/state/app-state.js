@@ -20,6 +20,8 @@ export const state = {
   deliveryTripSummaryDate: DEFAULT_DISPATCH_DATE,
   opshopBoard: null,
   opshopPickupCollections: [],
+  opshopTaskPoolView: "regular",
+  opshopTripSummaryDate: DEFAULT_DISPATCH_DATE,
   sharedSpecifications: { drivers: [], vehicles: [] },
   isDeliveryWorkspaceLoading: false,
   deliveryWorkspaceError: "",

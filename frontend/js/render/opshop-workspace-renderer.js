@@ -3,12 +3,14 @@ import { formatOptional } from "../utils/format-utils.js";
 
 
 const OPSHOP_TABS = [
-  { route: "opshop/regular", label: "Regular" },
-  { route: "opshop/oncall", label: "Oncall" },
-  { route: "opshop/countryside", label: "Countryside" },
-  { route: "opshop/templates", label: "Templates" },
+  { route: "opshop/task-pool", label: "Task Pool" },
+  { route: "opshop/trip-summary", label: "Trip Summary" },
   { route: "opshop/collections", label: "Pickup Collections" },
-  { route: "opshop/history", label: "Saved History" },
+];
+const OPSHOP_TASK_POOL_VIEWS = [
+  { view: "regular", label: "Regular" },
+  { view: "oncall", label: "Oncall" },
+  { view: "countryside", label: "Countryside" },
 ];
 
 
@@ -31,21 +33,23 @@ export function renderOpShopWorkspace(
     }
     if (state.workspaceRoute === "opshop/templates") {
       content.append(createTemplateList(state.opshopBoard));
-    } else if (
-      state.workspaceRoute === "opshop/collections" ||
-      state.workspaceRoute === "opshop/history"
-    ) {
+    } else if (state.workspaceRoute === "opshop/trip-summary") {
+      content.append(createOpShopTripSummary(
+        state.opshopBoard,
+        state.opshopPickupCollections,
+        state,
+        actions,
+      ));
+    } else if (state.workspaceRoute === "opshop/collections") {
       content.append(
         createCollectionList(
-          state.opshopBoard,
           state.opshopPickupCollections,
-          state.workspaceRoute === "opshop/history",
           state,
           actions,
         ),
       );
     } else {
-      content.append(createPickupList(state.opshopBoard, state.workspaceRoute, state, actions));
+      content.append(createOpShopTaskPool(state.opshopBoard, state, actions));
     }
   }
 
@@ -80,7 +84,10 @@ function createWorkspacePage(state, onDispatchDateChange) {
   const nav = document.createElement("nav");
   nav.className = "workspace-tabs workspace-tabs-opshop";
   nav.setAttribute("aria-label", "OP SHOP Pickup workspace");
-  OPSHOP_TABS.forEach((tab) => nav.append(createTab(tab, state.workspaceRoute)));
+  const activeRoute = state.workspaceRoute === "opshop/templates"
+    ? "opshop/task-pool"
+    : state.workspaceRoute;
+  OPSHOP_TABS.forEach((tab) => nav.append(createTab(tab, activeRoute)));
 
   page.append(heading, nav);
   return page;
@@ -114,6 +121,49 @@ function createTab(tab, activeRoute) {
 }
 
 
+function createOpShopTaskPool(board, state, actions) {
+  if (!board) {
+    return createEmptyState("No OP SHOP workspace data loaded.", "store");
+  }
+  const wrapper = document.createElement("div");
+  wrapper.className = "workspace-stack workspace-opshop-task-pool";
+  const toolbar = document.createElement("section");
+  toolbar.className = "workspace-context-panel workspace-context-panel-opshop workspace-opshop-task-pool-toolbar";
+  const heading = createSectionHeading(
+    "OP SHOP Pickup Task Pool",
+    "Assign Regular, Oncall, and Countryside pickups before reviewing them by driver.",
+  );
+  const manageTemplates = createRouteActionLink(
+    "Manage Templates",
+    "#opshop/templates",
+  );
+  toolbar.append(heading, manageTemplates);
+
+  const tabs = document.createElement("div");
+  tabs.className = "workspace-subtabs workspace-subtabs-opshop";
+  tabs.setAttribute("role", "tablist");
+  tabs.setAttribute("aria-label", "OP SHOP Task Pool pickup type");
+  OPSHOP_TASK_POOL_VIEWS.forEach((item) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "workspace-subtab";
+    button.textContent = item.label;
+    const isActive = item.view === (state.opshopTaskPoolView || "regular");
+    button.classList.toggle("workspace-subtab-active", isActive);
+    button.setAttribute("role", "tab");
+    button.setAttribute("aria-selected", isActive ? "true" : "false");
+    button.addEventListener("click", () => actions.updateOpShopTaskPoolView(item.view));
+    tabs.append(button);
+  });
+  wrapper.append(
+    toolbar,
+    tabs,
+    createPickupList(board, state.opshopTaskPoolView || "regular", state, actions),
+  );
+  return wrapper;
+}
+
+
 function createPickupList(board, route, state, actions) {
   if (!board) {
     return createEmptyState("No OP SHOP workspace data loaded.", "store");
@@ -132,7 +182,7 @@ function createPickupList(board, route, state, actions) {
     createSectionHeading(context.heading, context.description),
   );
 
-  if (route === "opshop/countryside") {
+  if (route === "countryside") {
     wrapper.append(createRouteGroupContext(board, state, actions));
   }
 
@@ -152,10 +202,10 @@ function createPickupList(board, route, state, actions) {
 
 function pickupListForRoute(board, route) {
   return (board.opshop_pickups || []).filter((pickup) => {
-    if (route === "opshop/regular") {
+    if (route === "regular") {
       return pickup.run_type === "REGULAR";
     }
-    if (route === "opshop/countryside") {
+    if (route === "countryside") {
       return pickup.pickup_category === "COUNTRYSIDE";
     }
     return pickup.run_type === "ON_CALL" && pickup.pickup_category !== "COUNTRYSIDE";
@@ -164,7 +214,7 @@ function pickupListForRoute(board, route) {
 
 
 function getPickupRouteContext(route) {
-  if (route === "opshop/regular") {
+  if (route === "regular") {
     return {
       title: "Regular pickups",
       heading: "Regular Pickup Schedule",
@@ -173,7 +223,7 @@ function getPickupRouteContext(route) {
       icon: "calendar",
     };
   }
-  if (route === "opshop/countryside") {
+  if (route === "countryside") {
     return {
       title: "Countryside pickups",
       heading: "Countryside Route Pickups",
@@ -389,12 +439,16 @@ function createTemplateList(board) {
   const templates = board.templates || [];
   const wrapper = document.createElement("div");
   wrapper.className = "workspace-stack";
-  wrapper.append(
+  const toolbar = document.createElement("section");
+  toolbar.className = "workspace-context-panel workspace-context-panel-opshop workspace-template-toolbar";
+  toolbar.append(
     createSectionHeading(
-      "OP SHOP Templates",
+      "Manage OP SHOP Templates",
       `${templates.length} active Regular, Oncall, and Countryside templates`,
     ),
+    createRouteActionLink("Back to Task Pool", "#opshop/task-pool"),
   );
+  wrapper.append(toolbar);
   const grid = document.createElement("div");
   grid.className = "workspace-card-grid workspace-template-grid";
   if (!templates.length) {
@@ -437,78 +491,228 @@ function createTemplateCard(template) {
 }
 
 
-function createCollectionList(board, collections, savedOnly, state, actions) {
-  const filtered = (collections || []).filter(
-    (collection) => !savedOnly || collection.status === "SAVED",
-  );
-  const wrapper = document.createElement("div");
-  wrapper.className = "workspace-stack";
-  if (!savedOnly && board) {
-    wrapper.append(createReadyCollectionSection(board, collections, state, actions));
+function createOpShopTripSummary(board, collections, state, actions) {
+  if (!board) {
+    return createEmptyState("No OP SHOP workspace data loaded.", "store");
   }
+  const pickupDate = state.opshopTripSummaryDate || state.dispatchDate;
+  const wrapper = document.createElement("div");
+  wrapper.className = "workspace-stack workspace-opshop-trip-summary";
+  wrapper.append(createOpShopTripSummaryToolbar(pickupDate, state, actions));
+  const assignedForDate = (board.opshop_pickups || []).filter(
+    (pickup) => pickup.pickup_date === pickupDate && currentDriverId(pickup),
+  );
   wrapper.append(
-    createSectionHeading(
-      savedOnly ? "Saved Pickup Collection History" : "OP SHOP Pickup Collections",
-      `${filtered.length} ${savedOnly ? "saved records" : "generated and saved records"}`,
-    ),
+    createMetricGrid([
+      ["Pickup date", pickupDate, "calendar"],
+      ["Assigned pickups", assignedForDate.length, "store"],
+      ["Drivers", (board.drivers || []).length, "user"],
+    ]),
   );
   const grid = document.createElement("div");
-  grid.className = "workspace-card-grid workspace-collection-grid";
-  if (!filtered.length) {
-    grid.append(
-      createEmptyState(
-        savedOnly ? "No saved Pickup Collections for this dispatch date." : "No Pickup Collections for this dispatch date.",
-        "history",
-      ),
-    );
+  grid.className = "workspace-card-grid workspace-driver-grid workspace-opshop-driver-grid";
+  if (!(board.drivers || []).length) {
+    grid.append(createEmptyState("No drivers are available for OP SHOP Trip Summary.", "user"));
   } else {
-    filtered.forEach((collection) => grid.append(createCollectionCard(collection, state, actions)));
+    (board.drivers || []).forEach((driver) => {
+      grid.append(createOpShopDriverSummaryCard(
+        driver,
+        board,
+        collections,
+        pickupDate,
+        state,
+        actions,
+      ));
+    });
   }
   wrapper.append(grid);
   return wrapper;
 }
 
 
-function createReadyCollectionSection(board, collections, state, actions) {
+function createOpShopTripSummaryToolbar(pickupDate, state, actions) {
+  const panel = document.createElement("section");
+  panel.className = "workspace-context-panel workspace-context-panel-opshop workspace-opshop-trip-toolbar";
+  const heading = createSectionHeading(
+    "OP SHOP Trip Summary",
+    "Review assigned pickups by driver before generating a Pickup Collection.",
+  );
+  const field = document.createElement("label");
+  field.className = "workspace-date-control workspace-opshop-pickup-date-control";
+  field.textContent = "Pickup date";
+  const input = document.createElement("input");
+  input.type = "date";
+  input.value = pickupDate;
+  input.disabled = state.isOpShopWorkspaceLoading;
+  input.addEventListener("change", () => actions.updateOpShopTripSummaryDate(input.value));
+  field.append(input);
+  panel.append(heading, field);
+  return panel;
+}
+
+
+function createOpShopDriverSummaryCard(
+  driver,
+  board,
+  collections,
+  pickupDate,
+  state,
+  actions,
+) {
+  const card = document.createElement("article");
+  card.className = "workspace-record-card workspace-driver-card workspace-opshop-driver-card";
+  const pickups = assignedOpShopPickupsForDriver(board, pickupDate, driver.driver_id);
+  const collection = findPickupCollectionForDriver(collections, pickupDate, driver.driver_id);
+  const isLocked = Boolean(collection && ["GENERATED", "SAVED"].includes(collection.status));
+  const candidates = readyPickupCollectionCandidates(board, collections);
+  const candidate = candidates.find(
+    (item) => item.pickup_date === pickupDate && item.driver_id === driver.driver_id,
+  );
+
+  const top = document.createElement("div");
+  top.className = "workspace-record-card-top";
+  const identity = document.createElement("div");
+  const heading = document.createElement("h3");
+  heading.textContent = formatOptional(driver.name, driver.driver_id);
+  const badges = document.createElement("div");
+  badges.className = "workspace-inline-badges";
+  badges.append(createBadge(driver.is_available === false ? "Unavailable" : "Available"));
+  if (collection) {
+    badges.append(createBadge(collection.status));
+  }
+  identity.append(heading, badges);
+  top.append(identity);
+
+  const counts = pickupCategoryCounts(pickups);
+  const facts = document.createElement("dl");
+  facts.className = "workspace-fact-grid";
+  appendFact(facts, "Regular pickups", counts.regular);
+  appendFact(facts, "Oncall pickups", counts.oncall);
+  appendFact(facts, "Countryside pickups", counts.countryside);
+  appendFact(facts, "Total pickups", pickups.length);
+  card.append(top, facts);
+
+  if (isLocked) {
+    card.append(createStatus(
+      collection.status === "SAVED"
+        ? "Saved Pickup Collection locks this driver and pickup date."
+        : "Generated Pickup Collection is awaiting confirmation on the Pickup Collections page.",
+      "loading",
+    ));
+  }
+
+  card.append(
+    createOpShopPickupGroup("Regular", pickups.filter(isRegularPickup), isLocked, state, actions),
+    createOpShopPickupGroup("Oncall", pickups.filter(isOncallPickup), isLocked, state, actions),
+    createOpShopPickupGroup("Countryside", pickups.filter(isCountrysidePickup), isLocked, state, actions),
+  );
+
+  const actionsRow = document.createElement("div");
+  actionsRow.className = "workspace-action-row";
+  if (candidate && !isLocked) {
+    actionsRow.append(createActionButton(
+      "Generate Pickup Collection",
+      () => actions.generateOpShopPickupCollection(candidate),
+      {
+        disabled: isBusy(state, `opshop-generate:${pickupDate}:${driver.driver_id}`),
+        primary: true,
+      },
+    ));
+  }
+  card.append(actionsRow);
+  return card;
+}
+
+
+function createOpShopPickupGroup(titleText, pickups, isLocked, state, actions) {
   const section = document.createElement("section");
-  section.className = "workspace-context-panel workspace-context-panel-opshop";
-  section.append(
-    createSectionHeading(
-      "Ready to Generate",
-      "Assigned pickup groups without a generated or saved pickup collection",
+  section.className = "workspace-trip-panel workspace-opshop-trip-group";
+  const title = document.createElement("h4");
+  title.textContent = `${titleText} (${pickups.length})`;
+  section.append(title);
+  if (!pickups.length) {
+    section.append(createEmptyState(`No ${titleText} pickups assigned`, "store"));
+    return section;
+  }
+  pickups.forEach((pickup) => {
+    section.append(createOpShopTripPickupRow(pickup, isLocked, state, actions));
+  });
+  return section;
+}
+
+
+function createOpShopTripPickupRow(pickup, isLocked, state, actions) {
+  const row = document.createElement("article");
+  row.className = "workspace-record-card workspace-opshop-trip-pickup-row";
+  const copy = document.createElement("div");
+  const heading = document.createElement("h5");
+  heading.textContent = formatOptional(pickup.opshop_name);
+  const meta = document.createElement("p");
+  meta.textContent = [
+    formatOptional(pickup.suburb),
+    pickupCategoryLabel(pickup),
+    isCountrysidePickup(pickup) ? pickup.route_group_name : "",
+  ].filter(Boolean).join(" - ");
+  copy.append(heading, meta);
+  const notes = joinValues(pickup.task_notes, pickup.status_notes, pickup.access_type);
+  if (notes !== "-") {
+    const detail = document.createElement("p");
+    detail.className = "workspace-muted workspace-opshop-trip-notes";
+    detail.textContent = notes;
+    copy.append(detail);
+  }
+  const button = createActionButton(
+    "Unassign",
+    () => actions.unassignOpShopPickup(pickup.pickup_task_id),
+    {
+      disabled:
+        isLocked
+        || pickup.assigned_to_locked
+        || isBusy(state, `opshop-unassign:${pickup.pickup_task_id}`),
+    },
+  );
+  row.append(copy, button);
+  return row;
+}
+
+
+function createCollectionList(collections, state, actions) {
+  const generated = (collections || []).filter((collection) => collection.status === "GENERATED");
+  const saved = (collections || []).filter((collection) => collection.status === "SAVED");
+  const wrapper = document.createElement("div");
+  wrapper.className = "workspace-stack workspace-pickup-collections";
+  wrapper.append(
+    createCollectionSection(
+      "Generated Pickup Collections",
+      "Awaiting confirmation. Save to lock the snapshot, or cancel to restore editable pickups.",
+      generated,
+      "No generated Pickup Collections are awaiting confirmation.",
+      state,
+      actions,
+    ),
+    createCollectionSection(
+      "Saved Pickup Collections",
+      "Saved collection history remains available here for review and export.",
+      saved,
+      "No saved Pickup Collections for this dispatch date.",
+      state,
+      actions,
     ),
   );
-  const candidates = readyPickupCollectionCandidates(board, collections);
+  return wrapper;
+}
+
+
+function createCollectionSection(titleText, description, collections, emptyMessage, state, actions) {
+  const section = document.createElement("section");
+  section.className = "workspace-context-panel workspace-context-panel-opshop workspace-collection-section";
+  section.append(createSectionHeading(titleText, description));
   const grid = document.createElement("div");
   grid.className = "workspace-card-grid workspace-collection-grid";
-  if (!candidates.length) {
-    grid.append(createEmptyState("No pickup collection candidates are ready.", "store"));
+  if (!collections.length) {
+    grid.append(createEmptyState(emptyMessage, "history"));
   } else {
-    candidates.forEach((candidate) => {
-      const driver = (board.drivers || []).find((item) => item.driver_id === candidate.driver_id);
-      const card = document.createElement("article");
-      card.className = "workspace-record-card workspace-collection-card";
-      const heading = document.createElement("h3");
-      heading.textContent = formatOptional(driver?.name, candidate.driver_id);
-      const facts = document.createElement("dl");
-      facts.className = "workspace-fact-grid";
-      appendFact(facts, "Driver", formatOptional(driver?.name, candidate.driver_id));
-      appendFact(facts, "Pickup date", candidate.pickup_date);
-      appendFact(facts, "Regular pickups", candidate.regular_count);
-      appendFact(facts, "Oncall pickups", candidate.oncall_count);
-      appendFact(facts, "Countryside pickups", candidate.countryside_count);
-      appendFact(facts, "Total pickups", candidate.pickups.length);
-      const button = createActionButton(
-        "Generate",
-        () => actions.generateOpShopPickupCollection(candidate),
-        {
-          disabled: isBusy(state, `opshop-generate:${candidate.pickup_date}:${candidate.driver_id}`),
-          primary: true,
-        },
-      );
-      card.append(heading, facts, button);
-      grid.append(card);
-    });
+    collections.forEach((collection) => grid.append(createCollectionCard(collection, state, actions)));
   }
   section.append(grid);
   return section;
@@ -530,7 +734,11 @@ function createCollectionCard(collection, state, actions) {
   top.append(identity, createBadge(collection.status));
   const facts = document.createElement("dl");
   facts.className = "workspace-fact-grid";
+  const counts = pickupCategoryCounts(collection.pickups || []);
   appendFact(facts, "Pickup count", (collection.pickups || []).length);
+  appendFact(facts, "Regular pickups", counts.regular);
+  appendFact(facts, "Oncall pickups", counts.oncall);
+  appendFact(facts, "Countryside pickups", counts.countryside);
   appendFact(facts, "Generated", collection.generated_at);
   appendFact(facts, "Saved", collection.saved_at || "Not saved");
   appendFact(facts, "Saved by", collection.saved_by_account_name || "Not saved");
@@ -612,6 +820,67 @@ function readyPickupCollectionCandidates(board, collections) {
 }
 
 
+function assignedOpShopPickupsForDriver(board, pickupDate, driverId) {
+  return (board.opshop_pickups || []).filter(
+    (pickup) =>
+      pickup.pickup_date === pickupDate
+      && currentDriverId(pickup) === driverId,
+  );
+}
+
+
+function findPickupCollectionForDriver(collections, pickupDate, driverId) {
+  return (collections || []).find(
+    (collection) =>
+      collection.pickup_date === pickupDate
+      && collection.driver_id === driverId
+      && ["GENERATED", "SAVED"].includes(collection.status),
+  );
+}
+
+
+function pickupCategoryCounts(pickups) {
+  return (pickups || []).reduce(
+    (counts, pickup) => {
+      if (isCountrysidePickup(pickup)) {
+        counts.countryside += 1;
+      } else if (isRegularPickup(pickup)) {
+        counts.regular += 1;
+      } else {
+        counts.oncall += 1;
+      }
+      return counts;
+    },
+    { regular: 0, oncall: 0, countryside: 0 },
+  );
+}
+
+
+function isCountrysidePickup(pickup) {
+  return (pickup.pickup_category || pickup.pickup_category_snapshot) === "COUNTRYSIDE";
+}
+
+
+function isRegularPickup(pickup) {
+  return !isCountrysidePickup(pickup)
+    && (pickup.run_type || pickup.run_type_snapshot) === "REGULAR";
+}
+
+
+function isOncallPickup(pickup) {
+  return !isCountrysidePickup(pickup)
+    && (pickup.run_type || pickup.run_type_snapshot) === "ON_CALL";
+}
+
+
+function pickupCategoryLabel(pickup) {
+  if (isCountrysidePickup(pickup)) {
+    return "Countryside";
+  }
+  return isRegularPickup(pickup) ? "Regular" : "Oncall";
+}
+
+
 function changedOpShopAssignments(pickups, state) {
   return (pickups || []).filter((pickup) => {
     if (!Object.prototype.hasOwnProperty.call(state.opshopAssignmentDrafts, pickup.pickup_task_id)) {
@@ -676,13 +945,13 @@ function createSelect(labelText, value, options, onChange) {
   const text = document.createElement("span");
   text.textContent = labelText;
   const select = document.createElement("select");
-  select.value = value || "";
   options.forEach((option) => {
     const item = document.createElement("option");
     item.value = option.value;
     item.textContent = option.label;
     select.append(item);
   });
+  select.value = value || "";
   select.addEventListener("change", () => onChange(select.value));
   label.append(text, select);
   return label;
@@ -725,6 +994,15 @@ function createActionButton(label, onClick, { disabled = false, primary = false 
   button.disabled = disabled;
   button.addEventListener("click", onClick);
   return button;
+}
+
+
+function createRouteActionLink(label, href) {
+  const link = document.createElement("a");
+  link.href = href;
+  link.className = "button-secondary workspace-action-button workspace-route-action-link";
+  link.textContent = label;
+  return link;
 }
 
 

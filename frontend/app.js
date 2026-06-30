@@ -61,17 +61,24 @@ const WORKSPACE_ROUTES = new Set([
   "delivery/trip-summary",
   "delivery/run-sheet",
   "delivery/history",
-  "opshop/regular",
-  "opshop/oncall",
-  "opshop/countryside",
+  "opshop/task-pool",
+  "opshop/trip-summary",
   "opshop/templates",
   "opshop/collections",
-  "opshop/history",
 ]);
 const LEGACY_WORKSPACE_REDIRECTS = {
   "task-pool": "delivery/task-pool",
   "trip-summary": "delivery/trip-summary",
   "final-summary": "delivery/history",
+  "opshop/regular": "opshop/task-pool",
+  "opshop/oncall": "opshop/task-pool",
+  "opshop/countryside": "opshop/task-pool",
+  "opshop/history": "opshop/collections",
+};
+const LEGACY_OPSHOP_TASK_POOL_VIEWS = {
+  "opshop/regular": "regular",
+  "opshop/oncall": "oncall",
+  "opshop/countryside": "countryside",
 };
 
 async function loadBoard(dispatchDate = state.dispatchDate, options = {}) {
@@ -149,6 +156,9 @@ function clearError() {
 
 function getWorkspaceRouteFromHash() {
   const requestedRoute = window.location.hash.replace(/^#/, "");
+  if (LEGACY_OPSHOP_TASK_POOL_VIEWS[requestedRoute]) {
+    state.opshopTaskPoolView = LEGACY_OPSHOP_TASK_POOL_VIEWS[requestedRoute];
+  }
   const redirectedRoute = LEGACY_WORKSPACE_REDIRECTS[requestedRoute] || requestedRoute;
   return WORKSPACE_ROUTES.has(redirectedRoute) ? redirectedRoute : "home";
 }
@@ -171,7 +181,11 @@ function activateWorkspaceRoute(route) {
 }
 
 function setWorkspaceRoute(route, options = {}) {
-  const resolvedRoute = WORKSPACE_ROUTES.has(route) ? route : "home";
+  if (LEGACY_OPSHOP_TASK_POOL_VIEWS[route]) {
+    state.opshopTaskPoolView = LEGACY_OPSHOP_TASK_POOL_VIEWS[route];
+  }
+  const redirectedRoute = LEGACY_WORKSPACE_REDIRECTS[route] || route;
+  const resolvedRoute = WORKSPACE_ROUTES.has(redirectedRoute) ? redirectedRoute : "home";
   const nextHash = `#${resolvedRoute}`;
   if (options.replace) {
     window.history.replaceState(null, "", nextHash);

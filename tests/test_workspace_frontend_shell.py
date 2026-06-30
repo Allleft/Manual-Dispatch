@@ -52,6 +52,8 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             "delivery/trip-summary",
             "delivery/run-sheet",
             "delivery/history",
+            "opshop/task-pool",
+            "opshop/trip-summary",
             "opshop/regular",
             "opshop/oncall",
             "opshop/countryside",
@@ -65,6 +67,10 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             ("task-pool", "delivery/task-pool"),
             ("trip-summary", "delivery/trip-summary"),
             ("final-summary", "delivery/history"),
+            ("opshop/regular", "opshop/task-pool"),
+            ("opshop/oncall", "opshop/task-pool"),
+            ("opshop/countryside", "opshop/task-pool"),
+            ("opshop/history", "opshop/collections"),
         ):
             self.assertIn(f'"{legacy_route}": "{scoped_route}"', self.app)
         self.assertIn('window.addEventListener("hashchange"', self.app)
@@ -72,7 +78,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
 
     def test_home_is_navigation_only_and_does_not_fetch_board_data(self):
         self.assertIn('href: "#delivery/task-pool"', self.home_renderer)
-        self.assertIn('href: "#opshop/regular"', self.home_renderer)
+        self.assertIn('href: "#opshop/task-pool"', self.home_renderer)
         self.assertNotIn("fetch(", self.home_renderer)
         self.assertNotIn("apiGet", self.home_renderer)
         self.assertNotIn("apiList", self.home_renderer)
@@ -1748,7 +1754,8 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("saveOpShopPickupCollection", self.opshop_renderer)
         self.assertIn("cancelOpShopPickupCollection", self.opshop_renderer)
         self.assertIn("exportOpShopPickupCollection", self.opshop_renderer)
-        self.assertIn("Ready to Generate", self.opshop_renderer)
+        self.assertIn("Generate Pickup Collection", self.opshop_renderer)
+        self.assertNotIn("Ready to Generate", self.opshop_renderer)
         self.assertIn("pickup_task_id: pickup.pickup_task_id", self.workspace_actions)
         self.assertIn("driver_id: state.opshopAssignmentDrafts[pickup.pickup_task_id] || null", self.workspace_actions)
         self.assertIn("function changedOpShopAssignmentDrafts", self.workspace_actions)
@@ -1763,6 +1770,68 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertNotIn("task_type", opshop_apply_block)
         self.assertNotIn("trip_no", opshop_apply_block)
 
+    def test_opshop_workspace_uses_three_stage_workflow_and_internal_task_pool_tabs(self):
+        self.assertIn('{ route: "opshop/task-pool", label: "Task Pool" }', self.opshop_renderer)
+        self.assertIn('{ route: "opshop/trip-summary", label: "Trip Summary" }', self.opshop_renderer)
+        self.assertIn('{ route: "opshop/collections", label: "Pickup Collections" }', self.opshop_renderer)
+        top_tabs = self.opshop_renderer.split("const OPSHOP_TABS", 1)[1].split("];", 1)[0]
+        self.assertNotIn("Templates", top_tabs)
+        self.assertNotIn("Saved History", top_tabs)
+        self.assertIn('{ view: "regular", label: "Regular" }', self.opshop_renderer)
+        self.assertIn('{ view: "oncall", label: "Oncall" }', self.opshop_renderer)
+        self.assertIn('{ view: "countryside", label: "Countryside" }', self.opshop_renderer)
+        self.assertIn('tabs.setAttribute("role", "tablist")', self.opshop_renderer)
+        self.assertIn('button.setAttribute("aria-selected"', self.opshop_renderer)
+        self.assertIn("actions.updateOpShopTaskPoolView(item.view)", self.opshop_renderer)
+        self.assertIn('"Manage Templates",\n    "#opshop/templates"', self.opshop_renderer)
+        self.assertIn('createRouteActionLink("Back to Task Pool", "#opshop/task-pool")', self.opshop_renderer)
+        self.assertIn('opshopTaskPoolView: "regular"', self.state)
+        self.assertIn("function updateOpShopTaskPoolView(view)", self.workspace_actions)
+        task_pool_view_action = self.workspace_actions.split(
+            "function updateOpShopTaskPoolView", 1
+        )[1].split("function updateOpShopTripSummaryDate", 1)[0]
+        self.assertIn("renderWorkspace();", task_pool_view_action)
+        self.assertNotIn("loadOpShopRoute", task_pool_view_action)
+        self.assertNotIn("window.location", task_pool_view_action)
+        self.assertIn('"opshop/regular": "regular"', self.app)
+        self.assertIn('"opshop/oncall": "oncall"', self.app)
+        self.assertIn('"opshop/countryside": "countryside"', self.app)
+
+    def test_opshop_trip_summary_groups_pickups_and_preserves_collection_locks(self):
+        self.assertIn('state.workspaceRoute === "opshop/trip-summary"', self.opshop_renderer)
+        self.assertIn("function createOpShopTripSummary(", self.opshop_renderer)
+        self.assertIn('field.textContent = "Pickup date"', self.opshop_renderer)
+        self.assertIn("actions.updateOpShopTripSummaryDate(input.value)", self.opshop_renderer)
+        self.assertIn("assignedOpShopPickupsForDriver", self.opshop_renderer)
+        self.assertIn('createOpShopPickupGroup("Regular"', self.opshop_renderer)
+        self.assertIn('createOpShopPickupGroup("Oncall"', self.opshop_renderer)
+        self.assertIn('createOpShopPickupGroup("Countryside"', self.opshop_renderer)
+        self.assertIn("pickup.route_group_name", self.opshop_renderer)
+        self.assertIn("pickup.task_notes", self.opshop_renderer)
+        self.assertIn("actions.unassignOpShopPickup(pickup.pickup_task_id)", self.opshop_renderer)
+        self.assertIn('collection.status === "SAVED"', self.opshop_renderer)
+        self.assertIn("Saved Pickup Collection locks this driver and pickup date.", self.opshop_renderer)
+        self.assertIn("Generated Pickup Collection is awaiting confirmation", self.opshop_renderer)
+        self.assertIn("readyPickupCollectionCandidates(board, collections)", self.opshop_renderer)
+        self.assertIn("Generate Pickup Collection", self.opshop_renderer)
+        self.assertIn("opshopTripSummaryDate: DEFAULT_DISPATCH_DATE", self.state)
+        self.assertIn("function updateOpShopTripSummaryDate(nextDate)", self.workspace_actions)
+
+    def test_opshop_collections_merge_generated_and_saved_history(self):
+        self.assertIn("Generated Pickup Collections", self.opshop_renderer)
+        self.assertIn("Saved Pickup Collections", self.opshop_renderer)
+        self.assertIn('collection.status === "GENERATED"', self.opshop_renderer)
+        self.assertIn('collection.status === "SAVED"', self.opshop_renderer)
+        self.assertIn("saveOpShopPickupCollection", self.opshop_renderer)
+        self.assertIn("cancelOpShopPickupCollection", self.opshop_renderer)
+        self.assertIn("exportOpShopPickupCollection", self.opshop_renderer)
+        self.assertIn("Saved by", self.opshop_renderer)
+        self.assertIn("pickupCategoryCounts(collection.pickups || [])", self.opshop_renderer)
+        self.assertIn(
+            'route === "opshop/collections" || route === "opshop/trip-summary"',
+            self.workspace_actions,
+        )
+
     def test_opshop_default_driver_is_suggested_not_auto_submitted(self):
         self.assertIn("Suggested default", self.opshop_renderer)
         self.assertIn("defaultDriverHint", self.opshop_renderer)
@@ -1776,6 +1845,13 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         )[1].split("function selectedOpShopDriverId", 1)[0]
         self.assertIn("state.opshopAssignmentDrafts", changed_block)
         self.assertNotIn("default_driver_id", changed_block)
+        create_select_block = self.opshop_renderer.split(
+            "function createSelect", 1
+        )[1].split("function createDateField", 1)[0]
+        self.assertLess(
+            create_select_block.index("options.forEach"),
+            create_select_block.index('select.value = value || ""'),
+        )
 
     def test_generated_cancel_requires_confirmation_before_scoped_api_call(self):
         self._run_workspace_actions_script(
