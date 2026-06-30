@@ -753,6 +753,15 @@
   align-items: center;
 }
 
+.opshop-template-management-panel {
+  display: grid;
+  gap: 1rem;
+}
+
+.opshop-template-page-actions {
+  justify-content: flex-end;
+}
+
 .workspace-route-action-link {
   display: inline-flex;
   align-items: center;

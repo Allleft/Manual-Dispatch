@@ -1,5 +1,6 @@
 import { createIcon } from "../utils/icon-utils.js";
 import { formatOptional } from "../utils/format-utils.js";
+import { createOpShopTemplateManagementPanel } from "./opshop-template-management-modal-renderer.js";
 
 
 const OPSHOP_TABS = [
@@ -32,7 +33,7 @@ export function renderOpShopWorkspace(
       content.append(createStatus(state.opshopActionError, "error"));
     }
     if (state.workspaceRoute === "opshop/templates") {
-      content.append(createTemplateList(state.opshopBoard, state));
+      content.append(createTemplateManagementPage(state, actions));
     } else if (state.workspaceRoute === "opshop/trip-summary") {
       content.append(createOpShopTripSummary(
         state.opshopBoard,
@@ -433,11 +434,10 @@ function createRouteGroupAssignmentForm(group, routeTemplates, state, actions) {
 }
 
 
-function createTemplateList(board, state) {
-  if (!board) {
+function createTemplateManagementPage(state, actions) {
+  if (!state.opshopBoard) {
     return createEmptyState("No OP SHOP template data loaded.", "store");
   }
-  const templates = board.templates || [];
   const wrapper = document.createElement("div");
   wrapper.className = "workspace-stack";
   const toolbar = document.createElement("section");
@@ -445,53 +445,28 @@ function createTemplateList(board, state) {
   toolbar.append(
     createSectionHeading(
       "Manage OP SHOP Templates",
-      `${templates.length} active Regular, Oncall, and Countryside templates`,
+      "Add, edit, review, and soft-disable Regular and Oncall templates.",
     ),
     createRouteActionLink(
       "Back to Task Pool",
       `#${state.opshopTaskPoolReturnRoute || "opshop/task-pool/regular"}`,
     ),
   );
-  wrapper.append(toolbar);
-  const grid = document.createElement("div");
-  grid.className = "workspace-card-grid workspace-template-grid";
-  if (!templates.length) {
-    grid.append(createEmptyState("No active OP SHOP templates are available.", "store"));
-  } else {
-    templates.forEach((template) => grid.append(createTemplateCard(template)));
-  }
-  wrapper.append(grid);
+  wrapper.append(
+    toolbar,
+    createOpShopTemplateManagementPanel({
+      onCancelForm: actions.cancelTemplateForm,
+      onConfirmDisable: actions.disableTemplate,
+      onSave: actions.saveTemplate,
+      onSelectTab: actions.selectTemplateTab,
+      onStartAdd: actions.startAddTemplate,
+      onStartDisable: actions.startDisableTemplate,
+      onStartEdit: actions.startEditTemplate,
+      onToggleIncludeInactive: actions.toggleTemplateIncludeInactive,
+      onUpdateForm: actions.updateTemplateForm,
+    }),
+  );
   return wrapper;
-}
-
-
-function createTemplateCard(template) {
-  const card = document.createElement("article");
-  card.className = "workspace-record-card workspace-template-card";
-  const top = document.createElement("div");
-  top.className = "workspace-record-card-top";
-  const identity = document.createElement("div");
-  const kicker = document.createElement("span");
-  kicker.className = "workspace-record-kicker";
-  kicker.textContent = template.pickup_category === "COUNTRYSIDE"
-    ? formatOptional(template.route_group_name, "Countryside")
-    : formatOptional(template.run_type);
-  const title = document.createElement("h3");
-  title.textContent = formatOptional(template.opshop_name || template.name);
-  const location = document.createElement("p");
-  location.textContent = [template.street_address, template.suburb].filter(Boolean).join(", ");
-  identity.append(kicker, title, location);
-  top.append(identity, createBadge(formatOptional(template.status, "Active")));
-  const facts = document.createElement("dl");
-  facts.className = "workspace-fact-grid";
-  appendFact(facts, "Run day", template.run_day || "No fixed day");
-  appendFact(facts, "Frequency", template.pickup_frequency);
-  appendFact(facts, "Time window", template.time_window);
-  appendFact(facts, "Default driver", template.default_driver_name || template.default_driver_alias || "None");
-  appendFact(facts, "Contact", joinValues(template.primary_contact, template.primary_phone));
-  appendFact(facts, "Access", template.access_type);
-  card.append(top, facts);
-  return card;
 }
 
 

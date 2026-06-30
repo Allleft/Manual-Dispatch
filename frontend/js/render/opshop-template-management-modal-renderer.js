@@ -45,15 +45,49 @@ export function renderOpShopTemplateManagementModal({
   modal.setAttribute("aria-labelledby", "opshop-template-title");
   modal.addEventListener("click", (event) => event.stopPropagation());
 
-  modal.append(
-    createHeader(onClose, onStartAdd),
+  modal.append(createHeader(onClose, onStartAdd));
+  modal.append(createOpShopTemplateManagementPanel({
+    onCancelForm,
+    onConfirmDisable,
+    onSave,
+    onSelectTab,
+    onStartAdd,
+    onStartDisable,
+    onStartEdit,
+    onToggleIncludeInactive,
+    onUpdateForm,
+  }, { showAddButton: false }));
+  backdrop.append(modal);
+  root.append(backdrop);
+}
+
+
+export function createOpShopTemplateManagementPanel({
+  onCancelForm,
+  onConfirmDisable,
+  onSave,
+  onSelectTab,
+  onStartAdd,
+  onStartDisable,
+  onStartEdit,
+  onToggleIncludeInactive,
+  onUpdateForm,
+}, { showAddButton = true } = {}) {
+  const panel = document.createElement("section");
+  panel.className = "opshop-template-management-panel";
+  if (showAddButton) {
+    const actions = document.createElement("div");
+    actions.className = "detail-actions opshop-template-page-actions";
+    actions.append(createAddTemplateButton(onStartAdd));
+    panel.append(actions);
+  }
+  panel.append(
     createTabs(onSelectTab, onToggleIncludeInactive),
     createError(),
     createActiveForm({ onCancelForm, onConfirmDisable, onSave, onUpdateForm }),
     createTemplateList({ onStartDisable, onStartEdit }),
   );
-  backdrop.append(modal);
-  root.append(backdrop);
+  return panel;
 }
 
 
@@ -69,11 +103,7 @@ function createHeader(onClose, onStartAdd) {
 
   const actions = document.createElement("div");
   actions.className = "detail-actions";
-  const add = document.createElement("button");
-  add.type = "button";
-  setButtonContent(add, "Add Template", "plus");
-  add.disabled = state.isOpShopTemplateSaving;
-  add.addEventListener("click", onStartAdd);
+  const add = createAddTemplateButton(onStartAdd);
   const close = document.createElement("button");
   close.type = "button";
   close.className = "button-secondary";
@@ -82,6 +112,16 @@ function createHeader(onClose, onStartAdd) {
   actions.append(add, close);
   header.append(titleWrap, actions);
   return header;
+}
+
+
+function createAddTemplateButton(onStartAdd) {
+  const add = document.createElement("button");
+  add.type = "button";
+  setButtonContent(add, "Add Template", "plus");
+  add.disabled = state.isOpShopTemplateSaving;
+  add.addEventListener("click", onStartAdd);
+  return add;
 }
 
 
@@ -168,12 +208,20 @@ function createActiveForm({ onCancelForm, onConfirmDisable, onSave, onUpdateForm
       "Default Driver",
       "default_driver_id",
       values.default_driver_id,
-      [["", "No default driver"], ...state.drivers.map((driver) => [driver.driver_id, driver.name])],
+      [["", "No default driver"], ...getTemplateDrivers().map((driver) => [driver.driver_id, driver.name])],
       onUpdateForm,
     ),
     createActions(state.opshopTemplateFormMode === "add" ? "Save Template" : "Save Changes", onSave, onCancelForm),
   );
   return form;
+}
+
+
+function getTemplateDrivers() {
+  if (state.activeWorkspace === "opshop") {
+    return state.opshopBoard?.drivers || [];
+  }
+  return state.drivers || [];
 }
 
 

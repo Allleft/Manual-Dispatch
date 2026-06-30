@@ -1805,6 +1805,49 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("const isSubtypeOnlyChange", self.app)
         self.assertIn("if (!isSubtypeOnlyChange)", self.app)
 
+    def test_opshop_templates_reuse_full_regular_oncall_management(self):
+        template_renderer = self._read(
+            "js/render/opshop-template-management-modal-renderer.js"
+        )
+        template_actions = self._read("js/actions/opshop-template-actions.js")
+        self.assertIn("createOpShopTemplateManagementPanel", self.opshop_renderer)
+        self.assertNotIn("function createTemplateCard", self.opshop_renderer)
+        for action in (
+            "cancelTemplateForm",
+            "disableTemplate",
+            "saveTemplate",
+            "selectTemplateTab",
+            "startAddTemplate",
+            "startDisableTemplate",
+            "startEditTemplate",
+            "toggleTemplateIncludeInactive",
+            "updateTemplateForm",
+        ):
+            self.assertIn(action, self.app)
+        self.assertIn("Regular Templates", template_renderer)
+        self.assertIn("Oncall Templates", template_renderer)
+        self.assertIn("Show disabled templates", template_renderer)
+        self.assertIn("Add Template", template_renderer)
+        self.assertIn("Edit", template_renderer)
+        self.assertIn("Disable", template_renderer)
+        self.assertIn("Default Driver", template_renderer)
+        self.assertIn('state.opshopBoard?.drivers || []', template_renderer)
+        self.assertIn("refreshScopedBoard = null", template_actions)
+        self.assertIn('state.activeWorkspace === "opshop"', template_actions)
+        self.assertIn("await refreshScopedBoard();", template_actions)
+        self.assertIn(
+            "refreshScopedBoard: () => workspaceActions.loadWorkspaceRoute(state.workspaceRoute)",
+            self.app,
+        )
+        template_update = template_actions.split(
+            "function updateTemplateForm", 1
+        )[1].split("async function saveTemplate", 1)[0]
+        self.assertIn("if (shouldRender)", template_update)
+        self.assertNotIn(
+            "state.opshopTemplateForm = form;\n    renderBoard();",
+            template_update,
+        )
+
     def test_opshop_trip_summary_groups_pickups_and_preserves_collection_locks(self):
         self.assertIn('state.workspaceRoute === "opshop/trip-summary"', self.opshop_renderer)
         self.assertIn("function createOpShopTripSummary(", self.opshop_renderer)

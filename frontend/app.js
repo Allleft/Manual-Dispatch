@@ -204,6 +204,9 @@ function activateWorkspaceRoute(route) {
   if (!isSubtypeOnlyChange) {
     workspaceActions.loadWorkspaceRoute(route);
   }
+  if (route === "opshop/templates") {
+    opShopTemplateActions.loadTemplates();
+  }
 }
 
 function setWorkspaceRoute(route, options = {}) {
@@ -320,7 +323,18 @@ function renderWorkspace() {
   }
   renderOpShopWorkspaceView(root, {
     state,
-    actions: workspaceActions,
+    actions: {
+      ...workspaceActions,
+      cancelTemplateForm: opShopTemplateActions.cancelTemplateForm,
+      disableTemplate: opShopTemplateActions.disableTemplate,
+      saveTemplate: opShopTemplateActions.saveTemplate,
+      selectTemplateTab: opShopTemplateActions.selectTab,
+      startAddTemplate: opShopTemplateActions.startAddTemplate,
+      startDisableTemplate: opShopTemplateActions.startDisableTemplate,
+      startEditTemplate: opShopTemplateActions.startEditTemplate,
+      toggleTemplateIncludeInactive: opShopTemplateActions.toggleIncludeInactive,
+      updateTemplateForm: opShopTemplateActions.updateTemplateForm,
+    },
     onDispatchDateChange: workspaceActions.updateDispatchDate,
   });
 }
@@ -1210,6 +1224,7 @@ const countrysideOpShopPickupActions = createCountrysideOpShopPickupActions({
 
 const opShopTemplateActions = createOpShopTemplateActions({
   loadBoard,
+  refreshScopedBoard: () => workspaceActions.loadWorkspaceRoute(state.workspaceRoute),
   reloadCountrysideCandidates: countrysideOpShopPickupActions.loadScheduleCandidates,
   reloadOncallCandidates: oncallOpShopPickupActions.loadScheduleCandidates,
   reloadRegularCandidates: opShopPickupActions.loadScheduleCandidates,
