@@ -14,13 +14,19 @@ import {
   captureElementScroll,
   restoreElementScroll,
 } from "../utils/scroll-utils.js";
+import {
+  getOpShopModalDrivers,
+  syncScopedOpShopModalState,
+} from "../utils/opshop-workspace-modal-utils.js";
 
 export function createOpShopPickupActions({
   loadBoard,
+  refreshScopedBoard = null,
   renderBoard,
   state,
 }) {
   async function openOpShopPickupList() {
+    syncScopedOpShopModalState(state);
     state.isOpShopPickupListOpen = true;
     state.opshopPickupListError = "";
     state.opshopPickupFormMode = "";
@@ -131,6 +137,9 @@ export function createOpShopPickupActions({
       ...state.opshopPickupForm,
       [field]: value,
     };
+    if (["schedule_id", "pickup_date"].includes(field)) {
+      renderBoard();
+    }
   }
 
   async function handleCreatePickupTask() {
@@ -150,7 +159,7 @@ export function createOpShopPickupActions({
       });
       state.opshopPickupFormMode = "";
       state.opshopPickupForm = {};
-      await loadBoard(state.dispatchDate, { force: true });
+      await refreshPickupBoard();
       initializeAssignedDriverSelections({ preserveExisting: true });
     } catch (error) {
       state.opshopPickupListError = `Unable to add OP SHOP pickup. ${error.message}`;
@@ -177,7 +186,7 @@ export function createOpShopPickupActions({
       state.opshopPickupFormMode = "";
       state.opshopPickupEditingTaskId = "";
       state.opshopPickupForm = {};
-      await loadBoard(state.dispatchDate, { force: true });
+      await refreshPickupBoard();
       initializeAssignedDriverSelections({ preserveExisting: true });
     } catch (error) {
       state.opshopPickupListError = `Unable to update OP SHOP pickup. ${error.message}`;
@@ -201,7 +210,7 @@ export function createOpShopPickupActions({
       state.opshopPickupFormMode = "";
       state.opshopPickupEditingTaskId = "";
       state.opshopPickupForm = {};
-      await loadBoard(state.dispatchDate, { force: true });
+      await refreshPickupBoard();
       initializeAssignedDriverSelections({ preserveExisting: true });
     } catch (error) {
       state.opshopPickupListError = `Unable to delete OP SHOP pickup. ${error.message}`;
@@ -246,7 +255,7 @@ export function createOpShopPickupActions({
       return false;
     }
 
-    const defaultDriverExists = state.drivers.some(
+    const defaultDriverExists = getOpShopModalDrivers(state).some(
       (driver) => driver.driver_id === pickup.default_driver_id,
     );
     if (!defaultDriverExists) {
@@ -290,6 +299,15 @@ export function createOpShopPickupActions({
       state.scheduledOpShopPickups,
       state.dispatchDate,
     );
+  }
+
+  async function refreshPickupBoard() {
+    if (state.activeWorkspace === "opshop" && typeof refreshScopedBoard === "function") {
+      await refreshScopedBoard();
+      syncScopedOpShopModalState(state);
+      return;
+    }
+    await loadBoard(state.dispatchDate, { force: true });
   }
 
   return {

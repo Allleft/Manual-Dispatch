@@ -73,6 +73,9 @@ export function getOrderByTaskId(taskId) {
 
 export function getOpShopPickupByTaskId(taskId) {
   return (
+    state.opshopBoard?.opshop_pickups?.find(
+      (pickup) => pickup.pickup_task_id === taskId,
+    ) ||
     state.scheduledOpShopPickups.find((pickup) => pickup.pickup_task_id === taskId) ||
     state.oncallOpShopPickups.find((pickup) => pickup.pickup_task_id === taskId) ||
     state.countrysideOpShopPickups.find((pickup) => pickup.pickup_task_id === taskId) ||

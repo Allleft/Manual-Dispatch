@@ -195,6 +195,9 @@ function activateWorkspaceRoute(route) {
   if (route === "opshop/templates" && OPSHOP_TASK_POOL_ROUTE_VIEWS[previousRoute]) {
     state.opshopTaskPoolReturnRoute = previousRoute;
   }
+  if (previousRoute.startsWith("opshop/") && !route.startsWith("opshop/")) {
+    clearOpShopOperationalModalState();
+  }
   state.workspaceRoute = route;
   state.activeWorkspace = getActiveWorkspace(route);
   if (OPSHOP_TASK_POOL_ROUTE_VIEWS[route]) {
@@ -354,6 +357,24 @@ function renderWorkspace() {
       startRenameCountrysideRouteGroup: countrysideOpShopPickupActions.startRenameRouteGroup,
       updateCountrysideRouteGroupForm: countrysideOpShopPickupActions.updateRouteGroupForm,
       updateCountrysideRouteTemplateForm: countrysideOpShopPickupActions.updateRouteTemplateForm,
+      openOpShopPickupDetail,
+      startAddOpShopPickupTask: (pickupType) => {
+        if (pickupType === "oncall") {
+          oncallOpShopPickupActions.openOncallOpShopPickupList();
+          oncallOpShopPickupActions.startAddPickupTask();
+          return;
+        }
+        opShopPickupActions.openOpShopPickupList();
+        opShopPickupActions.startAddPickupTask();
+      },
+      startDeleteOpShopPickupTask: (pickup) => {
+        openScopedOpShopPickupList(pickup);
+        getScopedOpShopPickupActions(pickup).startDeletePickupTask(pickup);
+      },
+      startEditOpShopPickupTask: (pickup) => {
+        openScopedOpShopPickupList(pickup);
+        getScopedOpShopPickupActions(pickup).startEditPickupTask(pickup);
+      },
     },
     onDispatchDateChange: workspaceActions.updateDispatchDate,
   });
@@ -533,7 +554,9 @@ function renderCountrysideOpShopPickupListModal() {
     onCancelRouteGroupForm: countrysideOpShopPickupActions.cancelRouteGroupForm,
     onCancelRouteTemplateForm: countrysideOpShopPickupActions.cancelRouteTemplateForm,
     onAddRouteTemplate: countrysideOpShopPickupActions.handleAddRouteTemplate,
-    onCloseList: countrysideOpShopPickupActions.closeCountrysideOpShopPickupList,
+    onCloseList: state.activeWorkspace === "opshop"
+      ? countrysideOpShopPickupActions.closeCountrysideOpShopPickupListWithoutApply
+      : countrysideOpShopPickupActions.closeCountrysideOpShopPickupList,
     onConfirmDelete: countrysideOpShopPickupActions.handleDeletePickupTask,
     onCreatePickup: countrysideOpShopPickupActions.handleCreatePickupTask,
     onCreateRouteGroup: countrysideOpShopPickupActions.handleCreateRouteGroup,
@@ -566,7 +589,9 @@ function renderCountrysideOpShopPickupListModal() {
 function renderOncallOpShopPickupListModal() {
   renderOncallOpShopPickupListModalView({
     onCancelForm: oncallOpShopPickupActions.cancelPickupTaskForm,
-    onCloseList: oncallOpShopPickupActions.closeOncallOpShopPickupList,
+    onCloseList: state.activeWorkspace === "opshop"
+      ? oncallOpShopPickupActions.closeOncallOpShopPickupListWithoutApply
+      : oncallOpShopPickupActions.closeOncallOpShopPickupList,
     onConfirmDelete: oncallOpShopPickupActions.handleDeletePickupTask,
     onCreatePickup: oncallOpShopPickupActions.handleCreatePickupTask,
     onOpenDetail: openOpShopPickupDetail,
@@ -586,7 +611,9 @@ function renderOncallOpShopPickupListModal() {
 function renderOpShopPickupListModal() {
   renderOpShopPickupListModalView({
     onCancelForm: opShopPickupActions.cancelPickupTaskForm,
-    onCloseList: opShopPickupActions.closeOpShopPickupList,
+    onCloseList: state.activeWorkspace === "opshop"
+      ? opShopPickupActions.closeOpShopPickupListWithoutApply
+      : opShopPickupActions.closeOpShopPickupList,
     onConfirmDelete: opShopPickupActions.handleDeletePickupTask,
     onCreatePickup: opShopPickupActions.handleCreatePickupTask,
     onOpenDetail: openOpShopPickupDetail,
@@ -1175,14 +1202,45 @@ function renderBoard() {
     renderOrderDetailPopup();
     renderAddOrderPopup();
     renderAttacheInvoiceImportModal();
-    renderOpShopPickupListModal();
-    renderOncallOpShopPickupListModal();
-    renderCountrysideOpShopPickupListModal();
     renderOpShopTemplateManagementModal();
-    renderOpShopPickupDetailPopup();
     renderSpecificationModal();
   }
+  renderOpShopPickupListModal();
+  renderOncallOpShopPickupListModal();
+  renderCountrysideOpShopPickupListModal();
+  renderOpShopPickupDetailPopup();
   renderAuthGate();
+}
+
+function getScopedOpShopPickupActions(pickup) {
+  if (pickup.pickup_category === "COUNTRYSIDE") {
+    return countrysideOpShopPickupActions;
+  }
+  if (pickup.run_type === "ON_CALL") {
+    return oncallOpShopPickupActions;
+  }
+  return opShopPickupActions;
+}
+
+function openScopedOpShopPickupList(pickup) {
+  const actions = getScopedOpShopPickupActions(pickup);
+  if (actions === countrysideOpShopPickupActions) {
+    actions.openCountrysideOpShopPickupList();
+  } else if (actions === oncallOpShopPickupActions) {
+    actions.openOncallOpShopPickupList();
+  } else {
+    actions.openOpShopPickupList();
+  }
+}
+
+function clearOpShopOperationalModalState() {
+  state.isOpShopPickupListOpen = false;
+  state.isOncallOpShopPickupListOpen = false;
+  state.isCountrysideOpShopPickupListOpen = false;
+  state.activeOpShopPickupDetailId = "";
+  state.opshopPickupFormMode = "";
+  state.oncallOpShopPickupFormMode = "";
+  state.countrysideOpShopPickupFormMode = "";
 }
 
 const authActions = createAuthActions({
@@ -1226,12 +1284,14 @@ const assignmentActions = createAssignmentActions({
 
 const opShopPickupActions = createOpShopPickupActions({
   loadBoard,
+  refreshScopedBoard: () => workspaceActions.loadWorkspaceRoute(state.workspaceRoute),
   renderBoard,
   state,
 });
 
 const oncallOpShopPickupActions = createOncallOpShopPickupActions({
   loadBoard,
+  refreshScopedBoard: () => workspaceActions.loadWorkspaceRoute(state.workspaceRoute),
   renderBoard,
   state,
 });

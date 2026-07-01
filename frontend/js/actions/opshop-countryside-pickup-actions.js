@@ -18,6 +18,7 @@ import {
   captureElementScroll,
   restoreElementScroll,
 } from "../utils/scroll-utils.js";
+import { syncScopedOpShopModalState } from "../utils/opshop-workspace-modal-utils.js";
 
 export function createCountrysideOpShopPickupActions({
   loadBoard,
@@ -26,6 +27,7 @@ export function createCountrysideOpShopPickupActions({
   state,
 }) {
   async function openCountrysideOpShopPickupList() {
+    syncScopedOpShopModalState(state);
     state.isCountrysideOpShopPickupListOpen = true;
     state.countrysideOpShopPickupListError = "";
     state.countrysideRouteManagementError = "";
@@ -124,6 +126,17 @@ export function createCountrysideOpShopPickupActions({
       state.isCountrysideOpShopPickupListLoading = false;
       renderBoard();
     }
+  }
+
+  function closeCountrysideOpShopPickupListWithoutApply() {
+    state.isCountrysideOpShopPickupListOpen = false;
+    state.countrysideOpShopPickupListError = "";
+    state.countrysideOpShopPickupFormMode = "";
+    state.countrysideOpShopPickupEditingTaskId = "";
+    state.countrysideOpShopPickupForm = {};
+    resetRouteGroupForm();
+    resetRouteTemplateForm();
+    renderBoard();
   }
 
   async function loadManagementData() {
@@ -513,7 +526,7 @@ export function createCountrysideOpShopPickupActions({
       });
       state.countrysideOpShopPickupFormMode = "";
       state.countrysideOpShopPickupForm = {};
-      await loadBoard(state.dispatchDate, { force: true });
+      await refreshPickupBoard();
       initializeAssignedDriverSelections();
     } catch (error) {
       state.countrysideOpShopPickupListError = `Unable to assign Countryside route group. ${error.message}`;
@@ -543,7 +556,7 @@ export function createCountrysideOpShopPickupActions({
       state.countrysideOpShopPickupFormMode = "";
       state.countrysideOpShopPickupEditingTaskId = "";
       state.countrysideOpShopPickupForm = {};
-      await loadBoard(state.dispatchDate, { force: true });
+      await refreshPickupBoard();
       initializeAssignedDriverSelections();
       state.countrysideOpShopPickupAssignedDriverSelections = {
         ...state.countrysideOpShopPickupAssignedDriverSelections,
@@ -571,7 +584,7 @@ export function createCountrysideOpShopPickupActions({
       state.countrysideOpShopPickupFormMode = "";
       state.countrysideOpShopPickupEditingTaskId = "";
       state.countrysideOpShopPickupForm = {};
-      await loadBoard(state.dispatchDate, { force: true });
+      await refreshPickupBoard();
       initializeAssignedDriverSelections();
     } catch (error) {
       state.countrysideOpShopPickupListError = `Unable to delete Countryside OP SHOP pickup. ${error.message}`;
@@ -629,6 +642,15 @@ export function createCountrysideOpShopPickupActions({
     initializeAssignedDriverSelections();
   }
 
+  async function refreshPickupBoard() {
+    if (state.activeWorkspace === "opshop" && typeof refreshScopedBoard === "function") {
+      await refreshScopedBoard();
+      syncScopedOpShopModalState(state);
+      return;
+    }
+    await loadBoard(state.dispatchDate, { force: true });
+  }
+
   function getSelectedRouteGroup() {
     return state.countrysideRouteGroups.find(
       (routeGroup) => routeGroup.route_group_id === state.selectedCountrysideRouteGroupId,
@@ -682,6 +704,7 @@ export function createCountrysideOpShopPickupActions({
     cancelRouteGroupForm,
     cancelRouteTemplateForm,
     closeCountrysideOpShopPickupList,
+    closeCountrysideOpShopPickupListWithoutApply,
     handleAddRouteTemplate,
     handleCreatePickupTask,
     handleCreateRouteGroup,

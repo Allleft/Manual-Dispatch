@@ -305,6 +305,17 @@ export function createWorkspaceActions({
         if (isCurrent()) {
           state.opshopPickupCollections = collections || [];
         }
+      } else if (route.startsWith("opshop/task-pool/")) {
+        const [board, collections] = await Promise.all([
+          api.getOpShopWorkspaceBoard(dispatchDate),
+          api.listOpShopPickupCollections(dispatchDate, ""),
+        ]);
+        if (isCurrent()) {
+          state.opshopBoard = board;
+          state.opshopPickupCollections = collections || [];
+          pruneOpShopDrafts();
+          initializeRegularDefaultDriverDrafts();
+        }
       } else {
         const board = await api.getOpShopWorkspaceBoard(dispatchDate);
         if (isCurrent()) {
@@ -1757,6 +1768,35 @@ export function createWorkspaceActions({
         routeGroupIds.has(routeGroupId),
       ),
     );
+  }
+
+  function initializeRegularDefaultDriverDrafts() {
+    const drivers = new Set(
+      (state.opshopBoard?.drivers || []).map((driver) => driver.driver_id),
+    );
+    const blockedDriverDates = new Set(
+      (state.opshopPickupCollections || [])
+        .filter((collection) => ["GENERATED", "SAVED"].includes(collection.status))
+        .map((collection) => `${collection.driver_id}:${collection.pickup_date}`),
+    );
+    const nextDrafts = { ...(state.opshopAssignmentDrafts || {}) };
+    (state.opshopBoard?.opshop_pickups || []).forEach((pickup) => {
+      if (
+        pickup.run_type !== "REGULAR" ||
+        pickup.is_assigned ||
+        pickup.assigned_to_locked ||
+        !pickup.default_driver_id ||
+        !pickup.pickup_date ||
+        pickup.pickup_date < state.dispatchDate ||
+        !drivers.has(pickup.default_driver_id) ||
+        blockedDriverDates.has(`${pickup.default_driver_id}:${pickup.pickup_date}`) ||
+        Object.prototype.hasOwnProperty.call(nextDrafts, pickup.pickup_task_id)
+      ) {
+        return;
+      }
+      nextDrafts[pickup.pickup_task_id] = pickup.default_driver_id;
+    });
+    state.opshopAssignmentDrafts = nextDrafts;
   }
 
   function saveSnapshotPayload() {

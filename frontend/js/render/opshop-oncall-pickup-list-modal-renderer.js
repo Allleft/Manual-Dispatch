@@ -15,6 +15,7 @@ import {
   getDateGroupCollapsed,
   getDateGroupListId,
 } from "../utils/opshop-date-group-utils.js";
+import { getOpShopModalDrivers } from "../utils/opshop-workspace-modal-utils.js";
 
 export function renderOncallOpShopPickupListModal({
   onCancelForm,
@@ -520,7 +521,7 @@ function createDriverSelect(labelText, value, onChange, options = {}) {
   const select = document.createElement("select");
   select.disabled = Boolean(options.disabled) || state.isOncallOpShopPickupSaving;
   select.append(createOption("", "Unassigned", !value));
-  state.drivers.forEach((driver) => {
+  getOpShopModalDrivers(state).forEach((driver) => {
     select.append(createOption(driver.driver_id, driver.name, value === driver.driver_id));
   });
   select.value = value || "";
@@ -715,7 +716,9 @@ function createPickupItem(pickup, { onOpenDetail, onStartEdit, onUpdateAssignedD
   actions.addEventListener("click", (event) => event.stopPropagation());
   actions.addEventListener("keydown", (event) => event.stopPropagation());
 
-  actions.append(createAssignedToSelect(pickup, onUpdateAssignedDriver));
+  if (state.activeWorkspace !== "opshop") {
+    actions.append(createAssignedToSelect(pickup, onUpdateAssignedDriver));
+  }
 
   if (!lockState.isLocked) {
     const editButton = document.createElement("button");
@@ -761,7 +764,7 @@ function createAssignedToSelect(pickup, onUpdateAssignedDriver) {
     isFinalSummaryLocked || isGeneratedFinalSummaryLocked,
   );
   select.append(createOption("", "Unassigned", !selectedDriverId));
-  state.drivers.forEach((driver) => {
+  getOpShopModalDrivers(state).forEach((driver) => {
     const hasSavedFinalSummary = isDriverFinalizedForPickup(driver.driver_id, pickup.pickup_date);
     const option = createOption(
       driver.driver_id,
@@ -896,7 +899,7 @@ function getAssignedDriverSortName(pickup) {
 }
 
 function getDriverNameById(driverId) {
-  const driver = state.drivers.find((item) => item.driver_id === driverId);
+  const driver = getOpShopModalDrivers(state).find((item) => item.driver_id === driverId);
   return driver ? driver.name : "";
 }
 

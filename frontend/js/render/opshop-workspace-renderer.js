@@ -185,6 +185,19 @@ function createPickupList(board, route, state, actions) {
     createSectionHeading(context.heading, context.description),
   );
 
+  if (route === "regular" || route === "oncall") {
+    const taskActions = document.createElement("div");
+    taskActions.className = "workspace-action-row workspace-task-operation-toolbar";
+    taskActions.append(
+      createActionButton(
+        "Add Pickup Task",
+        () => actions.startAddOpShopPickupTask(route),
+        { primary: true },
+      ),
+    );
+    wrapper.append(taskActions);
+  }
+
   if (route === "countryside") {
     wrapper.append(createRouteGroupContext(board, state, actions));
   }
@@ -300,7 +313,25 @@ function createPickupCard(pickup, state, actions) {
   appendFact(facts, "Notes", joinValues(pickup.task_notes, pickup.status_notes));
 
   const controls = createPickupAssignmentControls(pickup, state, actions);
-  card.append(top, facts, controls);
+  const taskActions = document.createElement("div");
+  taskActions.className = "workspace-action-row workspace-pickup-task-actions";
+  taskActions.append(
+    createActionButton(
+      "View details",
+      () => actions.openOpShopPickupDetail(pickup.pickup_task_id),
+    ),
+    createActionButton(
+      "Edit",
+      () => actions.startEditOpShopPickupTask(pickup),
+      { disabled: Boolean(pickup.assigned_to_locked) },
+    ),
+    createActionButton(
+      "Delete",
+      () => actions.startDeleteOpShopPickupTask(pickup),
+      { disabled: Boolean(pickup.assigned_to_locked) },
+    ),
+  );
+  card.append(top, facts, controls, taskActions);
   return card;
 }
 

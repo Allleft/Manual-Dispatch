@@ -14,6 +14,7 @@ import {
   captureElementScroll,
   restoreElementScroll,
 } from "../utils/scroll-utils.js";
+import { syncScopedOpShopModalState } from "../utils/opshop-workspace-modal-utils.js";
 
 const WEEKDAY_OFFSETS = {
   MONDAY: 0,
@@ -25,10 +26,12 @@ const WEEKDAY_OFFSETS = {
 
 export function createOncallOpShopPickupActions({
   loadBoard,
+  refreshScopedBoard = null,
   renderBoard,
   state,
 }) {
   async function openOncallOpShopPickupList() {
+    syncScopedOpShopModalState(state);
     state.isOncallOpShopPickupListOpen = true;
     state.oncallOpShopPickupListError = "";
     state.oncallOpShopPickupFormMode = "";
@@ -71,6 +74,16 @@ export function createOncallOpShopPickupActions({
       state.isOncallOpShopPickupSaving = false;
       renderBoard();
     }
+  }
+
+  function closeOncallOpShopPickupListWithoutApply() {
+    state.isOncallOpShopPickupListOpen = false;
+    state.oncallOpShopPickupListError = "";
+    state.oncallOpShopPickupFormMode = "";
+    state.oncallOpShopPickupEditingTaskId = "";
+    state.oncallOpShopPickupForm = {};
+    resetTemplatePicker();
+    renderBoard();
   }
 
   async function loadScheduleCandidates() {
@@ -234,7 +247,7 @@ export function createOncallOpShopPickupActions({
       state.oncallOpShopPickupFormMode = "";
       state.oncallOpShopPickupForm = {};
       resetTemplatePicker();
-      await loadBoard(state.dispatchDate, { force: true });
+      await refreshPickupBoard();
       initializeAssignedDriverSelections();
       if (created && created.pickup_task_id) {
         state.oncallOpShopPickupAssignedDriverSelections = {
@@ -270,7 +283,7 @@ export function createOncallOpShopPickupActions({
       state.oncallOpShopPickupFormMode = "";
       state.oncallOpShopPickupEditingTaskId = "";
       state.oncallOpShopPickupForm = {};
-      await loadBoard(state.dispatchDate, { force: true });
+      await refreshPickupBoard();
       initializeAssignedDriverSelections();
       if (pickupTaskId) {
         state.oncallOpShopPickupAssignedDriverSelections = {
@@ -300,7 +313,7 @@ export function createOncallOpShopPickupActions({
       state.oncallOpShopPickupFormMode = "";
       state.oncallOpShopPickupEditingTaskId = "";
       state.oncallOpShopPickupForm = {};
-      await loadBoard(state.dispatchDate, { force: true });
+      await refreshPickupBoard();
       initializeAssignedDriverSelections();
     } catch (error) {
       state.oncallOpShopPickupListError = `Unable to delete Oncall OP SHOP pickup. ${error.message}`;
@@ -367,9 +380,19 @@ export function createOncallOpShopPickupActions({
     return formatLocalDate(date);
   }
 
+  async function refreshPickupBoard() {
+    if (state.activeWorkspace === "opshop" && typeof refreshScopedBoard === "function") {
+      await refreshScopedBoard();
+      syncScopedOpShopModalState(state);
+      return;
+    }
+    await loadBoard(state.dispatchDate, { force: true });
+  }
+
   return {
     cancelPickupTaskForm,
     closeOncallOpShopPickupList,
+    closeOncallOpShopPickupListWithoutApply,
     handleCreatePickupTask,
     handleDeletePickupTask,
     handleUpdatePickupTask,

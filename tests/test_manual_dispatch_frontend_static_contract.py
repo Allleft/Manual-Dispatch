@@ -624,7 +624,7 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("Object.prototype.hasOwnProperty.call(", actions)
         self.assertIn("existingSelections,", actions)
         self.assertIn("selections[pickup.pickup_task_id] = existingSelections[pickup.pickup_task_id]", actions)
-        self.assertIn("state.drivers.some", actions)
+        self.assertIn("getOpShopModalDrivers(state).some", actions)
         self.assertIn("state.finalizedDriverDeliveryDates.some", actions)
         self.assertIn("pickup.default_driver_id", actions)
         self.assertIn("pickup.pickup_date >= state.dispatchDate", actions)
@@ -788,7 +788,7 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertNotIn("compact-note", list_item_renderer)
         self.assertNotIn("opshop-pickup-note", list_item_renderer)
         self.assertNotIn('deleteButton.textContent = "Delete"', list_item_renderer)
-        self.assertIn("state.drivers", modal_renderer)
+        self.assertIn("getOpShopModalDrivers(state)", modal_renderer)
         self.assertNotIn("pickup.default_driver_id ||", modal_renderer)
         self.assertIn("pickup.assigned_to_locked", modal_renderer)
         self.assertIn("isDriverFinalizedForPickup", modal_renderer)
@@ -1016,7 +1016,14 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn("Locked - Generated in Final Trip Summary", modal_renderer)
         self.assertIn("opshop-assigned-to-lock-finalized", modal_renderer)
         self.assertIn("opshop-assigned-to-select-locked", modal_renderer)
-        self.assertIn("onCloseList: oncallOpShopPickupActions.closeOncallOpShopPickupList", app_js)
+        self.assertIn(
+            "? oncallOpShopPickupActions.closeOncallOpShopPickupListWithoutApply",
+            app_js,
+        )
+        self.assertIn(
+            ": oncallOpShopPickupActions.closeOncallOpShopPickupList",
+            app_js,
+        )
         self.assertIn("oncallOpShopPickups", selectors)
         self.assertIn("assigned-opshop-pickups-section", (
             FRONTEND_ROOT / "js" / "render" / "trip-summary-renderer.js"

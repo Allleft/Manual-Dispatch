@@ -17,6 +17,7 @@ import {
   getDateGroupCollapsed,
   getDateGroupListId,
 } from "../utils/opshop-date-group-utils.js";
+import { getOpShopModalDrivers } from "../utils/opshop-workspace-modal-utils.js";
 
 export function renderOpShopPickupListModal({
   onCancelForm,
@@ -541,7 +542,9 @@ function createPickupItem(pickup, {
   actions.addEventListener("click", (event) => event.stopPropagation());
   actions.addEventListener("keydown", (event) => event.stopPropagation());
 
-  actions.append(createAssignedToSelect(pickup, onUpdateAssignedDriver));
+  if (state.activeWorkspace !== "opshop") {
+    actions.append(createAssignedToSelect(pickup, onUpdateAssignedDriver));
+  }
 
   if (!lockState.isLocked) {
     const editButton = document.createElement("button");
@@ -590,7 +593,7 @@ function createAssignedToSelect(pickup, onUpdateAssignedDriver) {
     isFinalSummaryLocked || isGeneratedFinalSummaryLocked,
   );
   select.append(createOption("", "Unassigned", !selectedDriverId));
-  state.drivers.forEach((driver) => {
+  getOpShopModalDrivers(state).forEach((driver) => {
     const hasSavedFinalSummary = isDriverFinalizedForPickup(driver.driver_id, pickup.pickup_date);
     const option = createOption(
       driver.driver_id,
@@ -648,7 +651,9 @@ function defaultDriverExistsForVisiblePickup(pickup) {
   return Boolean(
     pickup &&
       pickup.default_driver_id &&
-      state.drivers.some((driver) => driver.driver_id === pickup.default_driver_id),
+      getOpShopModalDrivers(state).some(
+        (driver) => driver.driver_id === pickup.default_driver_id,
+      ),
   );
 }
 
@@ -777,7 +782,7 @@ function getAssignedDriverSortName(pickup) {
 }
 
 function getDriverNameById(driverId) {
-  const driver = state.drivers.find((item) => item.driver_id === driverId);
+  const driver = getOpShopModalDrivers(state).find((item) => item.driver_id === driverId);
   return driver ? driver.name : "";
 }
 

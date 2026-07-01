@@ -1891,6 +1891,112 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertNotIn("fetch(", countryside_renderer)
         self.assertIn(".opshop-countryside-management-panel", self.styles)
 
+    def test_opshop_task_pool_reuses_legacy_task_crud_without_assignment_apply(self):
+        regular_actions = self._read("js/actions/opshop-pickup-actions.js")
+        oncall_actions = self._read("js/actions/opshop-oncall-pickup-actions.js")
+        countryside_actions = self._read(
+            "js/actions/opshop-countryside-pickup-actions.js"
+        )
+        modal_adapter = self._read("js/utils/opshop-workspace-modal-utils.js")
+        selectors = self._read("js/state/selectors.js")
+
+        self.assertIn('"Add Pickup Task"', self.opshop_renderer)
+        self.assertIn('"View details"', self.opshop_renderer)
+        self.assertIn('"Edit"', self.opshop_renderer)
+        self.assertIn('"Delete"', self.opshop_renderer)
+        self.assertIn("actions.startAddOpShopPickupTask(route)", self.opshop_renderer)
+        self.assertIn("actions.startEditOpShopPickupTask(pickup)", self.opshop_renderer)
+        self.assertIn("actions.startDeleteOpShopPickupTask(pickup)", self.opshop_renderer)
+        self.assertIn("pickup.assigned_to_locked", self.opshop_renderer)
+        self.assertIn("syncScopedOpShopModalState", modal_adapter)
+        self.assertIn("state.opshopBoard.opshop_pickups", modal_adapter)
+        self.assertIn("state.opshopBoard?.opshop_pickups?.find", selectors)
+        self.assertIn("refreshScopedBoard = null", regular_actions)
+        self.assertIn("refreshScopedBoard = null", oncall_actions)
+        self.assertIn("refreshScopedBoard = null", countryside_actions)
+        self.assertIn("closeOpShopPickupListWithoutApply", self.app)
+        self.assertIn("closeOncallOpShopPickupListWithoutApply", self.app)
+        self.assertIn("closeCountrysideOpShopPickupListWithoutApply", self.app)
+        self.assertIn('state.activeWorkspace === "opshop"', self.app)
+        regular_form_update = regular_actions.split(
+            "function updatePickupTaskForm", 1
+        )[1].split("async function handleCreatePickupTask", 1)[0]
+        self.assertIn('["schedule_id", "pickup_date"].includes(field)', regular_form_update)
+        self.assertIn("renderBoard();", regular_form_update)
+
+    def test_regular_default_driver_initializes_only_safe_missing_drafts(self):
+        self._run_workspace_actions_script(
+            """
+            const state = {
+              isLoggedIn: true,
+              workspaceRoute: "opshop/task-pool/regular",
+              dispatchDate: "2026-06-30",
+              opshopBoard: null,
+              opshopPickupCollections: [],
+              opshopAssignmentDrafts: { "REG-EXPLICIT": "" },
+              countrysideRouteGroupDrafts: {},
+              isOpShopWorkspaceLoading: false,
+              opshopWorkspaceError: "",
+              opshopActionError: "",
+            };
+            const pickup = (id, values = {}) => ({
+              pickup_task_id: id,
+              run_type: "REGULAR",
+              pickup_category: "NORMAL",
+              pickup_date: "2026-07-01",
+              default_driver_id: "DRIVER-1",
+              assigned_driver_id: "",
+              driver_id: "",
+              is_assigned: false,
+              assigned_to_locked: false,
+              ...values,
+            });
+            const board = {
+              drivers: [{ driver_id: "DRIVER-1", name: "Driver One" }],
+              countryside_route_groups: [],
+              opshop_pickups: [
+                pickup("REG-DEFAULT"),
+                pickup("REG-EXPLICIT"),
+                pickup("REG-UNAVAILABLE", { default_driver_id: "DRIVER-9" }),
+                pickup("REG-PAST", { pickup_date: "2026-06-29", assigned_to_locked: true }),
+                pickup("REG-BLOCKED", { pickup_date: "2026-07-02" }),
+                pickup("REG-ASSIGNED", { is_assigned: true, assigned_driver_id: "DRIVER-1" }),
+                pickup("ONCALL", { run_type: "ON_CALL" }),
+              ],
+            };
+            const api = {
+              getWorkspaceMigrationStatus: async () => ({}),
+              getOpShopWorkspaceBoard: async () => board,
+              listOpShopPickupCollections: async () => [{
+                status: "SAVED",
+                driver_id: "DRIVER-1",
+                pickup_date: "2026-07-02",
+              }],
+            };
+            const actions = createWorkspaceActions({
+              state,
+              renderWorkspace: () => {},
+              api,
+            });
+
+            await actions.loadWorkspaceRoute("opshop/task-pool/regular");
+            if (state.opshopAssignmentDrafts["REG-DEFAULT"] !== "DRIVER-1") {
+              throw new Error("eligible Regular default driver was not drafted");
+            }
+            if (!Object.prototype.hasOwnProperty.call(state.opshopAssignmentDrafts, "REG-EXPLICIT")) {
+              throw new Error("explicit Unassigned draft key was removed");
+            }
+            if (state.opshopAssignmentDrafts["REG-EXPLICIT"] !== "") {
+              throw new Error("explicit Unassigned draft was overwritten");
+            }
+            for (const pickupId of ["REG-UNAVAILABLE", "REG-PAST", "REG-BLOCKED", "REG-ASSIGNED", "ONCALL"]) {
+              if (Object.prototype.hasOwnProperty.call(state.opshopAssignmentDrafts, pickupId)) {
+                throw new Error(`unsafe default draft created for ${pickupId}`);
+              }
+            }
+            """
+        )
+
     def test_opshop_trip_summary_groups_pickups_and_preserves_collection_locks(self):
         self.assertIn('state.workspaceRoute === "opshop/trip-summary"', self.opshop_renderer)
         self.assertIn("function createOpShopTripSummary(", self.opshop_renderer)

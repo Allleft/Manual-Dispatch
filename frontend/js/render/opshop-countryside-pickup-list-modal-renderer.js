@@ -1348,7 +1348,9 @@ function createPickupItem(pickup, { onOpenDetail, onStartEdit, onUpdateAssignedD
   actions.addEventListener("click", (event) => event.stopPropagation());
   actions.addEventListener("keydown", (event) => event.stopPropagation());
 
-  actions.append(createAssignedToSelect(pickup, onUpdateAssignedDriver));
+  if (state.activeWorkspace !== "opshop") {
+    actions.append(createAssignedToSelect(pickup, onUpdateAssignedDriver));
+  }
 
   if (!lockState.isLocked) {
     const editButton = document.createElement("button");
@@ -1411,7 +1413,7 @@ function createAssignedToSelect(pickup, onUpdateAssignedDriver) {
     isFinalSummaryLocked || isGeneratedFinalSummaryLocked,
   );
   select.append(createOption("", "Unassigned", !selectedDriverId));
-  state.drivers.forEach((driver) => {
+  getCountrysideDrivers().forEach((driver) => {
     const hasSavedFinalSummary = isDriverFinalizedForPickup(driver.driver_id, pickup.pickup_date);
     const option = createOption(
       driver.driver_id,
@@ -1546,7 +1548,7 @@ function getAssignedDriverSortName(pickup) {
 }
 
 function getDriverNameById(driverId) {
-  const driver = state.drivers.find((item) => item.driver_id === driverId);
+  const driver = getCountrysideDrivers().find((item) => item.driver_id === driverId);
   return driver ? driver.name : "";
 }
 
