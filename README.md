@@ -2,18 +2,19 @@
 
 ## Project Overview
 
-Manual Dispatch Board is a FastAPI, SQLite, and vanilla JavaScript application for office staff to manually coordinate Delivery Orders and OP SHOP pickup work with drivers.
+Manual Dispatch Board is a FastAPI, SQLite, and vanilla JavaScript application for office staff to manually coordinate two independent workspaces: Order Delivery and OP SHOP Pickup.
 
 The board is a manual office workflow:
 
-- The frontend is still a single-page board, now split into three hash-based workflow views: `#task-pool`, `#trip-summary`, and `#final-summary`.
-- Staff move through `Task Pool -> Trip Summary -> Final Trip Summary` without changing backend workflow or opening separate HTML pages.
+- The frontend is a single-page application with hash-routed Delivery and OP SHOP workspaces.
+- Order Delivery uses `Task Pool -> Trip Summary -> Delivery Run Sheets`.
+- OP SHOP Pickup uses `Task Pool -> Trip Summary -> Pickup Collections`.
 - Dispatch Date identifies the operational dispatch session.
-- Driver Summary Delivery Date identifies which delivery or pickup day is being reviewed.
-- Delivery Orders and OP SHOP pickups share manual driver assignment infrastructure, but remain separate task types and separate summary sections.
-- Final Trip Summary stores Delivery rows and OP SHOP pickup rows as separate snapshot sections.
+- Delivery Date and Pickup Date independently identify the day reviewed inside their workspace.
+- Delivery Orders and OP SHOP pickups remain separate task types, scoped boards, snapshots, locks, histories, and exports.
+- Legacy Final Trip Summary remains readable for compatibility and migration; it is not the primary scoped workflow.
 
-The current branch includes Regular, Oncall, and Countryside OP SHOP pickup workflows, OP SHOP template management, generated/saved Final Summary locking, saved History re-export, and OP SHOP saved-lock audit/backfill tools.
+The current branch includes scoped Delivery Run Sheets, Regular/Oncall/Countryside OP SHOP Task Pools, template and route management, generated/saved Pickup Collections, migration-readiness controls, and legacy Final Summary compatibility tools.
 
 ### Explicit Non-Goals
 
@@ -88,19 +89,16 @@ Never commit runtime SQLite databases, backups, `.env` files, generated outputs,
 
 ## Main Workflow
 
-1. Log in.
-2. Choose the Dispatch Date for the operational board session.
-3. Use the workflow navigation tabs to switch between `Task Pool`, `Trip Summary`, and `Final Trip Summary`.
-4. In `Task Pool` (`/frontend/#task-pool`), review unassigned Delivery Orders and use the OP SHOP PICKUP area for Regular, Oncall, Countryside, and template management work.
-5. Assign Delivery Orders manually to a Driver and `trip1` or `trip2`.
-6. Assign OP SHOP pickups manually in their list modals, then close the modal to apply visible pickup assignments.
-7. In `Trip Summary` (`/frontend/#trip-summary`), select the Driver Summary Delivery Date, choose the vehicle for the driver/date combination, review Delivery trips and OP SHOP PICKUPS, then Generate Final Trip Summary.
-8. Successful Generate creates a `GENERATED` snapshot and moves the browser to `Final Trip Summary` (`/frontend/#final-summary`) for review.
-9. If the generated snapshot is wrong, use `Cancel Generated Summary`; the board returns to `Trip Summary` for editable work.
-10. If the generated snapshot is correct, use Save and Export to convert it to `SAVED`, export the workbook, and hard-lock that driver/date.
-11. Later, use Final Summary History `Re-export` for saved summaries when the Excel file is needed again.
+1. Log in and choose a workspace from Home.
+2. Set the Dispatch Date for the operational board session.
+3. In **Order Delivery**, assign Orders in `#delivery/task-pool`, review by driver/date in `#delivery/trip-summary`, then generate, save, cancel, or export independent Delivery Run Sheets.
+4. In **OP SHOP Pickup**, choose Regular, Oncall, or Countryside under the canonical Task Pool routes, make draft assignment changes, and click `Apply Assignment Changes`.
+5. Review assigned pickups by driver and Pickup Date in `#opshop/trip-summary`.
+6. Generate an independent Pickup Collection for a driver/date.
+7. In `#opshop/collections`, review Generated collections, cancel an incorrect Generated collection, or save/export the correct collection.
+8. Reopen Saved Pickup Collections from the same page for history and export.
 
-The three views are frontend-only navigation. They do not change backend routes, assignment APIs, OP SHOP locking, Final Summary snapshot semantics, or Excel export behavior.
+Workspace navigation is hash-based and browser Back/Forward safe. Switching OP SHOP Task Pool subtype does not submit or discard pending assignment drafts.
 
 ## Delivery Order Workflow
 
@@ -110,10 +108,10 @@ The three views are frontend-only navigation. They do not change backend routes,
 | Add / Edit / Cancel | Active Orders can be added and edited; Cancel is a soft removal from normal workflow. |
 | Product Details | Orders may contain product lines with Pallets, Bags, or mixed pallet + loose-bag loads. |
 | Assign / Unassign | Staff manually assign an Order to a Driver and `trip1` or `trip2`, or return it to the Task Pool. |
-| Delivery Date | Driver Summary filters assigned Delivery Orders by the selected Delivery Date. |
-| Trip Display | Delivery Orders remain inside Driver Summary `Trip 1` and `Trip 2` sections. |
-| Generated Lock | Delivery Orders captured by a `GENERATED` Final Summary are removed from editable Driver Summary / Task Pool state until cancelled or saved. |
-| Saved Lock | A `SAVED` Final Summary blocks further Delivery assignment and vehicle changes for that driver/date. |
+| Delivery Date | Delivery Trip Summary filters assigned Delivery Orders by the selected Delivery Date. |
+| Trip Display | Delivery Orders remain inside Delivery Trip Summary `Trip 1` and `Trip 2` sections. |
+| Generated Lock | Delivery Orders captured by a `GENERATED` Delivery Run Sheet are reserved until cancelled or saved. |
+| Saved Lock | A `SAVED` Delivery Run Sheet blocks further Delivery assignment and vehicle changes for that driver/date. |
 | Totals | Pallet, loose-bag, and capacity totals count Delivery Orders only. |
 
 Delivery assignment remains entirely manual. OP SHOP work is not stored as a Delivery Order and does not change Delivery totals.
@@ -127,28 +125,41 @@ Delivery assignment remains entirely manual. OP SHOP work is not stored as a Del
 - Staff can edit delivery date, time window, phone, address, suburb, postcode, pallet quantity, loose-bag quantity, and notes before confirming.
 - Confirm Import creates standard Delivery Orders through the same `CreateOrderRequest` path as manual entry, so imported Orders appear in the Task Pool like normal Delivery Orders.
 - Product lines use the existing `product_name`, `quantity`, and `unit` fields only; invoice accounting lines, GST, totals, and payment details are not imported as delivery product lines.
-- PDF import does not change OP SHOP workflows, Driver Summary OP SHOP sections, generated/saved Final Summary locking, or Final Summary Excel semantics.
+- PDF import does not change the OP SHOP workspace, Pickup Collections, OP SHOP locks, or OP SHOP exports.
 
-## OP SHOP Pickup Workflow
+## OP SHOP Pickup Workspace
 
-OP SHOP PICKUP is a distinct manual task type. The Task Pool OP SHOP PICKUP section currently shows:
+OP SHOP Pickup is an independent manual workspace:
 
-- `Manage OP SHOP Templates`
-- `Regular OP SHOP Pickup List`
-- `Oncall OP SHOP Pickup List`
-- `Countryside OP SHOP Pickup List`
+```text
+OP SHOP Pickup
+  Task Pool
+    Regular
+    Oncall
+    Countryside
+    Manage Templates
+  Trip Summary
+    Pickup-date review by driver
+    Generate Pickup Collection
+  Pickup Collections
+    Generated collections
+    Saved collections / history
+    Export
+```
+
+Canonical routes are `#opshop/task-pool/regular`, `#opshop/task-pool/oncall`, `#opshop/task-pool/countryside`, `#opshop/templates`, `#opshop/trip-summary`, and `#opshop/collections`.
 
 OP SHOP pickups:
 
 - use `task_type = OPSHOP_PICKUP`
-- display in Driver Summary under a separate `OP SHOP PICKUPS` section
-- never enter Delivery `Trip 1` / `Trip 2` rows
+- display only in the OP SHOP Trip Summary and Pickup Collection workflow
+- never enter Delivery Task Pool, Delivery Trip Summary, or Delivery Run Sheet rows
 - never affect Delivery pallet, loose-bag, or vehicle capacity totals
-- are captured in Final Trip Summary under a separate `OP SHOP PICKUPS` snapshot section
+- are captured in independent OP SHOP Pickup Collection snapshot rows
 
 ### Template Management
 
-`Manage OP SHOP Templates` is the office-facing entry point for adding, editing, and disabling pickup templates.
+`Manage Templates` (`#opshop/templates`) is the office-facing entry point for Regular/Oncall template CRUD and Countryside route-group/membership management.
 
 | Template Type | Purpose | Actual Pickup Task Creation |
 | --- | --- | --- |
@@ -173,8 +184,9 @@ Template rules:
 - Saturday and Sunday Dispatch Dates show the next Monday-Friday.
 - The source schedule weekday determines the pickup day. Frequency text does not expand one Regular source row into extra weekdays in this list flow.
 - Date groups before the selected Dispatch Date are collapsed by default; today/future groups are expanded and can be toggled manually.
-- Staff can add, edit, soft-delete, and choose the assigned driver for visible tasks unless the pickup is generated/saved locked or a past pickup date.
-- Closing the list applies selected assignments using `trip1` internally for persistence compatibility.
+- Staff can add, view, edit, and soft-delete visible tasks unless the pickup is locked.
+- Assignment selection is a local draft until `Apply Assignment Changes` is clicked.
+- An eligible available default driver initializes a draft only when no explicit draft exists; explicit `Unassigned` remains preserved.
 - A cancelled task can be restored by re-adding the same schedule and pickup date; active or assigned duplicates remain prevented.
 
 ### Oncall OP SHOP Pickup List
@@ -187,8 +199,8 @@ Template rules:
 - If the selected template no longer matches the search, the selected `schedule_id` is cleared.
 - Search clears when opening Add, cancelling, saving successfully, or closing the modal.
 - Weekday templates can provide a matching default pickup date; no-fixed-day templates require staff to select a pickup date.
-- Staff can edit, soft-delete, and select a driver for created Oncall tasks unless generated/saved locked.
-- Closing the list applies selected assignments using `trip1` internally.
+- Staff can add, view, edit, and soft-delete created Oncall tasks unless locked.
+- Assignment changes remain local drafts until `Apply Assignment Changes` is clicked.
 - Importing or creating an Oncall template never automatically creates an actual pickup task.
 
 ### Countryside OP SHOP Pickup List
@@ -205,22 +217,20 @@ Countryside pickup is an OP SHOP Oncall subcategory, not a new Delivery workflow
 - A single OP SHOP location can belong to multiple route groups.
 - Duplicate addresses are expected; they reuse the same `opshop_locations` row and create separate route membership schedules.
 - Countryside route groups and membership schedules are template/source data only. Importing them does not create actual pickup tasks.
-- The Countryside Pickup List is also the route management entry point. There is no separate Task Pool button for managing Countryside routes.
-- Inside the Countryside list, staff can create, rename, and soft-disable route groups; add OP SHOP locations to a selected route; move a route membership to another route; or remove a membership from a route.
+- Countryside Task Pool remains operational: it assigns route groups and manages live pickup task drafts.
+- `Manage Templates` contains route management: create, rename, and soft-disable groups; add/move/remove memberships; and inspect route-template detail.
 - Route membership changes are soft schedule/template changes. They do not delete OP SHOP locations, existing pickup tasks, assignments already captured in history, or saved Final Summary snapshots.
 - `Assign Route Group` creates or restores one `OPSHOP_PICKUP` task per active route template for the selected pickup date, assigns those tasks to the selected driver, and uses `trip1` for compatibility with the OP SHOP assignment model.
-- Assigned Countryside pickups appear in Driver Summary under `OP SHOP PICKUPS`, with Countryside/route group context preserved for snapshots and exports.
+- Assigned Countryside pickups appear in OP SHOP Trip Summary with route-group context preserved for snapshots and exports.
 
-### Driver Summary and Lock Boundary
+### Trip Summary and Collection Lock Boundary
 
-- Assigned OP SHOP pickups appear in a driver-level `OP SHOP PICKUPS` section, not inside Delivery `Trip 1` or `Trip 2`.
-- Visibility is filtered by the pickup date matching the selected Driver Summary Delivery Date.
-- OP SHOP pickups do not affect Delivery pallet, loose-bag, or capacity totals.
-- Generate captures displayed OP SHOP pickups into a persisted `GENERATED` Final Summary snapshot.
-- Generated OP SHOP pickups are hidden/locked from editable Driver Summary while the generated snapshot exists, but remain traceable through the OP SHOP pickup task and snapshot data.
-- Cancelling a generated summary removes the generated lock and restores editable work for that generated summary.
-- Once Save and Export saves a Final Summary for `dispatch_date + delivery_date + driver_id`, that driver/date is hard-locked against Delivery assignment, OP SHOP assignment, and vehicle changes.
-- Saved OP SHOP assignments display as locked in OP SHOP lists with Final Summary saved messaging.
+- OP SHOP Trip Summary groups assigned pickups by driver and category for the selected Pickup Date.
+- Generate creates an independent `GENERATED` Pickup Collection snapshot and reserves its captured pickup tasks.
+- Cancelling a Generated Pickup Collection removes that generated snapshot and restores editable pickup work.
+- Saving a Pickup Collection locks only OP SHOP pickup mutations for its driver/date; it does not lock Delivery Orders or Delivery vehicles.
+- Delivery Run Sheet locks and OP SHOP Pickup Collection locks are independent.
+- Saved history and export read immutable Pickup Collection snapshots, not live mutable pickup tasks.
 
 ### OP SHOP Pickup Run Sheet Export
 
@@ -230,13 +240,13 @@ The backend still provides an independent OP SHOP pickup run sheet export endpoi
 GET /api/manual-dispatch/opshop-pickups/export-excel?dispatch_date=YYYY-MM-DD
 ```
 
-This export is independent from Final Trip Summary workbooks. It includes OP SHOP pickup operational data and keeps pickup categories separate, including Countryside route group context when present.
+This legacy operational run-sheet export remains independent from Delivery Run Sheets and Pickup Collection exports. It includes OP SHOP operational data and Countryside route-group context when present.
 
 The current Task Pool UI does not show a dedicated run sheet export button. Use this endpoint only through an approved office workflow or tool path.
 
-## Final Trip Summary
+## Legacy Final Trip Summary Compatibility
 
-Final Trip Summary is a historical snapshot for a driver, Dispatch Date, and Driver Summary Delivery Date.
+Final Trip Summary is retained as historical compatibility for pre-workspace records and migration. New scoped work uses Delivery Run Sheets and OP SHOP Pickup Collections instead.
 
 | Scenario | Snapshot Content | Totals |
 | --- | --- | --- |
@@ -300,24 +310,27 @@ Final Trip Summary is a historical snapshot for a driver, Dispatch Date, and Dri
 | `final_trip_summaries` | Final Summary header rows with `GENERATED` / `SAVED` status and driver/date lock source. |
 | `final_trip_summary_rows` | Delivery Order Trip 1 / Trip 2 snapshot rows only. |
 | `final_trip_summary_opshop_pickup_rows` | Separate OP SHOP pickup snapshot rows. |
+| `delivery_run_sheets` / `delivery_run_sheet_rows` | Independent generated/saved Delivery snapshots. |
+| `opshop_pickup_collections` / `opshop_pickup_collection_rows` | Independent generated/saved OP SHOP snapshots. |
 
-### Board OP SHOP Fields
+### Scoped OP SHOP Board Fields
 
 | Response Field | Purpose |
 | --- | --- |
-| `scheduled_opshop_pickups` | Regular list tasks for the active Regular window. |
-| `oncall_opshop_pickups` | Actual created Oncall tasks visible in the Oncall list. |
-| `countryside_route_groups` | Active Countryside route groups available to the Countryside pickup list. |
-| `countryside_opshop_pickups` | Actual created Countryside pickup tasks visible in the Countryside list. |
-| `assigned_opshop_pickups` | Assigned pickup items used in Driver Summary. |
-| `opshop_regular_list_window_start` / `opshop_regular_list_window_end` | Display window for the Regular list. |
-| `finalized_driver_delivery_dates` | Saved-summary hard-lock information for frontend interaction guards. |
+| `dispatch_date` | Current OP SHOP board context. |
+| `opshop_pickups` | Combined live Regular, Oncall, and Countryside tasks; generated/saved reserved tasks are excluded from editable state. |
+| `drivers` | Current drivers available to OP SHOP assignment controls. |
+| `templates` | Active OP SHOP template context used by the workspace. |
+| `countryside_route_groups` | Active Countryside route groups available to Task Pool and management views. |
 
 ### API Groups
 
 | Group | Routes |
 | --- | --- |
 | Board / Delivery Export | `GET /api/manual-dispatch/board`, `GET /api/manual-dispatch/export-excel` |
+| Workspace Boards | `GET /api/manual-dispatch/delivery/board`, `GET /api/manual-dispatch/opshop/board`, `GET /api/manual-dispatch/workspace-migration-status` |
+| Scoped Delivery | `/api/manual-dispatch/delivery/assignments...`, `/api/manual-dispatch/delivery/vehicle-assignments...`, `/api/manual-dispatch/delivery/run-sheets...` |
+| Scoped OP SHOP | `/api/manual-dispatch/opshop/pickups/assignments...`, `/api/manual-dispatch/opshop/countryside-route-groups/{route_group_id}/assign`, `/api/manual-dispatch/opshop/pickup-collections...` |
 | Auth | `POST /api/manual-dispatch/auth/register`, `POST /api/manual-dispatch/auth/login`, `POST /api/manual-dispatch/auth/reset-password` |
 | Orders | `POST /api/manual-dispatch/orders`, `POST /api/manual-dispatch/orders/import-attache-pdf-preview`, `POST /api/manual-dispatch/orders/import-attache-pdf-commit`, `PATCH /api/manual-dispatch/orders/{order_id}`, `POST /api/manual-dispatch/orders/{order_id}/cancel` |
 | Assignment | `POST /api/manual-dispatch/assign`, `POST /api/manual-dispatch/unassign` |
@@ -541,18 +554,19 @@ The GitHub Actions workflow runs Ubuntu and Windows jobs for the automated Pytho
 
 Local/manual smoke remains necessary for workflows depending on runtime data or browser interaction, including:
 
-- Oncall Add Pickup Task template search by company name, suburb, and address.
-- Regular OP SHOP assign -> Generate -> Cancel Generated Summary.
-- Oncall OP SHOP assign -> Generate -> Save and Export.
-- Countryside Assign Route Group -> Generate -> Save and Export.
-- Saved Final Summary History Re-export.
+- OP SHOP canonical route, refresh, Back/Forward, and assignment-draft preservation checks.
+- Regular/Oncall/Countryside Task Pool CRUD and assignment Apply.
+- Regular/Oncall template CRUD plus Countryside route/membership management.
+- OP SHOP Trip Summary -> Generate -> Cancel Generated Pickup Collection.
+- OP SHOP Trip Summary -> Generate -> Save/Export Pickup Collection.
+- Saved Pickup Collection persistence and history export.
 - OP SHOP saved-lock audit/backfill review.
 - Template Add/Edit/Disable and continuous typing.
 - Runtime SQLite backup/import checks using approved local workbook sources.
 
 ## Documentation Index
 
-Some earlier phase documents predate the OP SHOP branch and should be read as implementation history. For current OP SHOP and Final Summary behavior, prefer this README, the current code, and automated tests.
+Some earlier phase documents predate the independent workspaces and should be read as implementation history. For current OP SHOP behavior, prefer this README, the workspace specification, the current smoke checklist, code, and automated tests.
 
 ### Architecture and Data
 
@@ -576,7 +590,8 @@ Some earlier phase documents predate the OP SHOP branch and should be read as im
 - [Final Summary save and export polish](docs/manual-dispatch-board-phase14b-final-summary-save-export.md)
 - [Login and operator attribution](docs/manual-dispatch-board-phase15-login-final-summary-operator.md)
 - [Suburb distance sorting](docs/manual-dispatch-board-phase18-suburb-distance-sorting.md)
-- [OP SHOP / Final Summary smoke test checklist](docs/opshop-final-summary-smoke-test-checklist.md)
+- [Current OP SHOP workspace smoke test checklist](docs/opshop-workspace-smoke-test-checklist.md)
+- [Legacy OP SHOP / Final Summary compatibility checklist](docs/opshop-final-summary-smoke-test-checklist.md)
 - [Office trial deployment and backup](docs/manual-dispatch-board-phase20-office-trial-deployment.md)
 - [Office trial checklist](docs/manual-dispatch-board-office-trial-checklist.md)
 

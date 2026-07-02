@@ -1,5 +1,7 @@
 # OP SHOP / Final Trip Summary Smoke Test Checklist
 
+> **Legacy compatibility checklist:** This validates the historical shared Final Trip Summary workflow and old saved-lock repair tools. It is not the primary guide for the current scoped OP SHOP workspace. For current Task Pool, Trip Summary, Pickup Collection, and export QA, use [OP SHOP Workspace Smoke Test Checklist](opshop-workspace-smoke-test-checklist.md).
+
 Use this checklist to manually validate OP SHOP pickup locking and Final Trip Summary behavior with the local full-test SQLite database.
 
 ## Scope
