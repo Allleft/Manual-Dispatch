@@ -103,15 +103,16 @@ Verify legacy normalization:
 
 Use browser Back and Forward between all three Task Pool subtypes. Confirm the subtype and URL remain synchronized and no full-page reload occurs.
 
-## Assignment Drafts
+## Source Assignments and Manual Drafts
 
-1. In Regular, change one assignment but do not Apply.
-2. Set another defaulted pickup explicitly to `Unassigned`.
-3. Navigate Oncall -> Countryside -> browser Back to Regular.
-4. Confirm both pending values remain, including the explicit empty selection.
-5. Confirm an eligible current/future Regular default driver appears as a draft only.
-6. Confirm past, unavailable-driver, Generated, and Saved-lock targets do not receive an invalid default draft.
-7. Click `Apply Assignment Changes` and verify only changed rows persist.
+1. Confirm a source-backed current/future Regular task immediately shows its persisted driver in Current Assignee and Assigned To.
+2. Confirm the same task appears in OP SHOP Trip Summary without clicking Apply and does not increase pending changes.
+3. Change one assignment but do not Apply, and set another pickup explicitly to `Unassigned`.
+4. Navigate Oncall -> Countryside -> browser Back to Regular.
+5. Confirm both manual drafts remain, including the explicit empty selection.
+6. Click `Apply Assignment Changes` and verify only changed rows persist.
+7. Refresh and confirm persisted manual reassignment/Unassign remains and is not recreated from the template default.
+8. Confirm past, unavailable-driver, Generated, and Saved-lock targets remain protected.
 
 ## Regular Task Operations
 
@@ -127,8 +128,9 @@ Use browser Back and Forward between all three Task Pool subtypes. Confirm the s
 1. Click `Add Pickup Task`.
 2. Select an active Oncall template and Pickup Date.
 3. Save and confirm the live task appears.
-4. View detail, edit, assign through draft/Apply, unassign, and soft-delete.
-5. Confirm template import/create alone never creates an actual Oncall task.
+4. For a defaulted template, confirm the live task immediately has its actual assignment and no pending draft.
+5. View detail, edit, assign through draft/Apply, unassign, and soft-delete; refresh after Unassign and confirm it remains Unassigned.
+6. Confirm template import/create alone never creates an actual Oncall task.
 
 ## Countryside Task and Route Operations
 

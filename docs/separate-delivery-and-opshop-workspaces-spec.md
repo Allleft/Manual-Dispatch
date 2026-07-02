@@ -66,13 +66,15 @@ Saving one module must not lock or mutate the other. The same driver/date may ha
 
 - Active schedules ensure visible tasks idempotently.
 - Add/view/edit/soft-delete reuse the established pickup task lifecycle.
-- Eligible template default drivers initialize local drafts only when the task has no explicit draft, is current/future, the driver exists, and no Generated/Saved collection blocks that driver/date.
-- An explicit empty-string draft remains `Unassigned`.
+- A source-backed template default driver is materialized once as an actual assignment when an eligible task is created or through the controlled source-driver backfill.
+- Persisted source assignments immediately appear in Current Assignee, Assigned To, and Trip Summary without a pending draft or Apply click.
+- Later user changes remain drafts until Apply. Once persisted, a manual reassignment or explicit `Unassigned` wins and is not overwritten by board loads, refresh, navigation, or rendering.
 
 ### Oncall
 
 - Templates never create actual tasks automatically.
 - Staff use Add Pickup Task, then may view/edit/soft-delete the live task.
+- A template-derived task receives its source-backed default assignment once at creation; an ad hoc/no-default task remains Unassigned.
 - Assignment changes remain drafts until Apply.
 
 ### Countryside
@@ -118,7 +120,7 @@ See [the migration runbook](separate-delivery-and-opshop-workspaces-migration.md
 - Regular, Oncall, and Countryside operational CRUD is reachable in canonical scoped routes.
 - Regular/Oncall template and Countryside route management is reachable at `#opshop/templates`.
 - Browser refresh, copied links, Back, and Forward preserve canonical subtype behavior.
-- Pending drafts survive subtype navigation; Apply remains the persistence boundary.
+- Persisted source defaults require no Apply; later manual drafts survive subtype navigation and Apply remains their persistence boundary.
 - Generated and Saved lifecycle state survives refresh/restart.
 - Delivery remains unchanged by OP SHOP navigation, management, drafts, and collections.
 - New and existing SQLite databases initialize safely and repeatedly.

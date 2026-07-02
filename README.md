@@ -92,7 +92,7 @@ Never commit runtime SQLite databases, backups, `.env` files, generated outputs,
 1. Log in and choose a workspace from Home.
 2. Set the Dispatch Date for the operational board session.
 3. In **Order Delivery**, assign Orders in `#delivery/task-pool`, review by driver/date in `#delivery/trip-summary`, then generate, save, cancel, or export independent Delivery Run Sheets.
-4. In **OP SHOP Pickup**, choose Regular, Oncall, or Countryside under the canonical Task Pool routes, make draft assignment changes, and click `Apply Assignment Changes`.
+4. In **OP SHOP Pickup**, choose Regular, Oncall, or Countryside. Source-backed template defaults appear as persisted assignments; later staff assignment edits remain drafts until `Apply Assignment Changes`.
 5. Review assigned pickups by driver and Pickup Date in `#opshop/trip-summary`.
 6. Generate an independent Pickup Collection for a driver/date.
 7. In `#opshop/collections`, review Generated collections, cancel an incorrect Generated collection, or save/export the correct collection.
@@ -171,7 +171,7 @@ Template rules:
 
 - Regular templates require a weekday.
 - Oncall templates may have a weekday or no fixed day.
-- Default driver data may be maintained on the template.
+- Default driver data may be maintained on the template. For source-backed templates, that default is materialized once as an actual task assignment when an eligible task is created or through the controlled backfill tool.
 - Disable is a soft disable: `status = On_Hold` and `active_flag = false`.
 - Disabling a template does not delete existing pickup tasks, assignments already captured in history, or saved Final Summaries.
 - An identity-field edit can create/use a new deterministic active schedule while old task references remain historically valid.
@@ -185,8 +185,8 @@ Template rules:
 - The source schedule weekday determines the pickup day. Frequency text does not expand one Regular source row into extra weekdays in this list flow.
 - Date groups before the selected Dispatch Date are collapsed by default; today/future groups are expanded and can be toggled manually.
 - Staff can add, view, edit, and soft-delete visible tasks unless the pickup is locked.
-- Assignment selection is a local draft until `Apply Assignment Changes` is clicked.
-- An eligible available default driver initializes a draft only when no explicit draft exists; explicit `Unassigned` remains preserved.
+- Persisted source-backed assignments immediately appear in Current Assignee, Assigned To, and OP SHOP Trip Summary without creating a pending draft.
+- Later staff assignment changes are local drafts until `Apply Assignment Changes` is clicked. A persisted manual reassignment or explicit `Unassigned` always wins and is not replaced on refresh or navigation.
 - A cancelled task can be restored by re-adding the same schedule and pickup date; active or assigned duplicates remain prevented.
 
 ### Oncall OP SHOP Pickup List
@@ -201,6 +201,7 @@ Template rules:
 - Weekday templates can provide a matching default pickup date; no-fixed-day templates require staff to select a pickup date.
 - Staff can add, view, edit, and soft-delete created Oncall tasks unless locked.
 - Assignment changes remain local drafts until `Apply Assignment Changes` is clicked.
+- A task created from a template with a source-backed default driver receives that actual assignment once at creation. An ad hoc/no-default Oncall task remains Unassigned.
 - Importing or creating an Oncall template never automatically creates an actual pickup task.
 
 ### Countryside OP SHOP Pickup List
@@ -396,6 +397,18 @@ The repository provides importer and maintenance tools for approved local bulk r
 - UI-created templates remain office-managed and should not be soft-disabled merely because they are absent from a workbook.
 - Before any source refresh, establish which source is authoritative and back up the SQLite database.
 
+### OP SHOP Source-Driver Assignment Backfill
+
+`tools/backfill_opshop_source_driver_assignments.py` safely materializes approved Regular/Oncall workbook driver defaults into template defaults and eligible current/future task assignments.
+
+- It matches category + normalized company + suburb + address + run day; company-only matching is rejected.
+- Existing task assignments always win. Generated/Saved, cancelled, historical, and non-editable tasks are not reassigned.
+- Dry-run is mandatory before apply. Apply is blocked by ambiguous matches, conflicting defaults, or unknown aliases.
+- The tool is not route optimization or automatic balancing. It applies office-maintained source intent once at controlled backfill/task-creation time.
+- A later persisted manual reassignment or Unassign is never recreated by board loading, refresh, navigation, or rendering.
+
+See [OP SHOP source-driver assignment release preflight](docs/opshop-source-driver-assignment-release-preflight.md) before any production dry-run or apply.
+
 ### OP SHOP Saved-Lock Audit
 
 The audit tool is read-only. It checks saved Final Summary OP SHOP snapshot rows against live OP SHOP tasks and assignments.
@@ -571,6 +584,7 @@ Some earlier phase documents predate the independent workspaces and should be re
 ### Architecture and Data
 
 - [Manual Dispatch Board code structure](docs/manual-dispatch-board-code-structure.md)
+- [OP SHOP source-driver assignment release preflight](docs/opshop-source-driver-assignment-release-preflight.md)
 - [Data model direction](docs/manual-dispatch-board-data-model.md)
 - [Schema design](docs/manual-dispatch-board-schema.md)
 

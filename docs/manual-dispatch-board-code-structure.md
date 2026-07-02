@@ -93,7 +93,7 @@ The route is the subtype source of truth. Subtype-only navigation reuses the loa
 - `opshop-pickup-modal-renderer.js`: read-only live pickup detail.
 - `opshop-workspace-modal-utils.js`: adapts the scoped OP SHOP board to reused task-operation modals without replacing scoped board state.
 
-Scoped assignment dropdowns write only to `opshopAssignmentDrafts`; `Apply Assignment Changes` is the persistence boundary. Eligible Regular default drivers initialize missing drafts only. Own-property checks preserve explicit `Unassigned` values.
+Persisted source-backed assignments come from controlled backfill or initial template-derived task creation and are authoritative in the scoped board. Assignment dropdown changes made later by staff write to `opshopAssignmentDrafts` until `Apply Assignment Changes`; own-property checks preserve explicit `Unassigned` values. Board loading/rendering never recreates a manually cleared assignment from a template default.
 
 ### Delivery Workspace UI
 
@@ -105,11 +105,12 @@ Scoped assignment dropdowns write only to `opshopAssignmentDrafts`; `Apply Assig
 - `import_regular_opshop_pickups_to_db.py`: locations + Regular schedules only.
 - `import_oncall_opshop_pickups_to_db.py`: locations + Oncall templates only; no actual tasks.
 - `import_countryside_opshop_pickups_to_db.py`: workbook-backed route groups and memberships only; no actual tasks.
+- `backfill_opshop_source_driver_assignments.py`: dry-run-first strict source identity audit; apply updates safe template defaults and eligible unassigned tasks while preserving existing assignments and locks.
 - `migrate_legacy_final_summaries_to_workspaces.py`: dry-run by default; apply requires confirmation, creates a verified backup, and copies legacy saved snapshots into independent histories without deleting legacy data.
 
 ## Test Boundaries
 
-- `tests/test_workspace_frontend_shell.py`: canonical routes, scoped state, interaction wiring, stale-response safety, template/route/task parity, and default-driver drafts.
+- `tests/test_workspace_frontend_shell.py`: canonical routes, scoped state, interaction wiring, stale-response safety, template/route/task parity, persisted source assignments, and manual drafts.
 - `tests/test_workspace_scoped_boards.py`: independent board payloads and Regular ensure behavior.
 - `tests/test_workspace_scoped_mutations.py`: module-only mutations and locks.
 - `tests/test_workspace_services.py`: independent lifecycle semantics.
