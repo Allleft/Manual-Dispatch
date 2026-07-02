@@ -32,8 +32,10 @@ export function createOpShopPickupActions({
     state.opshopPickupFormMode = "";
     state.opshopPickupEditingTaskId = "";
     state.opshopPickupForm = {};
-    initializeAssignedDriverSelections({ preserveExisting: false });
-    initializeCollapsedDateGroups();
+    if (state.activeWorkspace !== "opshop") {
+      initializeAssignedDriverSelections({ preserveExisting: false });
+      initializeCollapsedDateGroups();
+    }
     renderBoard();
     await loadScheduleCandidates();
   }
@@ -159,6 +161,7 @@ export function createOpShopPickupActions({
       });
       state.opshopPickupFormMode = "";
       state.opshopPickupForm = {};
+      closeScopedOperationModal();
       await refreshPickupBoard();
       initializeAssignedDriverSelections({ preserveExisting: true });
     } catch (error) {
@@ -186,6 +189,7 @@ export function createOpShopPickupActions({
       state.opshopPickupFormMode = "";
       state.opshopPickupEditingTaskId = "";
       state.opshopPickupForm = {};
+      closeScopedOperationModal();
       await refreshPickupBoard();
       initializeAssignedDriverSelections({ preserveExisting: true });
     } catch (error) {
@@ -210,6 +214,7 @@ export function createOpShopPickupActions({
       state.opshopPickupFormMode = "";
       state.opshopPickupEditingTaskId = "";
       state.opshopPickupForm = {};
+      closeScopedOperationModal();
       await refreshPickupBoard();
       initializeAssignedDriverSelections({ preserveExisting: true });
     } catch (error) {
@@ -308,6 +313,12 @@ export function createOpShopPickupActions({
       return;
     }
     await loadBoard(state.dispatchDate, { force: true });
+  }
+
+  function closeScopedOperationModal() {
+    if (state.activeWorkspace === "opshop") {
+      state.isOpShopPickupListOpen = false;
+    }
   }
 
   return {

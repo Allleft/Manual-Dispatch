@@ -13,11 +13,8 @@ import {
   formatOptional,
 } from "../utils/format-utils.js";
 import { createIcon } from "../utils/icon-utils.js";
-import {
-  getDateGroupCollapsed,
-  getDateGroupListId,
-} from "../utils/opshop-date-group-utils.js";
 import { getOpShopModalDrivers } from "../utils/opshop-workspace-modal-utils.js";
+import { createOpShopDateGroupList } from "./opshop-date-group-list-renderer.js";
 
 export function renderOpShopPickupListModal({
   onCancelForm,
@@ -50,14 +47,24 @@ export function renderOpShopPickupListModal({
 
   const modal = document.createElement("section");
   modal.className = "order-detail-modal opshop-pickup-list-modal";
+  const isScopedFormOnly = Boolean(
+    state.activeWorkspace === "opshop" && state.opshopPickupFormMode,
+  );
+  modal.classList.toggle("opshop-pickup-form-only-modal", isScopedFormOnly);
   modal.setAttribute("role", "dialog");
   modal.setAttribute("aria-modal", "true");
   modal.setAttribute("aria-labelledby", "opshop-pickup-list-title");
   modal.addEventListener("click", (event) => event.stopPropagation());
 
+  modal.append(createModalHeader({
+    isScopedFormOnly,
+    onCloseList,
+    onStartAdd,
+  }));
+  if (!isScopedFormOnly) {
+    modal.append(createWindowSummary());
+  }
   modal.append(
-    createModalHeader({ onCloseList, onStartAdd }),
-    createWindowSummary(),
     createErrorMessage(),
     createActiveForm({
       onCancelForm,
@@ -67,19 +74,21 @@ export function renderOpShopPickupListModal({
       onUpdateForm,
       onUpdatePickup,
     }),
-    createPickupGroups({
+  );
+  if (!isScopedFormOnly) {
+    modal.append(createPickupGroups({
       onOpenDetail,
       onStartEdit,
       onToggleDateGroup,
       onUpdateAssignedDriver,
-    }),
-  );
+    }));
+  }
 
   backdrop.append(modal);
   root.append(backdrop);
 }
 
-function createModalHeader({ onCloseList, onStartAdd }) {
+function createModalHeader({ isScopedFormOnly, onCloseList, onStartAdd }) {
   const header = document.createElement("div");
   header.className = "detail-header";
 
@@ -88,20 +97,13 @@ function createModalHeader({ onCloseList, onStartAdd }) {
 
   const title = document.createElement("h2");
   title.id = "opshop-pickup-list-title";
-  title.textContent = "Regular OP SHOP Pickup List";
+  title.textContent = isScopedFormOnly
+    ? scopedFormTitle()
+    : "Regular OP SHOP Pickup List";
   titleWrap.append(kicker, title);
 
   const actions = document.createElement("div");
   actions.className = "detail-actions";
-
-  const addButton = document.createElement("button");
-  addButton.type = "button";
-  setButtonContent(addButton, "Add Pickup Task", "plus");
-  addButton.disabled = state.isOpShopPickupSaving || state.isOpShopPickupListLoading;
-  addButton.addEventListener("click", (event) => {
-    event.stopPropagation();
-    onStartAdd();
-  });
 
   const closeButton = document.createElement("button");
   closeButton.type = "button";
@@ -112,7 +114,18 @@ function createModalHeader({ onCloseList, onStartAdd }) {
     onCloseList();
   });
 
-  actions.append(addButton, closeButton);
+  if (!isScopedFormOnly) {
+    const addButton = document.createElement("button");
+    addButton.type = "button";
+    setButtonContent(addButton, "Add Pickup Task", "plus");
+    addButton.disabled = state.isOpShopPickupSaving || state.isOpShopPickupListLoading;
+    addButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      onStartAdd();
+    });
+    actions.append(addButton);
+  }
+  actions.append(closeButton);
   header.append(titleWrap, actions);
   return header;
 }
@@ -389,103 +402,33 @@ function createFormActions({
 }
 
 function createPickupGroups({ onOpenDetail, onStartEdit, onToggleDateGroup, onUpdateAssignedDriver }) {
-  const container = document.createElement("div");
-  container.className = "opshop-date-group-list";
-
-  if (state.isOpShopPickupListLoading && state.scheduledOpShopPickups.length === 0) {
-    const loading = document.createElement("p");
-    loading.className = "empty-board";
-    loading.textContent = "Loading OP SHOP pickup list...";
-    container.append(loading);
-    return container;
-  }
-
-  if (state.scheduledOpShopPickups.length === 0) {
-    const empty = document.createElement("p");
-    empty.className = "empty-board";
-    empty.textContent = "No Regular OP SHOP pickups in this week.";
-    container.append(empty);
-    return container;
-  }
-
-  groupPickupsByDate(state.scheduledOpShopPickups).forEach(([pickupDate, pickups]) => {
-    const section = document.createElement("section");
-    section.className = "opshop-date-group";
-    const collapsed = getDateGroupCollapsed(
-      state.collapsedRegularOpShopPickupDates,
-      pickupDate,
-      state.dispatchDate,
-    );
-    const listId = getDateGroupListId("regular", pickupDate);
-
-    const heading = document.createElement("h3");
-    heading.className = "opshop-date-group-heading";
-    heading.append(createDateGroupToggle({
-      collapsed,
-      listId,
-      onToggleDateGroup,
-      pickupCount: pickups.length,
-      pickupDate,
-    }));
-    section.append(heading);
-
-    const list = document.createElement("div");
-    list.className = "opshop-date-card-list";
-    list.id = listId;
-    list.hidden = collapsed;
-    pickups.forEach((pickup) => {
-      list.append(createPickupItem(pickup, {
+  return createOpShopDateGroupList({
+    collapsedDates: state.collapsedRegularOpShopPickupDates,
+    comparePickups: comparePickupsWithinDateGroup,
+    dispatchDate: state.dispatchDate,
+    emptyMessage: "No Regular OP SHOP pickups in this week.",
+    idPrefix: "regular",
+    loading: state.isOpShopPickupListLoading,
+    loadingMessage: "Loading OP SHOP pickup list...",
+    onToggleDateGroup,
+    pickups: state.scheduledOpShopPickups,
+    renderPickup: (pickup) => createPickupItem(pickup, {
         onOpenDetail,
         onStartEdit,
         onUpdateAssignedDriver,
-      }));
-    });
-
-    section.append(list);
-    container.append(section);
+      }),
   });
-
-  return container;
 }
 
-function createDateGroupToggle({
-  collapsed,
-  listId,
-  onToggleDateGroup,
-  pickupCount,
-  pickupDate,
-}) {
-  const toggle = document.createElement("button");
-  toggle.type = "button";
-  toggle.className = "opshop-date-group-toggle";
-  toggle.setAttribute("aria-controls", listId);
-  toggle.setAttribute("aria-expanded", String(!collapsed));
-  toggle.addEventListener("click", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    onToggleDateGroup(pickupDate);
-  });
 
-  const label = document.createElement("span");
-  label.className = "opshop-date-group-label";
-  label.append(createIcon("calendar"), document.createTextNode(formatDateHeading(pickupDate)));
-
-  const count = document.createElement("span");
-  count.className = "opshop-date-group-count";
-  count.textContent = `(${pickupCount} ${pickupCount === 1 ? "pickup" : "pickups"})`;
-
-  const stateLabel = document.createElement("span");
-  stateLabel.className = "opshop-date-group-state";
-  stateLabel.append(
-    document.createTextNode(collapsed ? "Collapsed" : "Expanded"),
-    createIcon(collapsed ? "chevron-down" : "chevron-up"),
-  );
-
-  const title = document.createElement("span");
-  title.className = "opshop-date-group-title";
-  title.append(label, count);
-  toggle.append(title, stateLabel);
-  return toggle;
+function scopedFormTitle() {
+  if (state.opshopPickupFormMode === "edit") {
+    return "Edit Regular OP SHOP Pickup Task";
+  }
+  if (state.opshopPickupFormMode === "delete") {
+    return "Delete Regular OP SHOP Pickup Task";
+  }
+  return "Add Regular OP SHOP Pickup Task";
 }
 
 function createPickupItem(pickup, {
@@ -730,23 +673,6 @@ function isDriverFinalizedForPickup(driverId, pickupDate) {
   );
 }
 
-function groupPickupsByDate(pickups) {
-  const groups = new Map();
-  [...pickups]
-    .sort((left, right) => compareText(left.pickup_date, right.pickup_date))
-    .forEach((pickup) => {
-      const key = pickup.pickup_date || "";
-      if (!groups.has(key)) {
-        groups.set(key, []);
-      }
-      groups.get(key).push(pickup);
-    });
-  return [...groups.entries()].map(([pickupDate, groupPickups]) => [
-    pickupDate,
-    [...groupPickups].sort(comparePickupsWithinDateGroup),
-  ]);
-}
-
 function comparePickupsWithinDateGroup(left, right) {
   const leftDriverName = getAssignedDriverSortName(left);
   const rightDriverName = getAssignedDriverSortName(right);
@@ -792,14 +718,6 @@ function compareText(left, right) {
   });
 }
 
-function formatDateHeading(value) {
-  const date = parseLocalDate(value);
-  if (!date) {
-    return formatOptional(value);
-  }
-  return `${WEEKDAYS[date.getDay()]} ${date.getDate()}/${date.getMonth() + 1}`;
-}
-
 function formatDateShort(date) {
   if (!date) {
     return "-";
@@ -814,13 +732,3 @@ function parseLocalDate(value) {
   }
   return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
 }
-
-const WEEKDAYS = [
-  "Sunday",
-  "Monday",
-  "Tuesday",
-  "Wednesday",
-  "Thursday",
-  "Friday",
-  "Saturday",
-];

@@ -35,6 +35,8 @@ import {
 import {
   getDeliveryVehicleConflictDriverNames,
 } from "../utils/delivery-vehicle-utils.js";
+import { toggleCollapsedPickupDateGroup } from "../utils/opshop-date-group-utils.js";
+import { captureWindowScroll, restoreWindowScroll } from "../utils/scroll-utils.js";
 
 
 const DELIVERY_ROUTES = new Set([
@@ -314,7 +316,6 @@ export function createWorkspaceActions({
           state.opshopBoard = board;
           state.opshopPickupCollections = collections || [];
           pruneOpShopDrafts();
-          initializeRegularDefaultDriverDrafts();
         }
       } else {
         const board = await api.getOpShopWorkspaceBoard(dispatchDate);
@@ -365,6 +366,17 @@ export function createWorkspaceActions({
     state.workspaceRoute = route;
     state.opshopTaskPoolView = view;
     renderWorkspace();
+  }
+
+  function toggleRegularOpShopDateGroup(pickupDate) {
+    const scrollSnapshot = captureWindowScroll();
+    state.collapsedRegularOpShopPickupDates = toggleCollapsedPickupDateGroup(
+      state.collapsedRegularOpShopPickupDates || {},
+      pickupDate,
+      state.dispatchDate,
+    );
+    renderWorkspace();
+    restoreWindowScroll(scrollSnapshot);
   }
 
   function updateOpShopTripSummaryDate(nextDate) {
@@ -1770,35 +1782,6 @@ export function createWorkspaceActions({
     );
   }
 
-  function initializeRegularDefaultDriverDrafts() {
-    const drivers = new Set(
-      (state.opshopBoard?.drivers || []).map((driver) => driver.driver_id),
-    );
-    const blockedDriverDates = new Set(
-      (state.opshopPickupCollections || [])
-        .filter((collection) => ["GENERATED", "SAVED"].includes(collection.status))
-        .map((collection) => `${collection.driver_id}:${collection.pickup_date}`),
-    );
-    const nextDrafts = { ...(state.opshopAssignmentDrafts || {}) };
-    (state.opshopBoard?.opshop_pickups || []).forEach((pickup) => {
-      if (
-        pickup.run_type !== "REGULAR" ||
-        pickup.is_assigned ||
-        pickup.assigned_to_locked ||
-        !pickup.default_driver_id ||
-        !pickup.pickup_date ||
-        pickup.pickup_date < state.dispatchDate ||
-        !drivers.has(pickup.default_driver_id) ||
-        blockedDriverDates.has(`${pickup.default_driver_id}:${pickup.pickup_date}`) ||
-        Object.prototype.hasOwnProperty.call(nextDrafts, pickup.pickup_task_id)
-      ) {
-        return;
-      }
-      nextDrafts[pickup.pickup_task_id] = pickup.default_driver_id;
-    });
-    state.opshopAssignmentDrafts = nextDrafts;
-  }
-
   function saveSnapshotPayload() {
     return {
       saved_by_account_name: state.accountName || null,
@@ -1824,6 +1807,7 @@ export function createWorkspaceActions({
     state.deliverySpecificationBusyKey = "";
     state.opshopAssignmentDrafts = {};
     state.countrysideRouteGroupDrafts = {};
+    state.collapsedRegularOpShopPickupDates = {};
     state.deliveryActionError = "";
     state.opshopActionError = "";
     state.deliveryBusyActionKeys = {};
@@ -1995,6 +1979,7 @@ export function createWorkspaceActions({
     updateOpShopAssignmentDraft,
     updateOpShopTaskPoolView,
     updateOpShopTripSummaryDate,
+    toggleRegularOpShopDateGroup,
   };
 }
 

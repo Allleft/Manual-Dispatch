@@ -610,7 +610,9 @@ function renderOncallOpShopPickupListModal() {
 
 function renderOpShopPickupListModal() {
   renderOpShopPickupListModalView({
-    onCancelForm: opShopPickupActions.cancelPickupTaskForm,
+    onCancelForm: state.activeWorkspace === "opshop"
+      ? opShopPickupActions.closeOpShopPickupListWithoutApply
+      : opShopPickupActions.cancelPickupTaskForm,
     onCloseList: state.activeWorkspace === "opshop"
       ? opShopPickupActions.closeOpShopPickupListWithoutApply
       : opShopPickupActions.closeOpShopPickupList,

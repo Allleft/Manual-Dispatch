@@ -4566,6 +4566,125 @@ select:disabled {
   stroke-width: 2.35;
 }
 
+.workspace-regular-pickup-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.workspace-regular-pickup-list .opshop-date-group-list {
+  gap: 0.75rem;
+}
+
+.workspace-regular-pickup-list .opshop-date-group {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.workspace-regular-pickup-list .opshop-date-card-list {
+  display: grid;
+  gap: 0.48rem;
+}
+
+.workspace-regular-pickup-row {
+  grid-template-columns: auto minmax(250px, 1fr) minmax(360px, 0.9fr);
+  padding: 0.7rem 0.82rem;
+}
+
+.workspace-regular-pickup-main {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.workspace-regular-current-assignee {
+  margin: 0;
+  color: var(--accent-strong);
+  font-size: 0.8rem;
+  font-weight: 850;
+}
+
+.workspace-regular-pickup-controls {
+  display: grid;
+  grid-template-columns: minmax(185px, 1fr) auto;
+  gap: 0.6rem;
+  align-items: end;
+  min-width: 0;
+}
+
+.workspace-regular-assignee-field {
+  min-width: 0;
+}
+
+.workspace-regular-assignee-field select {
+  min-height: 2.3rem;
+}
+
+.workspace-regular-assignment-hint,
+.workspace-regular-assignment-lock {
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.workspace-regular-assignment-hint {
+  color: var(--muted);
+}
+
+.workspace-regular-assignment-lock {
+  color: #b42318;
+}
+
+.workspace-regular-pickup-actions {
+  flex-wrap: nowrap;
+  align-items: end;
+  margin: 0;
+}
+
+.workspace-regular-pickup-actions .workspace-action-button {
+  min-height: 2.3rem;
+  padding-inline: 0.62rem;
+}
+
+.opshop-pickup-form-only-modal {
+  width: min(760px, calc(100vw - 2rem));
+  max-width: min(760px, calc(100vw - 2rem));
+}
+
+@media (max-width: 1120px) {
+  .workspace-regular-pickup-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .workspace-regular-pickup-controls {
+    grid-column: 2;
+  }
+}
+
+@media (max-width: 720px) {
+  .workspace-regular-pickup-row {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-regular-pickup-row > .opshop-list-item-icon {
+    display: none;
+  }
+
+  .workspace-regular-pickup-controls {
+    grid-column: 1;
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-regular-pickup-actions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .workspace-regular-pickup-actions .workspace-action-button {
+    flex: 1 1 8rem;
+  }
+}
+
 .specification-modal {
   width: min(1160px, calc(100vw - 3rem));
   max-width: min(1160px, calc(100vw - 3rem));

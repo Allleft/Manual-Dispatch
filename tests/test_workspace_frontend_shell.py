@@ -31,6 +31,9 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.opshop_renderer = self._read(
             "js/render/opshop-workspace-renderer.js"
         )
+        self.opshop_date_group_renderer = self._read(
+            "js/render/opshop-date-group-list-renderer.js"
+        )
         self.styles = self._read("styles.css")
 
     def test_login_defaults_to_home_and_logged_out_routes_do_not_load(self):
@@ -1805,6 +1808,85 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("const isSubtypeOnlyChange", self.app)
         self.assertIn("if (!isSubtypeOnlyChange)", self.app)
 
+    def test_regular_task_pool_uses_shared_date_groups_and_compact_rows(self):
+        self.assertIn("createRegularPickupDateGroups", self.opshop_renderer)
+        self.assertIn("createRegularPickupRow", self.opshop_renderer)
+        self.assertIn("createOpShopDateGroupList", self.opshop_renderer)
+        self.assertIn('idPrefix: "workspace-regular"', self.opshop_renderer)
+        self.assertIn("Current Assignee:", self.opshop_renderer)
+        self.assertIn('"Assigned to"', self.opshop_renderer)
+        self.assertIn('"View details"', self.opshop_renderer)
+        self.assertIn('"Edit"', self.opshop_renderer)
+        self.assertIn('"Delete"', self.opshop_renderer)
+        regular_branch = self.opshop_renderer.split(
+            'if (route === "regular")', 1
+        )[1].split('} else {', 1)[0]
+        self.assertIn("createRegularPickupDateGroups", regular_branch)
+        self.assertNotIn("createPickupCard", regular_branch)
+        self.assertIn('toggle.type = "button"', self.opshop_date_group_renderer)
+        self.assertIn('aria-expanded', self.opshop_date_group_renderer)
+        self.assertIn('aria-controls', self.opshop_date_group_renderer)
+        self.assertIn('collapsed ? "Collapsed" : "Expanded"', self.opshop_date_group_renderer)
+        self.assertIn("getDateGroupCollapsed", self.opshop_date_group_renderer)
+        self.assertIn("list.hidden = collapsed", self.opshop_date_group_renderer)
+        self.assertIn("workspace-regular-pickup-row", self.styles)
+        self.assertIn("workspace-regular-pickup-controls", self.styles)
+
+    def test_regular_date_toggle_preserves_drafts_without_board_reload(self):
+        self._run_workspace_actions_script(
+            """
+            const state = {
+              isLoggedIn: true,
+              activeWorkspace: "opshop",
+              workspaceRoute: "opshop/task-pool/regular",
+              dispatchDate: "2026-07-02",
+              collapsedRegularOpShopPickupDates: {},
+              opshopAssignmentDrafts: { "TASK-1": "" },
+            };
+            let boardCalls = 0;
+            const actions = createWorkspaceActions({
+              state,
+              renderWorkspace: () => {},
+              api: {
+                getWorkspaceMigrationStatus: async () => ({}),
+                getOpShopWorkspaceBoard: async () => { boardCalls += 1; return {}; },
+              },
+            });
+
+            actions.toggleRegularOpShopDateGroup("2026-07-01");
+            if (state.collapsedRegularOpShopPickupDates["2026-07-01"] !== false) {
+              throw new Error("past date did not expand from its default collapsed state");
+            }
+            if (!Object.prototype.hasOwnProperty.call(state.opshopAssignmentDrafts, "TASK-1")) {
+              throw new Error("explicit Unassigned draft was lost during toggle");
+            }
+            if (boardCalls !== 0) {
+              throw new Error("date group toggle reloaded the scoped board");
+            }
+            actions.toggleRegularOpShopDateGroup("2026-07-01");
+            if (state.collapsedRegularOpShopPickupDates["2026-07-01"] !== true) {
+              throw new Error("expanded date group did not collapse");
+            }
+            """
+        )
+
+    def test_scoped_regular_task_forms_do_not_render_duplicate_list(self):
+        modal_renderer = self._read(
+            "js/render/opshop-pickup-list-modal-renderer.js"
+        )
+        regular_actions = self._read("js/actions/opshop-pickup-actions.js")
+        self.assertIn("isScopedFormOnly", modal_renderer)
+        self.assertIn('state.activeWorkspace === "opshop"', modal_renderer)
+        self.assertIn('if (!isScopedFormOnly)', modal_renderer)
+        self.assertIn("createPickupGroups", modal_renderer)
+        self.assertIn("opshop-pickup-form-only-modal", modal_renderer)
+        self.assertIn("closeScopedOperationModal", regular_actions)
+        self.assertIn('state.isOpShopPickupListOpen = false', regular_actions)
+        self.assertIn(
+            'if (state.activeWorkspace !== "opshop")',
+            regular_actions,
+        )
+
     def test_opshop_templates_reuse_full_regular_oncall_management(self):
         template_renderer = self._read(
             "js/render/opshop-template-management-modal-renderer.js"
@@ -1924,7 +2006,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn('["schedule_id", "pickup_date"].includes(field)', regular_form_update)
         self.assertIn("renderBoard();", regular_form_update)
 
-    def test_regular_default_driver_initializes_only_safe_missing_drafts(self):
+    def test_regular_board_load_keeps_persisted_assignments_authoritative(self):
         self._run_workspace_actions_script(
             """
             const state = {
@@ -1955,13 +2037,12 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
               drivers: [{ driver_id: "DRIVER-1", name: "Driver One" }],
               countryside_route_groups: [],
               opshop_pickups: [
-                pickup("REG-DEFAULT"),
+                pickup("REG-PERSISTED", {
+                  is_assigned: true,
+                  assigned_driver_id: "DRIVER-1",
+                }),
                 pickup("REG-EXPLICIT"),
-                pickup("REG-UNAVAILABLE", { default_driver_id: "DRIVER-9" }),
-                pickup("REG-PAST", { pickup_date: "2026-06-29", assigned_to_locked: true }),
-                pickup("REG-BLOCKED", { pickup_date: "2026-07-02" }),
-                pickup("REG-ASSIGNED", { is_assigned: true, assigned_driver_id: "DRIVER-1" }),
-                pickup("ONCALL", { run_type: "ON_CALL" }),
+                pickup("REG-UNASSIGNED"),
               ],
             };
             const api = {
@@ -1980,18 +2061,15 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             });
 
             await actions.loadWorkspaceRoute("opshop/task-pool/regular");
-            if (state.opshopAssignmentDrafts["REG-DEFAULT"] !== "DRIVER-1") {
-              throw new Error("eligible Regular default driver was not drafted");
-            }
             if (!Object.prototype.hasOwnProperty.call(state.opshopAssignmentDrafts, "REG-EXPLICIT")) {
               throw new Error("explicit Unassigned draft key was removed");
             }
             if (state.opshopAssignmentDrafts["REG-EXPLICIT"] !== "") {
               throw new Error("explicit Unassigned draft was overwritten");
             }
-            for (const pickupId of ["REG-UNAVAILABLE", "REG-PAST", "REG-BLOCKED", "REG-ASSIGNED", "ONCALL"]) {
+            for (const pickupId of ["REG-PERSISTED", "REG-UNASSIGNED"]) {
               if (Object.prototype.hasOwnProperty.call(state.opshopAssignmentDrafts, pickupId)) {
-                throw new Error(`unsafe default draft created for ${pickupId}`);
+                throw new Error(`board load created a local assignment draft for ${pickupId}`);
               }
             }
             """
