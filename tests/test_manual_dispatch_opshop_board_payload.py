@@ -231,13 +231,18 @@ class OpShopBoardPayloadTest(unittest.TestCase):
         self.assertEqual("2026-05-19", item.pickup_date)
         self.assertEqual("2026-05-19", item.dispatch_date)
         self.assertEqual("REGULAR", item.generated_from)
-        self.assertEqual("ACTIVE", item.status)
-        self.assertFalse(item.is_assigned)
+        self.assertEqual("ASSIGNED", item.status)
+        self.assertTrue(item.is_assigned)
         self.assertEqual("D001", item.default_driver_id)
         self.assertEqual("John G", item.default_driver_alias)
         self.assertEqual("John Georgiadis", item.default_driver_name)
-        self.assertIsNone(item.assigned_driver_id)
-        self.assertIsNone(item.assigned_driver_name)
+        self.assertEqual("D001", item.assigned_driver_id)
+        self.assertEqual("John", item.assigned_driver_name)
+        assignment = self.repository.find_assignment_for_task(
+            "OPSHOP_PICKUP",
+            item.pickup_task_id,
+        )
+        self.assertEqual("D001", assignment.driver_id)
 
     def test_board_marks_past_pickups_locked_for_assigned_to_dropdown(self):
         self.repository.upsert_opshop_pickup_schedule(

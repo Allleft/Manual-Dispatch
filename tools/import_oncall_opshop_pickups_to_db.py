@@ -209,6 +209,7 @@ def read_oncall_workbook_rows(workbook_path):
             if any(record.values()):
                 record["__sheet_name"] = sheet_name
                 record["__run_day"] = run_day
+                record["__row_number"] = row[0].row
                 rows.append(record)
     return rows
 

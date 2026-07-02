@@ -250,6 +250,59 @@ class OpShopPickupGenerationTest(unittest.TestCase):
         self.assertEqual(2, second.tasks_existing)
         self.assertEqual(2, len(self.repository.list_opshop_pickup_tasks()))
 
+    def test_new_regular_task_with_template_default_creates_actual_assignment(self):
+        self._add_schedule(
+            "SCHED-DEFAULT",
+            run_day="MONDAY",
+            run_type="REGULAR",
+            frequency="Weekly",
+            default_driver_id="D001",
+        )
+
+        self._generate()
+
+        tasks = self.repository.list_opshop_pickup_tasks()
+        self.assertEqual(2, len(tasks))
+        for task in tasks:
+            assignment = self.repository.find_assignment_for_task(
+                "OPSHOP_PICKUP",
+                task.pickup_task_id,
+            )
+            self.assertEqual("ASSIGNED", task.status)
+            self.assertEqual("D001", task.driver_id)
+            self.assertEqual("trip1", task.trip_no)
+            self.assertEqual("D001", assignment.driver_id)
+
+    def test_existing_unassigned_regular_task_is_not_reassigned_on_refresh(self):
+        self._add_schedule(
+            "SCHED-DEFAULT",
+            run_day="MONDAY",
+            run_type="REGULAR",
+            frequency="Weekly",
+            default_driver_id="D001",
+        )
+        self._generate()
+        task = self.repository.list_opshop_pickup_tasks()[0]
+        self.repository.remove_assignments_for_task("OPSHOP_PICKUP", task.pickup_task_id)
+        self.repository.update_opshop_pickup_task_assignment_status(
+            task.pickup_task_id,
+            "ACTIVE",
+            None,
+            None,
+        )
+
+        self._generate()
+
+        refreshed = self.repository.get_opshop_pickup_task(task.pickup_task_id)
+        self.assertEqual("ACTIVE", refreshed.status)
+        self.assertIsNone(refreshed.driver_id)
+        self.assertIsNone(
+            self.repository.find_assignment_for_task(
+                "OPSHOP_PICKUP",
+                task.pickup_task_id,
+            )
+        )
+
     def test_existing_cancelled_task_prevents_regeneration(self):
         self._add_schedule("SCHED-001", run_day="MONDAY", frequency="Weekly")
         self.repository.upsert_opshop_pickup_task(
@@ -364,6 +417,7 @@ class OpShopPickupGenerationTest(unittest.TestCase):
         status="Active",
         fortnight_group=None,
         review_required=False,
+        default_driver_id=None,
     ):
         return OpShopPickupSchedule(
             schedule_id=schedule_id,
@@ -381,6 +435,7 @@ class OpShopPickupGenerationTest(unittest.TestCase):
             review_reason="Requires review" if review_required else None,
             created_at="2026-05-19T00:00:00+00:00",
             updated_at="2026-05-19T00:00:00+00:00",
+            default_driver_id=default_driver_id,
         )
 
     def _task(self, pickup_task_id, schedule_id, pickup_date, status="ACTIVE"):

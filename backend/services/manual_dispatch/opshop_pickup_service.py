@@ -18,6 +18,10 @@ from backend.schemas import (
 from backend.services.manual_dispatch.final_summary_lock import (
     is_driver_delivery_date_finalized,
 )
+from backend.services.manual_dispatch.opshop_pickup_collection_lock import (
+    ensure_opshop_pickup_collection_key_mutable,
+    ensure_opshop_pickup_not_reserved,
+)
 
 
 OPSHOP_FORTNIGHT_ANCHOR_DATE = date(2026, 5, 18)
@@ -127,7 +131,10 @@ class OpShopPickupService:
                     _increment(skip_reasons, "EXISTING_TASK")
                     continue
                 task = self._build_generated_task(schedule, pickup_date)
-                created_tasks.append(self.repository.insert_opshop_pickup_task(task))
+                created = self.repository.insert_opshop_pickup_task(task)
+                created_tasks.append(
+                    self._apply_template_default_assignment(created, schedule)
+                )
 
         return EnsureOpShopPickupTasksResult(
             window_start=window_start.isoformat(),
@@ -157,7 +164,11 @@ class OpShopPickupService:
         schedule_id = _clean_text(request.schedule_id)
         pickup_date = _parse_iso_date(request.pickup_date, "pickup_date").isoformat()
         schedule = self._get_schedulable_schedule(schedule_id)
-        self._requested_assignment_context(request, pickup_date)
+        self._requested_assignment_context(
+            request,
+            pickup_date,
+            default_driver_id=schedule.default_driver_id,
+        )
 
         existing = self.repository.find_opshop_pickup_task_by_schedule_and_date(
             schedule.schedule_id,
@@ -176,7 +187,7 @@ class OpShopPickupService:
                     updated_at=_timestamp(),
                 )
             )
-            return self._apply_created_assignment_if_requested(restored, request)
+            return self._apply_created_assignment_if_requested(restored, request, schedule)
         if existing:
             raise ValueError("OP SHOP pickup task already exists for this schedule and date")
 
@@ -197,14 +208,18 @@ class OpShopPickupService:
             updated_at=timestamp,
         )
         created = self.repository.insert_opshop_pickup_task(task)
-        return self._apply_created_assignment_if_requested(created, request)
+        return self._apply_created_assignment_if_requested(created, request, schedule)
 
     def create_oncall_opshop_pickup_task(self, request):
         request = request or CreateOpShopPickupTaskRequest()
         schedule_id = _clean_text(request.schedule_id)
         pickup_date = _parse_iso_date(request.pickup_date, "pickup_date").isoformat()
         schedule = self._get_oncall_schedule(schedule_id)
-        self._requested_assignment_context(request, pickup_date)
+        self._requested_assignment_context(
+            request,
+            pickup_date,
+            default_driver_id=schedule.default_driver_id,
+        )
 
         existing = self.repository.find_opshop_pickup_task_by_schedule_and_date(
             schedule.schedule_id,
@@ -223,7 +238,7 @@ class OpShopPickupService:
                     updated_at=_timestamp(),
                 )
             )
-            return self._apply_created_assignment_if_requested(restored, request)
+            return self._apply_created_assignment_if_requested(restored, request, schedule)
         if existing:
             raise ValueError("OP SHOP pickup task already exists for this schedule and date")
 
@@ -244,7 +259,7 @@ class OpShopPickupService:
             updated_at=timestamp,
         )
         created = self.repository.insert_opshop_pickup_task(task)
-        return self._apply_created_assignment_if_requested(created, request)
+        return self._apply_created_assignment_if_requested(created, request, schedule)
 
     def update_opshop_pickup_task(self, pickup_task_id, request):
         request = request or UpdateOpShopPickupTaskRequest()
@@ -609,14 +624,23 @@ class OpShopPickupService:
                 "trip1",
             )
 
-    def _apply_created_assignment_if_requested(self, task, request):
+    def _apply_created_assignment_if_requested(self, task, request, schedule=None):
         driver_id, dispatch_date = self._requested_assignment_context(
             request,
             task.pickup_date,
+            default_driver_id=schedule.default_driver_id if schedule else None,
         )
         if not driver_id:
             return task
 
+        return self._persist_created_assignment(task, driver_id, dispatch_date)
+
+    def _persist_created_assignment(self, task, driver_id, dispatch_date):
+        ensure_opshop_pickup_not_reserved(
+            self.repository,
+            dispatch_date,
+            task.pickup_task_id,
+        )
         self.repository.upsert_assignment(
             dispatch_date,
             "OPSHOP_PICKUP",
@@ -631,6 +655,22 @@ class OpShopPickupService:
             "trip1",
         )
         return self.repository.get_opshop_pickup_task(task.pickup_task_id)
+
+    def _apply_template_default_assignment(self, task, schedule):
+        if not schedule.default_driver_id:
+            return task
+        request = CreateOpShopPickupTaskRequest(dispatch_date=task.pickup_date)
+        try:
+            driver_id, dispatch_date = self._requested_assignment_context(
+                request,
+                task.pickup_date,
+                default_driver_id=schedule.default_driver_id,
+            )
+        except ValueError:
+            # Board task generation must remain available when a stored default
+            # driver is unavailable or its driver/date key is already locked.
+            return task
+        return self._persist_created_assignment(task, driver_id, dispatch_date)
 
     def _active_countryside_route_memberships(self, route_group_id):
         return [
@@ -686,8 +726,15 @@ class OpShopPickupService:
         )
         return self.repository.insert_opshop_pickup_task(task)
 
-    def _requested_assignment_context(self, request, pickup_date):
+    def _requested_assignment_context(
+        self,
+        request,
+        pickup_date,
+        default_driver_id=None,
+    ):
         driver_id = _clean_text(getattr(request, "assigned_driver_id", None))
+        if not driver_id:
+            driver_id = _clean_text(default_driver_id)
         if not driver_id:
             return None, None
         if driver_id not in set(self.repository.list_driver_ids()):
@@ -703,6 +750,12 @@ class OpShopPickupService:
             pickup_date,
         ):
             raise ValueError("Final Trip Summary has already been saved for this driver and delivery date.")
+        ensure_opshop_pickup_collection_key_mutable(
+            self.repository,
+            dispatch_date,
+            driver_id,
+            pickup_date,
+        )
         return driver_id, dispatch_date
 
     def _ensure_opshop_pickup_tasks_for_window(self, request, include_start_date):
@@ -783,7 +836,10 @@ class OpShopPickupService:
                     continue
 
                 task = self._build_generated_task(schedule, pickup_date)
-                created_tasks.append(self.repository.insert_opshop_pickup_task(task))
+                created = self.repository.insert_opshop_pickup_task(task)
+                created_tasks.append(
+                    self._apply_template_default_assignment(created, schedule)
+                )
 
         return EnsureOpShopPickupTasksResult(
             window_start=window_start.isoformat(),

@@ -161,6 +161,31 @@ class OpShopPickupListManagementTest(unittest.TestCase):
                 )
             )
 
+    def test_create_oncall_pickup_uses_template_default_as_actual_assignment(self):
+        self.repository.upsert_opshop_pickup_schedule(
+            self._schedule(
+                "SCHED-ONCALL-DEFAULT",
+                run_type="ON_CALL",
+                default_driver_id="D001",
+            )
+        )
+
+        task = self.service.create_oncall_opshop_pickup_task(
+            CreateOpShopPickupTaskRequest(
+                schedule_id="SCHED-ONCALL-DEFAULT",
+                pickup_date="2026-05-20",
+            )
+        )
+
+        assignment = self.repository.find_assignment_for_task(
+            "OPSHOP_PICKUP",
+            task.pickup_task_id,
+        )
+        self.assertEqual("ASSIGNED", task.status)
+        self.assertEqual("D001", task.driver_id)
+        self.assertEqual("trip1", task.trip_no)
+        self.assertEqual("D001", assignment.driver_id)
+
     def test_create_oncall_pickup_from_no_run_day_template_requires_pickup_date(self):
         self.repository.upsert_opshop_pickup_schedule(
             self._schedule("SCHED-GAVIN", run_day=None, run_type="ON_CALL")
@@ -855,7 +880,13 @@ class OpShopPickupListManagementTest(unittest.TestCase):
             updated_at="2026-05-19T00:00:00+00:00",
         )
 
-    def _schedule(self, schedule_id, run_type="STANDARD", run_day="MONDAY"):
+    def _schedule(
+        self,
+        schedule_id,
+        run_type="STANDARD",
+        run_day="MONDAY",
+        default_driver_id=None,
+    ):
         return OpShopPickupSchedule(
             schedule_id=schedule_id,
             opshop_id="OPSHOP-001",
@@ -872,6 +903,7 @@ class OpShopPickupListManagementTest(unittest.TestCase):
             review_reason=None,
             created_at="2026-05-19T00:00:00+00:00",
             updated_at="2026-05-19T00:00:00+00:00",
+            default_driver_id=default_driver_id,
         )
 
 
