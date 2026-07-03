@@ -1831,6 +1831,10 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("list.hidden = collapsed", self.opshop_date_group_renderer)
         self.assertIn("workspace-regular-pickup-row", self.styles)
         self.assertIn("workspace-regular-pickup-controls", self.styles)
+        self.assertRegex(
+            self.styles,
+            r"\.workspace-regular-pickup-list \.opshop-date-card-list\[hidden\]\s*\{\s*display: none;\s*\}",
+        )
 
     def test_regular_date_toggle_preserves_drafts_without_board_reload(self):
         self._run_workspace_actions_script(

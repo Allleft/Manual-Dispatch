@@ -4585,6 +4585,10 @@ select:disabled {
   gap: 0.48rem;
 }
 
+.workspace-regular-pickup-list .opshop-date-card-list[hidden] {
+  display: none;
+}
+
 .workspace-regular-pickup-row {
   grid-template-columns: auto minmax(250px, 1fr) minmax(360px, 0.9fr);
   padding: 0.7rem 0.82rem;
