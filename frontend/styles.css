@@ -816,12 +816,21 @@
 }
 
 .workspace-opshop-trip-pickup-row {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.7rem;
+  box-shadow: none;
+}
+
+.workspace-opshop-trip-pickup-summary {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 0.75rem;
-  padding: 0.7rem;
-  box-shadow: none;
+}
+
+.workspace-opshop-trip-pickup-copy {
+  min-width: 0;
 }
 
 .workspace-opshop-trip-pickup-row h5,
@@ -840,8 +849,87 @@
   line-height: 1.35;
 }
 
-.workspace-opshop-trip-notes {
-  max-width: 60ch;
+.workspace-opshop-general-info-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  min-height: 2.4rem;
+  border: 1px solid rgba(39, 93, 69, 0.18);
+  border-radius: var(--radius-sm);
+  padding: 0.48rem 0.6rem;
+  color: var(--accent-strong);
+  background: #f4f9f6;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+}
+
+.workspace-opshop-general-info-toggle:hover {
+  border-color: rgba(39, 93, 69, 0.36);
+  background: #edf6f0;
+}
+
+.workspace-opshop-general-info-toggle:focus-visible {
+  outline: 3px solid rgba(39, 93, 69, 0.24);
+  outline-offset: 2px;
+}
+
+.workspace-opshop-general-info-toggle > .ui-icon {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
+}
+
+.workspace-opshop-general-info-chevron {
+  display: inline-flex;
+  margin-left: auto;
+}
+
+.workspace-opshop-general-info-panel {
+  border: 1px solid rgba(39, 93, 69, 0.15);
+  border-radius: var(--radius-sm);
+  padding: 0.65rem;
+  background: #fbfdfb;
+}
+
+.workspace-opshop-general-info-panel[hidden] {
+  display: none;
+}
+
+.workspace-opshop-general-info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem 0.8rem;
+  margin: 0;
+}
+
+.workspace-opshop-general-info-grid > div {
+  min-width: 0;
+}
+
+.workspace-opshop-general-info-grid dt {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+
+.workspace-opshop-general-info-grid dd {
+  margin: 0.18rem 0 0;
+  color: var(--ink);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.workspace-opshop-general-info-item-wide {
+  grid-column: 1 / -1;
 }
 
 .workspace-collection-section {
@@ -1023,6 +1111,14 @@
   .workspace-date-control {
     flex-basis: auto;
     width: 100%;
+  }
+
+  .workspace-opshop-general-info-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .workspace-opshop-general-info-item-wide {
+    grid-column: auto;
   }
 
   .workspace-tabs {
