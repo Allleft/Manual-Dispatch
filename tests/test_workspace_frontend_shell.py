@@ -2186,19 +2186,97 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         modal_source = self.opshop_workspace_modal_utils.split(
             "export function openOpShopPickupDetailModal", 1
         )[1].split("function createOpShopDetailSection", 1)[0]
-        self.assertIn('host.querySelector(".workspace-opshop-pickup-detail-backdrop")?.remove()', modal_source)
+        self.assertIn('host.querySelector(".workspace-opshop-detail-backdrop")?.remove()', modal_source)
         self.assertIn('modal.setAttribute("role", "dialog")', modal_source)
         self.assertIn('modal.setAttribute("aria-modal", "true")', modal_source)
         self.assertIn('modal.setAttribute("aria-labelledby", titleId)', modal_source)
         self.assertIn('event.key === "Escape"', modal_source)
         self.assertIn('event.key === "Tab"', modal_source)
         self.assertIn("trapOpShopModalFocus(modal, event)", modal_source)
-        self.assertIn("trigger.focus({ preventScroll: true })", modal_source)
+        self.assertIn("focusOpShopElement(trigger, true)", modal_source)
+        self.assertIn("element.focus({ preventScroll: true })", modal_source)
         self.assertIn("host.append(backdrop)", modal_source)
         self.assertNotIn("fetch(", modal_source)
         self.assertNotIn("api.", modal_source)
         self.assertNotIn("renderOpShopWorkspace", modal_source)
         self.assertNotIn("state.", modal_source)
+
+    def test_countryside_route_group_heading_is_an_independent_detail_trigger(self):
+        route_card = self.opshop_renderer.split(
+            "function createRouteGroupAssignmentForm", 1
+        )[1].split("function createTemplateManagementPage", 1)[0]
+
+        self.assertIn('detailTrigger.type = "button"', route_card)
+        self.assertIn(
+            'detailTrigger.className = "workspace-route-group-detail-trigger"',
+            route_card,
+        )
+        self.assertIn('detailTrigger.setAttribute(\n    "aria-label"', route_card)
+        self.assertIn("event.preventDefault()", route_card)
+        self.assertIn("event.stopPropagation()", route_card)
+        self.assertIn("onOpenRouteGroupDetail({", route_card)
+        self.assertIn("templates: routeTemplates.get(group.route_group_id) || []", route_card)
+        self.assertIn("pickupDate: draft.pickup_date", route_card)
+        self.assertIn("trigger: detailTrigger", route_card)
+        self.assertIn("row.append(detailTrigger, controls, assignButton)", route_card)
+        self.assertIn('createDateField(\n      "Pickup date"', route_card)
+        self.assertIn('createSelect(\n      "Assigned to"', route_card)
+        self.assertIn('createTextField(\n      "Notes"', route_card)
+        self.assertIn('"Assign Route Group"', route_card)
+
+    def test_countryside_route_group_drill_down_is_single_local_and_active_only(self):
+        modal_source = self.opshop_workspace_modal_utils.split(
+            "export function openCountrysideRouteGroupDetailModal", 1
+        )[1].split("function createOpShopDetailSection", 1)[0]
+        template_filter = self.opshop_renderer.split(
+            "function templatesByRouteGroup", 1
+        )[1].split("function createSelect", 1)[0]
+
+        self.assertIn("const activeTemplates = templates.filter(isActiveCountrysideTemplate)", modal_source)
+        self.assertIn('template.active_flag !== false', modal_source)
+        self.assertIn('template.status !== "On_Hold"', modal_source)
+        self.assertIn('template.active_flag !== false', template_filter)
+        self.assertIn('template.status !== "On_Hold"', template_filter)
+        self.assertIn('workspace-opshop-route-template-list', modal_source)
+        self.assertIn('createCountrysideTemplateRow(template', modal_source)
+        self.assertIn('No active OP SHOP templates are available', modal_source)
+        self.assertIn('renderTemplateDetail(template)', modal_source)
+        self.assertIn('"OP SHOP / company"', modal_source)
+        self.assertIn('"Category", "Countryside"', modal_source)
+        self.assertIn('"Template status"', modal_source)
+        self.assertIn('"Template context", "ON_CALL + COUNTRYSIDE"', modal_source)
+        self.assertIn('"Actual pickup status", matchingTask?.status', modal_source)
+        self.assertIn('"Actual assignee", matchingTask?.assigned_driver_name', modal_source)
+        self.assertIn('backLabel.textContent = "Back to Route Group"', modal_source)
+        self.assertIn('renderRouteGroup(template.schedule_id)', modal_source)
+        self.assertIn('focusOpShopElement(focusTarget)', modal_source)
+        self.assertIn('focusOpShopElement(trigger, true)', modal_source)
+        self.assertEqual(1, modal_source.count('modal.setAttribute("role", "dialog")'))
+        self.assertNotIn("fetch(", modal_source)
+        self.assertNotIn("api.", modal_source)
+        self.assertNotIn("renderOpShopWorkspace", modal_source)
+
+    def test_countryside_route_group_drill_down_has_accessible_responsive_styles(self):
+        for selector in (
+            ".workspace-route-group-detail-trigger {",
+            ".workspace-route-group-detail-trigger:focus-visible {",
+            ".workspace-opshop-route-template-row {",
+            ".workspace-opshop-route-template-row:focus-visible {",
+            ".workspace-modal-opshop-route-detail {",
+            ".workspace-opshop-route-detail-body {",
+        ):
+            self.assertIn(selector, self.styles)
+        self.assertIn("min-height: 3.25rem", self.styles)
+        self.assertIn("min-height: 4.75rem", self.styles)
+        self.assertIn("overflow-wrap: anywhere", self.styles)
+        self.assertIn(
+            ".workspace-modal-opshop-route-detail .workspace-modal-icon {",
+            self.styles,
+        )
+        self.assertIn(
+            "background: linear-gradient(135deg, var(--accent), var(--accent-strong));",
+            self.styles,
+        )
 
     def test_opshop_pickup_detail_close_button_keeps_label_and_icon_together(self):
         modal_source = self.opshop_workspace_modal_utils.split(

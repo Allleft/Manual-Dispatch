@@ -3,7 +3,10 @@ import { formatOptional } from "../utils/format-utils.js";
 import { createOpShopTemplateManagementPanel } from "./opshop-template-management-modal-renderer.js";
 import { createCountrysideRouteManagementPanel } from "./opshop-countryside-pickup-list-modal-renderer.js";
 import { createOpShopDateGroupList } from "./opshop-date-group-list-renderer.js";
-import { openOpShopPickupDetailModal } from "../utils/opshop-workspace-modal-utils.js";
+import {
+  openCountrysideRouteGroupDetailModal,
+  openOpShopPickupDetailModal,
+} from "../utils/opshop-workspace-modal-utils.js";
 
 
 const OPSHOP_TABS = [
@@ -52,7 +55,12 @@ export function renderOpShopWorkspace(
         ),
       );
     } else {
-      content.append(createOpShopTaskPool(state.opshopBoard, state, actions));
+      content.append(createOpShopTaskPool(
+        state.opshopBoard,
+        state,
+        actions,
+        (detail) => openCountrysideRouteGroupDetailModal(root, detail),
+      ));
     }
   }
 
@@ -125,7 +133,7 @@ function createTab(tab, activeRoute) {
 }
 
 
-function createOpShopTaskPool(board, state, actions) {
+function createOpShopTaskPool(board, state, actions, onOpenRouteGroupDetail) {
   if (!board) {
     return createEmptyState("No OP SHOP workspace data loaded.", "store");
   }
@@ -162,13 +170,19 @@ function createOpShopTaskPool(board, state, actions) {
   wrapper.append(
     toolbar,
     tabs,
-    createPickupList(board, state.opshopTaskPoolView || "regular", state, actions),
+    createPickupList(
+      board,
+      state.opshopTaskPoolView || "regular",
+      state,
+      actions,
+      onOpenRouteGroupDetail,
+    ),
   );
   return wrapper;
 }
 
 
-function createPickupList(board, route, state, actions) {
+function createPickupList(board, route, state, actions, onOpenRouteGroupDetail) {
   if (!board) {
     return createEmptyState("No OP SHOP workspace data loaded.", "store");
   }
@@ -200,7 +214,12 @@ function createPickupList(board, route, state, actions) {
   }
 
   if (route === "countryside") {
-    wrapper.append(createRouteGroupContext(board, state, actions));
+    wrapper.append(createRouteGroupContext(
+      board,
+      state,
+      actions,
+      onOpenRouteGroupDetail,
+    ));
   }
 
   wrapper.append(createAssignmentApplyBar(pickups, state, actions));
@@ -524,7 +543,7 @@ function createPickupAssignmentControls(pickup, state, actions) {
 }
 
 
-function createRouteGroupContext(board, state, actions) {
+function createRouteGroupContext(board, state, actions, onOpenRouteGroupDetail) {
   const section = document.createElement("section");
   section.className = "workspace-context-panel workspace-context-panel-opshop";
   section.append(
@@ -537,7 +556,14 @@ function createRouteGroupContext(board, state, actions) {
   list.className = "workspace-route-assignment-list";
   const routeTemplates = templatesByRouteGroup(board);
   (board.countryside_route_groups || []).forEach((group) => {
-    list.append(createRouteGroupAssignmentForm(group, routeTemplates, state, actions));
+    list.append(createRouteGroupAssignmentForm(
+      group,
+      routeTemplates,
+      board.opshop_pickups || [],
+      state,
+      actions,
+      onOpenRouteGroupDetail,
+    ));
   });
   if (!list.children.length) {
     list.append(createEmptyState("No active Countryside route groups.", "route"));
@@ -547,7 +573,14 @@ function createRouteGroupContext(board, state, actions) {
 }
 
 
-function createRouteGroupAssignmentForm(group, routeTemplates, state, actions) {
+function createRouteGroupAssignmentForm(
+  group,
+  routeTemplates,
+  pickups,
+  state,
+  actions,
+  onOpenRouteGroupDetail,
+) {
   const row = document.createElement("article");
   row.className = "workspace-record-card workspace-route-group-card";
   const templateCount = (routeTemplates.get(group.route_group_id) || []).length;
@@ -557,10 +590,37 @@ function createRouteGroupAssignmentForm(group, routeTemplates, state, actions) {
     notes: "",
     ...(state.countrysideRouteGroupDrafts[group.route_group_id] || {}),
   };
-  const title = document.createElement("h3");
+  const detailTrigger = document.createElement("button");
+  detailTrigger.type = "button";
+  detailTrigger.className = "workspace-route-group-detail-trigger";
+  detailTrigger.setAttribute(
+    "aria-label",
+    `View active OP SHOP templates for ${group.route_group_name}`,
+  );
+  const triggerCopy = document.createElement("span");
+  triggerCopy.className = "workspace-route-group-detail-copy";
+  const title = document.createElement("strong");
+  title.className = "workspace-route-group-detail-title";
   title.textContent = group.route_group_name;
-  const meta = document.createElement("p");
+  const meta = document.createElement("span");
+  meta.className = "workspace-route-group-detail-count";
   meta.textContent = `${templateCount} active route templates`;
+  triggerCopy.append(title, meta);
+  const affordance = document.createElement("span");
+  affordance.className = "workspace-route-group-detail-affordance";
+  affordance.append(createIcon("arrow-right"));
+  detailTrigger.append(triggerCopy, affordance);
+  detailTrigger.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onOpenRouteGroupDetail({
+      group,
+      templates: routeTemplates.get(group.route_group_id) || [],
+      pickups,
+      pickupDate: draft.pickup_date,
+      trigger: detailTrigger,
+    });
+  });
   const controls = document.createElement("div");
   controls.className = "workspace-action-row workspace-action-row-stacked";
   controls.append(
@@ -614,9 +674,9 @@ function createRouteGroupAssignmentForm(group, routeTemplates, state, actions) {
     const warning = document.createElement("p");
     warning.className = "workspace-status workspace-status-notice";
     warning.textContent = "This route group has no active route templates.";
-    row.append(title, meta, warning, controls, assignButton);
+    row.append(detailTrigger, warning, controls, assignButton);
   } else {
-    row.append(title, meta, controls, assignButton);
+    row.append(detailTrigger, controls, assignButton);
   }
   return row;
 }
@@ -1132,7 +1192,12 @@ function defaultDriverHint(pickup, state) {
 function templatesByRouteGroup(board) {
   const groups = new Map();
   (board.templates || [])
-    .filter((template) => template.pickup_category === "COUNTRYSIDE" && template.route_group_id)
+    .filter((template) =>
+      template.pickup_category === "COUNTRYSIDE"
+      && template.route_group_id
+      && template.active_flag !== false
+      && template.status !== "On_Hold",
+    )
     .forEach((template) => {
       if (!groups.has(template.route_group_id)) {
         groups.set(template.route_group_id, []);
