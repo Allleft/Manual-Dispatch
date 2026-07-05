@@ -829,107 +829,47 @@
   gap: 0.75rem;
 }
 
-.workspace-opshop-trip-pickup-copy {
+.workspace-opshop-trip-pickup-trigger {
+  display: grid;
+  gap: 0.18rem;
+  flex: 1 1 auto;
   min-width: 0;
-}
-
-.workspace-opshop-trip-pickup-row h5,
-.workspace-opshop-trip-pickup-row p {
-  margin: 0;
-}
-
-.workspace-opshop-trip-pickup-row h5 {
-  font-size: 0.92rem;
-}
-
-.workspace-opshop-trip-pickup-row p {
-  margin-top: 0.18rem;
-  color: var(--muted);
-  font-size: 0.78rem;
-  line-height: 1.35;
-}
-
-.workspace-opshop-general-info-toggle {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  width: 100%;
-  min-height: 2.4rem;
-  border: 1px solid rgba(39, 93, 69, 0.18);
+  min-height: 2.75rem;
+  border: 0;
   border-radius: var(--radius-sm);
-  padding: 0.48rem 0.6rem;
-  color: var(--accent-strong);
-  background: #f4f9f6;
+  padding: 0.25rem 0.35rem;
+  color: var(--ink);
+  background: transparent;
   font: inherit;
-  font-size: 0.8rem;
-  font-weight: 800;
   text-align: left;
   cursor: pointer;
 }
 
-.workspace-opshop-general-info-toggle:hover {
-  border-color: rgba(39, 93, 69, 0.36);
-  background: #edf6f0;
+.workspace-opshop-trip-pickup-trigger:hover {
+  background: #f1f8f4;
 }
 
-.workspace-opshop-general-info-toggle:focus-visible {
+.workspace-opshop-trip-pickup-trigger:focus-visible {
   outline: 3px solid rgba(39, 93, 69, 0.24);
   outline-offset: 2px;
 }
 
-.workspace-opshop-general-info-toggle > .ui-icon {
-  width: 1rem;
-  height: 1rem;
-  flex: 0 0 auto;
-}
-
-.workspace-opshop-general-info-chevron {
-  display: inline-flex;
-  margin-left: auto;
-}
-
-.workspace-opshop-general-info-panel {
-  border: 1px solid rgba(39, 93, 69, 0.15);
-  border-radius: var(--radius-sm);
-  padding: 0.65rem;
-  background: #fbfdfb;
-}
-
-.workspace-opshop-general-info-panel[hidden] {
-  display: none;
-}
-
-.workspace-opshop-general-info-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.55rem 0.8rem;
+.workspace-opshop-trip-pickup-name,
+.workspace-opshop-trip-pickup-meta {
   margin: 0;
 }
 
-.workspace-opshop-general-info-grid > div {
-  min-width: 0;
-}
-
-.workspace-opshop-general-info-grid dt {
-  color: var(--muted);
-  font-size: 0.68rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
+.workspace-opshop-trip-pickup-name {
+  display: block;
+  font-size: 0.92rem;
+  font-weight: 850;
   line-height: 1.25;
-  text-transform: uppercase;
 }
 
-.workspace-opshop-general-info-grid dd {
-  margin: 0.18rem 0 0;
-  color: var(--ink);
+.workspace-opshop-trip-pickup-meta {
+  color: var(--muted);
   font-size: 0.78rem;
-  line-height: 1.45;
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
-}
-
-.workspace-opshop-general-info-item-wide {
-  grid-column: 1 / -1;
+  line-height: 1.35;
 }
 
 .workspace-collection-section {
@@ -1111,14 +1051,6 @@
   .workspace-date-control {
     flex-basis: auto;
     width: 100%;
-  }
-
-  .workspace-opshop-general-info-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .workspace-opshop-general-info-item-wide {
-    grid-column: auto;
   }
 
   .workspace-tabs {
@@ -5853,6 +5785,74 @@ select:disabled {
 .workspace-modal-import,
 .workspace-modal-specification {
   width: min(1320px, calc(100vw - 2rem));
+}
+
+.workspace-modal-opshop-pickup-detail {
+  width: min(920px, calc(100vw - 2rem));
+  border-color: rgba(39, 93, 69, 0.18);
+}
+
+.workspace-modal-opshop-pickup-detail .workspace-modal-header {
+  border-bottom-color: rgba(39, 93, 69, 0.14);
+}
+
+.workspace-modal-opshop-pickup-detail .workspace-modal-icon,
+.workspace-modal-opshop-pickup-detail .workspace-modal-eyebrow,
+.workspace-modal-opshop-pickup-detail .workspace-modal-section h4 {
+  color: var(--accent-strong);
+}
+
+.workspace-opshop-detail-close {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: auto;
+  min-width: auto;
+  padding: 0.5rem 0.7rem !important;
+}
+
+.workspace-opshop-detail-close .ui-icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+.workspace-opshop-pickup-detail-body {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.workspace-opshop-detail-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.workspace-opshop-detail-section {
+  border-color: rgba(39, 93, 69, 0.14);
+  background: #fbfdfb;
+}
+
+.workspace-opshop-detail-grid dt {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.workspace-opshop-detail-grid dd {
+  margin: 0.22rem 0 0;
+  color: var(--ink);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.workspace-opshop-detail-notes {
+  margin: 0;
+  color: var(--ink);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .workspace-modal-header {

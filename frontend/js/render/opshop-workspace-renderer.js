@@ -3,6 +3,7 @@ import { formatOptional } from "../utils/format-utils.js";
 import { createOpShopTemplateManagementPanel } from "./opshop-template-management-modal-renderer.js";
 import { createCountrysideRouteManagementPanel } from "./opshop-countryside-pickup-list-modal-renderer.js";
 import { createOpShopDateGroupList } from "./opshop-date-group-list-renderer.js";
+import { openOpShopPickupDetailModal } from "../utils/opshop-workspace-modal-utils.js";
 
 
 const OPSHOP_TABS = [
@@ -15,11 +16,6 @@ const OPSHOP_TASK_POOL_VIEWS = [
   { view: "oncall", label: "Oncall" },
   { view: "countryside", label: "Countryside" },
 ];
-const expandedOpShopTripPickupDetails = new Set();
-const opShopTripPickupDetailIds = new Map();
-let opShopTripPickupDetailSequence = 0;
-
-
 export function renderOpShopWorkspace(
   root,
   { state, actions, onDispatchDateChange },
@@ -45,6 +41,7 @@ export function renderOpShopWorkspace(
         state.opshopPickupCollections,
         state,
         actions,
+        (pickup, trigger) => openOpShopPickupDetailModal(root, { pickup, trigger }),
       ));
     } else if (state.workspaceRoute === "opshop/collections") {
       content.append(
@@ -686,7 +683,7 @@ function createTemplateManagementPage(state, actions) {
 }
 
 
-function createOpShopTripSummary(board, collections, state, actions) {
+function createOpShopTripSummary(board, collections, state, actions, onOpenPickupDetail) {
   if (!board) {
     return createEmptyState("No OP SHOP workspace data loaded.", "store");
   }
@@ -717,6 +714,7 @@ function createOpShopTripSummary(board, collections, state, actions) {
         pickupDate,
         state,
         actions,
+        onOpenPickupDetail,
       ));
     });
   }
@@ -753,6 +751,7 @@ function createOpShopDriverSummaryCard(
   pickupDate,
   state,
   actions,
+  onOpenPickupDetail,
 ) {
   const card = document.createElement("article");
   card.className = "workspace-record-card workspace-driver-card workspace-opshop-driver-card";
@@ -797,9 +796,9 @@ function createOpShopDriverSummaryCard(
   }
 
   card.append(
-    createOpShopPickupGroup("Regular", pickups.filter(isRegularPickup), isLocked, state, actions),
-    createOpShopPickupGroup("Oncall", pickups.filter(isOncallPickup), isLocked, state, actions),
-    createOpShopPickupGroup("Countryside", pickups.filter(isCountrysidePickup), isLocked, state, actions),
+    createOpShopPickupGroup("Regular", pickups.filter(isRegularPickup), isLocked, state, actions, onOpenPickupDetail),
+    createOpShopPickupGroup("Oncall", pickups.filter(isOncallPickup), isLocked, state, actions, onOpenPickupDetail),
+    createOpShopPickupGroup("Countryside", pickups.filter(isCountrysidePickup), isLocked, state, actions, onOpenPickupDetail),
   );
 
   const actionsRow = document.createElement("div");
@@ -819,7 +818,7 @@ function createOpShopDriverSummaryCard(
 }
 
 
-function createOpShopPickupGroup(titleText, pickups, isLocked, state, actions) {
+function createOpShopPickupGroup(titleText, pickups, isLocked, state, actions, onOpenPickupDetail) {
   const section = document.createElement("section");
   section.className = "workspace-trip-panel workspace-opshop-trip-group";
   const title = document.createElement("h4");
@@ -830,29 +829,38 @@ function createOpShopPickupGroup(titleText, pickups, isLocked, state, actions) {
     return section;
   }
   pickups.forEach((pickup) => {
-    section.append(createOpShopTripPickupRow(pickup, isLocked, state, actions));
+    section.append(createOpShopTripPickupRow(pickup, isLocked, state, actions, onOpenPickupDetail));
   });
   return section;
 }
 
 
-function createOpShopTripPickupRow(pickup, isLocked, state, actions) {
+function createOpShopTripPickupRow(pickup, isLocked, state, actions, onOpenPickupDetail) {
   const row = document.createElement("article");
   row.className = "workspace-record-card workspace-opshop-trip-pickup-row";
   const summary = document.createElement("div");
   summary.className = "workspace-opshop-trip-pickup-summary";
-  const copy = document.createElement("div");
-  copy.className = "workspace-opshop-trip-pickup-copy";
-  const heading = document.createElement("h5");
+  const trigger = document.createElement("button");
+  trigger.type = "button";
+  trigger.className = "workspace-opshop-trip-pickup-trigger";
+  trigger.setAttribute("aria-label", `View pickup details for ${formatOptional(pickup.opshop_name)}`);
+  const heading = document.createElement("span");
+  heading.className = "workspace-opshop-trip-pickup-name";
   heading.textContent = formatOptional(pickup.opshop_name);
   const meta = document.createElement("p");
+  meta.className = "workspace-opshop-trip-pickup-meta";
   meta.textContent = [
     formatOptional(pickup.suburb),
     pickupCategoryLabel(pickup),
     isCountrysidePickup(pickup) ? pickup.route_group_name : "",
     pickup.pickup_date,
   ].filter(Boolean).join(" - ");
-  copy.append(heading, meta);
+  trigger.append(heading, meta);
+  trigger.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onOpenPickupDetail(pickup, trigger);
+  });
   const button = createActionButton(
     "Unassign",
     (event) => {
@@ -866,141 +874,9 @@ function createOpShopTripPickupRow(pickup, isLocked, state, actions) {
         || isBusy(state, `opshop-unassign:${pickup.pickup_task_id}`),
     },
   );
-  summary.append(copy, button);
-
-  const detailsId = opShopTripPickupDetailId(pickup.pickup_task_id);
-  const isExpanded = expandedOpShopTripPickupDetails.has(pickup.pickup_task_id);
-  const details = createOpShopTripPickupDetails(pickup, detailsId);
-  details.hidden = !isExpanded;
-  const toggle = createOpShopTripPickupDetailsToggle(
-    pickup,
-    details,
-    isExpanded,
-  );
-  row.append(summary, toggle, details);
+  summary.append(trigger, button);
+  row.append(summary);
   return row;
-}
-
-
-function createOpShopTripPickupDetailsToggle(pickup, details, isExpanded) {
-  const toggle = document.createElement("button");
-  toggle.type = "button";
-  toggle.className = "workspace-opshop-general-info-toggle";
-  toggle.setAttribute("aria-expanded", String(isExpanded));
-  toggle.setAttribute("aria-controls", details.id);
-  const label = document.createElement("span");
-  label.textContent = "Pickup General Info";
-  const chevron = document.createElement("span");
-  chevron.className = "workspace-opshop-general-info-chevron";
-  chevron.append(createIcon(isExpanded ? "chevron-up" : "chevron-down"));
-  toggle.append(createIcon("info"), label, chevron);
-  toggle.addEventListener("click", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    const expanded = toggleOpShopTripPickupDetails(pickup.pickup_task_id);
-    details.hidden = !expanded;
-    toggle.setAttribute("aria-expanded", String(expanded));
-    chevron.replaceChildren(createIcon(expanded ? "chevron-up" : "chevron-down"));
-  });
-  return toggle;
-}
-
-
-function createOpShopTripPickupDetails(pickup, detailsId) {
-  const details = document.createElement("section");
-  details.id = detailsId;
-  details.className = "workspace-opshop-general-info-panel";
-  const facts = document.createElement("dl");
-  facts.className = "workspace-opshop-general-info-grid";
-  appendOpShopTripDetail(
-    facts,
-    "Full address",
-    [pickup.street_address, pickup.suburb].filter(Boolean).join(", "),
-  );
-  appendOpShopTripDetail(facts, "Suburb", pickup.suburb);
-  appendOpShopTripDetail(facts, "Area / region", pickup.area_region);
-  appendOpShopTripDetail(facts, "Pickup date", pickup.pickup_date);
-  appendOpShopTripDetail(facts, "Pickup category", pickupCategoryLabel(pickup));
-  appendOpShopTripDetail(
-    facts,
-    "Current assignee",
-    pickup.assigned_driver_name || (currentDriverId(pickup) ? "Assigned" : "Unassigned"),
-  );
-  appendOpShopTripDetail(
-    facts,
-    "Default driver",
-    pickup.default_driver_name || pickup.default_driver_alias,
-  );
-  appendOpShopTripDetail(facts, "Pickup frequency", pickup.pickup_frequency);
-  appendOpShopTripDetail(facts, "Time window", pickup.time_window);
-  appendOpShopTripDetail(
-    facts,
-    "Contact",
-    joinPresentValues(pickup.primary_contact, pickup.primary_phone),
-  );
-  appendOpShopTripDetail(
-    facts,
-    "Secondary contact",
-    joinPresentValues(pickup.secondary_contact, pickup.secondary_phone),
-  );
-  appendOpShopTripDetail(
-    facts,
-    "Call before arrival",
-    pickup.call_before_arrival
-      ? joinPresentValues("Yes", pickup.call_timing)
-      : "No",
-  );
-  appendOpShopTripDetail(facts, "Access", pickup.access_type);
-  appendOpShopTripDetail(facts, "Key required", pickup.key_required ? "Yes" : "No");
-  appendOpShopTripDetail(facts, "Trailer restriction", pickup.trailer_restriction);
-  if (isCountrysidePickup(pickup)) {
-    appendOpShopTripDetail(facts, "Route group", pickup.route_group_name);
-  }
-  appendOpShopTripDetail(
-    facts,
-    "Notes",
-    [pickup.task_notes, pickup.status_notes].filter(Boolean).join("\n\n"),
-    { wide: true },
-  );
-  details.append(facts);
-  return details;
-}
-
-
-function appendOpShopTripDetail(list, labelText, value, { wide = false } = {}) {
-  if (value === null || value === undefined || String(value).trim() === "") {
-    return;
-  }
-  const item = document.createElement("div");
-  item.className = wide ? "workspace-opshop-general-info-item-wide" : "";
-  const label = document.createElement("dt");
-  label.textContent = labelText;
-  const detail = document.createElement("dd");
-  detail.textContent = String(value);
-  item.append(label, detail);
-  list.append(item);
-}
-
-
-function toggleOpShopTripPickupDetails(pickupTaskId) {
-  if (expandedOpShopTripPickupDetails.has(pickupTaskId)) {
-    expandedOpShopTripPickupDetails.delete(pickupTaskId);
-    return false;
-  }
-  expandedOpShopTripPickupDetails.add(pickupTaskId);
-  return true;
-}
-
-
-function opShopTripPickupDetailId(pickupTaskId) {
-  if (!opShopTripPickupDetailIds.has(pickupTaskId)) {
-    opShopTripPickupDetailSequence += 1;
-    opShopTripPickupDetailIds.set(
-      pickupTaskId,
-      `opshop-trip-pickup-general-info-${opShopTripPickupDetailSequence}`,
-    );
-  }
-  return opShopTripPickupDetailIds.get(pickupTaskId);
 }
 
 
@@ -1411,11 +1287,6 @@ function createEmptyState(message, iconName) {
 
 function joinValues(...values) {
   return values.filter(Boolean).join(" - ") || "-";
-}
-
-
-function joinPresentValues(...values) {
-  return values.filter(Boolean).join(" / ");
 }
 
 

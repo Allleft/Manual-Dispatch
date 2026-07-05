@@ -34,6 +34,9 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.opshop_date_group_renderer = self._read(
             "js/render/opshop-date-group-list-renderer.js"
         )
+        self.opshop_workspace_modal_utils = self._read(
+            "js/utils/opshop-workspace-modal-utils.js"
+        )
         self.styles = self._read("styles.css")
 
     def test_login_defaults_to_home_and_logged_out_routes_do_not_load(self):
@@ -2099,77 +2102,100 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("opshopTripSummaryDate: DEFAULT_DISPATCH_DATE", self.state)
         self.assertIn("function updateOpShopTripSummaryDate(nextDate)", self.workspace_actions)
 
-    def test_opshop_trip_summary_pickup_general_info_is_accessible_and_local(self):
+    def test_opshop_trip_summary_pickup_cards_open_read_only_detail_modal(self):
         row_block = self.opshop_renderer.split(
             "function createOpShopTripPickupRow", 1
-        )[1].split("function createOpShopTripPickupDetailsToggle", 1)[0]
-        toggle_block = self.opshop_renderer.split(
-            "function createOpShopTripPickupDetailsToggle", 1
-        )[1].split("function createOpShopTripPickupDetails", 1)[0]
-        details_block = self.opshop_renderer.split(
-            "function createOpShopTripPickupDetails", 1
-        )[1].split("function appendOpShopTripDetail", 1)[0]
+        )[1].split("function createCollectionList", 1)[0]
 
-        self.assertIn('label.textContent = "Pickup General Info"', toggle_block)
-        self.assertIn('toggle.type = "button"', toggle_block)
-        self.assertIn('toggle.setAttribute("aria-expanded", String(isExpanded))', toggle_block)
-        self.assertIn('toggle.setAttribute("aria-controls", details.id)', toggle_block)
-        self.assertIn('event.preventDefault()', toggle_block)
-        self.assertIn('event.stopPropagation()', toggle_block)
-        self.assertIn("toggleOpShopTripPickupDetails(pickup.pickup_task_id)", toggle_block)
-        self.assertIn("details.hidden = !expanded", toggle_block)
-        self.assertNotIn("actions.", toggle_block)
+        self.assertIn('trigger.type = "button"', row_block)
+        self.assertIn('trigger.className = "workspace-opshop-trip-pickup-trigger"', row_block)
+        self.assertIn('trigger.setAttribute("aria-label"', row_block)
+        self.assertIn("onOpenPickupDetail(pickup, trigger)", row_block)
+        self.assertIn("event.preventDefault()", row_block)
+        self.assertIn("event.stopPropagation()", row_block)
         self.assertNotIn("task_notes", row_block)
         self.assertNotIn("status_notes", row_block)
-        self.assertIn("expandedOpShopTripPickupDetails.has(pickup.pickup_task_id)", row_block)
-        self.assertIn("details.hidden = !isExpanded", row_block)
+        self.assertNotIn("Pickup General Info", self.opshop_renderer)
+        self.assertNotIn("workspace-opshop-general-info", self.opshop_renderer)
+        self.assertNotIn("expandedOpShopTripPickupDetails", self.opshop_renderer)
+        self.assertNotIn("workspace-opshop-general-info", self.styles)
 
+    def test_opshop_pickup_detail_modal_has_operational_fields_and_no_ids(self):
+        modal_source = self.opshop_workspace_modal_utils
         for label in (
-            "Full address",
-            "Suburb",
-            "Area / region",
+            "OP SHOP / company",
+            "Category",
             "Pickup date",
-            "Pickup category",
             "Current assignee",
             "Default driver",
+            "Suburb",
+            "Area / region",
+            "Full address",
+            "Frequency",
+            "Run day",
             "Time window",
-            "Contact",
             "Call before arrival",
-            "Access",
             "Key required",
             "Trailer restriction",
+            "Contact name",
+            "Contact phone",
+            "Access instructions",
             "Route group",
             "Notes",
         ):
-            self.assertIn(f'"{label}"', details_block)
-        self.assertIn('[pickup.task_notes, pickup.status_notes]', details_block)
-        self.assertIn('.join("\\n\\n")', details_block)
+            self.assertIn(f'"{label}"', modal_source)
+        self.assertIn('[pickup.task_notes, pickup.status_notes]', modal_source)
+        self.assertIn('.join("\\n\\n")', modal_source)
+        for internal_label in (
+            "Task ID",
+            "Assignment ID",
+            "Lock ID",
+            "Schedule ID",
+        ):
+            self.assertNotIn(internal_label, modal_source)
         self.assertIn("white-space: pre-wrap", self.styles)
         self.assertIn("overflow-wrap: anywhere", self.styles)
 
-    def test_opshop_trip_summary_unassign_does_not_toggle_details(self):
+    def test_opshop_trip_summary_unassign_is_independent_from_detail_modal(self):
         row_block = self.opshop_renderer.split(
             "function createOpShopTripPickupRow", 1
-        )[1].split("function createOpShopTripPickupDetailsToggle", 1)[0]
+        )[1].split("function createCollectionList", 1)[0]
         self.assertIn("event.stopPropagation()", row_block)
         self.assertIn("actions.unassignOpShopPickup(pickup.pickup_task_id)", row_block)
+        self.assertIn("onOpenPickupDetail(pickup, trigger)", row_block)
         self.assertIn("isLocked", row_block)
         self.assertIn("pickup.assigned_to_locked", row_block)
 
-    def test_opshop_trip_summary_detail_state_toggles_only_requested_pickup(self):
-        toggle_state_block = self.opshop_renderer.split(
-            "function toggleOpShopTripPickupDetails", 1
-        )[1].split("function opShopTripPickupDetailId", 1)[0]
-        self.assertIn("expandedOpShopTripPickupDetails.has(pickupTaskId)", toggle_state_block)
-        self.assertIn("expandedOpShopTripPickupDetails.delete(pickupTaskId)", toggle_state_block)
-        self.assertIn("expandedOpShopTripPickupDetails.add(pickupTaskId)", toggle_state_block)
-        self.assertNotIn("render", toggle_state_block)
-        self.assertNotIn("actions", toggle_state_block)
-        self.assertNotIn("api", toggle_state_block.lower())
+    def test_opshop_pickup_detail_modal_is_single_local_and_accessible(self):
+        modal_source = self.opshop_workspace_modal_utils.split(
+            "export function openOpShopPickupDetailModal", 1
+        )[1].split("function createOpShopDetailSection", 1)[0]
+        self.assertIn('host.querySelector(".workspace-opshop-pickup-detail-backdrop")?.remove()', modal_source)
+        self.assertIn('modal.setAttribute("role", "dialog")', modal_source)
+        self.assertIn('modal.setAttribute("aria-modal", "true")', modal_source)
+        self.assertIn('modal.setAttribute("aria-labelledby", titleId)', modal_source)
+        self.assertIn('event.key === "Escape"', modal_source)
+        self.assertIn('event.key === "Tab"', modal_source)
+        self.assertIn("trapOpShopModalFocus(modal, event)", modal_source)
+        self.assertIn("trigger.focus({ preventScroll: true })", modal_source)
+        self.assertIn("host.append(backdrop)", modal_source)
+        self.assertNotIn("fetch(", modal_source)
+        self.assertNotIn("api.", modal_source)
+        self.assertNotIn("renderOpShopWorkspace", modal_source)
+        self.assertNotIn("state.", modal_source)
+
+    def test_locked_opshop_pickups_keep_detail_trigger_but_disable_unassign(self):
+        row_block = self.opshop_renderer.split(
+            "function createOpShopTripPickupRow", 1
+        )[1].split("function createCollectionList", 1)[0]
+        self.assertIn("onOpenPickupDetail(pickup, trigger)", row_block)
+        self.assertNotIn("isLocked ||", row_block.split("trigger.addEventListener", 1)[1].split("const button", 1)[0])
+        self.assertIn("isLocked", row_block.split("const button", 1)[1])
+        self.assertIn("pickup.assigned_to_locked", row_block.split("const button", 1)[1])
 
     def test_delivery_trip_summary_does_not_gain_opshop_general_info(self):
-        self.assertNotIn("Pickup General Info", self.delivery_renderer)
-        self.assertNotIn("workspace-opshop-general-info", self.delivery_renderer)
+        self.assertNotIn("openOpShopPickupDetailModal", self.delivery_renderer)
+        self.assertNotIn("workspace-opshop-pickup-detail", self.delivery_renderer)
 
     def test_opshop_collections_merge_generated_and_saved_history(self):
         self.assertIn("Generated Pickup Collections", self.opshop_renderer)
