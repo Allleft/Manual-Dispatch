@@ -1780,6 +1780,22 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertNotIn("task_type", opshop_apply_block)
         self.assertNotIn("trip_no", opshop_apply_block)
 
+    def test_opshop_generate_failure_reloads_authoritative_board_before_error(self):
+        generate_block = self.workspace_actions.split(
+            "async function generateOpShopPickupCollection", 1
+        )[1].split("async function saveOpShopPickupCollection", 1)[0]
+        run_action_block = self.workspace_actions.split(
+            "async function runOpShopAction", 1
+        )[1].split("function getDeliveryAssignmentDraft", 1)[0]
+
+        self.assertIn("dispatch_date: context.dispatchDate", generate_block)
+        self.assertIn("pickup_date: candidate.pickup_date", generate_block)
+        self.assertIn("driver_id: candidate.driver_id", generate_block)
+        self.assertIn("await loadOpShopRoute(context.route)", generate_block)
+        self.assertIn("state.opshopActionError = error.message", generate_block)
+        self.assertIn("onError = null", run_action_block)
+        self.assertIn('typeof onError === "function"', run_action_block)
+
     def test_opshop_workspace_uses_three_stage_workflow_and_internal_task_pool_tabs(self):
         self.assertIn('{ route: "opshop/task-pool/regular", label: "Task Pool" }', self.opshop_renderer)
         self.assertIn('{ route: "opshop/trip-summary", label: "Trip Summary" }', self.opshop_renderer)

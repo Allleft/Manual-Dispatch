@@ -1565,6 +1565,12 @@ export function createWorkspaceActions({
           await loadOpShopRoute(context.route);
         }
       },
+      async (error, context) => {
+        await loadOpShopRoute(context.route);
+        if (isOpShopMutationCurrent(context)) {
+          state.opshopActionError = error.message;
+        }
+      },
     );
   }
 
@@ -1643,7 +1649,7 @@ export function createWorkspaceActions({
     }
   }
 
-  async function runOpShopAction(actionKey, callback) {
+  async function runOpShopAction(actionKey, callback, onError = null) {
     const context = captureMutationContext();
     const token = nextActionToken();
     state.opshopBusyActionKeys = state.opshopBusyActionKeys || {};
@@ -1657,7 +1663,11 @@ export function createWorkspaceActions({
         return;
       }
       if (isOpShopMutationCurrent(context)) {
-        state.opshopActionError = error.message;
+        if (typeof onError === "function") {
+          await onError(error, context);
+        } else {
+          state.opshopActionError = error.message;
+        }
       }
     } finally {
       if (clearBusyAction(state.opshopBusyActionKeys, actionKey, token)) {

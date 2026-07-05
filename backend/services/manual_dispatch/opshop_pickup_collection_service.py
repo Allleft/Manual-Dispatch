@@ -34,7 +34,7 @@ class OpShopPickupCollectionService:
                 "OP SHOP Pickup Collection already exists for this driver and pickup date."
             )
 
-        pickups = self._build_pickups(dispatch_date, pickup_date, driver_id)
+        pickups = self._build_pickups(pickup_date, driver_id)
         if not pickups:
             raise ValueError("At least one assigned OP SHOP pickup is required.")
 
@@ -123,14 +123,11 @@ class OpShopPickupCollectionService:
             f"Only generated OP SHOP Pickup Collections can be {past_tense}."
         )
 
-    def _build_pickups(self, dispatch_date, pickup_date, driver_id):
-        items = [
-            pickup
-            for pickup in self.repository.list_assigned_opshop_pickup_board_items(
-                dispatch_date
-            )
-            if pickup.driver_id == driver_id and pickup.pickup_date == pickup_date
-        ]
+    def _build_pickups(self, pickup_date, driver_id):
+        items = self.repository.list_collectable_opshop_pickup_board_items(
+            pickup_date,
+            driver_id,
+        )
         return [
             OpShopPickupCollectionRowSnapshot(
                 row_id=f"OPCR-{uuid4().hex.upper()}",

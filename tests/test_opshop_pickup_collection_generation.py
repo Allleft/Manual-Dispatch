@@ -1,0 +1,429 @@
+import importlib
+import os
+import shutil
+import unittest
+import uuid
+from pathlib import Path
+
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from backend.repositories.in_memory_manual_dispatch_repository import (
+    InMemoryManualDispatchRepository,
+)
+from backend.repositories.sqlite_manual_dispatch_repository import (
+    SQLiteManualDispatchRepository,
+)
+from backend.schemas import (
+    Driver,
+    GenerateOpShopPickupCollectionRequest,
+    OpShopLocation,
+    OpShopPickupSchedule,
+    OpShopPickupTask,
+    RegisterOperatorAccountRequest,
+)
+from backend.services.manual_dispatch_service import ManualDispatchService
+
+
+class OpShopPickupCollectionGenerationTest(unittest.TestCase):
+    def setUp(self):
+        temp_parent = Path.cwd() / "tmp"
+        temp_parent.mkdir(exist_ok=True)
+        self.temp_dir = temp_parent / f"opshop-collection-generation-{uuid.uuid4().hex}"
+        self.temp_dir.mkdir()
+        self.db_path = self.temp_dir / "manual_dispatch.sqlite3"
+        self.previous_db_path = os.environ.get("MANUAL_DISPATCH_DB_PATH")
+        self.previous_seed_flag = os.environ.get("MANUAL_DISPATCH_SEED_DEMO_DATA")
+        os.environ["MANUAL_DISPATCH_DB_PATH"] = str(self.db_path)
+        os.environ["MANUAL_DISPATCH_SEED_DEMO_DATA"] = "0"
+
+        self.repository = SQLiteManualDispatchRepository(self.db_path)
+        self.repository.create_driver(
+            Driver(
+                driver_id="D001",
+                name="John Georgiadis",
+                start_time="07:00",
+                end_time="15:00",
+                is_available=True,
+                preferred_zone=None,
+                pallet_only=False,
+            )
+        )
+        self.repository.create_driver(
+            Driver(
+                driver_id="D002",
+                name="Second Driver",
+                start_time="07:00",
+                end_time="15:00",
+                is_available=True,
+                preferred_zone=None,
+                pallet_only=False,
+            )
+        )
+        self.service = ManualDispatchService(self.repository)
+        self.dispatch_date = "2026-07-05"
+        self.pickup_date = "2026-07-06"
+        self.account = self.service.register_operator_account(
+            RegisterOperatorAccountRequest(
+                account_name="Collection QA",
+                password="secret123",
+                confirm_password="secret123",
+            )
+        )
+
+        self.api_module = importlib.import_module("backend.api.manual_dispatch")
+        self.original_service = self.api_module.service
+        self.api_module.service = self.service
+        app = FastAPI()
+        app.include_router(self.api_module.router)
+        self.client = TestClient(app)
+
+    def tearDown(self):
+        self.api_module.service = self.original_service
+        self._restore_environment("MANUAL_DISPATCH_DB_PATH", self.previous_db_path)
+        self._restore_environment(
+            "MANUAL_DISPATCH_SEED_DEMO_DATA",
+            self.previous_seed_flag,
+        )
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_five_source_backed_regular_pickups_generate_cancel_and_save(self):
+        for number in range(1, 6):
+            self._seed_template(
+                f"REGRESSION-{number}",
+                run_type="REGULAR",
+                pickup_category="NORMAL",
+                default_driver_id="D001",
+            )
+
+        board_response = self.client.get(
+            "/api/manual-dispatch/opshop/board",
+            params={"dispatch_date": self.dispatch_date},
+        )
+        self.assertEqual(200, board_response.status_code)
+        visible = self._visible_pickups(board_response.json(), "D001")
+        self.assertEqual(5, len(visible))
+        self.assertEqual({"REGULAR"}, {pickup["run_type"] for pickup in visible})
+        for pickup in visible:
+            assignment = self.repository.get_assignment(
+                self.pickup_date,
+                "OPSHOP_PICKUP",
+                pickup["pickup_task_id"],
+            )
+            self.assertIsNotNone(assignment)
+            self.assertEqual("D001", assignment.driver_id)
+
+        generated = self._post_generate("D001")
+        self.assertEqual(200, generated.status_code)
+        generated_body = generated.json()
+        self.assertEqual("John Georgiadis", generated_body["driver_name_snapshot"])
+        self.assertEqual(5, len(generated_body["pickups"]))
+        self.assertEqual(
+            {pickup["pickup_task_id"] for pickup in visible},
+            {
+                pickup["pickup_task_id_snapshot"]
+                for pickup in generated_body["pickups"]
+            },
+        )
+
+        first_location = self.repository.get_opshop_location(
+            self.repository.get_opshop_pickup_task(
+                visible[0]["pickup_task_id"]
+            ).opshop_id
+        )
+        snapshot_name = generated_body["pickups"][0]["opshop_name_snapshot"]
+        first_location.name = "Edited after generation"
+        self.repository.upsert_opshop_location(first_location)
+        persisted = self.client.get(
+            f"/api/manual-dispatch/opshop/pickup-collections/{generated_body['collection_id']}"
+        ).json()
+        self.assertEqual(
+            snapshot_name,
+            persisted["pickups"][0]["opshop_name_snapshot"],
+        )
+
+        duplicate = self._post_generate("D001")
+        self.assertEqual(400, duplicate.status_code)
+        cancelled = self.client.post(
+            "/api/manual-dispatch/opshop/pickup-collections/"
+            f"{generated_body['collection_id']}/cancel-generated"
+        )
+        self.assertEqual({"cancelled": True}, cancelled.json())
+        self.assertEqual(5, len(self._visible_pickups(self._get_board(), "D001")))
+
+        regenerated = self._post_generate("D001")
+        self.assertEqual(200, regenerated.status_code)
+        saved = self.client.post(
+            "/api/manual-dispatch/opshop/pickup-collections/"
+            f"{regenerated.json()['collection_id']}/save",
+            json={
+                "saved_by_account_name": self.account.account_name,
+                "saved_by_account_id": self.account.account_id,
+            },
+        )
+        self.assertEqual(200, saved.status_code)
+        self.assertEqual("SAVED", saved.json()["status"])
+        self.assertEqual(400, self._post_generate("D001").status_code)
+
+    def test_missing_assignment_is_not_rendered_as_assigned_or_collectable(self):
+        self._seed_pickup(
+            "MISSING-ASSIGNMENT",
+            driver_id="D001",
+            assignment_dispatch_date=None,
+        )
+
+        item = next(
+            pickup
+            for pickup in self._get_board()["opshop_pickups"]
+            if pickup["pickup_task_id"] == "MISSING-ASSIGNMENT"
+        )
+        self.assertIsNone(item["driver_id"])
+        self.assertIsNone(item["assigned_driver_id"])
+        self.assertFalse(item["is_assigned"])
+        response = self._post_generate("D001")
+        self.assertEqual(400, response.status_code)
+        self.assertIn("assigned OP SHOP pickup", response.json()["detail"])
+
+    def test_manual_unassign_and_reassign_follow_persisted_task_driver(self):
+        self._seed_pickup(
+            "REASSIGN-PICKUP",
+            driver_id="D001",
+            assignment_dispatch_date=self.pickup_date,
+        )
+
+        unassigned = self.client.post(
+            "/api/manual-dispatch/opshop/pickups/assignments/unassign",
+            json={
+                "dispatch_date": self.dispatch_date,
+                "pickup_task_id": "REASSIGN-PICKUP",
+            },
+        )
+        self.assertEqual(200, unassigned.status_code)
+        self.assertEqual(400, self._post_generate("D001").status_code)
+
+        reassigned = self.client.post(
+            "/api/manual-dispatch/opshop/pickups/assignments/apply",
+            json={
+                "dispatch_date": self.dispatch_date,
+                "assignments": [
+                    {"pickup_task_id": "REASSIGN-PICKUP", "driver_id": "D002"}
+                ],
+            },
+        )
+        self.assertEqual(200, reassigned.status_code)
+        item = next(
+            pickup
+            for pickup in reassigned.json()["opshop_pickups"]
+            if pickup["pickup_task_id"] == "REASSIGN-PICKUP"
+        )
+        self.assertEqual("D002", item["driver_id"])
+        self.assertEqual(400, self._post_generate("D001").status_code)
+        collection = self._post_generate("D002")
+        self.assertEqual(200, collection.status_code)
+        self.assertEqual(
+            ["REASSIGN-PICKUP"],
+            [
+                pickup["pickup_task_id_snapshot"]
+                for pickup in collection.json()["pickups"]
+            ],
+        )
+
+    def test_oncall_and_countryside_pickups_generate_across_assignment_dates(self):
+        self._seed_pickup(
+            "ONCALL-PICKUP",
+            driver_id="D001",
+            assignment_dispatch_date=self.pickup_date,
+            run_type="ON_CALL",
+            pickup_category="NORMAL",
+        )
+        self._seed_pickup(
+            "COUNTRYSIDE-PICKUP",
+            driver_id="D002",
+            assignment_dispatch_date=self.dispatch_date,
+            run_type="ON_CALL",
+            pickup_category="COUNTRYSIDE",
+        )
+
+        oncall = self._post_generate("D001")
+        countryside = self._post_generate("D002")
+        self.assertEqual(200, oncall.status_code)
+        self.assertEqual(200, countryside.status_code)
+        self.assertEqual("ON_CALL", oncall.json()["pickups"][0]["run_type_snapshot"])
+        self.assertEqual(
+            "COUNTRYSIDE",
+            countryside.json()["pickups"][0]["pickup_category_snapshot"],
+        )
+
+    def test_in_memory_repository_uses_same_collectable_rule(self):
+        repository = InMemoryManualDispatchRepository()
+        service = ManualDispatchService(repository)
+        self._seed_pickup(
+            "MEMORY-PICKUP",
+            driver_id="D001",
+            assignment_dispatch_date=self.pickup_date,
+            repository=repository,
+        )
+
+        self.assertEqual(
+            ["MEMORY-PICKUP"],
+            [
+                pickup.pickup_task_id
+                for pickup in repository.list_collectable_opshop_pickup_board_items(
+                    self.pickup_date,
+                    "D001",
+                )
+            ],
+        )
+        service.create_generated_opshop_pickup_collection(
+            GenerateOpShopPickupCollectionRequest(
+                dispatch_date=self.dispatch_date,
+                pickup_date=self.pickup_date,
+                driver_id="D001",
+            )
+        )
+        self.assertEqual(
+            [],
+            repository.list_collectable_opshop_pickup_board_items(
+                self.pickup_date,
+                "D001",
+            ),
+        )
+
+    def _seed_template(
+        self,
+        suffix,
+        run_type,
+        pickup_category,
+        default_driver_id=None,
+        repository=None,
+    ):
+        repository = repository or self.repository
+        opshop_id = f"OPSHOP-{suffix}"
+        schedule_id = f"SCHEDULE-{suffix}"
+        repository.upsert_opshop_location(
+            OpShopLocation(
+                opshop_id=opshop_id,
+                name=f"QA OP SHOP {suffix}",
+                suburb="MELBOURNE",
+                street_address=f"{suffix} TEST STREET",
+                area_region="QA",
+                primary_contact="QA Contact",
+                primary_phone="0400 000 000",
+                secondary_contact=None,
+                secondary_phone=None,
+                access_type="Front door",
+                key_required=False,
+                trailer_restriction="No",
+                status_notes="QA only",
+                is_active=True,
+                created_at="2026-07-05T00:00:00+00:00",
+                updated_at="2026-07-05T00:00:00+00:00",
+            )
+        )
+        repository.upsert_opshop_pickup_schedule(
+            OpShopPickupSchedule(
+                schedule_id=schedule_id,
+                opshop_id=opshop_id,
+                run_day="MONDAY",
+                run_type=run_type,
+                pickup_frequency="Weekly",
+                time_window="09:00-12:00",
+                call_before_arrival=False,
+                call_timing=None,
+                status="Active",
+                active_flag=True,
+                fortnight_group=None,
+                review_required=False,
+                review_reason=None,
+                created_at="2026-07-05T00:00:00+00:00",
+                updated_at="2026-07-05T00:00:00+00:00",
+                default_driver_id=default_driver_id,
+                default_driver_name_snapshot=(
+                    repository.get_driver(default_driver_id).name
+                    if default_driver_id
+                    else None
+                ),
+                pickup_category=pickup_category,
+                route_group_id=None,
+            )
+        )
+        return schedule_id, opshop_id
+
+    def _seed_pickup(
+        self,
+        task_id,
+        driver_id,
+        assignment_dispatch_date,
+        run_type="REGULAR",
+        pickup_category="NORMAL",
+        repository=None,
+    ):
+        repository = repository or self.repository
+        schedule_id, opshop_id = self._seed_template(
+            task_id,
+            run_type,
+            pickup_category,
+            repository=repository,
+        )
+        repository.upsert_opshop_pickup_task(
+            OpShopPickupTask(
+                pickup_task_id=task_id,
+                schedule_id=schedule_id,
+                opshop_id=opshop_id,
+                pickup_date=self.pickup_date,
+                task_type="OPSHOP_PICKUP",
+                generated_from="ON_CALL" if run_type == "ON_CALL" else "REGULAR",
+                status="ASSIGNED" if driver_id else "ACTIVE",
+                dispatch_date=self.pickup_date,
+                driver_id=driver_id,
+                trip_no="trip1" if driver_id else None,
+                notes="Collection QA",
+                created_at="2026-07-05T00:00:00+00:00",
+                updated_at="2026-07-05T00:00:00+00:00",
+            )
+        )
+        if assignment_dispatch_date:
+            repository.upsert_assignment(
+                assignment_dispatch_date,
+                "OPSHOP_PICKUP",
+                task_id,
+                driver_id,
+                "trip1",
+            )
+
+    def _post_generate(self, driver_id):
+        return self.client.post(
+            "/api/manual-dispatch/opshop/pickup-collections/generated",
+            json={
+                "dispatch_date": self.dispatch_date,
+                "pickup_date": self.pickup_date,
+                "driver_id": driver_id,
+            },
+        )
+
+    def _get_board(self):
+        response = self.client.get(
+            "/api/manual-dispatch/opshop/board",
+            params={"dispatch_date": self.dispatch_date},
+        )
+        self.assertEqual(200, response.status_code)
+        return response.json()
+
+    def _visible_pickups(self, board, driver_id):
+        return [
+            pickup
+            for pickup in board["opshop_pickups"]
+            if pickup["pickup_date"] == self.pickup_date
+            and pickup["driver_id"] == driver_id
+        ]
+
+    @staticmethod
+    def _restore_environment(name, value):
+        if value is None:
+            os.environ.pop(name, None)
+        else:
+            os.environ[name] = value
+
+
+if __name__ == "__main__":
+    unittest.main()

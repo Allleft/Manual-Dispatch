@@ -259,6 +259,44 @@ class InMemoryManualDispatchRepository:
             ),
         )
 
+    def list_collectable_opshop_pickup_board_items(self, pickup_date, driver_id):
+        reserved_task_ids = {
+            pickup.pickup_task_id_snapshot
+            for collection in self.opshop_pickup_collections
+            if collection.status in {"GENERATED", "SAVED"}
+            for pickup in collection.pickups
+            if pickup.pickup_task_id_snapshot
+        }
+        items = []
+        for task in self.opshop_pickup_tasks:
+            has_matching_assignment = any(
+                assignment.task_type == "OPSHOP_PICKUP"
+                and assignment.task_id == task.pickup_task_id
+                and assignment.driver_id == task.driver_id
+                for assignment in self.assignments
+            )
+            if (
+                task.task_type != "OPSHOP_PICKUP"
+                or task.pickup_date != pickup_date
+                or task.status != "ASSIGNED"
+                or task.driver_id != driver_id
+                or not has_matching_assignment
+                or task.pickup_task_id in reserved_task_ids
+            ):
+                continue
+            schedule = self.get_opshop_pickup_schedule(task.schedule_id)
+            location = self.get_opshop_location(task.opshop_id)
+            items.append(self._opshop_pickup_board_item(task, schedule, location))
+
+        return sorted(
+            items,
+            key=lambda item: (
+                item.suburb or "",
+                item.opshop_name or "",
+                item.pickup_task_id,
+            ),
+        )
+
     def list_driver_vehicle_assignments(self, dispatch_date):
         return [
             assignment

@@ -33,8 +33,16 @@ class OpShopWorkspaceBoardService:
                 pickup.assigned_to_locked = pickup.pickup_date < dispatch_date
                 pickups_by_id[pickup.pickup_task_id] = pickup
 
+        collectable_task_ids = self._collectable_task_ids(pickups_by_id.values())
+
         pickups = sorted(
-            (self._workspace_pickup(pickup) for pickup in pickups_by_id.values()),
+            (
+                self._workspace_pickup(
+                    pickup,
+                    pickup.pickup_task_id in collectable_task_ids,
+                )
+                for pickup in pickups_by_id.values()
+            ),
             key=lambda pickup: (
                 pickup.pickup_date,
                 pickup.pickup_category or "",
@@ -64,8 +72,24 @@ class OpShopWorkspaceBoardService:
             if pickup.pickup_task_id_snapshot
         }
 
+    def _collectable_task_ids(self, pickups):
+        candidate_keys = {
+            (pickup.pickup_date, pickup.driver_id)
+            for pickup in pickups
+            if pickup.pickup_date and pickup.driver_id
+        }
+        return {
+            pickup.pickup_task_id
+            for pickup_date, driver_id in candidate_keys
+            for pickup in self.repository.list_collectable_opshop_pickup_board_items(
+                pickup_date,
+                driver_id,
+            )
+        }
+
     @staticmethod
-    def _workspace_pickup(pickup):
+    def _workspace_pickup(pickup, assignment_is_collectable):
+        driver_id = pickup.driver_id if assignment_is_collectable else None
         return OpShopWorkspacePickupItem(
             pickup_task_id=pickup.pickup_task_id,
             task_type=pickup.task_type,
@@ -94,13 +118,15 @@ class OpShopWorkspaceBoardService:
             generated_from=pickup.generated_from,
             status_notes=pickup.status_notes,
             task_notes=pickup.task_notes,
-            driver_id=pickup.driver_id,
-            is_assigned=pickup.is_assigned,
+            driver_id=driver_id,
+            is_assigned=bool(driver_id),
             default_driver_id=pickup.default_driver_id,
             default_driver_alias=pickup.default_driver_alias,
             default_driver_name=pickup.default_driver_name,
-            assigned_driver_id=pickup.assigned_driver_id,
-            assigned_driver_name=pickup.assigned_driver_name,
+            assigned_driver_id=driver_id,
+            assigned_driver_name=(
+                pickup.assigned_driver_name if assignment_is_collectable else None
+            ),
             assigned_to_locked=pickup.assigned_to_locked,
             pickup_category=pickup.pickup_category,
             route_group_id=pickup.route_group_id,

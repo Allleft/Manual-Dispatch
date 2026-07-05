@@ -212,6 +212,84 @@ class SQLiteManualDispatchRepository:
             ).fetchall()
         return [self._row_to_opshop_pickup_board_item(row) for row in rows]
 
+    def list_collectable_opshop_pickup_board_items(self, pickup_date, driver_id):
+        with connect(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    task.pickup_task_id,
+                    task.task_type,
+                    task.schedule_id,
+                    task.opshop_id,
+                    task.pickup_date,
+                    task.dispatch_date,
+                    task.status,
+                    task.generated_from,
+                    task.notes AS task_notes,
+                    task.driver_id,
+                    task.trip_no,
+                    location.name AS opshop_name,
+                    location.suburb,
+                    location.street_address,
+                    location.area_region,
+                    location.primary_contact,
+                    location.primary_phone,
+                    location.secondary_contact,
+                    location.secondary_phone,
+                    location.access_type,
+                    location.key_required,
+                    location.trailer_restriction,
+                    location.status_notes,
+                    schedule.run_day,
+                    schedule.run_type,
+                    schedule.pickup_frequency,
+                    schedule.time_window,
+                    schedule.call_before_arrival,
+                    schedule.call_timing,
+                    schedule.default_driver_id,
+                    schedule.default_driver_alias,
+                    schedule.default_driver_name_snapshot AS default_driver_name,
+                    COALESCE(schedule.pickup_category, 'NORMAL') AS pickup_category,
+                    schedule.route_group_id,
+                    route_group.route_group_name,
+                    assigned_driver.name AS assigned_driver_name
+                FROM opshop_pickup_tasks task
+                LEFT JOIN opshop_locations location
+                    ON location.opshop_id = task.opshop_id
+                LEFT JOIN opshop_pickup_schedules schedule
+                    ON schedule.schedule_id = task.schedule_id
+                LEFT JOIN opshop_countryside_route_groups route_group
+                    ON route_group.route_group_id = schedule.route_group_id
+                LEFT JOIN manual_drivers assigned_driver
+                    ON assigned_driver.driver_id = task.driver_id
+                WHERE task.task_type = 'OPSHOP_PICKUP'
+                    AND task.pickup_date = ?
+                    AND task.status = 'ASSIGNED'
+                    AND task.driver_id = ?
+                    AND EXISTS (
+                        SELECT 1
+                        FROM manual_dispatch_assignments assignment
+                        WHERE assignment.task_type = 'OPSHOP_PICKUP'
+                            AND assignment.task_id = task.pickup_task_id
+                            AND assignment.driver_id = task.driver_id
+                    )
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM opshop_pickup_collection_rows collection_row
+                        JOIN opshop_pickup_collections collection
+                            ON collection.collection_id = collection_row.collection_id
+                        WHERE collection_row.pickup_task_id_snapshot = task.pickup_task_id
+                            AND collection.status IN ('GENERATED', 'SAVED')
+                    )
+                ORDER BY
+                    COALESCE(location.suburb, ''),
+                    COALESCE(location.name, ''),
+                    task.pickup_task_id
+                """,
+                (pickup_date, driver_id),
+            ).fetchall()
+        return [self._row_to_opshop_pickup_board_item(row) for row in rows]
+
     def list_driver_vehicle_assignments(self, dispatch_date):
         with connect(self.db_path) as connection:
             rows = connection.execute(
