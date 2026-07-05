@@ -2184,6 +2184,36 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertNotIn("renderOpShopWorkspace", modal_source)
         self.assertNotIn("state.", modal_source)
 
+    def test_opshop_pickup_detail_close_button_keeps_label_and_icon_together(self):
+        modal_source = self.opshop_workspace_modal_utils.split(
+            "export function openOpShopPickupDetailModal", 1
+        )[1].split("function createOpShopDetailSection", 1)[0]
+        close_styles = self.styles.split(
+            ".workspace-modal-close.workspace-opshop-detail-close {", 1
+        )[1].split("}", 1)[0]
+        close_icon_styles = self.styles.split(
+            ".workspace-modal-close.workspace-opshop-detail-close .ui-icon {", 1
+        )[1].split("}", 1)[0]
+
+        self.assertIn('close.type = "button"', modal_source)
+        self.assertIn('closeText.textContent = "Close"', modal_source)
+        self.assertIn('close.append(closeText, createIcon("x"))', modal_source)
+        self.assertIn("header.append(titleGroup, close)", modal_source)
+        for declaration in (
+            "display: inline-flex",
+            "align-items: center",
+            "justify-content: center",
+            "flex-shrink: 0",
+            "white-space: nowrap",
+            "line-height: 1",
+            "min-height: 2.75rem !important",
+        ):
+            self.assertIn(declaration, close_styles)
+        self.assertNotIn("position: absolute", close_icon_styles)
+        self.assertNotIn("transform:", close_icon_styles)
+        self.assertNotIn("margin-left: -", close_icon_styles)
+        self.assertNotIn("margin-right: -", close_icon_styles)
+
     def test_locked_opshop_pickups_keep_detail_trigger_but_disable_unassign(self):
         row_block = self.opshop_renderer.split(
             "function createOpShopTripPickupRow", 1
