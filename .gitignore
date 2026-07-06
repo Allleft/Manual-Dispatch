@@ -1,4 +1,4 @@
-﻿# Local environment
+# Local environment
 .env
 .env.*
 !.env.example
@@ -33,11 +33,20 @@ outputs/
 *.tmp
 *.temp
 agent.md
+AGENT.md
+AGENT.local.md
 findings.md
 progress.md
 task_plan.md
 tmp/
 temp/
+
+# One-off local refactor handoff artifacts
+# Keep the shared, tracked AGENTS.md project governance file.
+.refactor-scope-allowlist
+.refactor-session.md
+CHANGE_MANIFEST.md
+OBSERVATIONS.md
 
 # Local business workbooks
 backend/data/Opshop Pickup/*.xlsx
