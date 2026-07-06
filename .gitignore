@@ -35,6 +35,7 @@ outputs/
 agent.md
 AGENT.md
 AGENT.local.md
+AGENTS.md
 findings.md
 progress.md
 task_plan.md
@@ -42,7 +43,6 @@ tmp/
 temp/
 
 # One-off local refactor handoff artifacts
-# Keep the shared, tracked AGENTS.md project governance file.
 .refactor-scope-allowlist
 .refactor-session.md
 CHANGE_MANIFEST.md
