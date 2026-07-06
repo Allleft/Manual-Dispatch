@@ -112,6 +112,7 @@ export function createWorkspaceActions({
   const deliveryVehiclePhysicalTails = new Map();
 
   async function loadWorkspaceRoute(route = state.workspaceRoute) {
+    clearGenerationConfirmationsForRoute(route);
     if (route !== "delivery/trip-summary") {
       clearDeliveryVehicleTransientState();
     }
@@ -172,6 +173,8 @@ export function createWorkspaceActions({
     state.isOpShopWorkspaceLoading = false;
     state.deliveryBusyActionKeys = {};
     state.opshopBusyActionKeys = {};
+    state.deliveryGenerationConfirmation = null;
+    state.opshopGenerationConfirmation = null;
     state.deliveryActionError = "";
     state.opshopActionError = "";
     state.deliveryOrderDetailId = "";
@@ -1412,7 +1415,37 @@ export function createWorkspaceActions({
     };
   }
 
-  async function generateDeliveryRunSheet(candidate) {
+  function generateDeliveryRunSheet(candidate) {
+    if (!candidate || !(candidate.orders || []).length) {
+      return;
+    }
+    state.deliveryGenerationConfirmation = {
+      ...candidate,
+      dispatch_date: state.dispatchDate,
+      error: "",
+      orders: (candidate.orders || []).map((order) => ({ ...order })),
+      totals: { ...(candidate.totals || {}) },
+      vehicle: candidate.vehicle ? { ...candidate.vehicle } : null,
+    };
+    state.deliveryActionError = "";
+    renderWorkspace();
+  }
+
+  function closeDeliveryGenerationConfirmation() {
+    const confirmation = state.deliveryGenerationConfirmation;
+    if (!confirmation || isDeliveryGenerationBusy(confirmation)) {
+      return;
+    }
+    state.deliveryGenerationConfirmation = null;
+    renderWorkspace();
+    restoreGenerateButtonFocus("delivery", confirmation);
+  }
+
+  async function confirmGenerateDeliveryRunSheet() {
+    const candidate = state.deliveryGenerationConfirmation;
+    if (!candidate || isDeliveryGenerationBusy(candidate)) {
+      return;
+    }
     await runDeliveryAction(
       `delivery-generate:${candidate.delivery_date}:${candidate.driver_id}`,
       async (context) => {
@@ -1422,8 +1455,15 @@ export function createWorkspaceActions({
           driver_id: candidate.driver_id,
         });
         if (isDeliveryMutationCurrent(context)) {
+          state.deliveryGenerationConfirmation = null;
           await navigateToDeliveryRunSheets();
         }
+      },
+      (error) => {
+        state.deliveryGenerationConfirmation = {
+          ...candidate,
+          error: error.message,
+        };
       },
     );
   }
@@ -1552,7 +1592,35 @@ export function createWorkspaceActions({
     });
   }
 
-  async function generateOpShopPickupCollection(candidate) {
+  function generateOpShopPickupCollection(candidate) {
+    if (!candidate || !(candidate.pickups || []).length) {
+      return;
+    }
+    state.opshopGenerationConfirmation = {
+      ...candidate,
+      dispatch_date: state.dispatchDate,
+      error: "",
+      pickups: (candidate.pickups || []).map((pickup) => ({ ...pickup })),
+    };
+    state.opshopActionError = "";
+    renderWorkspace();
+  }
+
+  function closeOpShopGenerationConfirmation() {
+    const confirmation = state.opshopGenerationConfirmation;
+    if (!confirmation || isOpShopGenerationBusy(confirmation)) {
+      return;
+    }
+    state.opshopGenerationConfirmation = null;
+    renderWorkspace();
+    restoreGenerateButtonFocus("opshop", confirmation);
+  }
+
+  async function confirmGenerateOpShopPickupCollection() {
+    const candidate = state.opshopGenerationConfirmation;
+    if (!candidate || isOpShopGenerationBusy(candidate)) {
+      return;
+    }
     await runOpShopAction(
       `opshop-generate:${candidate.pickup_date}:${candidate.driver_id}`,
       async (context) => {
@@ -1562,13 +1630,17 @@ export function createWorkspaceActions({
           driver_id: candidate.driver_id,
         });
         if (isOpShopMutationCurrent(context)) {
+          state.opshopGenerationConfirmation = null;
           await loadOpShopRoute(context.route);
         }
       },
       async (error, context) => {
         await loadOpShopRoute(context.route);
         if (isOpShopMutationCurrent(context)) {
-          state.opshopActionError = error.message;
+          state.opshopGenerationConfirmation = {
+            ...candidate,
+            error: error.message,
+          };
         }
       },
     );
@@ -1822,6 +1894,51 @@ export function createWorkspaceActions({
     state.opshopActionError = "";
     state.deliveryBusyActionKeys = {};
     state.opshopBusyActionKeys = {};
+    state.deliveryGenerationConfirmation = null;
+    state.opshopGenerationConfirmation = null;
+  }
+
+  function clearGenerationConfirmationsForRoute(route) {
+    if (route !== "delivery/trip-summary") {
+      state.deliveryGenerationConfirmation = null;
+    }
+    if (route !== "opshop/trip-summary") {
+      state.opshopGenerationConfirmation = null;
+    }
+  }
+
+  function isDeliveryGenerationBusy(confirmation) {
+    return Boolean(state.deliveryBusyActionKeys?.[
+      `delivery-generate:${confirmation.delivery_date}:${confirmation.driver_id}`
+    ]);
+  }
+
+  function isOpShopGenerationBusy(confirmation) {
+    return Boolean(state.opshopBusyActionKeys?.[
+      `opshop-generate:${confirmation.pickup_date}:${confirmation.driver_id}`
+    ]);
+  }
+
+  function restoreGenerateButtonFocus(workspace, confirmation) {
+    if (
+      typeof document === "undefined"
+      || typeof window === "undefined"
+      || typeof window.requestAnimationFrame !== "function"
+    ) {
+      return;
+    }
+    window.requestAnimationFrame(() => {
+      const button = Array.from(
+        document.querySelectorAll(`[data-workspace-generate="${workspace}"]`),
+      ).find(
+        (item) =>
+          item.dataset.driverId === confirmation.driver_id
+          && item.dataset.serviceDate === (
+            confirmation.delivery_date || confirmation.pickup_date
+          ),
+      );
+      button?.focus();
+    });
   }
 
   function clearDeliveryTaskPoolModals() {
@@ -1934,6 +2051,8 @@ export function createWorkspaceActions({
     clearDeliveryTaskPoolFilters,
     clearDeliveryAttacheImportSelection,
     cancelOpShopPickupCollection,
+    closeDeliveryGenerationConfirmation,
+    closeOpShopGenerationConfirmation,
     closeDeliveryAttacheImport,
     closeDeliveryOrderModal,
     closeDeliverySpecifications,
@@ -1942,6 +2061,8 @@ export function createWorkspaceActions({
     deleteDeliveryVehicle,
     exportDeliveryRunSheet,
     exportOpShopPickupCollection,
+    confirmGenerateDeliveryRunSheet,
+    confirmGenerateOpShopPickupCollection,
     generateDeliveryRunSheet,
     generateOpShopPickupCollection,
     loadWorkspaceRoute,

@@ -230,6 +230,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             "deliveryWorkspaceError",
             "deliveryActionError",
             "deliveryBusyActionKeys",
+            "deliveryGenerationConfirmation",
             "deliveryAssignmentDrafts",
             "deliveryVehicleDrafts",
             "deliveryVehicleClaims",
@@ -240,6 +241,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             "opshopWorkspaceError",
             "opshopActionError",
             "opshopBusyActionKeys",
+            "opshopGenerationConfirmation",
             "opshopAssignmentDrafts",
             "countrysideRouteGroupDrafts",
             "deliveryTaskPoolFilters",
@@ -1680,10 +1682,17 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
               throw new Error("Move Order payload was not scoped correctly");
             }
 
-            await actions.generateDeliveryRunSheet({
+            actions.generateDeliveryRunSheet({
               delivery_date: "2026-06-22",
               driver_id: "D001",
+              driver_name: "Driver One",
+              orders: [{ order_id: "ORDER-1" }],
+              totals: {},
             });
+            if (generatedPayloads.length !== 0) {
+              throw new Error("opening Delivery confirmation called Generate API");
+            }
+            await actions.confirmGenerateDeliveryRunSheet();
             if (generatedPayloads[0].dispatch_date !== "2026-06-24" ||
                 generatedPayloads[0].delivery_date !== "2026-06-22" ||
                 generatedPayloads[0].driver_id !== "D001") {
@@ -1736,10 +1745,14 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
                   state.workspaceRoute = route;
                 },
               });
-              const pending = actions.generateDeliveryRunSheet({
+              actions.generateDeliveryRunSheet({
                 delivery_date: "2026-06-24",
                 driver_id: "D001",
+                driver_name: "Driver One",
+                orders: [{ order_id: "ORDER-1" }],
+                totals: {},
               });
+              const pending = actions.confirmGenerateDeliveryRunSheet();
               mutator(state);
               resolveGenerate();
               await pending;
@@ -1756,6 +1769,258 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             });
             """
         )
+
+    def test_generation_confirmations_gate_api_and_prevent_double_submit(self):
+        self._run_workspace_actions_script(
+            """
+            function deferred() {
+              let resolve;
+              const promise = new Promise((done) => { resolve = done; });
+              return { promise, resolve };
+            }
+
+            const deliveryGate = deferred();
+            let deliveryCalls = 0;
+            const deliveryState = {
+              isLoggedIn: true,
+              workspaceRoute: "delivery/trip-summary",
+              activeWorkspace: "delivery",
+              dispatchDate: "2026-07-06",
+              deliveryTripSummaryDate: "2026-07-06",
+              deliveryBoard: { orders: [], assignments: [], driver_vehicle_assignments: [] },
+              deliveryRunSheets: [],
+              deliveryActionError: "",
+              deliveryBusyActionKeys: {},
+              deliveryGenerationConfirmation: null,
+              deliveryAssignmentDrafts: {}, deliveryVehicleDrafts: {},
+              opshopBusyActionKeys: {}, opshopGenerationConfirmation: null,
+            };
+            const deliveryRoutes = [];
+            const deliveryActions = createWorkspaceActions({
+              state: deliveryState,
+              renderWorkspace: () => {},
+              api: {
+                createGeneratedDeliveryRunSheet: async () => {
+                  deliveryCalls += 1;
+                  return deliveryGate.promise;
+                },
+              },
+              navigateWorkspaceRoute: (route) => {
+                deliveryRoutes.push(route);
+                deliveryState.workspaceRoute = route;
+              },
+            });
+            const deliveryCandidate = {
+              delivery_date: "2026-07-06", driver_id: "D003",
+              driver_name: "John Georgiadis",
+              orders: [{ order_id: "ORDER-1", order_number: "1001" }],
+              totals: { pallets: 1, bags: 0, cartons: 2 },
+            };
+            deliveryActions.generateDeliveryRunSheet(deliveryCandidate);
+            if (deliveryCalls !== 0 || !deliveryState.deliveryGenerationConfirmation) {
+              throw new Error("Delivery confirmation opening mutated server state");
+            }
+            deliveryActions.closeDeliveryGenerationConfirmation();
+            if (deliveryCalls !== 0 || deliveryState.deliveryGenerationConfirmation) {
+              throw new Error("Delivery confirmation Cancel mutated server state");
+            }
+            deliveryActions.generateDeliveryRunSheet(deliveryCandidate);
+            const firstDeliveryConfirm = deliveryActions.confirmGenerateDeliveryRunSheet();
+            const secondDeliveryConfirm = deliveryActions.confirmGenerateDeliveryRunSheet();
+            if (deliveryCalls !== 1) {
+              throw new Error(`Delivery rapid confirm made ${deliveryCalls} API calls`);
+            }
+            deliveryActions.closeDeliveryGenerationConfirmation();
+            if (!deliveryState.deliveryGenerationConfirmation) {
+              throw new Error("Delivery confirmation closed while Generate was pending");
+            }
+            deliveryGate.resolve({ run_sheet_id: "DRS-1" });
+            await Promise.all([firstDeliveryConfirm, secondDeliveryConfirm]);
+            if (deliveryRoutes.join(",") !== "delivery/run-sheet") {
+              throw new Error("Delivery confirmed Generate did not continue existing navigation");
+            }
+
+            const opshopGate = deferred();
+            let opshopCalls = 0;
+            const opshopState = {
+              isLoggedIn: true,
+              workspaceRoute: "opshop/trip-summary",
+              activeWorkspace: "opshop",
+              dispatchDate: "2026-07-06",
+              opshopTripSummaryDate: "2026-07-06",
+              opshopBoard: { opshop_pickups: [], countryside_route_groups: [] },
+              opshopPickupCollections: [],
+              opshopActionError: "", opshopBusyActionKeys: {},
+              opshopGenerationConfirmation: null,
+              opshopAssignmentDrafts: {}, countrysideRouteGroupDrafts: {},
+              deliveryBusyActionKeys: {}, deliveryGenerationConfirmation: null,
+            };
+            const opshopActions = createWorkspaceActions({
+              state: opshopState,
+              renderWorkspace: () => {},
+              api: {
+                createGeneratedOpShopPickupCollection: async () => {
+                  opshopCalls += 1;
+                  return opshopGate.promise;
+                },
+                getOpShopWorkspaceBoard: async () => opshopState.opshopBoard,
+                listOpShopPickupCollections: async () => [],
+              },
+            });
+            const pickups = Array.from({ length: 5 }, (_, index) => ({
+              pickup_task_id: `P-${index + 1}`,
+              opshop_name: `Regular ${index + 1}`,
+              pickup_date: "2026-07-06",
+              run_type: "REGULAR",
+            }));
+            const opshopCandidate = {
+              pickup_date: "2026-07-06", driver_id: "D003",
+              driver_name: "John Georgiadis", pickups,
+              regular_count: 5, oncall_count: 0, countryside_count: 0,
+            };
+            opshopActions.generateOpShopPickupCollection(opshopCandidate);
+            if (opshopCalls !== 0 || opshopState.opshopGenerationConfirmation.regular_count !== 5) {
+              throw new Error("OP SHOP confirmation opening mutated or lost its five-pickup preview");
+            }
+            opshopActions.closeOpShopGenerationConfirmation();
+            if (opshopCalls !== 0 || opshopState.opshopGenerationConfirmation) {
+              throw new Error("OP SHOP confirmation Cancel mutated server state");
+            }
+            opshopActions.generateOpShopPickupCollection(opshopCandidate);
+            const firstOpShopConfirm = opshopActions.confirmGenerateOpShopPickupCollection();
+            const secondOpShopConfirm = opshopActions.confirmGenerateOpShopPickupCollection();
+            if (opshopCalls !== 1) {
+              throw new Error(`OP SHOP rapid confirm made ${opshopCalls} API calls`);
+            }
+            opshopActions.closeOpShopGenerationConfirmation();
+            if (!opshopState.opshopGenerationConfirmation) {
+              throw new Error("OP SHOP confirmation closed while Generate was pending");
+            }
+            opshopGate.resolve({ collection_id: "OPC-1" });
+            await Promise.all([firstOpShopConfirm, secondOpShopConfirm]);
+            if (opshopState.opshopGenerationConfirmation) {
+              throw new Error("successful OP SHOP confirmation did not close");
+            }
+            """
+        )
+
+    def test_generation_confirmations_clear_when_their_trip_summary_route_is_left(self):
+        self._run_workspace_actions_script(
+            """
+            const state = {
+              isLoggedIn: false,
+              workspaceRoute: "delivery/trip-summary",
+              activeWorkspace: "delivery",
+              deliveryGenerationConfirmation: { driver_id: "D001" },
+              opshopGenerationConfirmation: { driver_id: "D002" },
+              deliveryBusyActionKeys: {}, opshopBusyActionKeys: {},
+              deliveryVehicleDrafts: {}, deliveryVehicleClaims: {},
+              deliveryVehicleErrors: {}, deliveryVehiclePendingKeys: {},
+            };
+            const actions = createWorkspaceActions({
+              state,
+              renderWorkspace: () => {},
+              api: {},
+            });
+
+            await actions.loadWorkspaceRoute("delivery/trip-summary");
+            if (!state.deliveryGenerationConfirmation || state.opshopGenerationConfirmation) {
+              throw new Error("Delivery route did not retain only its own confirmation");
+            }
+
+            state.opshopGenerationConfirmation = { driver_id: "D002" };
+            await actions.loadWorkspaceRoute("opshop/trip-summary");
+            if (state.deliveryGenerationConfirmation || !state.opshopGenerationConfirmation) {
+              throw new Error("OP SHOP route did not retain only its own confirmation");
+            }
+
+            await actions.loadWorkspaceRoute("home");
+            if (state.deliveryGenerationConfirmation || state.opshopGenerationConfirmation) {
+              throw new Error("leaving Trip Summary retained a generation confirmation");
+            }
+            """
+        )
+
+    def test_generation_confirmation_failure_keeps_truthful_modal_error(self):
+        self._run_workspace_actions_script(
+            """
+            const deliveryState = {
+              isLoggedIn: true, workspaceRoute: "delivery/trip-summary",
+              activeWorkspace: "delivery", dispatchDate: "2026-07-06",
+              deliveryActionError: "", deliveryBusyActionKeys: {},
+              deliveryGenerationConfirmation: null,
+            };
+            const deliveryActions = createWorkspaceActions({
+              state: deliveryState, renderWorkspace: () => {},
+              api: { createGeneratedDeliveryRunSheet: async () => { throw new Error("Delivery changed"); } },
+            });
+            deliveryActions.generateDeliveryRunSheet({
+              delivery_date: "2026-07-06", driver_id: "D003",
+              driver_name: "John", orders: [{ order_id: "O-1" }], totals: {},
+            });
+            await deliveryActions.confirmGenerateDeliveryRunSheet();
+            if (deliveryState.deliveryGenerationConfirmation?.error !== "Delivery changed") {
+              throw new Error("Delivery rejection did not remain in confirmation modal state");
+            }
+
+            const opshopState = {
+              isLoggedIn: true, workspaceRoute: "opshop/trip-summary",
+              activeWorkspace: "opshop", dispatchDate: "2026-07-06",
+              opshopBoard: { opshop_pickups: [], countryside_route_groups: [] },
+              opshopPickupCollections: [], opshopActionError: "",
+              opshopBusyActionKeys: {}, opshopGenerationConfirmation: null,
+              opshopAssignmentDrafts: {}, countrysideRouteGroupDrafts: {},
+            };
+            let reloads = 0;
+            const opshopActions = createWorkspaceActions({
+              state: opshopState, renderWorkspace: () => {},
+              api: {
+                createGeneratedOpShopPickupCollection: async () => { throw new Error("Pickup changed"); },
+                getOpShopWorkspaceBoard: async () => { reloads += 1; return opshopState.opshopBoard; },
+                listOpShopPickupCollections: async () => [],
+              },
+            });
+            opshopActions.generateOpShopPickupCollection({
+              pickup_date: "2026-07-06", driver_id: "D003", driver_name: "John",
+              pickups: [{ pickup_task_id: "P-1" }],
+              regular_count: 1, oncall_count: 0, countryside_count: 0,
+            });
+            await opshopActions.confirmGenerateOpShopPickupCollection();
+            if (reloads !== 1 || opshopState.opshopGenerationConfirmation?.error !== "Pickup changed") {
+              throw new Error("OP SHOP rejection did not reconcile and remain in confirmation modal state");
+            }
+            """
+        )
+
+    def test_generation_confirmation_renderers_show_required_review_content(self):
+        for expected in (
+            "Confirm Delivery Run Sheet",
+            "Confirm Generate Run Sheet",
+            "Assigned Delivery Orders",
+            "Vehicle capacity",
+            "Cartons",
+            'dataset.workspaceGenerate = "delivery"',
+            "closeDisabled: isGenerating",
+        ):
+            self.assertIn(expected, self.delivery_renderer)
+        for expected in (
+            "Confirm Pickup Collection",
+            "Confirm Generate Pickup Collection",
+            "Assigned OP SHOP Pickups",
+            "Total pickups",
+            "Regular",
+            "Oncall",
+            "Countryside",
+            'dataset.workspaceGenerate = "opshop"',
+        ):
+            self.assertIn(
+                expected,
+                self.opshop_renderer + self.opshop_workspace_modal_utils,
+            )
+        self.assertIn("workspace-generation-preview-list", self.styles)
+        self.assertIn("overflow-y: auto", self.styles)
+        self.assertNotIn("window.confirm(", self.delivery_renderer)
+        self.assertNotIn("window.confirm(", self.opshop_renderer)
 
     def test_opshop_workspace_wires_scoped_assignment_route_and_collection_actions(self):
         self.assertIn("Apply Assignment Changes", self.opshop_renderer)
@@ -1782,7 +2047,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
 
     def test_opshop_generate_failure_reloads_authoritative_board_before_error(self):
         generate_block = self.workspace_actions.split(
-            "async function generateOpShopPickupCollection", 1
+            "async function confirmGenerateOpShopPickupCollection", 1
         )[1].split("async function saveOpShopPickupCollection", 1)[0]
         run_action_block = self.workspace_actions.split(
             "async function runOpShopAction", 1
@@ -1792,7 +2057,8 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("pickup_date: candidate.pickup_date", generate_block)
         self.assertIn("driver_id: candidate.driver_id", generate_block)
         self.assertIn("await loadOpShopRoute(context.route)", generate_block)
-        self.assertIn("state.opshopActionError = error.message", generate_block)
+        self.assertIn("state.opshopGenerationConfirmation =", generate_block)
+        self.assertIn("error: error.message", generate_block)
         self.assertIn("onError = null", run_action_block)
         self.assertIn('typeof onError === "function"', run_action_block)
 
@@ -2262,7 +2528,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             ".workspace-route-group-detail-trigger:focus-visible {",
             ".workspace-opshop-route-template-row {",
             ".workspace-opshop-route-template-row:focus-visible {",
-            ".workspace-modal-opshop-route-detail {",
+            ".workspace-modal-opshop-route-detail,",
             ".workspace-opshop-route-detail-body {",
         ):
             self.assertIn(selector, self.styles)
@@ -2270,7 +2536,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("min-height: 4.75rem", self.styles)
         self.assertIn("overflow-wrap: anywhere", self.styles)
         self.assertIn(
-            ".workspace-modal-opshop-route-detail .workspace-modal-icon {",
+            ".workspace-modal-opshop-route-detail .workspace-modal-icon,",
             self.styles,
         )
         self.assertIn(

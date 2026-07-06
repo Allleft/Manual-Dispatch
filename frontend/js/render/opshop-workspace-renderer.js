@@ -6,6 +6,7 @@ import { createOpShopDateGroupList } from "./opshop-date-group-list-renderer.js"
 import {
   openCountrysideRouteGroupDetailModal,
   openOpShopPickupDetailModal,
+  openOpShopPickupCollectionConfirmationModal,
 } from "../utils/opshop-workspace-modal-utils.js";
 
 
@@ -66,6 +67,21 @@ export function renderOpShopWorkspace(
 
   page.append(content);
   root.append(page);
+  if (
+    state.workspaceRoute === "opshop/trip-summary"
+    && state.opshopGenerationConfirmation
+  ) {
+    const confirmation = state.opshopGenerationConfirmation;
+    openOpShopPickupCollectionConfirmationModal(root, {
+      confirmation,
+      isGenerating: isBusy(
+        state,
+        `opshop-generate:${confirmation.pickup_date}:${confirmation.driver_id}`,
+      ),
+      onCancel: actions.closeOpShopGenerationConfirmation,
+      onConfirm: actions.confirmGenerateOpShopPickupCollection,
+    });
+  }
 }
 
 
@@ -864,14 +880,21 @@ function createOpShopDriverSummaryCard(
   const actionsRow = document.createElement("div");
   actionsRow.className = "workspace-action-row";
   if (candidate && !isLocked) {
-    actionsRow.append(createActionButton(
+    const generateButton = createActionButton(
       "Generate Pickup Collection",
-      () => actions.generateOpShopPickupCollection(candidate),
+      () => actions.generateOpShopPickupCollection({
+        ...candidate,
+        driver_name: formatOptional(driver.name, driver.driver_id),
+      }),
       {
         disabled: isBusy(state, `opshop-generate:${pickupDate}:${driver.driver_id}`),
         primary: true,
       },
-    ));
+    );
+    generateButton.dataset.workspaceGenerate = "opshop";
+    generateButton.dataset.driverId = driver.driver_id;
+    generateButton.dataset.serviceDate = pickupDate;
+    actionsRow.append(generateButton);
   }
   card.append(actionsRow);
   return card;

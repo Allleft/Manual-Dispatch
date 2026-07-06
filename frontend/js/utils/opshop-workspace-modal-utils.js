@@ -218,7 +218,95 @@ export function openCountrysideRouteGroupDetailModal(
 }
 
 
-function createOpShopWorkspaceDetailModal(host, { className, trigger }) {
+export function openOpShopPickupCollectionConfirmationModal(
+  host,
+  { confirmation, isGenerating, onCancel, onConfirm },
+) {
+  if (!host || !confirmation) {
+    return;
+  }
+  const shell = createOpShopWorkspaceDetailModal(host, {
+    className: "workspace-modal-opshop-generation-confirmation",
+    closeDisabled: isGenerating,
+    onClose: onCancel,
+  });
+  const { body, modal, setHeader } = shell;
+  setHeader({
+    eyebrow: "OP SHOP Pickup",
+    iconName: "store",
+    subtitle: "Review the assigned pickups before generating the collection.",
+    title: "Confirm Pickup Collection",
+  });
+  body.className = "workspace-modal-body workspace-generation-confirmation-body";
+  body.append(createOpShopDetailSection("Collection Summary", [
+    ["Driver", confirmation.driver_name],
+    ["Dispatch date", confirmation.dispatch_date],
+    ["Pickup date", confirmation.pickup_date],
+    ["Total pickups", confirmation.pickups.length],
+    ["Regular", confirmation.regular_count || 0],
+    ["Oncall", confirmation.oncall_count || 0],
+    ["Countryside", confirmation.countryside_count || 0],
+  ]));
+
+  const preview = document.createElement("section");
+  preview.className = "workspace-generation-preview";
+  const heading = document.createElement("div");
+  heading.className = "workspace-section-heading";
+  const title = document.createElement("h3");
+  title.textContent = "Assigned OP SHOP Pickups";
+  const description = document.createElement("p");
+  description.textContent = `${confirmation.pickups.length} pickups will be captured by the backend if still eligible.`;
+  heading.append(title, description);
+  const list = document.createElement("div");
+  list.className = "workspace-generation-preview-list";
+  confirmation.pickups.forEach((pickup) => {
+    const row = document.createElement("article");
+    row.className = "workspace-generation-preview-row";
+    const identity = document.createElement("div");
+    const name = document.createElement("strong");
+    name.textContent = formatOptional(pickup.opshop_name, "OP SHOP Pickup");
+    const location = document.createElement("span");
+    location.textContent = [pickup.suburb, pickup.pickup_date]
+      .filter(Boolean)
+      .join(" - ");
+    identity.append(name, location);
+    const context = document.createElement("span");
+    context.className = "workspace-generation-preview-context";
+    context.textContent = [
+      opShopPickupCategoryLabel(pickup),
+      pickup.pickup_category === "COUNTRYSIDE" ? pickup.route_group_name : "",
+    ].filter(Boolean).join(" - ");
+    row.append(identity, context);
+    list.append(row);
+  });
+  preview.append(heading, list);
+  body.append(preview);
+  if (confirmation.error) {
+    const error = document.createElement("p");
+    error.className = "workspace-status workspace-status-error";
+    error.setAttribute("role", "alert");
+    error.textContent = confirmation.error;
+    body.append(error);
+  }
+  const actions = document.createElement("div");
+  actions.className = "workspace-action-row workspace-generation-confirmation-actions";
+  actions.append(
+    createOpShopModalButton("Cancel", onCancel, { disabled: isGenerating }),
+    createOpShopModalButton(
+      isGenerating ? "Generating Pickup Collection..." : "Confirm Generate Pickup Collection",
+      onConfirm,
+      { disabled: isGenerating, primary: true },
+    ),
+  );
+  body.append(actions);
+  focusOpShopModal(modal);
+}
+
+
+function createOpShopWorkspaceDetailModal(
+  host,
+  { className, trigger = null, onClose = null, closeDisabled = false },
+) {
   host.querySelector(".workspace-opshop-detail-backdrop")?.remove();
   opShopDetailModalSequence += 1;
   const titleId = `workspace-opshop-detail-title-${opShopDetailModalSequence}`;
@@ -232,6 +320,13 @@ function createOpShopWorkspaceDetailModal(host, { className, trigger }) {
   modal.setAttribute("aria-labelledby", titleId);
 
   const requestClose = () => {
+    if (closeDisabled) {
+      return;
+    }
+    if (typeof onClose === "function") {
+      onClose();
+      return;
+    }
     backdrop.remove();
     if (trigger && typeof trigger.focus === "function") {
       focusOpShopElement(trigger, true);
@@ -239,7 +334,7 @@ function createOpShopWorkspaceDetailModal(host, { className, trigger }) {
   };
   modal.addEventListener("click", (event) => event.stopPropagation());
   modal.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") {
+    if (event.key === "Escape" && !closeDisabled) {
       event.preventDefault();
       requestClose();
     } else if (event.key === "Tab") {
@@ -268,6 +363,7 @@ function createOpShopWorkspaceDetailModal(host, { className, trigger }) {
   const closeText = document.createElement("span");
   closeText.textContent = "Close";
   close.append(closeText, createIcon("x"));
+  close.disabled = closeDisabled;
   close.addEventListener("click", requestClose);
   header.append(titleGroup, close);
   const body = document.createElement("div");
@@ -288,6 +384,17 @@ function createOpShopWorkspaceDetailModal(host, { className, trigger }) {
       subtitle.hidden = !subtitleText;
     },
   };
+}
+
+
+function createOpShopModalButton(label, onClick, { disabled = false, primary = false } = {}) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `${primary ? "button-primary" : "button-secondary"} workspace-action-button`;
+  button.textContent = label;
+  button.disabled = disabled;
+  button.addEventListener("click", onClick);
+  return button;
 }
 
 
