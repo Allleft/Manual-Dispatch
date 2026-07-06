@@ -4,6 +4,7 @@ import shutil
 import sqlite3
 import unittest
 import uuid
+from dataclasses import replace
 from io import BytesIO
 from pathlib import Path
 
@@ -20,6 +21,9 @@ from backend.schemas import (
     RegisterOperatorAccountRequest,
 )
 from backend.services.manual_dispatch_service import ManualDispatchService
+from backend.services.delivery_run_sheet_excel_export_service import (
+    build_delivery_run_sheets_excel,
+)
 
 try:
     from fastapi import FastAPI
@@ -84,6 +88,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             ("POST", "/api/manual-dispatch/delivery/orders/import-attache-pdf-commit"),
             ("POST", "/api/manual-dispatch/delivery/run-sheets/generated"),
             ("GET", "/api/manual-dispatch/delivery/run-sheets"),
+            ("GET", "/api/manual-dispatch/delivery/run-sheets/export-excel"),
             ("GET", "/api/manual-dispatch/delivery/run-sheets/{run_sheet_id}"),
             ("POST", "/api/manual-dispatch/delivery/run-sheets/{run_sheet_id}/save"),
             (
@@ -321,6 +326,169 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertEqual(2, customer_a_row[5])
         for manual_column in range(6, 13):
             self.assertIsNone(customer_a_row[manual_column])
+
+    def test_delivery_date_export_uses_snapshot_rows_and_one_sheet_per_driver(self):
+        self.service.assign_task(
+            AssignTaskRequest(
+                dispatch_date=self.dispatch_date,
+                task_type="ORDER",
+                task_id="ORD-003",
+                driver_id="D001",
+                trip_no="trip2",
+            )
+        )
+        self.service.assign_task(
+            AssignTaskRequest(
+                dispatch_date=self.dispatch_date,
+                task_type="ORDER",
+                task_id="ORD-002",
+                driver_id="D002",
+                trip_no="trip1",
+            )
+        )
+        john = self.client.post(
+            "/api/manual-dispatch/delivery/run-sheets/generated",
+            json=self._delivery_generate_payload(),
+        ).json()
+        self.assertEqual(
+            200,
+            self.client.post(
+                f"/api/manual-dispatch/delivery/run-sheets/{john['run_sheet_id']}/save",
+                json=self._save_payload(),
+            ).status_code,
+        )
+        tony = self.client.post(
+            "/api/manual-dispatch/delivery/run-sheets/generated",
+            json={
+                "dispatch_date": self.dispatch_date,
+                "delivery_date": self.dispatch_date,
+                "driver_id": "D002",
+            },
+        ).json()
+
+        for order_id in ("ORD-001", "ORD-002", "ORD-003"):
+            order = self.repository.get_order(order_id)
+            order.company_name = f"Edited Live {order_id}"
+            order.suburb = "Edited Live Suburb"
+            self.repository.update_order(order)
+
+        response = self.client.get(
+            "/api/manual-dispatch/delivery/run-sheets/export-excel",
+            params={"delivery_date": self.dispatch_date},
+        )
+        self.assertEqual(200, response.status_code)
+        self.assertEqual(
+            'attachment; filename="Daily_Run_Sheets_2026-05-05.xlsx"',
+            response.headers["content-disposition"],
+        )
+        workbook = load_workbook(BytesIO(response.content))
+        self.assertEqual(2, len(workbook.worksheets))
+        self.assertEqual({"John", "Tony"}, set(workbook.sheetnames))
+        self.assertNotIn("Sheet", workbook.sheetnames)
+
+        expected_headers = [
+            "Customer Name",
+            "Suburb",
+            "Invoice #",
+            "BAGS",
+            "KGS",
+            "Pallets",
+        ]
+        for worksheet in workbook.worksheets:
+            self.assertEqual("landscape", worksheet.page_setup.orientation)
+            self.assertEqual(
+                str(worksheet.PAPERSIZE_A4),
+                str(worksheet.page_setup.paperSize),
+            )
+            self.assertEqual(1, worksheet.page_setup.fitToWidth)
+            self.assertEqual(0, worksheet.page_setup.fitToHeight)
+            self.assertEqual("$7:$7", worksheet.print_title_rows)
+            self.assertEqual(expected_headers, [cell.value for cell in worksheet[7]])
+            self.assertEqual(6, worksheet.max_column)
+            self.assertEqual("DATE: 05/05/2026", worksheet["A1"].value)
+            self.assertEqual("DAILY RUN SHEET", worksheet["B1"].value)
+            self.assertTrue(str(worksheet["E1"].value).startswith("DRIVER: "))
+            values = [
+                cell.value
+                for row in worksheet.iter_rows()
+                for cell in row
+                if cell.value is not None
+            ]
+            for label in (
+                "START TIME: ______________________",
+                "TIME LOADING STARTED (TO BE FILLED IN BY STOREMAN): ______________________",
+                "TIME LOADING COMPLETED (TO BE FILLED IN BY STOREMAN): ______________________",
+                "FINISH TIME: ______________________",
+            ):
+                self.assertIn(label, values)
+            for forbidden in (
+                "COD",
+                "CQ",
+                "Time In",
+                "Time Out",
+                "Print Name",
+                "Customer Signature",
+                "No. of Pallets Picked",
+            ):
+                self.assertNotIn(forbidden, values)
+            self.assertFalse(any(str(value).startswith("Edited Live") for value in values))
+
+        john_rows = list(workbook["John"].iter_rows(values_only=True))
+        self.assertEqual("Demo Customer A", john_rows[7][0])
+        self.assertEqual("Demo Customer C", john_rows[8][0])
+        self.assertEqual("INV-1001", john_rows[7][2])
+        self.assertEqual(0, john_rows[7][3])
+        self.assertIsNone(john_rows[7][4])
+        self.assertEqual(2, john_rows[7][5])
+        self.assertEqual("General", workbook["John"]["D8"].number_format)
+
+        statuses = {
+            run_sheet.run_sheet_id: run_sheet.status
+            for run_sheet in self.service.list_delivery_run_sheets(
+                delivery_date=self.dispatch_date
+            )
+        }
+        self.assertEqual("SAVED", statuses[john["run_sheet_id"]])
+        self.assertEqual("GENERATED", statuses[tony["run_sheet_id"]])
+
+        snapshots = self.service.list_delivery_run_sheets_for_date_export(
+            self.dispatch_date
+        )
+        duplicate_name_bytes = build_delivery_run_sheets_excel(
+            [
+                replace(
+                    snapshots[0],
+                    driver_name_snapshot="Driver / North: Very Long Shared Name 123456789",
+                ),
+                replace(
+                    snapshots[1],
+                    driver_name_snapshot="Driver / North: Very Long Shared Name 123456789",
+                ),
+            ],
+            self.dispatch_date,
+        )
+        duplicate_name_workbook = load_workbook(BytesIO(duplicate_name_bytes))
+        self.assertEqual(2, len(set(duplicate_name_workbook.sheetnames)))
+        self.assertTrue(all(len(name) <= 31 for name in duplicate_name_workbook.sheetnames))
+        self.assertTrue(
+            all(not any(character in name for character in "[]:*?/\\")
+                for name in duplicate_name_workbook.sheetnames)
+        )
+
+    def test_delivery_date_export_rejects_empty_scope_without_mutation(self):
+        response = self.client.get(
+            "/api/manual-dispatch/delivery/run-sheets/export-excel",
+            params={"delivery_date": "2026-05-06"},
+        )
+        self.assertEqual(400, response.status_code)
+        self.assertEqual(
+            "No Generated or Saved Delivery Run Sheets are available for this Delivery Date.",
+            response.json()["detail"],
+        )
+        self.assertEqual(
+            [],
+            self.service.list_delivery_run_sheets(delivery_date="2026-05-06"),
+        )
 
     def test_legacy_final_summary_schema_and_routes_remain_available(self):
         route_pairs = {

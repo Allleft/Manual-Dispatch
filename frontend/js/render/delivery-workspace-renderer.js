@@ -640,28 +640,30 @@ function createAssignedOrderRow(order, assignment, driver, isLocked, state, acti
 function createRunSheetList(runSheets, savedOnly, state, actions) {
   const wrapper = document.createElement("div");
   wrapper.className = "workspace-stack";
-  const filtered = (runSheets || []).filter(
-    (runSheet) => !savedOnly || runSheet.status === "SAVED",
-  );
-  wrapper.append(
-    createSectionHeading(
-      savedOnly ? "Saved Run Sheet History" : "Delivery Run Sheets",
-      savedOnly
-        ? "Saved Delivery Run Sheets remain viewable and exportable."
-        : "Review generated documents, save them, or export saved Daily Run Sheets.",
-    ),
-  );
+  const deliveryDate = scopedDeliveryDate(state);
+  const filtered = (runSheets || []).filter((runSheet) => (
+    savedOnly
+      ? runSheet.status === "SAVED"
+      : runSheet.delivery_date === deliveryDate
+        && ["GENERATED", "SAVED"].includes(runSheet.status)
+  ));
 
   if (savedOnly) {
+    wrapper.append(createSectionHeading(
+      "Saved Run Sheet History",
+      "Saved Delivery Run Sheets remain viewable and exportable.",
+    ));
     wrapper.append(createRunSheetSection("Saved Run Sheets", filtered, state, actions));
     return wrapper;
   }
+  wrapper.append(createRunSheetToolbar(deliveryDate, filtered, state, actions));
   wrapper.append(
     createRunSheetSection(
       "Generated Run Sheets",
       filtered.filter((runSheet) => runSheet.status === "GENERATED"),
       state,
       actions,
+      { dailyPreview: true },
     ),
     createRunSheetSection(
       "Saved Run Sheets",
@@ -674,19 +676,222 @@ function createRunSheetList(runSheets, savedOnly, state, actions) {
 }
 
 
-function createRunSheetSection(titleText, runSheets, state, actions) {
+function createRunSheetToolbar(deliveryDate, runSheets, state, actions) {
+  const panel = document.createElement("section");
+  panel.className = "workspace-context-panel workspace-context-panel-delivery workspace-run-sheet-toolbar";
+  panel.append(createSectionHeading(
+    "Delivery Run Sheets",
+    "Review generated documents, save them, or export the selected Delivery Date.",
+  ));
+  const controls = document.createElement("div");
+  controls.className = "workspace-run-sheet-toolbar-controls";
+  const field = document.createElement("label");
+  field.className = "workspace-date-control workspace-delivery-date-control";
+  field.textContent = "Delivery date";
+  const input = document.createElement("input");
+  input.type = "date";
+  input.value = deliveryDate;
+  input.disabled = state.isDeliveryWorkspaceLoading;
+  input.addEventListener("change", () => actions.updateDeliveryTripSummaryDate(input.value));
+  field.append(input);
+  const exportKey = `delivery-export-date:${deliveryDate}`;
+  const isExporting = isBusy(state, exportKey);
+  const exportButton = createActionButton(
+    isExporting ? "Preparing Excel File..." : "Export Excel File",
+    () => actions.exportDeliveryRunSheets(deliveryDate),
+    {
+      disabled: isExporting || !runSheets.length,
+    },
+  );
+  exportButton.dataset.deliveryRunSheetExport = deliveryDate;
+  controls.append(field, exportButton);
+  panel.append(controls);
+  return panel;
+}
+
+
+function createRunSheetSection(
+  titleText,
+  runSheets,
+  state,
+  actions,
+  { dailyPreview = false } = {},
+) {
   const section = document.createElement("section");
   section.className = "workspace-context-panel workspace-context-panel-delivery";
   section.append(createSectionHeading(titleText, `${runSheets.length} records`));
   const grid = document.createElement("div");
   grid.className = "workspace-card-grid workspace-run-sheet-grid";
+  if (dailyPreview) {
+    grid.classList.add("workspace-daily-run-sheet-list");
+  }
   if (!runSheets.length) {
-    grid.append(createEmptyState(`No ${titleText.toLowerCase()} for this dispatch date.`, "history"));
+    grid.append(createEmptyState(`No ${titleText.toLowerCase()} for this Delivery Date.`, "history"));
   } else {
-    runSheets.forEach((runSheet) => grid.append(createRunSheetCard(runSheet, state, actions)));
+    runSheets.forEach((runSheet) => grid.append(
+      dailyPreview
+        ? createGeneratedDailyRunSheet(runSheet, state, actions)
+        : createRunSheetCard(runSheet, state, actions),
+    ));
   }
   section.append(grid);
   return section;
+}
+
+
+function createGeneratedDailyRunSheet(runSheet, state, actions) {
+  const paper = document.createElement("article");
+  paper.className = "workspace-daily-run-sheet";
+
+  const header = document.createElement("header");
+  header.className = "workspace-daily-run-sheet-header";
+  header.append(
+    createDailyRunSheetHeaderField("DATE:", formatDailyRunSheetDate(runSheet.delivery_date)),
+    createDailyRunSheetTitle(),
+    createDailyRunSheetHeaderField(
+      "DRIVER:",
+      formatOptional(runSheet.driver_name_snapshot, runSheet.driver_id),
+      "workspace-daily-run-sheet-driver",
+    ),
+  );
+
+  const metadata = document.createElement("div");
+  metadata.className = "workspace-daily-run-sheet-metadata";
+  const vehicle = document.createElement("span");
+  vehicle.textContent = runSheet.vehicle_rego_snapshot
+    ? `Vehicle: ${runSheet.vehicle_rego_snapshot}`
+    : "Vehicle: Not selected";
+  const generated = document.createElement("span");
+  generated.textContent = `Generated: ${formatOptional(runSheet.generated_at)}`;
+  metadata.append(vehicle, generated, createBadge("GENERATED", "generated"));
+
+  const operationalFields = document.createElement("div");
+  operationalFields.className = "workspace-daily-run-sheet-operational-fields";
+  [
+    "START TIME: ______________________",
+    "TIME LOADING STARTED (TO BE FILLED IN BY STOREMAN): ______________________",
+    "TIME LOADING COMPLETED (TO BE FILLED IN BY STOREMAN): ______________________",
+  ].forEach((label) => {
+    const field = document.createElement("p");
+    field.textContent = label;
+    operationalFields.append(field);
+  });
+
+  const tableRegion = document.createElement("div");
+  tableRegion.className = "workspace-daily-run-sheet-table-scroll";
+  tableRegion.tabIndex = 0;
+  tableRegion.setAttribute("aria-label", "Daily Run Sheet order table");
+  const table = document.createElement("table");
+  table.className = "workspace-daily-run-sheet-table";
+  const head = document.createElement("thead");
+  const headerRow = document.createElement("tr");
+  DAILY_RUN_SHEET_COLUMNS.forEach((column) => {
+    const cell = document.createElement("th");
+    cell.scope = "col";
+    cell.textContent = column;
+    headerRow.append(cell);
+  });
+  head.append(headerRow);
+  const body = document.createElement("tbody");
+  dailyRunSheetSnapshotRows(runSheet).forEach((order) => {
+    const row = document.createElement("tr");
+    dailyRunSheetRowValues(order).forEach((value) => {
+      const cell = document.createElement("td");
+      cell.textContent = value;
+      row.append(cell);
+    });
+    body.append(row);
+  });
+  table.append(head, body);
+  tableRegion.append(table);
+
+  const finish = document.createElement("p");
+  finish.className = "workspace-daily-run-sheet-finish";
+  finish.textContent = "FINISH TIME: ______________________";
+
+  const actionsRow = document.createElement("div");
+  actionsRow.className = "workspace-action-row workspace-daily-run-sheet-actions";
+  actionsRow.append(
+    createActionButton(
+      "Save Run Sheet",
+      () => actions.saveDeliveryRunSheet(runSheet.run_sheet_id),
+      {
+        disabled: isBusy(state, `delivery-save:${runSheet.run_sheet_id}`),
+        primary: true,
+      },
+    ),
+    createActionButton(
+      "Cancel Generated",
+      () => actions.cancelDeliveryRunSheet(runSheet.run_sheet_id),
+      {
+        disabled: isBusy(state, `delivery-cancel:${runSheet.run_sheet_id}`),
+      },
+    ),
+  );
+  paper.append(header, metadata, operationalFields, tableRegion, finish, actionsRow);
+  return paper;
+}
+
+
+const DAILY_RUN_SHEET_COLUMNS = [
+  "Customer Name",
+  "Suburb",
+  "Invoice #",
+  "BAGS",
+  "KGS",
+  "Pallets",
+];
+
+
+function createDailyRunSheetHeaderField(labelText, valueText, className = "") {
+  const field = document.createElement("div");
+  field.className = `workspace-daily-run-sheet-header-field ${className}`.trim();
+  const label = document.createElement("span");
+  label.textContent = labelText;
+  const value = document.createElement("strong");
+  value.textContent = valueText;
+  field.append(label, value);
+  return field;
+}
+
+
+function createDailyRunSheetTitle() {
+  const title = document.createElement("h3");
+  title.className = "workspace-daily-run-sheet-title";
+  title.textContent = "DAILY RUN SHEET";
+  return title;
+}
+
+
+function dailyRunSheetSnapshotRows(runSheet) {
+  return (runSheet.trips || []).flatMap((trip) => trip.orders || []);
+}
+
+
+function dailyRunSheetRowValues(order) {
+  return [
+    formatOptional(order.company_name_snapshot, ""),
+    formatOptional(order.suburb_snapshot, ""),
+    formatOptional(order.invoice_number_snapshot || order.order_no_snapshot, ""),
+    formatRunSheetNumber(order.loose_bags_quantity_snapshot),
+    "",
+    formatRunSheetNumber(order.pallet_quantity_snapshot),
+  ];
+}
+
+
+function formatRunSheetNumber(value) {
+  if (value === null || value === undefined || value === "") {
+    return "";
+  }
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? String(numericValue) : "";
+}
+
+
+function formatDailyRunSheetDate(value) {
+  const [year, month, day] = String(value || "").split("-");
+  return year && month && day ? `${day}/${month}/${year}` : "";
 }
 
 

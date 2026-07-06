@@ -51,6 +51,7 @@ from backend.repositories.sqlite_manual_dispatch_repository import (
 from backend.services.excel_export_service import build_manual_dispatch_excel
 from backend.services.delivery_run_sheet_excel_export_service import (
     build_delivery_run_sheet_excel,
+    build_delivery_run_sheets_excel,
 )
 from backend.services.final_summary_excel_export_service import build_final_summary_excel
 from backend.services.manual_dispatch_service import ManualDispatchService
@@ -759,6 +760,22 @@ def list_delivery_run_sheets(
         ]
     except ValueError as error:
         raise _to_http_exception(error) from error
+
+
+@router.get("/delivery/run-sheets/export-excel")
+def export_delivery_run_sheets_excel(delivery_date: str):
+    try:
+        run_sheets = service.list_delivery_run_sheets_for_date_export(delivery_date)
+        workbook_bytes = build_delivery_run_sheets_excel(run_sheets, delivery_date)
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+    filename = f"Daily_Run_Sheets_{_safe_filename_part(delivery_date)}.xlsx"
+    return Response(
+        content=workbook_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/delivery/run-sheets/{run_sheet_id}")

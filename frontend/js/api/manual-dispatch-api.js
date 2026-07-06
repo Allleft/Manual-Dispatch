@@ -268,6 +268,14 @@ export async function apiExportDeliveryRunSheetExcel(runSheetId) {
 }
 
 
+export async function apiExportDeliveryRunSheetsExcel(deliveryDate) {
+  return requestBlobDownload(
+    `/api/manual-dispatch/delivery/run-sheets/export-excel?delivery_date=${encodeURIComponent(deliveryDate)}`,
+    `Daily_Run_Sheets_${deliveryDate}.xlsx`,
+  );
+}
+
+
 export async function apiCreateDeliveryOrder(payload) {
   return requestJson("/api/manual-dispatch/delivery/orders", {
     method: "POST",

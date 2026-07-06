@@ -573,6 +573,139 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("createWorkspaceModal", self.delivery_renderer)
         self.assertIn("trapModalFocus", self.delivery_renderer)
 
+    def test_generated_delivery_run_sheets_use_daily_form_snapshot_preview(self):
+        generated_block = self.delivery_renderer.split(
+            "function createGeneratedDailyRunSheet", 1
+        )[1].split("function createRunSheetCard", 1)[0]
+        self.assertIn('"DAILY RUN SHEET"', generated_block)
+        self.assertIn('"DATE:"', generated_block)
+        self.assertIn('"DRIVER:"', generated_block)
+        self.assertIn('createBadge("GENERATED"', generated_block)
+        self.assertIn("START TIME: ______________________", generated_block)
+        self.assertIn("TIME LOADING STARTED (TO BE FILLED IN BY STOREMAN)", generated_block)
+        self.assertIn("TIME LOADING COMPLETED (TO BE FILLED IN BY STOREMAN)", generated_block)
+        self.assertIn("FINISH TIME: ______________________", generated_block)
+        self.assertIn(
+            """const DAILY_RUN_SHEET_COLUMNS = [
+  "Customer Name",
+  "Suburb",
+  "Invoice #",
+  "BAGS",
+  "KGS",
+  "Pallets",
+];""",
+            generated_block,
+        )
+        self.assertIn("dailyRunSheetSnapshotRows(runSheet)", generated_block)
+        self.assertIn("runSheet.trips", generated_block)
+        self.assertNotIn("state.deliveryBoard", generated_block)
+        for forbidden in (
+            '"COD"',
+            '"CQ"',
+            '"Time In"',
+            '"Time Out"',
+            '"Print Name"',
+            '"Customer Signature"',
+            '"No. of Pallets Picked"',
+        ):
+            self.assertNotIn(forbidden, generated_block)
+        self.assertIn('"Save Run Sheet"', generated_block)
+        self.assertIn('"Cancel Generated"', generated_block)
+        saved_block = self.delivery_renderer.split(
+            "function createRunSheetCard", 1
+        )[1].split("function createRunSheetPreview", 1)[0]
+        self.assertIn("createRunSheetPreview(runSheet)", saved_block)
+        self.assertIn('"Export Daily Run Sheet"', saved_block)
+        self.assertIn("workspace-daily-run-sheet-table-scroll", self.styles)
+        self.assertIn("overflow-x: auto", self.styles)
+        self.assertIn("min-width: 760px", self.styles)
+
+    def test_delivery_date_excel_export_is_scoped_busy_and_non_mutating(self):
+        self.assertIn(
+            "/api/manual-dispatch/delivery/run-sheets/export-excel?delivery_date=",
+            self.api,
+        )
+        self.assertIn('"Export Excel File"', self.delivery_renderer)
+        self.assertIn('"Preparing Excel File..."', self.delivery_renderer)
+        self.assertNotIn("Export Excel File", self.opshop_renderer)
+        self._run_workspace_actions_script(
+            """
+            let resolveExport;
+            const exportGate = new Promise((resolve) => { resolveExport = resolve; });
+            let exportCalls = 0;
+            let generateCalls = 0;
+            const state = {
+              isLoggedIn: true,
+              workspaceRoute: "delivery/run-sheet",
+              activeWorkspace: "delivery",
+              dispatchDate: "2026-07-06",
+              deliveryTripSummaryDate: "2026-07-07",
+              deliveryBusyActionKeys: {},
+              deliveryActionError: "",
+              deliveryAssignmentDrafts: { "ORDER-1": { driver_id: "D001" } },
+              deliveryVehicleDrafts: {},
+              opshopBusyActionKeys: {},
+            };
+            const beforeDrafts = JSON.stringify(state.deliveryAssignmentDrafts);
+            const actions = createWorkspaceActions({
+              state,
+              renderWorkspace: () => {},
+              api: {
+                exportDeliveryRunSheetsExcel: async (deliveryDate) => {
+                  exportCalls += 1;
+                  if (deliveryDate !== "2026-07-07") {
+                    throw new Error(`wrong export date: ${deliveryDate}`);
+                  }
+                  return exportGate;
+                },
+                createGeneratedDeliveryRunSheet: async () => {
+                  generateCalls += 1;
+                },
+              },
+            });
+            const first = actions.exportDeliveryRunSheets("2026-07-07");
+            const second = actions.exportDeliveryRunSheets("2026-07-07");
+            if (exportCalls !== 1) {
+              throw new Error(`rapid Delivery export made ${exportCalls} API calls`);
+            }
+            if (!state.deliveryBusyActionKeys["delivery-export-date:2026-07-07"]) {
+              throw new Error("Delivery date export did not expose its isolated busy state");
+            }
+            resolveExport({ filename: "Daily_Run_Sheets_2026-07-07.xlsx" });
+            await Promise.all([first, second]);
+            if (generateCalls !== 0) {
+              throw new Error("Delivery date export called Generate API");
+            }
+            if (state.workspaceRoute !== "delivery/run-sheet" ||
+                state.deliveryTripSummaryDate !== "2026-07-07" ||
+                JSON.stringify(state.deliveryAssignmentDrafts) !== beforeDrafts) {
+              throw new Error("Delivery date export mutated route, date, or assignments");
+            }
+            if (Object.keys(state.deliveryBusyActionKeys).length !== 0) {
+              throw new Error("Delivery date export busy state was not cleared");
+            }
+
+            const failureState = {
+              ...state,
+              deliveryBusyActionKeys: {},
+              deliveryActionError: "",
+            };
+            const failureActions = createWorkspaceActions({
+              state: failureState,
+              renderWorkspace: () => {},
+              api: {
+                exportDeliveryRunSheetsExcel: async () => {
+                  throw new Error("Workbook preparation failed");
+                },
+              },
+            });
+            await failureActions.exportDeliveryRunSheets("2026-07-07");
+            if (failureState.deliveryActionError !== "Workbook preparation failed") {
+              throw new Error("Delivery export failure was not surfaced accurately");
+            }
+            """
+        )
+
     def test_delivery_vehicle_selector_labels_and_duplicate_state_contract(self):
         vehicle_control = self.delivery_renderer.split(
             "function createDriverVehicleControl", 1

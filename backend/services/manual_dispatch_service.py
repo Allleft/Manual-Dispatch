@@ -192,6 +192,9 @@ class ManualDispatchService:
     def get_saved_delivery_run_sheet_for_export(self, run_sheet_id):
         return self.delivery_run_sheet_service.get_saved_for_export(run_sheet_id)
 
+    def list_delivery_run_sheets_for_date_export(self, delivery_date):
+        return self.delivery_run_sheet_service.list_for_date_export(delivery_date)
+
     def create_generated_opshop_pickup_collection(self, request):
         self._ensure_workspace_ready("opshop")
         return self.opshop_pickup_collection_service.create_generated(request)

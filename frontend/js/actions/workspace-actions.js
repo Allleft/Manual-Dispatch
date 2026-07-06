@@ -16,6 +16,7 @@ import {
   apiDeleteDeliveryDriver,
   apiDeleteDeliveryVehicle,
   apiExportDeliveryRunSheetExcel,
+  apiExportDeliveryRunSheetsExcel,
   apiExportOpShopPickupCollectionExcel,
   apiGetDeliverySpecifications,
   apiGetDeliveryWorkspaceBoard,
@@ -75,6 +76,7 @@ const DEFAULT_API = {
   deleteDeliveryDriver: apiDeleteDeliveryDriver,
   deleteDeliveryVehicle: apiDeleteDeliveryVehicle,
   exportDeliveryRunSheetExcel: apiExportDeliveryRunSheetExcel,
+  exportDeliveryRunSheetsExcel: apiExportDeliveryRunSheetsExcel,
   exportOpShopPickupCollectionExcel: apiExportOpShopPickupCollectionExcel,
   getDeliverySpecifications: apiGetDeliverySpecifications,
   getDeliveryWorkspaceBoard: apiGetDeliveryWorkspaceBoard,
@@ -1498,6 +1500,17 @@ export function createWorkspaceActions({
     });
   }
 
+  async function exportDeliveryRunSheets(deliveryDate) {
+    const scopedDate = deliveryDate || state.deliveryTripSummaryDate || state.dispatchDate;
+    const actionKey = `delivery-export-date:${scopedDate}`;
+    if (state.deliveryBusyActionKeys?.[actionKey]) {
+      return;
+    }
+    await runDeliveryAction(actionKey, async () => {
+      await api.exportDeliveryRunSheetsExcel(scopedDate);
+    });
+  }
+
   function updateOpShopAssignmentDraft(pickupTaskId, driverId) {
     state.opshopAssignmentDrafts = {
       ...state.opshopAssignmentDrafts,
@@ -2060,6 +2073,7 @@ export function createWorkspaceActions({
     deleteDeliveryDriver,
     deleteDeliveryVehicle,
     exportDeliveryRunSheet,
+    exportDeliveryRunSheets,
     exportOpShopPickupCollection,
     confirmGenerateDeliveryRunSheet,
     confirmGenerateOpShopPickupCollection,

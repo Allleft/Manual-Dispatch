@@ -122,6 +122,22 @@ class DeliveryRunSheetService:
             raise ValueError("Only saved Delivery Run Sheets can be exported.")
         return run_sheet
 
+    def list_for_date_export(self, delivery_date):
+        delivery_date = clean_required_iso_date(delivery_date, "delivery_date")
+        run_sheets = [
+            run_sheet
+            for run_sheet in self.repository.list_delivery_run_sheets(
+                delivery_date=delivery_date
+            )
+            if run_sheet.status in {"GENERATED", "SAVED"}
+            and any(trip.orders for trip in run_sheet.trips)
+        ]
+        if not run_sheets:
+            raise ValueError(
+                "No Generated or Saved Delivery Run Sheets are available for this Delivery Date."
+            )
+        return run_sheets
+
     def _raise_transition_error(self, run_sheet_id, action):
         current = self.repository.get_delivery_run_sheet(run_sheet_id)
         if not current:
