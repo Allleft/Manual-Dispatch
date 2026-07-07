@@ -93,14 +93,17 @@ def _write_date_export_form(worksheet, run_sheet, delivery_date):
     worksheet["B1"].font = Font(bold=True, size=18)
     worksheet["B1"].alignment = Alignment(horizontal="center", vertical="center")
     worksheet.merge_cells("E1:F1")
-    worksheet["E1"] = f"DRIVER: {run_sheet.driver_name_snapshot or ''}"
+    worksheet["E1"] = (
+        f"DRIVER: {run_sheet.driver_name_snapshot or ''}\n"
+        f"REGO#: {_rego_snapshot_display(run_sheet)}"
+    )
     worksheet["E1"].font = Font(bold=True, size=11)
     worksheet["E1"].alignment = Alignment(
         horizontal="right",
         vertical="center",
         wrap_text=True,
     )
-    worksheet.row_dimensions[1].height = 26
+    worksheet.row_dimensions[1].height = 34
 
     operational_fields = [
         (3, "START TIME: ______________________"),
@@ -265,6 +268,17 @@ def _write_top_form(worksheet, run_sheet):
     worksheet["A2"] = "Driver:"
     worksheet["A2"].font = Font(bold=True)
     worksheet["B2"] = run_sheet.driver_name_snapshot
+    worksheet.merge_cells("K1:M2")
+    worksheet["K1"] = (
+        f"DRIVER: {run_sheet.driver_name_snapshot or ''}\n"
+        f"REGO#: {_rego_snapshot_display(run_sheet)}"
+    )
+    worksheet["K1"].font = Font(bold=True, size=11)
+    worksheet["K1"].alignment = Alignment(
+        horizontal="right",
+        vertical="center",
+        wrap_text=True,
+    )
 
     manual_fields = [
         (4, "Start Time:"),
@@ -356,6 +370,11 @@ def _write_empty_row(worksheet, row_index, border):
 
 def _number_or_blank(value):
     return "" if value is None else value
+
+
+def _rego_snapshot_display(run_sheet):
+    rego = str(getattr(run_sheet, "vehicle_rego_snapshot", "") or "").strip()
+    return rego or "Not selected"
 
 
 def _apply_column_widths(worksheet):

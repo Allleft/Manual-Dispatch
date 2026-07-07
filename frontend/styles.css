@@ -5812,6 +5812,36 @@ select:disabled {
   min-width: 0;
 }
 
+.workspace-order-detail-trigger {
+  display: grid;
+  gap: 0.18rem;
+  width: 100%;
+  min-width: 0;
+  border: 1px solid transparent;
+  border-radius: 0.72rem;
+  padding: 0.4rem 0.5rem;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.workspace-order-detail-trigger:hover {
+  border-color: rgba(31, 101, 232, 0.16);
+  background: #f8fbff;
+}
+
+.workspace-order-detail-trigger:focus-visible {
+  outline: 3px solid rgba(31, 101, 232, 0.28);
+  outline-offset: 2px;
+}
+
+.workspace-order-detail-trigger h5,
+.workspace-order-detail-trigger p {
+  margin: 0;
+}
+
 .workspace-trip-summary .workspace-record-card {
   padding: 1rem;
 }
@@ -5885,8 +5915,23 @@ select:disabled {
 }
 
 .workspace-daily-run-sheet-driver {
-  justify-content: flex-end;
+  display: grid;
+  justify-items: end;
+  gap: 0.18rem;
   text-align: right;
+}
+
+.workspace-daily-run-sheet-driver-line {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.workspace-daily-run-sheet-driver-line strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .workspace-daily-run-sheet-title {
@@ -6028,8 +6073,12 @@ select:disabled {
   }
 
   .workspace-daily-run-sheet-driver {
-    justify-content: flex-start;
+    justify-items: start;
     text-align: left;
+  }
+
+  .workspace-daily-run-sheet-driver-line {
+    justify-content: flex-start;
   }
 
   .workspace-daily-run-sheet-metadata .workspace-badge {

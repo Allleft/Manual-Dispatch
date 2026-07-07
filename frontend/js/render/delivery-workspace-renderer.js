@@ -607,7 +607,17 @@ function createTripPanel(tripNo, driver, board, deliveryDate, isLocked, state, a
 function createAssignedOrderRow(order, assignment, driver, isLocked, state, actions) {
   const row = document.createElement("article");
   row.className = "workspace-record-card workspace-order-row-card";
-  const title = document.createElement("div");
+  const title = document.createElement("button");
+  title.type = "button";
+  title.className = "workspace-order-detail-trigger";
+  title.setAttribute(
+    "aria-label",
+    `View Delivery Order ${formatOptional(order.invoice_number, order.order_id)} details`,
+  );
+  title.addEventListener("click", () => actions.openDeliveryOrderDetail(
+    order.order_id,
+    { readOnly: true },
+  ));
   const heading = document.createElement("h5");
   heading.textContent = formatOptional(order.company_name);
   const meta = document.createElement("p");
@@ -748,22 +758,14 @@ function createGeneratedDailyRunSheet(runSheet, state, actions) {
   header.append(
     createDailyRunSheetHeaderField("DATE:", formatDailyRunSheetDate(runSheet.delivery_date)),
     createDailyRunSheetTitle(),
-    createDailyRunSheetHeaderField(
-      "DRIVER:",
-      formatOptional(runSheet.driver_name_snapshot, runSheet.driver_id),
-      "workspace-daily-run-sheet-driver",
-    ),
+    createDailyRunSheetDriverHeader(runSheet),
   );
 
   const metadata = document.createElement("div");
   metadata.className = "workspace-daily-run-sheet-metadata";
-  const vehicle = document.createElement("span");
-  vehicle.textContent = runSheet.vehicle_rego_snapshot
-    ? `Vehicle: ${runSheet.vehicle_rego_snapshot}`
-    : "Vehicle: Not selected";
   const generated = document.createElement("span");
   generated.textContent = `Generated: ${formatOptional(runSheet.generated_at)}`;
-  metadata.append(vehicle, generated, createBadge("GENERATED", "generated"));
+  metadata.append(generated, createBadge("GENERATED", "generated"));
 
   const operationalFields = document.createElement("div");
   operationalFields.className = "workspace-daily-run-sheet-operational-fields";
@@ -854,6 +856,26 @@ function createDailyRunSheetHeaderField(labelText, valueText, className = "") {
   const value = document.createElement("strong");
   value.textContent = valueText;
   field.append(label, value);
+  return field;
+}
+
+
+function createDailyRunSheetDriverHeader(runSheet) {
+  const field = document.createElement("div");
+  field.className = "workspace-daily-run-sheet-header-field workspace-daily-run-sheet-driver";
+  [
+    ["DRIVER:", formatOptional(runSheet.driver_name_snapshot, runSheet.driver_id)],
+    ["REGO#:", formatOptional(runSheet.vehicle_rego_snapshot, "Not selected")],
+  ].forEach(([labelText, valueText]) => {
+    const row = document.createElement("div");
+    row.className = "workspace-daily-run-sheet-driver-line";
+    const label = document.createElement("span");
+    label.textContent = labelText;
+    const value = document.createElement("strong");
+    value.textContent = valueText;
+    row.append(label, value);
+    field.append(row);
+  });
   return field;
 }
 
@@ -1000,6 +1022,7 @@ function createRunSheetPreview(runSheet) {
 
 function createDeliveryOrderModal(state, actions) {
   const formMode = state.deliveryOrderFormMode;
+  const readOnly = Boolean(state.deliveryOrderDetailReadOnly);
   const order = (state.deliveryBoard?.orders || []).find(
     (item) => item.order_id === state.deliveryOrderDetailId,
   );
@@ -1012,7 +1035,9 @@ function createDeliveryOrderModal(state, actions) {
       ? "Add Delivery Order"
       : formMode === "edit"
         ? "Edit Delivery Order"
-        : `Delivery Order ${formatOptional(order?.invoice_number, order?.order_no)}`,
+        : readOnly
+          ? "Delivery Order Details"
+          : `Delivery Order ${formatOptional(order?.invoice_number, order?.order_no)}`,
     actions.closeDeliveryOrderModal,
     {
       eyebrow: "Delivery Order",
@@ -1033,8 +1058,10 @@ function createDeliveryOrderModal(state, actions) {
   } else {
     const locked = isOrderCapturedByRunSheet(order, state.deliveryRunSheets);
     body.append(
-      createDeliveryOrderActions(order, locked, state, actions),
-      locked
+      readOnly
+        ? createDeliveryOrderReadOnlyActions(actions)
+        : createDeliveryOrderActions(order, locked, state, actions),
+      locked && !readOnly
         ? createStatus("This Delivery Order is captured by a Generated or Saved Delivery Run Sheet. Edit and Cancel are locked.", "loading")
         : document.createDocumentFragment(),
       createDeliveryOrderReadOnly(order, state),
@@ -1044,8 +1071,21 @@ function createDeliveryOrderModal(state, actions) {
 }
 
 
+function createDeliveryOrderReadOnlyActions(actions) {
+  const row = document.createElement("div");
+  row.className = "workspace-modal-action-bar";
+  row.append(
+    createActionButton("Close", actions.closeDeliveryOrderModal, {
+      className: "workspace-modal-action-button workspace-modal-action-neutral",
+    }),
+  );
+  return row;
+}
+
+
 function createDeliveryOrderReadOnly(order, state) {
   const fragment = document.createDocumentFragment();
+  const assignmentFacts = deliveryOrderAssignmentFacts(order, state);
   fragment.append(
     createModalFactSection("General Information", [
       ["Invoice Number", order.invoice_number],
@@ -1064,11 +1104,28 @@ function createDeliveryOrderReadOnly(order, state) {
       ["Zone", order.zone],
       ["Urgency", order.urgency],
     ]),
+    assignmentFacts.length
+      ? createModalFactSection("Current Assignment", assignmentFacts)
+      : document.createDocumentFragment(),
     createLoadSummary(order),
     createProductLines(order),
     createModalFactSection("Notes", [["Notes", order.note]]),
   );
   return fragment;
+}
+
+
+function deliveryOrderAssignmentFacts(order, state) {
+  const assignment = (state.deliveryBoard?.assignments || []).find(
+    (item) => item.task_type === "ORDER" && item.task_id === order.order_id,
+  );
+  if (!assignment) {
+    return [];
+  }
+  return [
+    ["Current assigned driver", driverName(state.deliveryBoard, assignment.driver_id)],
+    ["Current trip", assignment.trip_no === "trip2" ? "Trip 2" : "Trip 1"],
+  ];
 }
 
 

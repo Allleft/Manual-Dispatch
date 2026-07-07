@@ -30,7 +30,8 @@ class WorkspaceLegacyMigrationTest(unittest.TestCase):
 
     def test_default_dry_run_is_read_only_and_reports_candidates(self):
         self._seed_summary("FTS-DRY", delivery_rows=1, opshop_rows=1)
-        before = self.db_path.read_bytes()
+        before_legacy = self._legacy_snapshot("FTS-DRY")
+        before_workspace_counts = self._workspace_counts()
 
         report = migrate_legacy_final_summaries(self.db_path)
 
@@ -38,9 +39,8 @@ class WorkspaceLegacyMigrationTest(unittest.TestCase):
         self.assertIsNone(report["backup_path"])
         self.assertEqual(1, report["summary"]["delivery_to_create"])
         self.assertEqual(1, report["summary"]["opshop_to_create"])
-        self.assertEqual(before, self.db_path.read_bytes())
-        self.assertEqual(0, self._count("delivery_run_sheets"))
-        self.assertEqual(0, self._count("opshop_pickup_collections"))
+        self.assertEqual(before_legacy, self._legacy_snapshot("FTS-DRY"))
+        self.assertEqual(before_workspace_counts, self._workspace_counts())
 
     def test_apply_requires_apply_and_yes(self):
         self._seed_summary("FTS-FLAGS", delivery_rows=1)

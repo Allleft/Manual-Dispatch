@@ -15,6 +15,7 @@ from backend.repositories.sqlite_manual_dispatch_repository import (
 )
 from backend.schemas import (
     AssignTaskRequest,
+    DeliveryWorkspaceVehicleAssignmentRequest,
     DeliveryRunSheetOrderSnapshot,
     OpShopLocation,
     OpShopPickupSchedule,
@@ -244,6 +245,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertNotIn("Demo Customer A", collection_values)
 
     def test_delivery_export_uses_daily_run_sheet_form_layout(self):
+        self._assign_delivery_vehicle("D001", "V001")
         self._set_product_lines(
             "ORD-001",
             [
@@ -262,6 +264,11 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             )
         )
         run_sheet_id = self._generate_and_save_delivery()
+        with sqlite3.connect(self.db_path) as connection:
+            connection.execute(
+                "UPDATE manual_vehicles SET rego = ? WHERE vehicle_id = ?",
+                ("EDITED-LIVE-REGO", "V001"),
+            )
         workbook = load_workbook(
             BytesIO(
                 self.client.get(
@@ -285,6 +292,8 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertIn(self.dispatch_date, values)
         self.assertIn("Driver:", values)
         self.assertIn("John", values)
+        self.assertIn("DRIVER: John\nREGO#: ABC123", values)
+        self.assertNotIn("EDITED-LIVE-REGO", values)
         self.assertIn("Start Time:", values)
         self.assertIn(
             "Time Loading Started (to be filled in by storeman):",
@@ -299,6 +308,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertNotIn("Address", values)
         self.assertNotIn("Product Details", values)
         self.assertNotIn("Order #", values)
+        self.assertEqual("DRIVER: John\nREGO#: ABC123", worksheet["K1"].value)
 
         header_row = [cell.value for cell in worksheet[9]]
         self.assertEqual(
@@ -341,6 +351,8 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             self.assertIsNone(customer_a_row[manual_column])
 
     def test_delivery_date_export_uses_snapshot_rows_and_one_sheet_per_driver(self):
+        self._assign_delivery_vehicle("D001", "V001")
+        self._assign_delivery_vehicle("D002", "V002")
         self._set_product_lines(
             "ORD-001",
             [
@@ -395,6 +407,11 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
                 ProductDetailLine(f"Edited Live Product {order_id}", 1, "PALLETS")
             ]
             self.repository.update_order(order)
+        with sqlite3.connect(self.db_path) as connection:
+            connection.execute(
+                "UPDATE manual_vehicles SET rego = ? WHERE vehicle_id IN (?, ?)",
+                ("EDITED-LIVE-REGO", "V001", "V002"),
+            )
 
         response = self.client.get(
             "/api/manual-dispatch/delivery/run-sheets/export-excel",
@@ -432,6 +449,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             self.assertEqual("DATE: 05/05/2026", worksheet["A1"].value)
             self.assertEqual("DAILY RUN SHEET", worksheet["B1"].value)
             self.assertTrue(str(worksheet["E1"].value).startswith("DRIVER: "))
+            self.assertIn("REGO#:", worksheet["E1"].value)
             values = [
                 cell.value
                 for row in worksheet.iter_rows()
@@ -470,6 +488,9 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertGreaterEqual(workbook["John"].row_dimensions[8].height, 30)
         self.assertGreater(workbook["John"].column_dimensions["D"].width, 30)
         self.assertNotIn("Edited Live Product ORD-001", self._workbook_values(response.content))
+        self.assertEqual("DRIVER: John\nREGO#: ABC123", workbook["John"]["E1"].value)
+        self.assertEqual("DRIVER: Tony\nREGO#: XYZ888", workbook["Tony"]["E1"].value)
+        self.assertNotIn("EDITED-LIVE-REGO", self._workbook_values(response.content))
 
         statuses = {
             run_sheet.run_sheet_id: run_sheet.status
@@ -503,6 +524,12 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             all(not any(character in name for character in "[]:*?/\\")
                 for name in duplicate_name_workbook.sheetnames)
         )
+        no_rego_bytes = build_delivery_run_sheets_excel(
+            [replace(snapshots[0], vehicle_rego_snapshot=None)],
+            self.dispatch_date,
+        )
+        no_rego_workbook = load_workbook(BytesIO(no_rego_bytes))
+        self.assertIn("REGO#: Not selected", no_rego_workbook.active["E1"].value)
 
     def test_delivery_run_sheet_product_display_prefers_snapshot_lines(self):
         order = DeliveryRunSheetOrderSnapshot(
@@ -586,6 +613,16 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
                 task_id="ORD-001",
                 driver_id="D001",
                 trip_no="trip1",
+            )
+        )
+
+    def _assign_delivery_vehicle(self, driver_id, vehicle_id):
+        self.service.assign_delivery_workspace_vehicle(
+            DeliveryWorkspaceVehicleAssignmentRequest(
+                dispatch_date=self.dispatch_date,
+                delivery_date=self.dispatch_date,
+                driver_id=driver_id,
+                vehicle_id=vehicle_id,
             )
         )
 

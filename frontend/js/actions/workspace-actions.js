@@ -180,6 +180,7 @@ export function createWorkspaceActions({
     state.deliveryActionError = "";
     state.opshopActionError = "";
     state.deliveryOrderDetailId = "";
+    state.deliveryOrderDetailReadOnly = false;
     state.deliveryOrderForm = {};
     state.deliveryOrderFormMode = "";
     state.deliveryOrderModalError = "";
@@ -415,8 +416,9 @@ export function createWorkspaceActions({
     renderWorkspace();
   }
 
-  function openDeliveryOrderDetail(orderId) {
+  function openDeliveryOrderDetail(orderId, { readOnly = false } = {}) {
     state.deliveryOrderDetailId = orderId || "";
+    state.deliveryOrderDetailReadOnly = Boolean(readOnly);
     state.deliveryOrderFormMode = "";
     state.deliveryOrderForm = {};
     state.deliveryOrderModalError = "";
@@ -428,6 +430,7 @@ export function createWorkspaceActions({
       return;
     }
     state.deliveryOrderDetailId = "";
+    state.deliveryOrderDetailReadOnly = false;
     state.deliveryOrderFormMode = "";
     state.deliveryOrderForm = {};
     state.deliveryOrderModalError = "";
@@ -436,6 +439,7 @@ export function createWorkspaceActions({
 
   function openAddDeliveryOrder() {
     state.deliveryOrderDetailId = "";
+    state.deliveryOrderDetailReadOnly = false;
     state.deliveryOrderFormMode = "add";
     state.deliveryOrderForm = defaultDeliveryOrderForm();
     state.deliveryOrderModalError = "";
@@ -450,6 +454,7 @@ export function createWorkspaceActions({
       return;
     }
     state.deliveryOrderDetailId = orderId;
+    state.deliveryOrderDetailReadOnly = false;
     state.deliveryOrderFormMode = "edit";
     state.deliveryOrderForm = deliveryOrderFormFromOrder(order);
     state.deliveryOrderModalError = "";
@@ -521,6 +526,7 @@ export function createWorkspaceActions({
       }
       if (isDeliveryMutationCurrent(context)) {
         state.deliveryOrderDetailId = "";
+        state.deliveryOrderDetailReadOnly = false;
         state.deliveryOrderFormMode = "";
         state.deliveryOrderForm = {};
         state.deliveryOrderModalError = "";
@@ -539,6 +545,7 @@ export function createWorkspaceActions({
       await api.cancelDeliveryOrder(orderId);
       if (isDeliveryMutationCurrent(context)) {
         state.deliveryOrderDetailId = "";
+        state.deliveryOrderDetailReadOnly = false;
         state.deliveryOrderFormMode = "";
         state.deliveryOrderForm = {};
         state.deliveryOrderModalError = "";
@@ -1889,6 +1896,7 @@ export function createWorkspaceActions({
     state.deliveryAssignmentDrafts = {};
     clearDeliveryVehicleTransientState();
     state.deliveryOrderDetailId = "";
+    state.deliveryOrderDetailReadOnly = false;
     state.deliveryOrderForm = {};
     state.deliveryOrderFormMode = "";
     state.deliveryOrderModalError = "";
@@ -1957,6 +1965,7 @@ export function createWorkspaceActions({
   function clearDeliveryTaskPoolModals() {
     invalidateDeliveryAttachePreview();
     state.deliveryOrderDetailId = "";
+    state.deliveryOrderDetailReadOnly = false;
     state.deliveryOrderForm = {};
     state.deliveryOrderFormMode = "";
     state.deliveryOrderModalError = "";

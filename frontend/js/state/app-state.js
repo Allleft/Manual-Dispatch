@@ -41,6 +41,7 @@ export const state = {
     urgency: "All",
   },
   deliveryOrderDetailId: "",
+  deliveryOrderDetailReadOnly: false,
   deliveryOrderForm: {},
   deliveryOrderFormMode: "",
   deliveryOrderModalError: "",
