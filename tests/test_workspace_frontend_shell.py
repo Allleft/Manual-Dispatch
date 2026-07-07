@@ -590,12 +590,21 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
   "Customer Name",
   "Suburb",
   "Invoice #",
-  "BAGS",
+  "PRODUCT",
   "KGS",
   "Pallets",
 ];""",
             generated_block,
         )
+        self.assertIn("formatRunSheetProduct(order)", generated_block)
+        self.assertIn("product_lines_snapshot", generated_block)
+        self.assertIn("product_snapshot", generated_block)
+        self.assertIn('names.join("\\n")', generated_block)
+        row_values_block = generated_block.split(
+            "function dailyRunSheetRowValues", 1
+        )[1].split("function formatRunSheetProduct", 1)[0]
+        self.assertNotIn("loose_bags_quantity_snapshot", row_values_block)
+        self.assertIn("workspace-daily-run-sheet-product-cell", generated_block)
         self.assertIn("dailyRunSheetSnapshotRows(runSheet)", generated_block)
         self.assertIn("runSheet.trips", generated_block)
         self.assertNotIn("state.deliveryBoard", generated_block)
@@ -618,7 +627,9 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn('"Export Daily Run Sheet"', saved_block)
         self.assertIn("workspace-daily-run-sheet-table-scroll", self.styles)
         self.assertIn("overflow-x: auto", self.styles)
-        self.assertIn("min-width: 760px", self.styles)
+        self.assertIn("min-width: 820px", self.styles)
+        self.assertIn("workspace-daily-run-sheet-product-cell", self.styles)
+        self.assertIn("white-space: pre-line", self.styles)
 
     def test_delivery_date_excel_export_is_scoped_busy_and_non_mutating(self):
         self.assertIn(

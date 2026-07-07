@@ -12,7 +12,7 @@ DAILY_RUN_SHEET_HEADERS = [
     "Customer Name",
     "Suburb",
     "Invoice #",
-    "BAGS",
+    "PRODUCT",
     "KGS",
     "Pallets",
     "COD",
@@ -27,7 +27,7 @@ DELIVERY_DATE_EXPORT_HEADERS = [
     "Customer Name",
     "Suburb",
     "Invoice #",
-    "BAGS",
+    "PRODUCT",
     "KGS",
     "Pallets",
 ]
@@ -169,12 +169,34 @@ def _ordered_snapshot_rows(run_sheet):
     ]
 
 
+def delivery_run_sheet_product_display(order):
+    names = []
+    seen = set()
+    for line in getattr(order, "product_lines_snapshot", None) or []:
+        product_name = str(getattr(line, "product_name", "") or "").strip()
+        if not product_name:
+            continue
+        key = " ".join(product_name.split()).casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        names.append(product_name)
+    if names:
+        return "\n".join(names)
+    return str(getattr(order, "product_snapshot", "") or "").strip()
+
+
+def _line_count(value):
+    return max(1, str(value or "").count("\n") + 1)
+
+
 def _write_date_export_order_row(worksheet, row_index, order, border):
+    product_display = delivery_run_sheet_product_display(order)
     values = [
         order.company_name_snapshot or "",
         order.suburb_snapshot or "",
         order.invoice_number_snapshot or order.order_no_snapshot or "",
-        _number_or_blank(order.loose_bags_quantity_snapshot),
+        product_display,
         "",
         _number_or_blank(order.pallet_quantity_snapshot),
     ]
@@ -182,13 +204,13 @@ def _write_date_export_order_row(worksheet, row_index, order, border):
         cell = worksheet.cell(row=row_index, column=column_index, value=value)
         cell.border = border
         cell.alignment = Alignment(
-            horizontal="right" if column_index >= 4 else "left",
+            horizontal="right" if column_index in {5, 6} else "left",
             vertical="top",
-            wrap_text=column_index in {1, 2},
+            wrap_text=column_index in {1, 2, 4},
         )
-        if column_index >= 4 and value != "":
+        if column_index in {5, 6} and value != "":
             cell.number_format = "General"
-    worksheet.row_dimensions[row_index].height = 22
+    worksheet.row_dimensions[row_index].height = max(22, 16 * _line_count(product_display))
 
 
 def _write_date_export_empty_row(worksheet, row_index, border):
@@ -200,12 +222,12 @@ def _write_date_export_empty_row(worksheet, row_index, border):
 
 def _apply_date_export_column_widths(worksheet):
     widths = {
-        "A": 31,
-        "B": 19,
+        "A": 29,
+        "B": 17,
         "C": 15,
-        "D": 10,
-        "E": 10,
-        "F": 10,
+        "D": 36,
+        "E": 8,
+        "F": 9,
     }
     for column_letter, width in widths.items():
         worksheet.column_dimensions[column_letter].width = width
@@ -297,11 +319,12 @@ def _write_order_table(worksheet, run_sheet):
 
 
 def _write_order_row(worksheet, row_index, order, border):
+    product_display = delivery_run_sheet_product_display(order)
     values = [
         order.company_name_snapshot or "",
         order.suburb_snapshot or "",
         order.invoice_number_snapshot or "",
-        _number_or_blank(order.loose_bags_quantity_snapshot),
+        product_display,
         "",
         _number_or_blank(order.pallet_quantity_snapshot),
         "",
@@ -315,7 +338,14 @@ def _write_order_row(worksheet, row_index, order, border):
     for column_index, value in enumerate(values, start=1):
         cell = worksheet.cell(row=row_index, column=column_index, value=value)
         cell.border = border
-        cell.alignment = Alignment(vertical="top", wrap_text=column_index in {1, 12})
+        cell.alignment = Alignment(
+            horizontal="right" if column_index in {5, 6} else "left",
+            vertical="top",
+            wrap_text=column_index in {1, 4, 12},
+        )
+        if column_index in {5, 6} and value != "":
+            cell.number_format = "General"
+    worksheet.row_dimensions[row_index].height = max(18, 15 * _line_count(product_display))
 
 
 def _write_empty_row(worksheet, row_index, border):
@@ -333,7 +363,7 @@ def _apply_column_widths(worksheet):
         "A": 24,
         "B": 16,
         "C": 12,
-        "D": 8,
+        "D": 26,
         "E": 8,
         "F": 8,
         "G": 8,

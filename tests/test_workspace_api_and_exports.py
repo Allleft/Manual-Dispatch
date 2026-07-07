@@ -15,14 +15,17 @@ from backend.repositories.sqlite_manual_dispatch_repository import (
 )
 from backend.schemas import (
     AssignTaskRequest,
+    DeliveryRunSheetOrderSnapshot,
     OpShopLocation,
     OpShopPickupSchedule,
     OpShopPickupTask,
+    ProductDetailLine,
     RegisterOperatorAccountRequest,
 )
 from backend.services.manual_dispatch_service import ManualDispatchService
 from backend.services.delivery_run_sheet_excel_export_service import (
     build_delivery_run_sheets_excel,
+    delivery_run_sheet_product_display,
 )
 
 try:
@@ -241,6 +244,14 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertNotIn("Demo Customer A", collection_values)
 
     def test_delivery_export_uses_daily_run_sheet_form_layout(self):
+        self._set_product_lines(
+            "ORD-001",
+            [
+                ProductDetailLine("Snapshot Alpha Product", 1, "PALLETS"),
+                ProductDetailLine("Snapshot Beta Product", 3, "BAGS"),
+                ProductDetailLine("Snapshot Alpha Product", 1, "PALLETS"),
+            ],
+        )
         self.service.assign_task(
             AssignTaskRequest(
                 dispatch_date=self.dispatch_date,
@@ -295,7 +306,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
                 "Customer Name",
                 "Suburb",
                 "Invoice #",
-                "BAGS",
+                "PRODUCT",
                 "KGS",
                 "Pallets",
                 "COD",
@@ -321,13 +332,23 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertLess(trip_2_index, customer_b_index)
         customer_a_row = rows[customer_a_index]
         self.assertEqual("INV-1001", customer_a_row[2])
-        self.assertEqual(0, customer_a_row[3])
+        self.assertEqual("Snapshot Alpha Product\nSnapshot Beta Product", customer_a_row[3])
         self.assertIsNone(customer_a_row[4])
         self.assertEqual(2, customer_a_row[5])
+        self.assertTrue(worksheet.cell(row=customer_a_index + 1, column=4).alignment.wrap_text)
+        self.assertGreaterEqual(worksheet.row_dimensions[customer_a_index + 1].height, 30)
         for manual_column in range(6, 13):
             self.assertIsNone(customer_a_row[manual_column])
 
     def test_delivery_date_export_uses_snapshot_rows_and_one_sheet_per_driver(self):
+        self._set_product_lines(
+            "ORD-001",
+            [
+                ProductDetailLine("Snapshot Alpha Product", 1, "PALLETS"),
+                ProductDetailLine("Snapshot Beta Product", 3, "BAGS"),
+                ProductDetailLine("Snapshot Alpha Product", 9, "PALLETS"),
+            ],
+        )
         self.service.assign_task(
             AssignTaskRequest(
                 dispatch_date=self.dispatch_date,
@@ -370,6 +391,9 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             order = self.repository.get_order(order_id)
             order.company_name = f"Edited Live {order_id}"
             order.suburb = "Edited Live Suburb"
+            order.product_lines = [
+                ProductDetailLine(f"Edited Live Product {order_id}", 1, "PALLETS")
+            ]
             self.repository.update_order(order)
 
         response = self.client.get(
@@ -390,7 +414,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             "Customer Name",
             "Suburb",
             "Invoice #",
-            "BAGS",
+            "PRODUCT",
             "KGS",
             "Pallets",
         ]
@@ -437,10 +461,15 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertEqual("Demo Customer A", john_rows[7][0])
         self.assertEqual("Demo Customer C", john_rows[8][0])
         self.assertEqual("INV-1001", john_rows[7][2])
-        self.assertEqual(0, john_rows[7][3])
+        self.assertEqual("Snapshot Alpha Product\nSnapshot Beta Product", john_rows[7][3])
         self.assertIsNone(john_rows[7][4])
         self.assertEqual(2, john_rows[7][5])
-        self.assertEqual("General", workbook["John"]["D8"].number_format)
+        self.assertIsNone(workbook["John"]["E8"].value)
+        self.assertEqual("General", workbook["John"]["F8"].number_format)
+        self.assertTrue(workbook["John"]["D8"].alignment.wrap_text)
+        self.assertGreaterEqual(workbook["John"].row_dimensions[8].height, 30)
+        self.assertGreater(workbook["John"].column_dimensions["D"].width, 30)
+        self.assertNotIn("Edited Live Product ORD-001", self._workbook_values(response.content))
 
         statuses = {
             run_sheet.run_sheet_id: run_sheet.status
@@ -474,6 +503,40 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             all(not any(character in name for character in "[]:*?/\\")
                 for name in duplicate_name_workbook.sheetnames)
         )
+
+    def test_delivery_run_sheet_product_display_prefers_snapshot_lines(self):
+        order = DeliveryRunSheetOrderSnapshot(
+            row_id="ROW-1",
+            trip_no="trip1",
+            row_no=1,
+            task_type="ORDER",
+            task_id="ORDER-1",
+            order_id_snapshot="ORDER-1",
+            invoice_number_snapshot="INV-1",
+            order_no_snapshot=None,
+            company_name_snapshot="Customer",
+            suburb_snapshot="Suburb",
+            delivery_address_snapshot="Address",
+            product_snapshot="Legacy Product",
+            pallet_quantity_snapshot=1,
+            loose_bags_quantity_snapshot=7,
+            note_snapshot=None,
+            product_lines_snapshot=[
+                ProductDetailLine("Product A", 1, "PALLETS"),
+                ProductDetailLine("Product B", 2, "BAGS"),
+                ProductDetailLine("Product A", 3, "BAGS"),
+            ],
+        )
+        self.assertEqual(
+            "Product A\nProduct B",
+            delivery_run_sheet_product_display(order),
+        )
+
+        order.product_lines_snapshot = []
+        self.assertEqual("Legacy Product", delivery_run_sheet_product_display(order))
+
+        order.product_snapshot = "  "
+        self.assertEqual("", delivery_run_sheet_product_display(order))
 
     def test_delivery_date_export_rejects_empty_scope_without_mutation(self):
         response = self.client.get(
@@ -525,6 +588,11 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
                 trip_no="trip1",
             )
         )
+
+    def _set_product_lines(self, order_id, product_lines):
+        order = self.repository.get_order(order_id)
+        order.product_lines = product_lines
+        self.repository.update_order(order)
 
     def _seed_and_assign_pickup(self):
         self.repository.upsert_opshop_location(

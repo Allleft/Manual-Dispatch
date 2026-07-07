@@ -795,8 +795,11 @@ function createGeneratedDailyRunSheet(runSheet, state, actions) {
   const body = document.createElement("tbody");
   dailyRunSheetSnapshotRows(runSheet).forEach((order) => {
     const row = document.createElement("tr");
-    dailyRunSheetRowValues(order).forEach((value) => {
+    dailyRunSheetRowValues(order).forEach((value, columnIndex) => {
       const cell = document.createElement("td");
+      if (columnIndex === 3) {
+        cell.classList.add("workspace-daily-run-sheet-product-cell");
+      }
       cell.textContent = value;
       row.append(cell);
     });
@@ -837,7 +840,7 @@ const DAILY_RUN_SHEET_COLUMNS = [
   "Customer Name",
   "Suburb",
   "Invoice #",
-  "BAGS",
+  "PRODUCT",
   "KGS",
   "Pallets",
 ];
@@ -873,10 +876,32 @@ function dailyRunSheetRowValues(order) {
     formatOptional(order.company_name_snapshot, ""),
     formatOptional(order.suburb_snapshot, ""),
     formatOptional(order.invoice_number_snapshot || order.order_no_snapshot, ""),
-    formatRunSheetNumber(order.loose_bags_quantity_snapshot),
+    formatRunSheetProduct(order),
     "",
     formatRunSheetNumber(order.pallet_quantity_snapshot),
   ];
+}
+
+
+function formatRunSheetProduct(order) {
+  const names = [];
+  const seen = new Set();
+  (order.product_lines_snapshot || []).forEach((line) => {
+    const productName = String(line?.product_name || "").trim();
+    if (!productName) {
+      return;
+    }
+    const key = productName.replace(/\s+/g, " ").toLocaleLowerCase();
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    names.push(productName);
+  });
+  if (names.length) {
+    return names.join("\n");
+  }
+  return String(order.product_snapshot || "").trim();
 }
 
 
