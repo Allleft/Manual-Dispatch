@@ -15,7 +15,7 @@ class DeliveryWorkspaceBoardService:
     def get_board(self, dispatch_date):
         dispatch_date = clean_required_iso_date(dispatch_date, "dispatch_date")
         run_sheets = self.repository.list_delivery_run_sheets(dispatch_date)
-        reserved_task_ids = self._reserved_task_ids(run_sheets)
+        reserved_task_ids = self.repository.list_reserved_delivery_order_ids()
 
         orders = [
             order
@@ -55,14 +55,3 @@ class DeliveryWorkspaceBoardService:
             ),
             saved_vehicle_assignment_locks=saved_locks,
         )
-
-    @staticmethod
-    def _reserved_task_ids(run_sheets):
-        return {
-            order.task_id
-            for run_sheet in run_sheets
-            if run_sheet.status in {"GENERATED", "SAVED"}
-            for trip in run_sheet.trips
-            for order in trip.orders
-            if order.task_type == "ORDER" and order.task_id
-        }

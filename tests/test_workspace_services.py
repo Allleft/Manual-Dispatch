@@ -77,6 +77,70 @@ class WorkspaceServicesTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "assigned Delivery Order"):
             self._generate_delivery()
 
+    def test_in_memory_delivery_run_sheet_reservation_is_global(self):
+        service = ManualDispatchService()
+        account = service.register_operator_account(
+            RegisterOperatorAccountRequest(
+                account_name="In Memory Workspace Tester",
+                password="secret123",
+                confirm_password="secret123",
+            )
+        )
+        service.assign_task(
+            AssignTaskRequest(
+                dispatch_date="2026-05-05",
+                task_type="ORDER",
+                task_id="ORD-001",
+                driver_id="D001",
+                trip_no="trip1",
+            )
+        )
+        generated = service.create_generated_delivery_run_sheet(
+            GenerateDeliveryRunSheetRequest(
+                dispatch_date="2026-05-05",
+                delivery_date="2026-05-05",
+                driver_id="D001",
+            )
+        )
+
+        self.assertNotIn(
+            "ORD-001",
+            {
+                order.order_id
+                for order in service.get_delivery_workspace_board("2026-05-06").orders
+            },
+        )
+        service.cancel_generated_delivery_run_sheet(generated.run_sheet_id)
+        self.assertIn(
+            "ORD-001",
+            {
+                order.order_id
+                for order in service.get_delivery_workspace_board("2026-05-06").orders
+            },
+        )
+
+        saved = service.save_generated_delivery_run_sheet(
+            service.create_generated_delivery_run_sheet(
+                GenerateDeliveryRunSheetRequest(
+                    dispatch_date="2026-05-05",
+                    delivery_date="2026-05-05",
+                    driver_id="D001",
+                )
+            ).run_sheet_id,
+            SaveGeneratedWorkspaceSnapshotRequest(
+                saved_by_account_name=account.account_name,
+                saved_by_account_id=account.account_id,
+            ),
+        )
+        self.assertEqual("SAVED", saved.status)
+        self.assertNotIn(
+            "ORD-001",
+            {
+                order.order_id
+                for order in service.get_delivery_workspace_board("2026-05-06").orders
+            },
+        )
+
     def test_opshop_generate_cancel_and_empty_rules(self):
         self._seed_and_assign_pickup("PICKUP-001")
         generated = self._generate_collection()

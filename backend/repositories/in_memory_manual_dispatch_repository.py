@@ -502,6 +502,42 @@ class InMemoryManualDispatchRepository:
             and (not status or run_sheet.status == status)
         ]
 
+    def list_reserved_delivery_order_ids(self):
+        return {
+            order.task_id
+            for run_sheet in self.delivery_run_sheets
+            if run_sheet.status in {"GENERATED", "SAVED"}
+            for trip in run_sheet.trips
+            for order in trip.orders
+            if order.task_type == "ORDER" and order.task_id
+        }
+
+    def get_delivery_run_sheet_reserving_order(self, order_id):
+        reserving_sheets = [
+            run_sheet
+            for run_sheet in self.delivery_run_sheets
+            if run_sheet.status in {"GENERATED", "SAVED"}
+            and any(
+                order.task_type == "ORDER" and order.task_id == order_id
+                for trip in run_sheet.trips
+                for order in trip.orders
+            )
+        ]
+        return next(
+            (
+                run_sheet
+                for run_sheet in sorted(
+                    reserving_sheets,
+                    key=lambda item: (
+                        0 if item.status == "SAVED" else 1,
+                        item.generated_at or "",
+                        item.run_sheet_id,
+                    ),
+                )
+            ),
+            None,
+        )
+
     def get_delivery_run_sheet(self, run_sheet_id):
         return next(
             (

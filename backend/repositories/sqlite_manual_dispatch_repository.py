@@ -590,6 +590,47 @@ class SQLiteManualDispatchRepository:
             ).fetchall()
         return [self._row_to_delivery_run_sheet(row) for row in rows]
 
+    def list_reserved_delivery_order_ids(self):
+        with connect(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT DISTINCT run_sheet_row.task_id
+                FROM delivery_run_sheet_rows run_sheet_row
+                JOIN delivery_run_sheets run_sheet
+                    ON run_sheet.run_sheet_id = run_sheet_row.run_sheet_id
+                WHERE run_sheet.status IN ('GENERATED', 'SAVED')
+                    AND run_sheet_row.task_type = 'ORDER'
+                    AND run_sheet_row.task_id IS NOT NULL
+                    AND run_sheet_row.task_id != ''
+                ORDER BY run_sheet_row.task_id
+                """
+            ).fetchall()
+        return {row["task_id"] for row in rows}
+
+    def get_delivery_run_sheet_reserving_order(self, order_id):
+        with connect(self.db_path) as connection:
+            row = connection.execute(
+                """
+                SELECT run_sheet.*
+                FROM delivery_run_sheets run_sheet
+                JOIN delivery_run_sheet_rows run_sheet_row
+                    ON run_sheet_row.run_sheet_id = run_sheet.run_sheet_id
+                WHERE run_sheet.status IN ('GENERATED', 'SAVED')
+                    AND run_sheet_row.task_type = 'ORDER'
+                    AND run_sheet_row.task_id = ?
+                ORDER BY
+                    CASE run_sheet.status
+                        WHEN 'SAVED' THEN 0
+                        ELSE 1
+                    END,
+                    run_sheet.generated_at DESC,
+                    run_sheet.run_sheet_id
+                LIMIT 1
+                """,
+                (order_id,),
+            ).fetchone()
+        return self._row_to_delivery_run_sheet(row) if row else None
+
     def get_delivery_run_sheet(self, run_sheet_id):
         with connect(self.db_path) as connection:
             row = connection.execute(

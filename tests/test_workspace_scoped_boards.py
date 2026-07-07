@@ -11,6 +11,7 @@ from backend.repositories.sqlite_manual_dispatch_repository import (
 )
 from backend.schemas import (
     AssignTaskRequest,
+    DeliveryWorkspaceAssignOrderRequest,
     Driver,
     GenerateDeliveryRunSheetRequest,
     GenerateOpShopPickupCollectionRequest,
@@ -245,6 +246,96 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
             ),
         )
 
+    def test_delivery_run_sheet_reserves_orders_across_dispatch_dates(self):
+        other_dispatch_date = "2026-05-06"
+        self._create_delivery_order("ORDER-2", self.dispatch_date)
+        self._create_delivery_order("ORDER-UNRELATED", other_dispatch_date)
+        self._assign_order("ORDER-1")
+        self._assign_order("ORDER-2")
+        original_assignments = [
+            to_dict(assignment)
+            for assignment in self.repository.list_assignments(self.dispatch_date)
+        ]
+
+        generated = self.service.create_generated_delivery_run_sheet(
+            self._delivery_generate_request()
+        )
+        other_board = self.service.get_delivery_workspace_board(other_dispatch_date)
+        other_board_response = self.client.get(
+            "/api/manual-dispatch/delivery/board",
+            params={"dispatch_date": other_dispatch_date},
+        )
+        self.assertEqual(200, other_board_response.status_code)
+        api_order_ids = {
+            order["order_id"] for order in other_board_response.json()["orders"]
+        }
+
+        self.assertNotIn("ORDER-1", self._delivery_order_ids(other_board))
+        self.assertNotIn("ORDER-2", self._delivery_order_ids(other_board))
+        self.assertNotIn("ORDER-1", api_order_ids)
+        self.assertNotIn("ORDER-2", api_order_ids)
+        self.assertIn("ORDER-UNRELATED", api_order_ids)
+        self.assertNotIn("ORDER-1", self._delivery_assignment_ids(other_board))
+        self.assertNotIn("ORDER-2", self._delivery_assignment_ids(other_board))
+        self.assertIn("ORDER-UNRELATED", self._delivery_order_ids(other_board))
+        self.assertEqual(
+            original_assignments,
+            [
+                to_dict(assignment)
+                for assignment in self.repository.list_assignments(self.dispatch_date)
+            ],
+        )
+        with self.assertRaisesRegex(ValueError, "already been generated"):
+            self.service.assign_delivery_workspace_order(
+                DeliveryWorkspaceAssignOrderRequest(
+                    dispatch_date=other_dispatch_date,
+                    order_id="ORDER-1",
+                    driver_id="DRIVER-1",
+                    trip_no="trip1",
+                )
+            )
+
+        self.assertTrue(
+            self.service.cancel_generated_delivery_run_sheet(generated.run_sheet_id)
+        )
+        released_board = self.service.get_delivery_workspace_board(other_dispatch_date)
+        self.assertIn("ORDER-1", self._delivery_order_ids(released_board))
+        self.assertIn("ORDER-2", self._delivery_order_ids(released_board))
+        self.assertIn("ORDER-UNRELATED", self._delivery_order_ids(released_board))
+
+        saved = self.service.save_generated_delivery_run_sheet(
+            self.service.create_generated_delivery_run_sheet(
+                self._delivery_generate_request()
+            ).run_sheet_id,
+            self._save_request(),
+        )
+        saved_other_board = self.service.get_delivery_workspace_board(
+            other_dispatch_date
+        )
+        saved_original_board = self.service.get_delivery_workspace_board(
+            self.dispatch_date
+        )
+        self.assertNotIn("ORDER-1", self._delivery_order_ids(saved_other_board))
+        self.assertNotIn("ORDER-2", self._delivery_order_ids(saved_other_board))
+        self.assertIn("ORDER-UNRELATED", self._delivery_order_ids(saved_other_board))
+        self.assertEqual([], saved_other_board.saved_vehicle_assignment_locks)
+        self.assertEqual(
+            [saved.run_sheet_id],
+            [
+                lock.run_sheet_id
+                for lock in saved_original_board.saved_vehicle_assignment_locks
+            ],
+        )
+        with self.assertRaisesRegex(ValueError, "already been saved"):
+            self.service.assign_delivery_workspace_order(
+                DeliveryWorkspaceAssignOrderRequest(
+                    dispatch_date=other_dispatch_date,
+                    order_id="ORDER-2",
+                    driver_id="DRIVER-1",
+                    trip_no="trip1",
+                )
+            )
+
     def test_opshop_snapshots_filter_only_pickups_and_cancel_restores_them(self):
         self._assign_order()
         pickup_id = self._seed_and_assign_oncall_pickup()
@@ -428,12 +519,43 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
         )
         return pickup_id
 
-    def _assign_order(self):
+    def _create_delivery_order(self, order_id, delivery_date):
+        self.repository.create_order(
+            Order(
+                order_id=order_id,
+                invoice_number=f"INV-{order_id}",
+                order_no=f"ORDER-NO-{order_id}",
+                company_name=f"Delivery Customer {order_id}",
+                phone="03 9000 0000",
+                delivery_address="2 Delivery Street",
+                suburb="DANDENONG",
+                postcode="3175",
+                delivery_date=delivery_date,
+                zone="SOUTH EAST",
+                urgency="Normal",
+                preferred_driver_id=None,
+                pallet_quantity=1,
+                loose_bags_quantity=0,
+                start_time="10:00",
+                end_time="13:00",
+                note="Delivery note",
+                status="ACTIVE",
+                product_lines=[
+                    ProductDetailLine(
+                        product_name="Rags",
+                        quantity=1,
+                        unit="PALLETS",
+                    )
+                ],
+            )
+        )
+
+    def _assign_order(self, order_id="ORDER-1"):
         return self.service.assign_task(
             AssignTaskRequest(
                 dispatch_date=self.dispatch_date,
                 task_type="ORDER",
-                task_id="ORDER-1",
+                task_id=order_id,
                 driver_id="DRIVER-1",
                 trip_no="trip1",
             )
