@@ -1661,7 +1661,10 @@ function ordersForDeliveryDate(board, deliveryDate) {
 function assignedOrdersForDriver(board, deliveryDate, driverId) {
   const orders = new Map((board.orders || []).map((order) => [order.order_id, order]));
   return (board.assignments || [])
-    .filter((assignment) => assignment.driver_id === driverId)
+    .filter((assignment) =>
+      assignment.dispatch_date === board.dispatch_date &&
+      assignment.driver_id === driverId
+    )
     .map((assignment) => ({ assignment, order: orders.get(assignment.task_id) }))
     .filter((item) => item.order?.delivery_date === deliveryDate)
     .sort((left, right) => {

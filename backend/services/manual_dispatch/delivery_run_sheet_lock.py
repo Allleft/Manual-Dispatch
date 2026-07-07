@@ -5,6 +5,10 @@ DELIVERY_RUN_SHEET_GENERATED_LOCK_MESSAGE = (
     "Delivery Run Sheet has already been generated for this driver and delivery "
     "date. Cancel the generated Delivery Run Sheet before making changes."
 )
+DELIVERY_ORDER_ASSIGNED_LOCK_MESSAGE = (
+    "Delivery Order is already assigned to a driver/trip. "
+    "Unassign it before assigning it elsewhere."
+)
 
 
 def is_delivery_run_sheet_finalized(
@@ -52,6 +56,12 @@ def ensure_delivery_run_sheet_key_mutable(
 def ensure_order_not_reserved(repository, _dispatch_date, order_id):
     run_sheet = repository.get_delivery_run_sheet_reserving_order(order_id)
     _raise_for_run_sheet(run_sheet)
+
+
+def ensure_order_not_assigned_elsewhere(repository, dispatch_date, order_id):
+    assignments = repository.list_assignments_for_task("ORDER", order_id)
+    if any(assignment.dispatch_date != dispatch_date for assignment in assignments):
+        raise ValueError(DELIVERY_ORDER_ASSIGNED_LOCK_MESSAGE)
 
 
 def _raise_for_run_sheet(run_sheet):

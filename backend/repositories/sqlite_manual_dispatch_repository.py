@@ -607,6 +607,40 @@ class SQLiteManualDispatchRepository:
             ).fetchall()
         return {row["task_id"] for row in rows}
 
+    def list_globally_assigned_delivery_order_ids(self):
+        with connect(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT DISTINCT task_id
+                FROM manual_dispatch_assignments
+                WHERE task_type = 'ORDER'
+                    AND task_id IS NOT NULL
+                    AND task_id != ''
+                ORDER BY task_id
+                """
+            ).fetchall()
+        return {row["task_id"] for row in rows}
+
+    def list_globally_assigned_delivery_order_assignments(self):
+        with connect(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT *
+                FROM manual_dispatch_assignments
+                WHERE task_type = 'ORDER'
+                    AND task_id IS NOT NULL
+                    AND task_id != ''
+                ORDER BY dispatch_date, task_id, assignment_id
+                """
+            ).fetchall()
+        return [self._row_to_assignment(row) for row in rows]
+
+    def list_globally_unavailable_delivery_order_ids(self):
+        return (
+            self.list_globally_assigned_delivery_order_ids()
+            | self.list_reserved_delivery_order_ids()
+        )
+
     def get_delivery_run_sheet_reserving_order(self, order_id):
         with connect(self.db_path) as connection:
             row = connection.execute(
@@ -2559,6 +2593,19 @@ class SQLiteManualDispatchRepository:
                 (task_type, task_id),
             ).fetchone()
         return self._row_to_assignment(row) if row else None
+
+    def list_assignments_for_task(self, task_type, task_id):
+        with connect(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT *
+                FROM manual_dispatch_assignments
+                WHERE task_type = ? AND task_id = ?
+                ORDER BY updated_at DESC, assigned_at DESC, assignment_id DESC
+                """,
+                (task_type, task_id),
+            ).fetchall()
+        return [self._row_to_assignment(row) for row in rows]
 
     def remove_assignment(self, dispatch_date, task_type, task_id):
         with connect(self.db_path) as connection:

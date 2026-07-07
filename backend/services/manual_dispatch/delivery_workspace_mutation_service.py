@@ -1,5 +1,6 @@
 from backend.services.manual_dispatch.delivery_run_sheet_lock import (
     ensure_delivery_run_sheet_key_mutable,
+    ensure_order_not_assigned_elsewhere,
     ensure_order_not_reserved,
 )
 from backend.services.manual_dispatch.normalization import (
@@ -22,12 +23,18 @@ class DeliveryWorkspaceMutationService:
         self.validator.validate_driver_exists(driver_id)
         self.validator.validate_trip_no(trip_no)
 
-        ensure_order_not_reserved(self.repository, dispatch_date, order.order_id)
         current = self.repository.get_assignment(
             dispatch_date,
             "ORDER",
             order.order_id,
         )
+        ensure_order_not_reserved(self.repository, dispatch_date, order.order_id)
+        if not current:
+            ensure_order_not_assigned_elsewhere(
+                self.repository,
+                dispatch_date,
+                order.order_id,
+            )
         if current:
             ensure_delivery_run_sheet_key_mutable(
                 self.repository,

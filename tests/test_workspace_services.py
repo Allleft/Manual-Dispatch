@@ -95,6 +95,22 @@ class WorkspaceServicesTest(unittest.TestCase):
                 trip_no="trip1",
             )
         )
+        self.assertNotIn(
+            "ORD-001",
+            self._delivery_task_pool_order_ids(
+                service.get_delivery_workspace_board("2026-05-06")
+            ),
+        )
+        with self.assertRaisesRegex(ValueError, "already assigned"):
+            service.assign_task(
+                AssignTaskRequest(
+                    dispatch_date="2026-05-06",
+                    task_type="ORDER",
+                    task_id="ORD-001",
+                    driver_id="D002",
+                    trip_no="trip1",
+                )
+            )
         generated = service.create_generated_delivery_run_sheet(
             GenerateDeliveryRunSheetRequest(
                 dispatch_date="2026-05-05",
@@ -105,18 +121,34 @@ class WorkspaceServicesTest(unittest.TestCase):
 
         self.assertNotIn(
             "ORD-001",
-            {
-                order.order_id
-                for order in service.get_delivery_workspace_board("2026-05-06").orders
-            },
+            self._delivery_task_pool_order_ids(
+                service.get_delivery_workspace_board("2026-05-06")
+            ),
         )
         service.cancel_generated_delivery_run_sheet(generated.run_sheet_id)
+        self.assertNotIn(
+            "ORD-001",
+            self._delivery_task_pool_order_ids(
+                service.get_delivery_workspace_board("2026-05-06")
+            ),
+        )
+        service.unassign_task(
+            self._unassign_request("ORDER", "ORD-001")
+        )
         self.assertIn(
             "ORD-001",
-            {
-                order.order_id
-                for order in service.get_delivery_workspace_board("2026-05-06").orders
-            },
+            self._delivery_task_pool_order_ids(
+                service.get_delivery_workspace_board("2026-05-06")
+            ),
+        )
+        service.assign_task(
+            AssignTaskRequest(
+                dispatch_date="2026-05-05",
+                task_type="ORDER",
+                task_id="ORD-001",
+                driver_id="D001",
+                trip_no="trip1",
+            )
         )
 
         saved = service.save_generated_delivery_run_sheet(
@@ -135,10 +167,9 @@ class WorkspaceServicesTest(unittest.TestCase):
         self.assertEqual("SAVED", saved.status)
         self.assertNotIn(
             "ORD-001",
-            {
-                order.order_id
-                for order in service.get_delivery_workspace_board("2026-05-06").orders
-            },
+            self._delivery_task_pool_order_ids(
+                service.get_delivery_workspace_board("2026-05-06")
+            ),
         )
 
     def test_opshop_generate_cancel_and_empty_rules(self):
@@ -420,6 +451,11 @@ class WorkspaceServicesTest(unittest.TestCase):
     @staticmethod
     def _delivery_task_types(run_sheet):
         return [order.task_type for trip in run_sheet.trips for order in trip.orders]
+
+    @staticmethod
+    def _delivery_task_pool_order_ids(board):
+        assigned_order_ids = {assignment.task_id for assignment in board.assignments}
+        return {order.order_id for order in board.orders} - assigned_order_ids
 
     @staticmethod
     def _pickup_task_ids(collection):

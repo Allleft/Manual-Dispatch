@@ -12,6 +12,7 @@ from backend.repositories.sqlite_manual_dispatch_repository import (
 from backend.schemas import (
     AssignTaskRequest,
     DeliveryWorkspaceAssignOrderRequest,
+    DeliveryWorkspaceUnassignOrderRequest,
     Driver,
     GenerateDeliveryRunSheetRequest,
     GenerateOpShopPickupCollectionRequest,
@@ -216,7 +217,7 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
             self.service.cancel_generated_delivery_run_sheet(generated.run_sheet_id)
         )
         cancelled_board = self.service.get_delivery_workspace_board(self.dispatch_date)
-        self.assertIn("ORDER-1", self._delivery_order_ids(cancelled_board))
+        self.assertNotIn("ORDER-1", self._delivery_task_pool_order_ids(cancelled_board))
         self.assertIn("ORDER-1", self._delivery_assignment_ids(cancelled_board))
 
         saved = self.service.save_generated_delivery_run_sheet(
@@ -266,18 +267,19 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
             params={"dispatch_date": other_dispatch_date},
         )
         self.assertEqual(200, other_board_response.status_code)
-        api_order_ids = {
+        api_payload = other_board_response.json()
+        api_task_pool_order_ids = {
             order["order_id"] for order in other_board_response.json()["orders"]
-        }
+        } - {assignment["task_id"] for assignment in api_payload["assignments"]}
 
-        self.assertNotIn("ORDER-1", self._delivery_order_ids(other_board))
-        self.assertNotIn("ORDER-2", self._delivery_order_ids(other_board))
-        self.assertNotIn("ORDER-1", api_order_ids)
-        self.assertNotIn("ORDER-2", api_order_ids)
-        self.assertIn("ORDER-UNRELATED", api_order_ids)
+        self.assertNotIn("ORDER-1", self._delivery_task_pool_order_ids(other_board))
+        self.assertNotIn("ORDER-2", self._delivery_task_pool_order_ids(other_board))
+        self.assertNotIn("ORDER-1", api_task_pool_order_ids)
+        self.assertNotIn("ORDER-2", api_task_pool_order_ids)
+        self.assertIn("ORDER-UNRELATED", api_task_pool_order_ids)
         self.assertNotIn("ORDER-1", self._delivery_assignment_ids(other_board))
         self.assertNotIn("ORDER-2", self._delivery_assignment_ids(other_board))
-        self.assertIn("ORDER-UNRELATED", self._delivery_order_ids(other_board))
+        self.assertIn("ORDER-UNRELATED", self._delivery_task_pool_order_ids(other_board))
         self.assertEqual(
             original_assignments,
             [
@@ -299,9 +301,27 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
             self.service.cancel_generated_delivery_run_sheet(generated.run_sheet_id)
         )
         released_board = self.service.get_delivery_workspace_board(other_dispatch_date)
-        self.assertIn("ORDER-1", self._delivery_order_ids(released_board))
-        self.assertIn("ORDER-2", self._delivery_order_ids(released_board))
-        self.assertIn("ORDER-UNRELATED", self._delivery_order_ids(released_board))
+        original_after_cancel = self.service.get_delivery_workspace_board(
+            self.dispatch_date
+        )
+        self.assertNotIn("ORDER-1", self._delivery_task_pool_order_ids(released_board))
+        self.assertNotIn("ORDER-2", self._delivery_task_pool_order_ids(released_board))
+        self.assertIn("ORDER-UNRELATED", self._delivery_task_pool_order_ids(released_board))
+        self.assertIn("ORDER-1", self._delivery_assignment_ids(original_after_cancel))
+        self.assertIn("ORDER-2", self._delivery_assignment_ids(original_after_cancel))
+
+        self.service.unassign_delivery_workspace_order(
+            DeliveryWorkspaceUnassignOrderRequest(
+                dispatch_date=self.dispatch_date,
+                order_id="ORDER-1",
+            )
+        )
+        after_unassign_other = self.service.get_delivery_workspace_board(
+            other_dispatch_date
+        )
+        self.assertIn("ORDER-1", self._delivery_task_pool_order_ids(after_unassign_other))
+        self.assertNotIn("ORDER-2", self._delivery_task_pool_order_ids(after_unassign_other))
+        self._assign_order("ORDER-1")
 
         saved = self.service.save_generated_delivery_run_sheet(
             self.service.create_generated_delivery_run_sheet(
@@ -315,9 +335,9 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
         saved_original_board = self.service.get_delivery_workspace_board(
             self.dispatch_date
         )
-        self.assertNotIn("ORDER-1", self._delivery_order_ids(saved_other_board))
-        self.assertNotIn("ORDER-2", self._delivery_order_ids(saved_other_board))
-        self.assertIn("ORDER-UNRELATED", self._delivery_order_ids(saved_other_board))
+        self.assertNotIn("ORDER-1", self._delivery_task_pool_order_ids(saved_other_board))
+        self.assertNotIn("ORDER-2", self._delivery_task_pool_order_ids(saved_other_board))
+        self.assertIn("ORDER-UNRELATED", self._delivery_task_pool_order_ids(saved_other_board))
         self.assertEqual([], saved_other_board.saved_vehicle_assignment_locks)
         self.assertEqual(
             [saved.run_sheet_id],
@@ -336,6 +356,50 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
                 )
             )
 
+    def test_manual_assignment_reserves_order_across_dispatch_dates_until_unassigned(self):
+        other_dispatch_date = "2026-05-06"
+        third_dispatch_date = "2026-05-08"
+        self._create_delivery_order("ORDER-2", self.dispatch_date)
+        self._create_delivery_order("ORDER-UNRELATED", other_dispatch_date)
+        self._assign_order("ORDER-1")
+        self._assign_order("ORDER-2")
+
+        for dispatch_date in (other_dispatch_date, third_dispatch_date):
+            board = self.service.get_delivery_workspace_board(dispatch_date)
+            self.assertNotIn("ORDER-1", self._delivery_task_pool_order_ids(board))
+            self.assertNotIn("ORDER-2", self._delivery_task_pool_order_ids(board))
+            self.assertIn("ORDER-UNRELATED", self._delivery_task_pool_order_ids(board))
+
+        original_board = self.service.get_delivery_workspace_board(self.dispatch_date)
+        self.assertIn("ORDER-1", self._delivery_assignment_ids(original_board))
+        self.assertIn("ORDER-2", self._delivery_assignment_ids(original_board))
+        with self.assertRaisesRegex(ValueError, "already assigned"):
+            self.service.assign_delivery_workspace_order(
+                DeliveryWorkspaceAssignOrderRequest(
+                    dispatch_date=other_dispatch_date,
+                    order_id="ORDER-1",
+                    driver_id="DRIVER-1",
+                    trip_no="trip1",
+                )
+            )
+
+        self.service.unassign_delivery_workspace_order(
+            DeliveryWorkspaceUnassignOrderRequest(
+                dispatch_date=self.dispatch_date,
+                order_id="ORDER-1",
+            )
+        )
+
+        released_other = self.service.get_delivery_workspace_board(other_dispatch_date)
+        released_original = self.service.get_delivery_workspace_board(
+            self.dispatch_date
+        )
+        self.assertIn("ORDER-1", self._delivery_task_pool_order_ids(released_other))
+        self.assertIn("ORDER-1", self._delivery_task_pool_order_ids(released_original))
+        self.assertNotIn("ORDER-2", self._delivery_task_pool_order_ids(released_other))
+        self.assertNotIn("ORDER-2", self._delivery_task_pool_order_ids(released_original))
+        self.assertIn("ORDER-UNRELATED", self._delivery_task_pool_order_ids(released_other))
+
     def test_opshop_snapshots_filter_only_pickups_and_cancel_restores_them(self):
         self._assign_order()
         pickup_id = self._seed_and_assign_oncall_pickup()
@@ -345,9 +409,9 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
         )
         generated_board = self.service.get_opshop_workspace_board(self.dispatch_date)
         self.assertNotIn(pickup_id, self._opshop_pickup_ids(generated_board))
-        self.assertIn(
+        self.assertNotIn(
             "ORDER-1",
-            self._delivery_order_ids(
+            self._delivery_task_pool_order_ids(
                 self.service.get_delivery_workspace_board(self.dispatch_date)
             ),
         )
@@ -369,7 +433,7 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
         saved_board = self.service.get_opshop_workspace_board(self.dispatch_date)
         self.assertNotIn(pickup_id, self._opshop_pickup_ids(saved_board))
         delivery_board = self.service.get_delivery_workspace_board(self.dispatch_date)
-        self.assertIn("ORDER-1", self._delivery_order_ids(delivery_board))
+        self.assertNotIn("ORDER-1", self._delivery_task_pool_order_ids(delivery_board))
         self.assertIn("ORDER-1", self._delivery_assignment_ids(delivery_board))
 
     def test_legacy_board_routes_and_service_boundaries_remain_intact(self):
@@ -625,6 +689,11 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
     @staticmethod
     def _delivery_order_ids(board):
         return {order.order_id for order in board.orders}
+
+    @staticmethod
+    def _delivery_task_pool_order_ids(board):
+        assigned_order_ids = {assignment.task_id for assignment in board.assignments}
+        return {order.order_id for order in board.orders} - assigned_order_ids
 
     @staticmethod
     def _delivery_assignment_ids(board):

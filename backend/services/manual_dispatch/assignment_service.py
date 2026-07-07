@@ -1,4 +1,8 @@
 from backend.schemas import ManualDriverVehicleClearResponse
+from backend.services.manual_dispatch.delivery_run_sheet_lock import (
+    ensure_order_not_assigned_elsewhere,
+    ensure_order_not_reserved,
+)
 from backend.services.manual_dispatch.final_summary_lock import (
     ensure_driver_delivery_date_not_finalized,
     is_driver_delivery_date_finalized,
@@ -27,6 +31,23 @@ class AssignmentService:
             request.driver_id,
             delivery_date,
         )
+        if request.task_type == "ORDER":
+            current = self.repository.get_assignment(
+                request.dispatch_date,
+                "ORDER",
+                request.task_id,
+            )
+            ensure_order_not_reserved(
+                self.repository,
+                request.dispatch_date,
+                request.task_id,
+            )
+            if not current:
+                ensure_order_not_assigned_elsewhere(
+                    self.repository,
+                    request.dispatch_date,
+                    request.task_id,
+                )
 
         assignment = self.repository.upsert_assignment(
             dispatch_date=request.dispatch_date,
@@ -46,6 +67,12 @@ class AssignmentService:
 
     def unassign_task(self, request):
         self.validator.validate_task_type(request.task_type)
+        if request.task_type == "ORDER":
+            ensure_order_not_reserved(
+                self.repository,
+                request.dispatch_date,
+                request.task_id,
+            )
         assignment = self.repository.get_assignment(
             request.dispatch_date,
             request.task_type,

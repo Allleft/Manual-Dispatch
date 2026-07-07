@@ -59,11 +59,12 @@ Workspace navigation is hash-based. Browser refresh, copied links, Back, and For
 1. Open **Order Delivery → Task Pool**.
 2. Add a Delivery Order manually, import text-based Attache invoice PDFs, or filter active unassigned Orders by search, urgency, or Delivery Date.
 3. Select a Driver and Trip 1 or Trip 2 for each Order and assign it manually.
-4. Open **Trip Summary**, select the Delivery Date, review the driver trips, and select a vehicle where required.
-5. Select Generate for a driver/date and confirm the information in the confirmation modal.
-6. Generation creates an immutable `GENERATED` Delivery Run Sheet snapshot and reserves its captured Orders and vehicle target.
-7. From **Run Sheets**, either cancel an incorrect Generated sheet or save/export it. Saving promotes the same snapshot to `SAVED`; it does not rebuild it from mutable live records.
-8. Saved Delivery Run Sheets remain immutable history and can be re-exported from their stored snapshot rows.
+4. Assigned Orders leave the Task Pool globally and remain unavailable there until staff manually unassign them; Generated/Saved Run Sheet snapshots also reserve captured Orders globally.
+5. Open **Trip Summary**, select the Delivery Date, review the driver trips, and select a vehicle where required.
+6. Select Generate for a driver/date and confirm the information in the confirmation modal.
+7. Generation creates an immutable `GENERATED` Delivery Run Sheet snapshot and reserves its captured Orders and vehicle target.
+8. From **Run Sheets**, either cancel an incorrect Generated sheet or save/export it. Cancel Generated removes only the snapshot reservation; the original Order assignments remain in Trip Summary until staff manually unassign them. Saving promotes the same snapshot to `SAVED`; it does not rebuild it from mutable live records.
+9. Saved Delivery Run Sheets remain immutable history and can be re-exported from their stored snapshot rows.
 
 ### Delivery Orders and Attache Invoice Import
 
@@ -80,7 +81,9 @@ Delivery Orders support manual add, edit, and soft-cancel operations. Delivery T
 
 ### Delivery Run Sheet Locking
 
-- `GENERATED` Delivery Run Sheets reserve only the captured Delivery Orders and the selected driver/date vehicle target until cancelled or saved.
+- Active Delivery Order assignments reserve those Orders globally from every Delivery Task Pool until staff manually unassign them.
+- `GENERATED` Delivery Run Sheets reserve captured Delivery Orders globally and reserve the selected driver/date vehicle target until cancelled or saved.
+- Cancelling a `GENERATED` Delivery Run Sheet releases only the snapshot reservation; still-assigned Orders remain hidden from Task Pool and return to their original Trip Summary assignment context.
 - `SAVED` Delivery Run Sheets block further Delivery assignment and vehicle changes for their driver/date.
 - Delivery locks are enforced by the scoped Delivery services and do not block OP SHOP work.
 

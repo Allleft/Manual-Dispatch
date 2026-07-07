@@ -29,7 +29,9 @@ class DeliveryWorkspaceBoardService:
 
         assignments = [
             assignment
-            for assignment in self.repository.list_assignments(dispatch_date)
+            for assignment in (
+                self.repository.list_globally_assigned_delivery_order_assignments()
+            )
             if assignment.task_type == "ORDER"
             and assignment.task_id not in reserved_task_ids
         ]

@@ -512,6 +512,26 @@ class InMemoryManualDispatchRepository:
             if order.task_type == "ORDER" and order.task_id
         }
 
+    def list_globally_assigned_delivery_order_ids(self):
+        return {
+            assignment.task_id
+            for assignment in self.assignments
+            if assignment.task_type == "ORDER" and assignment.task_id
+        }
+
+    def list_globally_assigned_delivery_order_assignments(self):
+        return [
+            assignment
+            for assignment in self.assignments
+            if assignment.task_type == "ORDER" and assignment.task_id
+        ]
+
+    def list_globally_unavailable_delivery_order_ids(self):
+        return (
+            self.list_globally_assigned_delivery_order_ids()
+            | self.list_reserved_delivery_order_ids()
+        )
+
     def get_delivery_run_sheet_reserving_order(self, order_id):
         reserving_sheets = [
             run_sheet
@@ -1456,6 +1476,13 @@ class InMemoryManualDispatchRepository:
             ),
             None,
         )
+
+    def list_assignments_for_task(self, task_type, task_id):
+        return [
+            assignment
+            for assignment in self.assignments
+            if assignment.task_type == task_type and assignment.task_id == task_id
+        ]
 
     def remove_assignment(self, dispatch_date, task_type, task_id):
         before_count = len(self.assignments)
