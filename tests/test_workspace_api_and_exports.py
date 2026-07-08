@@ -288,66 +288,67 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             if cell.value is not None
         ]
         self.assertIn("DAILY RUN SHEET", values)
-        self.assertIn("Date:", values)
-        self.assertIn(self.dispatch_date, values)
-        self.assertIn("Driver:", values)
-        self.assertIn("John", values)
-        self.assertIn("DRIVER: John\nREGO#: ABC123", values)
+        self.assertIn("DATE  05/05/2026", values)
+        self.assertIn("DRIVER: John", values)
+        self.assertIn("REGO #", values)
+        self.assertIn("ABC123", values)
         self.assertNotIn("EDITED-LIVE-REGO", values)
-        self.assertIn("Start Time:", values)
+        self.assertIn("START TIME: ____________________________________", values)
         self.assertIn(
-            "Time Loading Started (to be filled in by storeman):",
+            "TIME LOADING STARTED(TO BE FILLED IN BY STOREMAN)___________",
             values,
         )
         self.assertIn(
-            "Time Loading Completed (to be filled in by storeman):",
+            "TIME LOADING COMPLETED(TO BE FILLED IN BY STOREMAN)_____________",
             values,
         )
-        self.assertIn("Finish Time:", values)
+        self.assertIn("FINISH TIME:____________________________________", values)
         self.assertNotIn("Final Trip Summary", values)
         self.assertNotIn("Address", values)
         self.assertNotIn("Product Details", values)
         self.assertNotIn("Order #", values)
-        self.assertEqual("DRIVER: John\nREGO#: ABC123", worksheet["K1"].value)
+        self.assertEqual("DRIVER: John", worksheet["F1"].value)
+        self.assertEqual("REGO #", worksheet["L1"].value)
+        self.assertEqual("ABC123", worksheet["M1"].value)
 
-        header_row = [cell.value for cell in worksheet[9]]
+        header_row = [cell.value for cell in worksheet[8]]
         self.assertEqual(
             [
+                None,
                 "Customer Name",
                 "Suburb",
                 "Invoice #",
                 "PRODUCT",
-                "KGS",
+                "KG'S",
                 "Pallets",
                 "COD",
                 "CQ",
-                "Time Out",
                 "Time In",
-                "Print Name",
-                "Comments / Signature",
-                "No. of Pallets Returned",
+                "Time Out",
+                "PRINT NAME",
+                "SIGNATURE",
+                "NO. # PALLETS RETND",
             ],
             header_row,
         )
 
         rows = list(worksheet.iter_rows(values_only=True))
         customer_a_index = next(
-            index for index, row in enumerate(rows) if row[0] == "Demo Customer A"
+            index for index, row in enumerate(rows) if row[1] == "Demo Customer A"
         )
-        trip_2_index = next(index for index, row in enumerate(rows) if row[0] == "TRIP 2")
         customer_b_index = next(
-            index for index, row in enumerate(rows) if row[0] == "Demo Customer B"
+            index for index, row in enumerate(rows) if row[1] == "Demo Customer B"
         )
-        self.assertLess(customer_a_index, trip_2_index)
-        self.assertLess(trip_2_index, customer_b_index)
+        self.assertLess(customer_a_index, customer_b_index)
         customer_a_row = rows[customer_a_index]
-        self.assertEqual("INV-1001", customer_a_row[2])
-        self.assertEqual("Snapshot Alpha Product\nSnapshot Beta Product", customer_a_row[3])
-        self.assertIsNone(customer_a_row[4])
-        self.assertEqual(2, customer_a_row[5])
-        self.assertTrue(worksheet.cell(row=customer_a_index + 1, column=4).alignment.wrap_text)
+        self.assertEqual(1, customer_a_row[0])
+        self.assertEqual("INV-1001", customer_a_row[3])
+        self.assertEqual("Snapshot Alpha Product\nSnapshot Beta Product", customer_a_row[4])
+        self.assertIsNone(customer_a_row[5])
+        self.assertEqual(2, customer_a_row[6])
+        self.assertTrue(worksheet.cell(row=customer_a_index + 1, column=5).alignment.wrap_text)
         self.assertGreaterEqual(worksheet.row_dimensions[customer_a_index + 1].height, 30)
-        for manual_column in range(6, 13):
+        for manual_column in range(7, 14):
             self.assertIsNone(customer_a_row[manual_column])
 
     def test_delivery_date_export_uses_snapshot_rows_and_one_sheet_per_driver(self):
@@ -428,12 +429,20 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertNotIn("Sheet", workbook.sheetnames)
 
         expected_headers = [
+            None,
             "Customer Name",
             "Suburb",
             "Invoice #",
             "PRODUCT",
-            "KGS",
+            "KG'S",
             "Pallets",
+            "COD",
+            "CQ",
+            "Time In",
+            "Time Out",
+            "PRINT NAME",
+            "SIGNATURE",
+            "NO. # PALLETS RETND",
         ]
         for worksheet in workbook.worksheets:
             self.assertEqual("landscape", worksheet.page_setup.orientation)
@@ -443,13 +452,13 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             )
             self.assertEqual(1, worksheet.page_setup.fitToWidth)
             self.assertEqual(0, worksheet.page_setup.fitToHeight)
-            self.assertEqual("$7:$7", worksheet.print_title_rows)
-            self.assertEqual(expected_headers, [cell.value for cell in worksheet[7]])
-            self.assertEqual(6, worksheet.max_column)
-            self.assertEqual("DATE: 05/05/2026", worksheet["A1"].value)
-            self.assertEqual("DAILY RUN SHEET", worksheet["B1"].value)
-            self.assertTrue(str(worksheet["E1"].value).startswith("DRIVER: "))
-            self.assertIn("REGO#:", worksheet["E1"].value)
+            self.assertEqual("$8:$8", worksheet.print_title_rows)
+            self.assertEqual(expected_headers, [cell.value for cell in worksheet[8]])
+            self.assertEqual(14, worksheet.max_column)
+            self.assertEqual("DAILY RUN SHEET", worksheet["A1"].value)
+            self.assertEqual("DATE  05/05/2026", worksheet["C1"].value)
+            self.assertTrue(str(worksheet["F1"].value).startswith("DRIVER: "))
+            self.assertEqual("REGO #", worksheet["L1"].value)
             values = [
                 cell.value
                 for row in worksheet.iter_rows()
@@ -457,39 +466,39 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
                 if cell.value is not None
             ]
             for label in (
-                "START TIME: ______________________",
-                "TIME LOADING STARTED (TO BE FILLED IN BY STOREMAN): ______________________",
-                "TIME LOADING COMPLETED (TO BE FILLED IN BY STOREMAN): ______________________",
-                "FINISH TIME: ______________________",
+                "START TIME: ____________________________________",
+                "TIME LOADING STARTED(TO BE FILLED IN BY STOREMAN)___________",
+                "TIME LOADING COMPLETED(TO BE FILLED IN BY STOREMAN)_____________",
+                "FINISH TIME:____________________________________",
             ):
                 self.assertIn(label, values)
-            for forbidden in (
-                "COD",
-                "CQ",
-                "Time In",
-                "Time Out",
-                "Print Name",
-                "Customer Signature",
-                "No. of Pallets Picked",
-            ):
-                self.assertNotIn(forbidden, values)
+            self.assertIn("COD", values)
+            self.assertIn("CQ", values)
+            self.assertIn("Time In", values)
+            self.assertIn("Time Out", values)
+            self.assertIn("PRINT NAME", values)
+            self.assertIn("SIGNATURE", values)
+            self.assertIn("NO. # PALLETS RETND", values)
             self.assertFalse(any(str(value).startswith("Edited Live") for value in values))
 
         john_rows = list(workbook["John"].iter_rows(values_only=True))
-        self.assertEqual("Demo Customer A", john_rows[7][0])
-        self.assertEqual("Demo Customer C", john_rows[8][0])
-        self.assertEqual("INV-1001", john_rows[7][2])
-        self.assertEqual("Snapshot Alpha Product\nSnapshot Beta Product", john_rows[7][3])
-        self.assertIsNone(john_rows[7][4])
-        self.assertEqual(2, john_rows[7][5])
-        self.assertIsNone(workbook["John"]["E8"].value)
-        self.assertEqual("General", workbook["John"]["F8"].number_format)
-        self.assertTrue(workbook["John"]["D8"].alignment.wrap_text)
-        self.assertGreaterEqual(workbook["John"].row_dimensions[8].height, 30)
-        self.assertGreater(workbook["John"].column_dimensions["D"].width, 30)
+        self.assertEqual(1, john_rows[8][0])
+        self.assertEqual("Demo Customer A", john_rows[8][1])
+        self.assertEqual("Demo Customer C", john_rows[9][1])
+        self.assertEqual("INV-1001", john_rows[8][3])
+        self.assertEqual("Snapshot Alpha Product\nSnapshot Beta Product", john_rows[8][4])
+        self.assertIsNone(john_rows[8][5])
+        self.assertEqual(2, john_rows[8][6])
+        self.assertIsNone(workbook["John"]["F9"].value)
+        self.assertEqual("General", workbook["John"]["G9"].number_format)
+        self.assertTrue(workbook["John"]["E9"].alignment.wrap_text)
+        self.assertGreaterEqual(workbook["John"].row_dimensions[9].height, 30)
+        self.assertGreater(workbook["John"].column_dimensions["B"].width, 25)
         self.assertNotIn("Edited Live Product ORD-001", self._workbook_values(response.content))
-        self.assertEqual("DRIVER: John\nREGO#: ABC123", workbook["John"]["E1"].value)
-        self.assertEqual("DRIVER: Tony\nREGO#: XYZ888", workbook["Tony"]["E1"].value)
+        self.assertEqual("DRIVER: John", workbook["John"]["F1"].value)
+        self.assertEqual("ABC123", workbook["John"]["M1"].value)
+        self.assertEqual("DRIVER: Tony", workbook["Tony"]["F1"].value)
+        self.assertEqual("XYZ888", workbook["Tony"]["M1"].value)
         self.assertNotIn("EDITED-LIVE-REGO", self._workbook_values(response.content))
 
         statuses = {
@@ -529,7 +538,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             self.dispatch_date,
         )
         no_rego_workbook = load_workbook(BytesIO(no_rego_bytes))
-        self.assertIn("REGO#: Not selected", no_rego_workbook.active["E1"].value)
+        self.assertEqual("Not selected", no_rego_workbook.active["M1"].value)
 
     def test_delivery_run_sheet_product_display_prefers_snapshot_lines(self):
         order = DeliveryRunSheetOrderSnapshot(

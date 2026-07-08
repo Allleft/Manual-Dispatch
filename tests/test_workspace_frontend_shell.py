@@ -618,12 +618,20 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("FINISH TIME: ______________________", generated_block)
         self.assertIn(
             """const DAILY_RUN_SHEET_COLUMNS = [
+  "",
   "Customer Name",
   "Suburb",
   "Invoice #",
   "PRODUCT",
-  "KGS",
+  "KG'S",
   "Pallets",
+  "COD",
+  "CQ",
+  "Time In",
+  "Time Out",
+  "PRINT NAME",
+  "SIGNATURE",
+  "NO. # PALLETS RETND",
 ];""",
             generated_block,
         )
@@ -639,16 +647,16 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("dailyRunSheetSnapshotRows(runSheet)", generated_block)
         self.assertIn("runSheet.trips", generated_block)
         self.assertNotIn("state.deliveryBoard", generated_block)
-        for forbidden in (
+        for manual_column in (
             '"COD"',
             '"CQ"',
             '"Time In"',
             '"Time Out"',
-            '"Print Name"',
-            '"Customer Signature"',
-            '"No. of Pallets Picked"',
+            '"PRINT NAME"',
+            '"SIGNATURE"',
+            '"NO. # PALLETS RETND"',
         ):
-            self.assertNotIn(forbidden, generated_block)
+            self.assertIn(manual_column, generated_block)
         self.assertIn('"Save Run Sheet"', generated_block)
         self.assertIn('"Cancel Generated"', generated_block)
         saved_block = self.delivery_renderer.split(

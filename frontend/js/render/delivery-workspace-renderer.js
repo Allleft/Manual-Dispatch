@@ -796,11 +796,11 @@ function createGeneratedDailyRunSheet(runSheet, state, actions) {
   });
   head.append(headerRow);
   const body = document.createElement("tbody");
-  dailyRunSheetSnapshotRows(runSheet).forEach((order) => {
+  dailyRunSheetSnapshotRows(runSheet).forEach((order, rowIndex) => {
     const row = document.createElement("tr");
-    dailyRunSheetRowValues(order).forEach((value, columnIndex) => {
+    dailyRunSheetRowValues(order, rowIndex + 1).forEach((value, columnIndex) => {
       const cell = document.createElement("td");
-      if (columnIndex === 3) {
+      if (columnIndex === 4) {
         cell.classList.add("workspace-daily-run-sheet-product-cell");
       }
       cell.textContent = value;
@@ -840,12 +840,20 @@ function createGeneratedDailyRunSheet(runSheet, state, actions) {
 
 
 const DAILY_RUN_SHEET_COLUMNS = [
+  "",
   "Customer Name",
   "Suburb",
   "Invoice #",
   "PRODUCT",
-  "KGS",
+  "KG'S",
   "Pallets",
+  "COD",
+  "CQ",
+  "Time In",
+  "Time Out",
+  "PRINT NAME",
+  "SIGNATURE",
+  "NO. # PALLETS RETND",
 ];
 
 
@@ -892,14 +900,22 @@ function dailyRunSheetSnapshotRows(runSheet) {
 }
 
 
-function dailyRunSheetRowValues(order) {
+function dailyRunSheetRowValues(order, rowNumber) {
   return [
+    formatRunSheetNumber(rowNumber),
     formatOptional(order.company_name_snapshot, ""),
     formatOptional(order.suburb_snapshot, ""),
     formatOptional(order.invoice_number_snapshot || order.order_no_snapshot, ""),
     formatRunSheetProduct(order),
     "",
     formatRunSheetNumber(order.pallet_quantity_snapshot),
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
   ];
 }
 
