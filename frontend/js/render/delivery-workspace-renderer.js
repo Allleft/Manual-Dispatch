@@ -610,6 +610,7 @@ function createAssignedOrderRow(order, assignment, driver, isLocked, state, acti
   const title = document.createElement("button");
   title.type = "button";
   title.className = "workspace-order-detail-trigger";
+  title.dataset.orderId = order.order_id || "";
   title.setAttribute(
     "aria-label",
     `View Delivery Order ${formatOptional(order.invoice_number, order.order_id)} details`,
@@ -869,11 +870,9 @@ function createDailyRunSheetDriverHeader(runSheet) {
   ].forEach(([labelText, valueText]) => {
     const row = document.createElement("div");
     row.className = "workspace-daily-run-sheet-driver-line";
-    const label = document.createElement("span");
-    label.textContent = labelText;
-    const value = document.createElement("strong");
-    value.textContent = valueText;
-    row.append(label, value);
+    const line = document.createElement("strong");
+    line.textContent = `${labelText} ${valueText}`;
+    row.append(line);
     field.append(row);
   });
   return field;
@@ -2025,7 +2024,15 @@ function createWorkspaceModal(titleText, onClose, {
   const root = document.createElement("div");
   root.className = "workspace-modal-backdrop";
   const previouslyFocused = typeof document !== "undefined" ? document.activeElement : null;
+  let closeRequested = false;
   const requestClose = () => {
+    if (closeRequested) {
+      return;
+    }
+    closeRequested = true;
+    if (typeof document !== "undefined") {
+      document.removeEventListener("keydown", handleDocumentEscape);
+    }
     onClose();
     if (
       previouslyFocused
@@ -2040,6 +2047,15 @@ function createWorkspaceModal(titleText, onClose, {
       });
     }
   };
+  const handleDocumentEscape = (event) => {
+    if (event.key === "Escape" && !closeDisabled && document.body.contains(root)) {
+      event.preventDefault();
+      requestClose();
+    }
+  };
+  if (typeof document !== "undefined") {
+    document.addEventListener("keydown", handleDocumentEscape);
+  }
   const modal = document.createElement("article");
   modal.className = `workspace-modal workspace-modal-${width}`;
   modal.tabIndex = -1;

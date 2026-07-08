@@ -572,6 +572,8 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("workspace-modal-action-danger", action_block)
         self.assertIn("createWorkspaceModal", self.delivery_renderer)
         self.assertIn("trapModalFocus", self.delivery_renderer)
+        self.assertIn('document.addEventListener("keydown", handleDocumentEscape)', self.delivery_renderer)
+        self.assertIn('document.removeEventListener("keydown", handleDocumentEscape)', self.delivery_renderer)
         assigned_order_block = self.delivery_renderer.split(
             "function createAssignedOrderRow", 1
         )[1].split("function createRunSheetList", 1)[0]
@@ -580,6 +582,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         )[1]
         self.assertIn("workspace-order-detail-trigger", assigned_order_block)
         self.assertIn('title.type = "button"', assigned_order_block)
+        self.assertIn("title.dataset.orderId", assigned_order_block)
         self.assertIn("actions.openDeliveryOrderDetail", assigned_order_block)
         self.assertIn("order.order_id", assigned_order_block)
         self.assertIn("readOnly: true", assigned_order_block)
@@ -592,6 +595,9 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn('"Current Assignment"', self.delivery_renderer)
         self.assertIn('"Current assigned driver"', self.delivery_renderer)
         self.assertIn('"Current trip"', self.delivery_renderer)
+        self.assertIn("focusDeliveryOrderDetailTrigger", self.workspace_actions)
+        self.assertIn(".workspace-order-detail-trigger", self.workspace_actions)
+        self.assertIn("item.dataset.orderId === orderId", self.workspace_actions)
 
     def test_generated_delivery_run_sheets_use_daily_form_snapshot_preview(self):
         generated_block = self.delivery_renderer.split(
@@ -602,6 +608,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn('"DRIVER:"', generated_block)
         self.assertIn('"REGO#:"', generated_block)
         self.assertIn("runSheet.vehicle_rego_snapshot", generated_block)
+        self.assertIn("${labelText} ${valueText}", generated_block)
         self.assertIn('"Not selected"', generated_block)
         self.assertIn('createBadge("GENERATED"', generated_block)
         self.assertNotIn("Vehicle:", generated_block)

@@ -429,12 +429,16 @@ export function createWorkspaceActions({
     if (state.deliveryOrderFormMode && !confirmAction("Discard unsaved Delivery Order changes?")) {
       return;
     }
+    const restoreOrderDetailTriggerId = state.deliveryOrderDetailReadOnly
+      ? state.deliveryOrderDetailId
+      : "";
     state.deliveryOrderDetailId = "";
     state.deliveryOrderDetailReadOnly = false;
     state.deliveryOrderFormMode = "";
     state.deliveryOrderForm = {};
     state.deliveryOrderModalError = "";
     renderWorkspace();
+    focusDeliveryOrderDetailTrigger(restoreOrderDetailTriggerId);
   }
 
   function openAddDeliveryOrder() {
@@ -1977,6 +1981,30 @@ export function createWorkspaceActions({
     state.deliveryVehicleEditingId = "";
     state.deliverySpecificationError = "";
     state.deliverySpecificationBusyKey = "";
+  }
+
+  function focusDeliveryOrderDetailTrigger(orderId) {
+    if (!orderId || typeof window === "undefined" || typeof document === "undefined") {
+      return;
+    }
+    const focusTrigger = () => {
+      const trigger = Array.from(document.querySelectorAll(".workspace-order-detail-trigger"))
+        .find((item) => item.dataset.orderId === orderId);
+      if (trigger && typeof trigger.focus === "function") {
+        trigger.focus({ preventScroll: true });
+      }
+    };
+    if (typeof window.requestAnimationFrame === "function") {
+      window.requestAnimationFrame(() => {
+        focusTrigger();
+        window.requestAnimationFrame(focusTrigger);
+      });
+    }
+    if (typeof window.setTimeout === "function") {
+      window.setTimeout(focusTrigger, 0);
+      window.setTimeout(focusTrigger, 50);
+    }
+    focusTrigger();
   }
 
   function hasDeliveryAttacheDraft() {
