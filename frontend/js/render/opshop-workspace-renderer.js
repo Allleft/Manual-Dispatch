@@ -1009,6 +1009,7 @@ function createCollectionSection(titleText, description, collections, emptyMessa
 function createCollectionCard(collection, state, actions) {
   const card = document.createElement("article");
   card.className = "workspace-record-card workspace-collection-card";
+
   const top = document.createElement("div");
   top.className = "workspace-record-card-top";
   const identity = document.createElement("div");
@@ -1019,22 +1020,13 @@ function createCollectionCard(collection, state, actions) {
   title.textContent = formatOptional(collection.driver_name_snapshot, collection.driver_id);
   identity.append(kicker, title);
   top.append(identity, createBadge(collection.status));
-  const facts = document.createElement("dl");
-  facts.className = "workspace-fact-grid";
-  const counts = pickupCategoryCounts(collection.pickups || []);
-  appendFact(facts, "Pickup count", (collection.pickups || []).length);
-  appendFact(facts, "Regular pickups", counts.regular);
-  appendFact(facts, "Oncall pickups", counts.oncall);
-  appendFact(facts, "Countryside pickups", counts.countryside);
-  appendFact(facts, "Generated", collection.generated_at);
-  appendFact(facts, "Saved", collection.saved_at || "Not saved");
-  appendFact(facts, "Saved by", collection.saved_by_account_name || "Not saved");
+
   const actionsRow = document.createElement("div");
-  actionsRow.className = "workspace-action-row";
+  actionsRow.className = "workspace-action-row workspace-collection-actions";
   if (collection.status === "GENERATED") {
     actionsRow.append(
       createActionButton(
-        "Save",
+        "Save Collection",
         () => actions.saveOpShopPickupCollection(collection.collection_id),
         {
           disabled: isBusy(state, `opshop-save:${collection.collection_id}`),
@@ -1042,7 +1034,7 @@ function createCollectionCard(collection, state, actions) {
         },
       ),
       createActionButton(
-        "Cancel",
+        "Cancel Generated",
         () => actions.cancelOpShopPickupCollection(collection.collection_id),
         { disabled: isBusy(state, `opshop-cancel:${collection.collection_id}`) },
       ),
@@ -1060,7 +1052,7 @@ function createCollectionCard(collection, state, actions) {
       ),
     );
   }
-  card.append(top, facts, createCollectionWeightSheetPreview(collection), actionsRow);
+  card.append(top, createCollectionWeightSheetPreview(collection), actionsRow);
   return card;
 }
 
@@ -1073,7 +1065,7 @@ const OPSHOP_COLLECTION_WEIGHT_COLUMNS = [
   "TIME IN",
   "TIME OUT",
   "TROLLEYS OUT TO OPSHOPS",
-  "TROLLEYS IN TO MCC ",
+  "TROLLEYS IN TO MCC",
   "HARD TOYS",
   "SOFT TOYS",
   "BLACK BAGS",
@@ -1138,8 +1130,8 @@ function collectionWeightSheetRowValues(pickup) {
   return [
     formatOptional(pickup.opshop_name_snapshot, ""),
     formatOptional(pickup.suburb_snapshot, ""),
-    "KG",
-    "KG",
+    "",
+    "",
     "",
     "",
     "",

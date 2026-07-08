@@ -737,10 +737,28 @@
   border-top: 1px solid rgba(39, 93, 69, 0.12);
 }
 
+.workspace-collection-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.workspace-collection-card {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.workspace-collection-card .workspace-record-card-top {
+  margin-bottom: 0;
+}
+
+.workspace-collection-actions {
+  justify-content: flex-end;
+  border-top: 1px solid rgba(39, 93, 69, 0.12);
+  padding-top: 0.7rem;
+}
+
 .workspace-opshop-weight-sheet {
   display: grid;
   gap: 0.5rem;
-  margin-top: 0.75rem;
   border: 1px solid rgba(23, 33, 29, 0.18);
   border-radius: 10px;
   padding: 0.9rem;

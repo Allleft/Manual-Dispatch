@@ -2813,18 +2813,59 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("saveOpShopPickupCollection", self.opshop_renderer)
         self.assertIn("cancelOpShopPickupCollection", self.opshop_renderer)
         self.assertIn("exportOpShopPickupCollection", self.opshop_renderer)
-        self.assertIn("Saved by", self.opshop_renderer)
-        self.assertIn("pickupCategoryCounts(collection.pickups || [])", self.opshop_renderer)
+
+        collection_card_block = self.opshop_renderer.split(
+            "function createCollectionCard", 1
+        )[1].split("const OPSHOP_COLLECTION_WEIGHT_COLUMNS", 1)[0]
+        self.assertNotIn("workspace-fact-grid", collection_card_block)
+        self.assertNotIn("Pickup count", collection_card_block)
+        self.assertNotIn("Regular pickups", collection_card_block)
+        self.assertNotIn("Oncall pickups", collection_card_block)
+        self.assertNotIn("Countryside pickups", collection_card_block)
+        self.assertNotIn("Saved by", collection_card_block)
+        self.assertIn('"Save Collection"', collection_card_block)
+        self.assertIn('"Cancel Generated"', collection_card_block)
+        self.assertIn('"Export"', collection_card_block)
+        self.assertIn("workspace-collection-actions", collection_card_block)
+        self.assertIn(
+            "card.append(top, createCollectionWeightSheetPreview(collection), actionsRow)",
+            collection_card_block,
+        )
+
         self.assertIn("createCollectionWeightSheetPreview(collection)", self.opshop_renderer)
         self.assertIn("DAILY OP SHOP COLLECTIONS - WEIGHT SHEET", self.opshop_renderer)
         self.assertIn("PLEASE RECORD WEIGHT OF BAGS FOR EACH OP SHOP", self.opshop_renderer)
-        self.assertIn("OPSHOP_COLLECTION_WEIGHT_COLUMNS", self.opshop_renderer)
-        self.assertIn('"CLOTHING KG"', self.opshop_renderer)
-        self.assertIn('"SHOES KG"', self.opshop_renderer)
-        self.assertIn('"TROLLEYS OUT TO OPSHOPS"', self.opshop_renderer)
-        self.assertIn('"TROLLEYS IN TO MCC "', self.opshop_renderer)
+        column_block = self.opshop_renderer.split(
+            "const OPSHOP_COLLECTION_WEIGHT_COLUMNS = [", 1
+        )[1].split("];", 1)[0]
+        expected_columns = [
+            '"OPSHOP NAME"',
+            '"SUBURB"',
+            '"CLOTHING KG"',
+            '"SHOES KG"',
+            '"TIME IN"',
+            '"TIME OUT"',
+            '"TROLLEYS OUT TO OPSHOPS"',
+            '"TROLLEYS IN TO MCC"',
+            '"HARD TOYS"',
+            '"SOFT TOYS"',
+            '"BLACK BAGS"',
+            '"SHOE BAGS"',
+        ]
+        for column in expected_columns:
+            self.assertIn(column, column_block)
+        self.assertEqual(24, column_block.count('"'))
+
+        row_values_block = self.opshop_renderer.split(
+            "function collectionWeightSheetRowValues", 1
+        )[1].split("function readyPickupCollectionCandidates", 1)[0]
+        self.assertIn("pickup.opshop_name_snapshot", row_values_block)
+        self.assertIn("pickup.suburb_snapshot", row_values_block)
+        self.assertIn('formatOptional(pickup.suburb_snapshot, ""),\n    "",\n    "",', row_values_block)
         self.assertIn("collectionWeightSheetRowValues(pickup)", self.opshop_renderer)
         self.assertIn("workspace-opshop-weight-sheet-table-wrap", self.styles)
+        self.assertIn(".workspace-collection-grid", self.styles)
+        self.assertIn("grid-template-columns: minmax(0, 1fr)", self.styles)
         self.assertIn("min-width: 980px", self.styles)
         self.assertIn(
             'route === "opshop/collections" || route === "opshop/trip-summary"',
