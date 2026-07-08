@@ -737,6 +737,99 @@
   border-top: 1px solid rgba(39, 93, 69, 0.12);
 }
 
+.workspace-opshop-weight-sheet {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  border: 1px solid rgba(23, 33, 29, 0.18);
+  border-radius: 10px;
+  padding: 0.9rem;
+  color: #12251d;
+  background: #fff;
+}
+
+.workspace-opshop-weight-sheet h4,
+.workspace-opshop-weight-sheet p {
+  margin: 0;
+}
+
+.workspace-opshop-weight-sheet h4 {
+  font-size: 0.98rem;
+  font-weight: 950;
+  letter-spacing: 0.04em;
+  text-align: center;
+}
+
+.workspace-opshop-weight-sheet-reminder,
+.workspace-opshop-weight-sheet-meta,
+.workspace-opshop-weight-sheet-instruction {
+  font-size: 0.78rem;
+  font-weight: 850;
+  line-height: 1.35;
+}
+
+.workspace-opshop-weight-sheet-instruction {
+  border-radius: 8px;
+  padding: 0.45rem 0.55rem;
+  background: #edf7ef;
+  text-align: center;
+}
+
+.workspace-opshop-weight-sheet-table-wrap {
+  min-width: 0;
+  overflow-x: auto;
+  border: 1px solid #111827;
+}
+
+.workspace-opshop-weight-sheet-table-wrap:focus-visible {
+  outline: 3px solid rgba(39, 93, 69, 0.28);
+  outline-offset: 2px;
+}
+
+.workspace-opshop-weight-sheet-table {
+  width: 100%;
+  min-width: 980px;
+  border-collapse: collapse;
+  table-layout: fixed;
+  background: #fff;
+}
+
+.workspace-opshop-weight-sheet-table th,
+.workspace-opshop-weight-sheet-table td {
+  border: 1px solid #111827;
+  padding: 0.52rem 0.5rem;
+  overflow-wrap: anywhere;
+  vertical-align: middle;
+}
+
+.workspace-opshop-weight-sheet-table th {
+  color: #123528;
+  background: #e2f0d9;
+  font-size: 0.68rem;
+  font-weight: 950;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.workspace-opshop-weight-sheet-table td {
+  min-height: 2rem;
+  font-size: 0.78rem;
+  line-height: 1.3;
+}
+
+.workspace-opshop-weight-sheet-table th:nth-child(1) {
+  width: 24%;
+}
+
+.workspace-opshop-weight-sheet-table th:nth-child(2) {
+  width: 12%;
+}
+
+.workspace-opshop-weight-sheet-table th:nth-child(n+3),
+.workspace-opshop-weight-sheet-table td:nth-child(n+3) {
+  text-align: center;
+}
+
 .workspace-context-panel {
   display: grid;
   gap: 0.65rem;

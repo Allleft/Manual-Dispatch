@@ -2815,6 +2815,17 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("exportOpShopPickupCollection", self.opshop_renderer)
         self.assertIn("Saved by", self.opshop_renderer)
         self.assertIn("pickupCategoryCounts(collection.pickups || [])", self.opshop_renderer)
+        self.assertIn("createCollectionWeightSheetPreview(collection)", self.opshop_renderer)
+        self.assertIn("DAILY OP SHOP COLLECTIONS - WEIGHT SHEET", self.opshop_renderer)
+        self.assertIn("PLEASE RECORD WEIGHT OF BAGS FOR EACH OP SHOP", self.opshop_renderer)
+        self.assertIn("OPSHOP_COLLECTION_WEIGHT_COLUMNS", self.opshop_renderer)
+        self.assertIn('"CLOTHING KG"', self.opshop_renderer)
+        self.assertIn('"SHOES KG"', self.opshop_renderer)
+        self.assertIn('"TROLLEYS OUT TO OPSHOPS"', self.opshop_renderer)
+        self.assertIn('"TROLLEYS IN TO MCC"', self.opshop_renderer)
+        self.assertIn("collectionWeightSheetRowValues(pickup)", self.opshop_renderer)
+        self.assertIn("workspace-opshop-weight-sheet-table-wrap", self.styles)
+        self.assertIn("min-width: 980px", self.styles)
         self.assertIn(
             'route === "opshop/collections" || route === "opshop/trip-summary"',
             self.workspace_actions,

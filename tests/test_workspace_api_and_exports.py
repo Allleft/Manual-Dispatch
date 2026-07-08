@@ -238,11 +238,62 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertNotIn("OP SHOP Name", delivery_values)
         self.assertIn("Northside Op Shop", collection_values)
         self.assertNotIn("Edited Live OP SHOP", collection_values)
-        self.assertIn("Call Before Arrival", collection_values)
-        self.assertIn("30 minutes", collection_values)
+        self.assertIn("DAILY OP SHOP COLLECTIONS - WEIGHT SHEET", collection_values)
+        self.assertIn("PLEASE RECORD WEIGHT OF BAGS FOR EACH OP SHOP ", collection_values)
+        self.assertIn("CLOTHING KG", collection_values)
+        self.assertIn("SHOES KG", collection_values)
+        self.assertIn("KG", collection_values)
+        self.assertNotIn("Call Before Arrival", collection_values)
+        self.assertNotIn("30 minutes", collection_values)
         self.assertNotIn("Trip 1", collection_values)
         self.assertNotIn("Total Pallets", collection_values)
         self.assertNotIn("Demo Customer A", collection_values)
+
+    def test_opshop_collection_export_uses_daily_weight_sheet_layout(self):
+        collection_id = self._generate_and_save_collection()
+        response = self.client.get(
+            f"/api/manual-dispatch/opshop/pickup-collections/{collection_id}/export-excel"
+        )
+        self.assertEqual(200, response.status_code)
+        workbook = load_workbook(BytesIO(response.content))
+        worksheet = workbook.active
+        self.assertEqual("WEIGHT SHEET", worksheet.title)
+        self.assertEqual("landscape", worksheet.page_setup.orientation)
+        self.assertEqual(str(worksheet.PAPERSIZE_A4), str(worksheet.page_setup.paperSize))
+        self.assertEqual(1, worksheet.page_setup.fitToWidth)
+        self.assertEqual(0, worksheet.page_setup.fitToHeight)
+        self.assertEqual("DAILY OP SHOP COLLECTIONS - WEIGHT SHEET", worksheet["A1"].value)
+        self.assertIn("NO BOARD GAMES/ PUZZLES", worksheet["A3"].value)
+        self.assertIn("HARD & SOFT TOYS", worksheet["A4"].value)
+        self.assertIn("DRIVER NAME: John", worksheet["A5"].value)
+        self.assertIn("PICK UP DATE: 05/05/2026", worksheet["A5"].value)
+        self.assertIn("DAY: TUESDAY", worksheet["A5"].value)
+        self.assertEqual("REGO # ________________________", worksheet["A6"].value)
+        self.assertEqual("PLEASE RECORD WEIGHT OF BAGS FOR EACH OP SHOP ", worksheet["A8"].value)
+        self.assertEqual(
+            [
+                "OPSHOP NAME",
+                "Suburb",
+                "CLOTHING KG",
+                "SHOES KG",
+                "TIME IN",
+                "TIME OUT",
+                "TROLLEYS OUT TO OPSHOPS",
+                "TROLLEYS IN TO MCC",
+                "HARD TOYS",
+                "SOFT TOYS",
+                "BLACK BAGS",
+                "SHOE BAGS",
+            ],
+            [cell.value for cell in worksheet[10]],
+        )
+        self.assertEqual("Northside Op Shop", worksheet["A12"].value)
+        self.assertEqual("Coburg", worksheet["B12"].value)
+        self.assertEqual("KG", worksheet["C12"].value)
+        self.assertEqual("KG", worksheet["D12"].value)
+        self.assertIsNone(worksheet["E12"].value)
+        self.assertGreater(worksheet.column_dimensions["A"].width, 28)
+        self.assertIn("$A$1:$L$22", worksheet.print_area)
 
     def test_delivery_export_uses_daily_run_sheet_form_layout(self):
         self._assign_delivery_vehicle("D001", "V001")

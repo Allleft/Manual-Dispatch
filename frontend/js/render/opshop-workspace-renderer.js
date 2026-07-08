@@ -1060,8 +1060,113 @@ function createCollectionCard(collection, state, actions) {
       ),
     );
   }
-  card.append(top, facts, actionsRow);
+  card.append(top, facts, createCollectionWeightSheetPreview(collection), actionsRow);
   return card;
+}
+
+
+const OPSHOP_COLLECTION_WEIGHT_COLUMNS = [
+  "OPSHOP NAME",
+  "SUBURB",
+  "CLOTHING KG",
+  "SHOES KG",
+  "TIME IN",
+  "TIME OUT",
+  "TROLLEYS OUT TO OPSHOPS",
+  "TROLLEYS IN TO MCC",
+  "HARD TOYS",
+  "SOFT TOYS",
+  "BLACK BAGS",
+  "SHOE BAGS",
+];
+
+
+function createCollectionWeightSheetPreview(collection) {
+  const paper = document.createElement("section");
+  paper.className = "workspace-opshop-weight-sheet";
+  const title = document.createElement("h4");
+  title.textContent = "DAILY OP SHOP COLLECTIONS - WEIGHT SHEET";
+  const reminder = document.createElement("p");
+  reminder.className = "workspace-opshop-weight-sheet-reminder";
+  reminder.textContent = "REMINDER : NO BOARD GAMES/ PUZZLES - can not send overseas, don't understand english";
+  const toyReminder = document.createElement("p");
+  toyReminder.className = "workspace-opshop-weight-sheet-reminder";
+  toyReminder.textContent = "**Please ensure HARD & SOFT TOYS are in separate bags**";
+  const meta = document.createElement("p");
+  meta.className = "workspace-opshop-weight-sheet-meta";
+  meta.textContent = `DRIVER NAME: ${formatOptional(collection.driver_name_snapshot, collection.driver_id)}    PICK UP DATE: ${formatDailyCollectionDate(collection.pickup_date)}    DAY: ${formatCollectionDay(collection.pickup_date)}`;
+  const rego = document.createElement("p");
+  rego.className = "workspace-opshop-weight-sheet-meta";
+  rego.textContent = "REGO # ________________________";
+  const instruction = document.createElement("p");
+  instruction.className = "workspace-opshop-weight-sheet-instruction";
+  instruction.textContent = "PLEASE RECORD WEIGHT OF BAGS FOR EACH OP SHOP";
+
+  const tableWrap = document.createElement("div");
+  tableWrap.className = "workspace-opshop-weight-sheet-table-wrap";
+  tableWrap.tabIndex = 0;
+  tableWrap.setAttribute("aria-label", "OP SHOP pickup collection weight sheet table");
+  const table = document.createElement("table");
+  table.className = "workspace-opshop-weight-sheet-table";
+  const head = document.createElement("thead");
+  const headerRow = document.createElement("tr");
+  OPSHOP_COLLECTION_WEIGHT_COLUMNS.forEach((column) => {
+    const cell = document.createElement("th");
+    cell.scope = "col";
+    cell.textContent = column;
+    headerRow.append(cell);
+  });
+  head.append(headerRow);
+  const body = document.createElement("tbody");
+  (collection.pickups || []).forEach((pickup) => {
+    const row = document.createElement("tr");
+    collectionWeightSheetRowValues(pickup).forEach((value) => {
+      const cell = document.createElement("td");
+      cell.textContent = value;
+      row.append(cell);
+    });
+    body.append(row);
+  });
+  table.append(head, body);
+  tableWrap.append(table);
+  paper.append(title, reminder, toyReminder, meta, rego, instruction, tableWrap);
+  return paper;
+}
+
+
+function collectionWeightSheetRowValues(pickup) {
+  return [
+    formatOptional(pickup.opshop_name_snapshot, ""),
+    formatOptional(pickup.suburb_snapshot, ""),
+    "KG",
+    "KG",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+  ];
+}
+
+
+function formatDailyCollectionDate(value) {
+  const [year, month, day] = String(value || "").split("-");
+  return year && month && day ? `${day}/${month}/${year}` : "";
+}
+
+
+function formatCollectionDay(value) {
+  const [year, month, day] = String(value || "").split("-");
+  if (!year || !month || !day) {
+    return "";
+  }
+  const date = new Date(`${year}-${month}-${day}T00:00:00`);
+  return Number.isNaN(date.getTime())
+    ? ""
+    : date.toLocaleDateString("en-AU", { weekday: "long" }).toUpperCase();
 }
 
 
