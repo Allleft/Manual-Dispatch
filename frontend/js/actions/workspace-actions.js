@@ -18,6 +18,7 @@ import {
   apiExportDeliveryRunSheetExcel,
   apiExportDeliveryRunSheetsExcel,
   apiExportOpShopPickupCollectionExcel,
+  apiExportOpShopPickupCollectionsExcel,
   apiGetDeliverySpecifications,
   apiGetDeliveryWorkspaceBoard,
   apiGetOpShopWorkspaceBoard,
@@ -78,6 +79,7 @@ const DEFAULT_API = {
   exportDeliveryRunSheetExcel: apiExportDeliveryRunSheetExcel,
   exportDeliveryRunSheetsExcel: apiExportDeliveryRunSheetsExcel,
   exportOpShopPickupCollectionExcel: apiExportOpShopPickupCollectionExcel,
+  exportOpShopPickupCollectionsExcel: apiExportOpShopPickupCollectionsExcel,
   getDeliverySpecifications: apiGetDeliverySpecifications,
   getDeliveryWorkspaceBoard: apiGetDeliveryWorkspaceBoard,
   getOpShopWorkspaceBoard: apiGetOpShopWorkspaceBoard,
@@ -1703,6 +1705,20 @@ export function createWorkspaceActions({
     });
   }
 
+  async function exportOpShopPickupCollections(pickupDate) {
+    const scopedDate = pickupDate || state.opshopTripSummaryDate || state.dispatchDate;
+    const actionKey = `opshop-export-date:${scopedDate}`;
+    if (state.opshopBusyActionKeys?.[actionKey]) {
+      return;
+    }
+    await runOpShopAction(actionKey, async (context) => {
+      await api.exportOpShopPickupCollectionsExcel({
+        pickupDate: scopedDate,
+        dispatchDate: context.dispatchDate,
+      });
+    });
+  }
+
   async function runDeliveryAction(
     actionKey,
     callback,
@@ -2112,6 +2128,7 @@ export function createWorkspaceActions({
     exportDeliveryRunSheet,
     exportDeliveryRunSheets,
     exportOpShopPickupCollection,
+    exportOpShopPickupCollections,
     confirmGenerateDeliveryRunSheet,
     confirmGenerateOpShopPickupCollection,
     generateDeliveryRunSheet,

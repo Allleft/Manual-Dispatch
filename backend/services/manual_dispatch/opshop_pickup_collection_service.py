@@ -106,11 +106,48 @@ class OpShopPickupCollectionService:
             return True
         self._raise_transition_error(collection_id, "cancelled")
 
-    def get_saved_for_export(self, collection_id):
+    def get_for_export(self, collection_id):
         collection = self.get(collection_id)
-        if collection.status != "SAVED":
-            raise ValueError("Only saved OP SHOP Pickup Collections can be exported.")
+        if collection.status not in {"GENERATED", "SAVED"}:
+            raise ValueError(
+                "Only generated or saved OP SHOP Pickup Collections can be exported."
+            )
         return collection
+
+    def get_saved_for_export(self, collection_id):
+        return self.get_for_export(collection_id)
+
+    def list_for_date_export(self, pickup_date, dispatch_date=None, status=None):
+        pickup_date = clean_required_iso_date(pickup_date, "pickup_date")
+        dispatch_date = clean_optional_iso_date(dispatch_date, "dispatch_date")
+        status = clean_optional_text(status)
+        normalized_status = status.upper() if status else None
+        if normalized_status and normalized_status not in {"GENERATED", "SAVED"}:
+            raise ValueError(
+                "status must be GENERATED or SAVED for OP SHOP Pickup Collection export."
+            )
+        collections = self.repository.list_opshop_pickup_collections(
+            dispatch_date,
+            pickup_date,
+            normalized_status,
+        )
+        if not normalized_status:
+            collections = [
+                collection
+                for collection in collections
+                if collection.status in {"GENERATED", "SAVED"}
+            ]
+        if not collections:
+            raise ValueError(
+                "No OP SHOP Pickup Collections available for this pickup date."
+            )
+        return sorted(
+            collections,
+            key=lambda item: (
+                str(item.driver_name_snapshot or item.driver_id or ""),
+                str(item.collection_id or ""),
+            ),
+        )
 
     def _raise_transition_error(self, collection_id, action):
         current = self.repository.get_opshop_pickup_collection(collection_id)

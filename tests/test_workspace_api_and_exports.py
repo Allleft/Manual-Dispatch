@@ -107,6 +107,10 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             ("GET", "/api/manual-dispatch/opshop/pickup-collections"),
             (
                 "GET",
+                "/api/manual-dispatch/opshop/pickup-collections/export-excel",
+            ),
+            (
+                "GET",
                 "/api/manual-dispatch/opshop/pickup-collections/{collection_id}",
             ),
             (
@@ -182,6 +186,30 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertIn(
             "OPSHOP_Pickup_Collection_",
             collection_export.headers["content-disposition"],
+        )
+
+        self._seed_assigned_pickup(
+            task_id="PICKUP-GENERATED-SINGLE",
+            driver_id="D001",
+            pickup_date="2026-05-06",
+            opshop_id="OPSHOP-GENERATED-SINGLE",
+            schedule_id="SCHEDULE-GENERATED-SINGLE",
+            opshop_name="Generated Single Op Shop",
+            suburb="Northcote",
+        )
+        generated_collection = self.client.post(
+            "/api/manual-dispatch/opshop/pickup-collections/generated",
+            json=self._collection_generate_payload("D001", "2026-05-06"),
+        )
+        self.assertEqual(200, generated_collection.status_code)
+        generated_export = self.client.get(
+            "/api/manual-dispatch/opshop/pickup-collections/"
+            f"{generated_collection.json()['collection_id']}/export-excel"
+        )
+        self.assertEqual(200, generated_export.status_code)
+        self.assertIn(
+            "OPSHOP_Pickup_Collection_2026-05-06_John.xlsx",
+            generated_export.headers["content-disposition"],
         )
 
     def test_api_rejects_saved_snapshot_overwrite(self):
@@ -294,6 +322,106 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertIsNone(worksheet["E12"].value)
         self.assertGreater(worksheet.column_dimensions["A"].width, 28)
         self.assertIn("$A$1:$L$22", worksheet.print_area)
+
+    def test_opshop_daily_collection_export_uses_one_sheet_per_driver(self):
+        saved_collection_id = self._generate_and_save_collection()
+        self._seed_assigned_pickup(
+            task_id="PICKUP-TONY",
+            driver_id="D002",
+            pickup_date=self.dispatch_date,
+            opshop_id="OPSHOP-TONY",
+            schedule_id="SCHEDULE-TONY",
+            opshop_name="Tony North Op Shop",
+            suburb="Preston",
+        )
+        generated_tony = self.client.post(
+            "/api/manual-dispatch/opshop/pickup-collections/generated",
+            json=self._collection_generate_payload("D002", self.dispatch_date),
+        )
+        self.assertEqual(200, generated_tony.status_code)
+        self._seed_assigned_pickup(
+            task_id="PICKUP-OTHER-DATE",
+            driver_id="D001",
+            pickup_date="2026-05-06",
+            opshop_id="OPSHOP-OTHER-DATE",
+            schedule_id="SCHEDULE-OTHER-DATE",
+            opshop_name="Other Date Op Shop",
+            suburb="Brunswick",
+        )
+        other_date = self.client.post(
+            "/api/manual-dispatch/opshop/pickup-collections/generated",
+            json=self._collection_generate_payload("D001", "2026-05-06"),
+        )
+        self.assertEqual(200, other_date.status_code)
+
+        location = self.repository.get_opshop_location("OPSHOP-WORKSPACE")
+        location.name = "Edited Live OP SHOP"
+        self.repository.upsert_opshop_location(location)
+
+        response = self.client.get(
+            "/api/manual-dispatch/opshop/pickup-collections/export-excel",
+            params={
+                "dispatch_date": self.dispatch_date,
+                "pickup_date": self.dispatch_date,
+            },
+        )
+        self.assertEqual(200, response.status_code)
+        self.assertEqual(
+            'attachment; filename="Daily_OPSHOP_Collections_2026-05-05.xlsx"',
+            response.headers["content-disposition"],
+        )
+        workbook = load_workbook(BytesIO(response.content))
+        self.assertEqual({"John", "Tony"}, set(workbook.sheetnames))
+        self.assertNotIn("WEIGHT SHEET", workbook.sheetnames)
+        self.assertNotIn("Sheet", workbook.sheetnames)
+
+        john_values = [
+            cell.value
+            for row in workbook["John"].iter_rows()
+            for cell in row
+            if cell.value is not None
+        ]
+        tony_values = [
+            cell.value
+            for row in workbook["Tony"].iter_rows()
+            for cell in row
+            if cell.value is not None
+        ]
+        self.assertIn("Northside Op Shop", john_values)
+        self.assertIn("Tony North Op Shop", tony_values)
+        self.assertNotIn("Tony North Op Shop", john_values)
+        self.assertNotIn("Northside Op Shop", tony_values)
+        self.assertNotIn("Edited Live OP SHOP", john_values + tony_values)
+        self.assertNotIn("Other Date Op Shop", john_values + tony_values)
+        for worksheet in workbook.worksheets:
+            self.assertEqual("landscape", worksheet.page_setup.orientation)
+            self.assertEqual(1, worksheet.page_setup.fitToWidth)
+            self.assertEqual(0, worksheet.page_setup.fitToHeight)
+            self.assertEqual("DAILY OP SHOP COLLECTIONS - WEIGHT SHEET", worksheet["A1"].value)
+            self.assertIn("PICK UP DATE: 05/05/2026", worksheet["A5"].value)
+            self.assertEqual("PLEASE RECORD WEIGHT OF BAGS FOR EACH OP SHOP ", worksheet["A8"].value)
+            self.assertEqual("KG", worksheet["C12"].value)
+            self.assertEqual("KG", worksheet["D12"].value)
+
+        statuses = {
+            collection.collection_id: collection.status
+            for collection in self.service.list_opshop_pickup_collections(
+                pickup_date=self.dispatch_date
+            )
+        }
+        self.assertEqual("SAVED", statuses[saved_collection_id])
+        self.assertEqual("GENERATED", statuses[generated_tony.json()["collection_id"]])
+
+    def test_opshop_daily_collection_export_rejects_empty_pickup_date(self):
+        response = self.client.get(
+            "/api/manual-dispatch/opshop/pickup-collections/export-excel",
+            params={"pickup_date": "2026-05-07"},
+        )
+        self.assertEqual(400, response.status_code)
+        self.assertEqual(
+            "No OP SHOP Pickup Collections available for this pickup date.",
+            response.json()["detail"],
+        )
 
     def test_delivery_export_uses_daily_run_sheet_form_layout(self):
         self._assign_delivery_vehicle("D001", "V001")
@@ -692,11 +820,31 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.repository.update_order(order)
 
     def _seed_and_assign_pickup(self):
+        self._seed_assigned_pickup(
+            task_id="PICKUP-WORKSPACE",
+            driver_id="D001",
+            pickup_date=self.dispatch_date,
+            opshop_id="OPSHOP-WORKSPACE",
+            schedule_id="SCHEDULE-WORKSPACE",
+            opshop_name="Northside Op Shop",
+            suburb="Coburg",
+        )
+
+    def _seed_assigned_pickup(
+        self,
+        task_id,
+        driver_id,
+        pickup_date,
+        opshop_id,
+        schedule_id,
+        opshop_name,
+        suburb,
+    ):
         self.repository.upsert_opshop_location(
             OpShopLocation(
-                opshop_id="OPSHOP-WORKSPACE",
-                name="Northside Op Shop",
-                suburb="Coburg",
+                opshop_id=opshop_id,
+                name=opshop_name,
+                suburb=suburb,
                 street_address="1 Sydney Road",
                 area_region="North",
                 primary_contact="Mary",
@@ -714,8 +862,8 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         )
         self.repository.upsert_opshop_pickup_schedule(
             OpShopPickupSchedule(
-                schedule_id="SCHEDULE-WORKSPACE",
-                opshop_id="OPSHOP-WORKSPACE",
+                schedule_id=schedule_id,
+                opshop_id=opshop_id,
                 run_day="TUESDAY",
                 run_type="ON_CALL",
                 pickup_frequency="Weekly",
@@ -733,14 +881,14 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         )
         self.repository.upsert_opshop_pickup_task(
             OpShopPickupTask(
-                pickup_task_id="PICKUP-WORKSPACE",
-                schedule_id="SCHEDULE-WORKSPACE",
-                opshop_id="OPSHOP-WORKSPACE",
-                pickup_date=self.dispatch_date,
+                pickup_task_id=task_id,
+                schedule_id=schedule_id,
+                opshop_id=opshop_id,
+                pickup_date=pickup_date,
                 task_type="OPSHOP_PICKUP",
                 generated_from="ON_CALL",
                 status="ACTIVE",
-                dispatch_date=self.dispatch_date,
+                dispatch_date=pickup_date,
                 driver_id=None,
                 trip_no=None,
                 notes="Leave at rear door",
@@ -750,10 +898,10 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         )
         self.service.assign_task(
             AssignTaskRequest(
-                dispatch_date=self.dispatch_date,
+                dispatch_date=pickup_date,
                 task_type="OPSHOP_PICKUP",
-                task_id="PICKUP-WORKSPACE",
-                driver_id="D001",
+                task_id=task_id,
+                driver_id=driver_id,
                 trip_no="trip1",
             )
         )
@@ -791,11 +939,11 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             "driver_id": "D001",
         }
 
-    def _collection_generate_payload(self):
+    def _collection_generate_payload(self, driver_id="D001", pickup_date=None):
         return {
             "dispatch_date": self.dispatch_date,
-            "pickup_date": self.dispatch_date,
-            "driver_id": "D001",
+            "pickup_date": pickup_date or self.dispatch_date,
+            "driver_id": driver_id,
         }
 
     def _save_payload(self):

@@ -102,7 +102,7 @@ function createWorkspacePage(state, onDispatchDateChange) {
 function createDateControl(state, onDispatchDateChange) {
   const label = document.createElement("label");
   label.className = "workspace-date-control";
-  label.textContent = "Dispatch date";
+  label.textContent = "Dispatch board date";
   const input = document.createElement("input");
   input.type = "date";
   input.value = state.dispatchDate;

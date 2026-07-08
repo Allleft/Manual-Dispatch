@@ -226,9 +226,24 @@ class ManualDispatchService:
         self._ensure_workspace_ready("opshop")
         return self.opshop_pickup_collection_service.cancel_generated(collection_id)
 
-    def get_saved_opshop_pickup_collection_for_export(self, collection_id):
-        return self.opshop_pickup_collection_service.get_saved_for_export(
+    def get_opshop_pickup_collection_for_export(self, collection_id):
+        return self.opshop_pickup_collection_service.get_for_export(
             collection_id
+        )
+
+    def get_saved_opshop_pickup_collection_for_export(self, collection_id):
+        return self.get_opshop_pickup_collection_for_export(collection_id)
+
+    def list_opshop_pickup_collections_for_date_export(
+        self,
+        pickup_date,
+        dispatch_date=None,
+        status=None,
+    ):
+        return self.opshop_pickup_collection_service.list_for_date_export(
+            pickup_date,
+            dispatch_date,
+            status,
         )
 
     def _ensure_workspace_ready(self, workspace):

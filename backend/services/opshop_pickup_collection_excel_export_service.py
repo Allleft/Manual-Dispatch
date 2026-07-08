@@ -1,5 +1,6 @@
 from io import BytesIO
 from datetime import datetime
+import re
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -21,6 +22,7 @@ COLLECTION_HEADERS = [
     "SHOE BAGS",
 ]
 MIN_PICKUP_ROWS = 11
+_INVALID_SHEET_NAME_CHARACTERS = re.compile(r"[\\/*?:\[\]]")
 
 
 def build_opshop_pickup_collection_excel(collection):
@@ -30,6 +32,31 @@ def build_opshop_pickup_collection_excel(collection):
     _configure_worksheet(worksheet)
     _write_form_header(worksheet, collection)
     _write_pickup_table(worksheet, collection)
+    return _save(workbook)
+
+
+def build_opshop_pickup_collections_excel(collections, pickup_date):
+    if not collections:
+        raise ValueError(
+            "No OP SHOP Pickup Collections available for this pickup date."
+        )
+
+    workbook = Workbook()
+    workbook.remove(workbook.active)
+    used_sheet_names = set()
+    for collection in sorted(
+        collections,
+        key=lambda item: (
+            str(item.driver_name_snapshot or item.driver_id or ""),
+            str(item.collection_id or ""),
+        ),
+    ):
+        worksheet = workbook.create_sheet(
+            _unique_sheet_name(collection.driver_name_snapshot, used_sheet_names)
+        )
+        _configure_worksheet(worksheet)
+        _write_form_header(worksheet, collection, pickup_date=pickup_date)
+        _write_pickup_table(worksheet, collection)
     return _save(workbook)
 
 
@@ -66,7 +93,7 @@ def _configure_worksheet(worksheet):
         worksheet.column_dimensions[column_letter].width = width
 
 
-def _write_form_header(worksheet, collection):
+def _write_form_header(worksheet, collection, pickup_date=None):
     for range_ref in ("A1:L1", "A2:L2", "A3:L3", "A4:L4", "A8:L8"):
         worksheet.merge_cells(range_ref)
 
@@ -80,8 +107,8 @@ def _write_form_header(worksheet, collection):
     worksheet["A4"] = "**Please ensure  HARD & SOFT TOYS are in separate bags**"
     worksheet["A5"] = (
         f"DRIVER NAME: {collection.driver_name_snapshot or ''}           "
-        f"PICK UP DATE: {_display_date(collection.pickup_date)}            "
-        f"DAY: {_display_day(collection.pickup_date)}"
+        f"PICK UP DATE: {_display_date(pickup_date or collection.pickup_date)}            "
+        f"DAY: {_display_day(pickup_date or collection.pickup_date)}"
     )
     worksheet["A6"] = "REGO # ________________________"
     worksheet["A8"] = "PLEASE RECORD WEIGHT OF BAGS FOR EACH OP SHOP "
@@ -89,6 +116,9 @@ def _write_form_header(worksheet, collection):
         worksheet[coordinate].font = Font(bold=True, size=11)
         worksheet[coordinate].alignment = Alignment(vertical="center", wrap_text=True)
     worksheet["A8"].alignment = Alignment(horizontal="center", vertical="center")
+    worksheet["A3"].fill = PatternFill("solid", fgColor="1F1F1F")
+    worksheet["A3"].font = Font(bold=True, size=11, color="FFFFFF")
+    worksheet["A4"].fill = PatternFill("solid", fgColor="FCE4D6")
 
     worksheet.row_dimensions[1].height = 26.25
     worksheet.row_dimensions[2].height = 26.25
@@ -172,6 +202,20 @@ def _display_day(value):
         return datetime.strptime(value, "%Y-%m-%d").strftime("%A").upper()
     except (TypeError, ValueError):
         return ""
+
+
+def _unique_sheet_name(driver_name, used_sheet_names):
+    base_name = _INVALID_SHEET_NAME_CHARACTERS.sub(" ", str(driver_name or "Driver"))
+    base_name = " ".join(base_name.split()).strip("'") or "Driver"
+    base_name = base_name[:31]
+    candidate = base_name
+    sequence = 2
+    while candidate.casefold() in used_sheet_names:
+        suffix = f" {sequence}"
+        candidate = f"{base_name[:31 - len(suffix)]}{suffix}"
+        sequence += 1
+    used_sheet_names.add(candidate.casefold())
+    return candidate
 
 
 def _save(workbook):

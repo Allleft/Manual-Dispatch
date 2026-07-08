@@ -122,6 +122,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             "/api/manual-dispatch/opshop/pickups/assignments/unassign",
             "/api/manual-dispatch/opshop/countryside-route-groups/",
             "/api/manual-dispatch/opshop/pickup-collections/generated",
+            "/api/manual-dispatch/opshop/pickup-collections/export-excel",
         ):
             self.assertIn(endpoint, self.api)
         self.assertIn("/export-excel", self.api)
@@ -148,6 +149,12 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertNotIn("api.getDeliveryWorkspaceBoard", opshop_loader)
         self.assertNotIn("api.listDeliveryRunSheets", opshop_loader)
         self.assertNotIn("apiGetSharedSpecifications", self.workspace_actions)
+
+    def test_workspace_date_labels_distinguish_board_and_service_dates(self):
+        self.assertIn('label.textContent = "Dispatch board date"', self.delivery_renderer)
+        self.assertIn('label.textContent = "Pickup workspace date"', self.opshop_renderer)
+        self.assertIn('field.textContent = "Delivery date"', self.delivery_renderer)
+        self.assertIn('field.textContent = "Pickup date"', self.opshop_renderer)
 
     def test_new_workspace_source_does_not_call_legacy_board_or_summary_apis(self):
         new_workspace_source = "\n".join(
@@ -2304,6 +2311,86 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             r"\.workspace-regular-pickup-list \.opshop-date-card-list\[hidden\]\s*\{\s*display: none;\s*\}",
         )
 
+    def test_opshop_pickup_date_excel_export_is_scoped_busy_and_non_mutating(self):
+        self.assertIn(
+            "/api/manual-dispatch/opshop/pickup-collections/export-excel?",
+            self.api,
+        )
+        self.assertIn("apiExportOpShopPickupCollectionsExcel", self.api)
+        self.assertIn("exportOpShopPickupCollectionsExcel", self.workspace_actions)
+        self.assertIn('"Export Daily Collections"', self.opshop_renderer)
+        self.assertIn('"Preparing Daily Export..."', self.opshop_renderer)
+        self._run_workspace_actions_script(
+            """
+            let resolveExport;
+            const exportGate = new Promise((resolve) => { resolveExport = resolve; });
+            let exportCalls = 0;
+            const state = {
+              isLoggedIn: true,
+              workspaceRoute: "opshop/collections",
+              activeWorkspace: "opshop",
+              dispatchDate: "2026-07-06",
+              opshopTripSummaryDate: "2026-07-07",
+              opshopBusyActionKeys: {},
+              opshopActionError: "",
+              opshopAssignmentDrafts: { "PICKUP-1": "D001" },
+              countrysideRouteGroupDrafts: {},
+              deliveryBusyActionKeys: {},
+            };
+            const beforeDrafts = JSON.stringify(state.opshopAssignmentDrafts);
+            const actions = createWorkspaceActions({
+              state,
+              renderWorkspace: () => {},
+              api: {
+                exportOpShopPickupCollectionsExcel: async ({ pickupDate, dispatchDate }) => {
+                  exportCalls += 1;
+                  if (pickupDate !== "2026-07-07" || dispatchDate !== "2026-07-06") {
+                    throw new Error(`wrong export scope: ${dispatchDate}/${pickupDate}`);
+                  }
+                  return exportGate;
+                },
+              },
+            });
+            const first = actions.exportOpShopPickupCollections("2026-07-07");
+            const second = actions.exportOpShopPickupCollections("2026-07-07");
+            if (exportCalls !== 1) {
+              throw new Error(`rapid OP SHOP export made ${exportCalls} API calls`);
+            }
+            if (!state.opshopBusyActionKeys["opshop-export-date:2026-07-07"]) {
+              throw new Error("OP SHOP pickup date export did not expose busy state");
+            }
+            resolveExport({ filename: "Daily_OPSHOP_Collections_2026-07-07.xlsx" });
+            await Promise.all([first, second]);
+            if (state.workspaceRoute !== "opshop/collections" ||
+                state.opshopTripSummaryDate !== "2026-07-07" ||
+                JSON.stringify(state.opshopAssignmentDrafts) !== beforeDrafts) {
+              throw new Error("OP SHOP pickup date export mutated route, date, or assignments");
+            }
+            if (Object.keys(state.opshopBusyActionKeys).length !== 0) {
+              throw new Error("OP SHOP pickup date export busy state was not cleared");
+            }
+
+            const failureState = {
+              ...state,
+              opshopBusyActionKeys: {},
+              opshopActionError: "",
+            };
+            const failureActions = createWorkspaceActions({
+              state: failureState,
+              renderWorkspace: () => {},
+              api: {
+                exportOpShopPickupCollectionsExcel: async () => {
+                  throw new Error("OP SHOP workbook preparation failed");
+                },
+              },
+            });
+            await failureActions.exportOpShopPickupCollections("2026-07-07");
+            if (failureState.opshopActionError !== "OP SHOP workbook preparation failed") {
+              throw new Error("OP SHOP export failure was not surfaced accurately");
+            }
+            """
+        )
+
     def test_oncall_template_picker_uses_high_contrast_option_styles(self):
         oncall_renderer = self._read("js/render/opshop-oncall-pickup-list-modal-renderer.js")
         self.assertIn("opshop-template-picker-option-main", oncall_renderer)
@@ -2806,13 +2893,19 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertNotIn("workspace-opshop-pickup-detail", self.delivery_renderer)
 
     def test_opshop_collections_merge_generated_and_saved_history(self):
-        self.assertIn("Generated Pickup Collections", self.opshop_renderer)
-        self.assertIn("Saved Pickup Collections", self.opshop_renderer)
+        self.assertIn("Pickup Collections", self.opshop_renderer)
+        self.assertIn("groupCollectionsByPickupDate", self.opshop_renderer)
+        self.assertIn("createCollectionDateGroup", self.opshop_renderer)
+        self.assertIn("Pickup date:", self.opshop_renderer)
+        self.assertIn("Workspace date:", self.opshop_renderer)
+        self.assertIn("actions.exportOpShopPickupCollections(pickupDate)", self.opshop_renderer)
+        self.assertIn("dataset.opshopDailyCollectionExport", self.opshop_renderer)
         self.assertIn('collection.status === "GENERATED"', self.opshop_renderer)
         self.assertIn('collection.status === "SAVED"', self.opshop_renderer)
         self.assertIn("saveOpShopPickupCollection", self.opshop_renderer)
         self.assertIn("cancelOpShopPickupCollection", self.opshop_renderer)
         self.assertIn("exportOpShopPickupCollection", self.opshop_renderer)
+        self.assertIn("exportOpShopPickupCollections", self.opshop_renderer)
 
         collection_card_block = self.opshop_renderer.split(
             "function createCollectionCard", 1
@@ -2825,10 +2918,12 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertNotIn("Saved by", collection_card_block)
         self.assertIn('"Save Collection"', collection_card_block)
         self.assertIn('"Cancel Generated"', collection_card_block)
-        self.assertIn('"Export"', collection_card_block)
+        self.assertIn('"Export Excel"', collection_card_block)
+        self.assertIn('"Exporting..."', collection_card_block)
+        self.assertIn("workspace-collection-card-meta", collection_card_block)
         self.assertIn("workspace-collection-actions", collection_card_block)
         self.assertIn(
-            "card.append(top, createCollectionWeightSheetPreview(collection), actionsRow)",
+            "card.append(top, meta, createCollectionWeightSheetPreview(collection), actionsRow)",
             collection_card_block,
         )
 

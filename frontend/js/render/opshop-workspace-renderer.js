@@ -125,7 +125,7 @@ function createWorkspacePage(state, onDispatchDateChange) {
 function createDateControl(state, onDispatchDateChange) {
   const label = document.createElement("label");
   label.className = "workspace-date-control";
-  label.textContent = "Dispatch date";
+  label.textContent = "Pickup workspace date";
   const input = document.createElement("input");
   input.type = "date";
   input.value = state.dispatchDate;
@@ -964,43 +964,60 @@ function createOpShopTripPickupRow(pickup, isLocked, state, actions, onOpenPicku
 
 
 function createCollectionList(collections, state, actions) {
-  const generated = (collections || []).filter((collection) => collection.status === "GENERATED");
-  const saved = (collections || []).filter((collection) => collection.status === "SAVED");
+  const exportableCollections = (collections || []).filter(
+    (collection) => ["GENERATED", "SAVED"].includes(collection.status),
+  );
+  const groupedCollections = groupCollectionsByPickupDate(exportableCollections);
   const wrapper = document.createElement("div");
   wrapper.className = "workspace-stack workspace-pickup-collections";
-  wrapper.append(
-    createCollectionSection(
-      "Generated Pickup Collections",
-      "Awaiting confirmation. Save to lock the snapshot, or cancel to restore editable pickups.",
-      generated,
-      "No generated Pickup Collections are awaiting confirmation.",
-      state,
-      actions,
-    ),
-    createCollectionSection(
-      "Saved Pickup Collections",
-      "Saved collection history remains available here for review and export.",
-      saved,
-      "No saved Pickup Collections for this dispatch date.",
-      state,
-      actions,
-    ),
-  );
+  const intro = document.createElement("section");
+  intro.className = "workspace-context-panel workspace-context-panel-opshop workspace-collection-intro";
+  intro.append(createSectionHeading(
+    "Pickup Collections",
+    "Review generated and saved OP SHOP Pickup Collection weight sheets by actual Pickup date.",
+  ));
+  wrapper.append(intro);
+  if (!groupedCollections.length) {
+    wrapper.append(createEmptyState(
+      "No generated or saved Pickup Collections for this workspace date.",
+      "history",
+    ));
+    return wrapper;
+  }
+  groupedCollections.forEach(([pickupDate, dateCollections]) => {
+    wrapper.append(createCollectionDateGroup(pickupDate, dateCollections, state, actions));
+  });
   return wrapper;
 }
 
 
-function createCollectionSection(titleText, description, collections, emptyMessage, state, actions) {
+function createCollectionDateGroup(pickupDate, collections, state, actions) {
   const section = document.createElement("section");
-  section.className = "workspace-context-panel workspace-context-panel-opshop workspace-collection-section";
-  section.append(createSectionHeading(titleText, description));
+  section.className = "workspace-context-panel workspace-context-panel-opshop workspace-collection-date-group";
+  const header = document.createElement("div");
+  header.className = "workspace-record-card-top workspace-collection-date-group-header";
+  header.append(createSectionHeading(
+    `Pickup date: ${pickupDate}`,
+    `Workspace date: ${state.dispatchDate} - ${collections.length} generated/saved collections`,
+  ));
+  const exportKey = `opshop-export-date:${pickupDate}`;
+  const isExporting = isBusy(state, exportKey);
+  const exportButton = createActionButton(
+    isExporting ? "Preparing Daily Export..." : "Export Daily Collections",
+    () => actions.exportOpShopPickupCollections(pickupDate),
+    {
+      disabled: isExporting || !collections.length,
+      primary: true,
+    },
+  );
+  exportButton.title =
+    "Exports all generated/saved OP SHOP Pickup Collections for this pickup date, with one sheet per driver.";
+  exportButton.dataset.opshopDailyCollectionExport = pickupDate;
+  header.append(exportButton);
+  section.append(header);
   const grid = document.createElement("div");
   grid.className = "workspace-card-grid workspace-collection-grid";
-  if (!collections.length) {
-    grid.append(createEmptyState(emptyMessage, "history"));
-  } else {
-    collections.forEach((collection) => grid.append(createCollectionCard(collection, state, actions)));
-  }
+  collections.forEach((collection) => grid.append(createCollectionCard(collection, state, actions)));
   section.append(grid);
   return section;
 }
@@ -1020,6 +1037,14 @@ function createCollectionCard(collection, state, actions) {
   title.textContent = formatOptional(collection.driver_name_snapshot, collection.driver_id);
   identity.append(kicker, title);
   top.append(identity, createBadge(collection.status));
+  const meta = document.createElement("p");
+  meta.className = "workspace-collection-card-meta";
+  meta.textContent = [
+    `Workspace date: ${formatOptional(collection.dispatch_date)}`,
+    `Pickup date: ${formatOptional(collection.pickup_date)}`,
+    `Driver: ${formatOptional(collection.driver_name_snapshot, collection.driver_id)}`,
+    `Status: ${formatOptional(collection.status)}`,
+  ].join(" | ");
 
   const actionsRow = document.createElement("div");
   actionsRow.className = "workspace-action-row workspace-collection-actions";
@@ -1040,20 +1065,47 @@ function createCollectionCard(collection, state, actions) {
       ),
     );
   }
-  if (collection.status === "SAVED") {
+  if (["GENERATED", "SAVED"].includes(collection.status)) {
+    const isExporting = isBusy(state, `opshop-export:${collection.collection_id}`);
     actionsRow.append(
       createActionButton(
-        "Export",
+        isExporting ? "Exporting..." : "Export Excel",
         () => actions.exportOpShopPickupCollection(collection.collection_id),
         {
-          disabled: isBusy(state, `opshop-export:${collection.collection_id}`),
-          primary: true,
+          disabled: isExporting,
+          primary: collection.status === "SAVED",
         },
       ),
     );
   }
-  card.append(top, createCollectionWeightSheetPreview(collection), actionsRow);
+  card.append(top, meta, createCollectionWeightSheetPreview(collection), actionsRow);
   return card;
+}
+
+
+function groupCollectionsByPickupDate(collections) {
+  const groups = new Map();
+  (collections || []).forEach((collection) => {
+    const pickupDate = collection.pickup_date || "Unknown pickup date";
+    if (!groups.has(pickupDate)) {
+      groups.set(pickupDate, []);
+    }
+    groups.get(pickupDate).push(collection);
+  });
+  return Array.from(groups.entries())
+    .sort(([leftDate], [rightDate]) => String(rightDate).localeCompare(String(leftDate)))
+    .map(([pickupDate, dateCollections]) => [
+      pickupDate,
+      dateCollections.sort(compareCollectionsForDisplay),
+    ]);
+}
+
+
+function compareCollectionsForDisplay(left, right) {
+  const statusOrder = { GENERATED: 0, SAVED: 1 };
+  return (statusOrder[left.status] ?? 9) - (statusOrder[right.status] ?? 9)
+    || compareText(left.driver_name_snapshot || left.driver_id, right.driver_name_snapshot || right.driver_id)
+    || compareText(left.collection_id, right.collection_id);
 }
 
 

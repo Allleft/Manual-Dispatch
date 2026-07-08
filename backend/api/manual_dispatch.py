@@ -67,6 +67,7 @@ from backend.services.opshop_pickup_excel_export_service import (
 )
 from backend.services.opshop_pickup_collection_excel_export_service import (
     build_opshop_pickup_collection_excel,
+    build_opshop_pickup_collections_excel,
 )
 
 router = APIRouter(prefix="/api/manual-dispatch", tags=["manual-dispatch"])
@@ -857,6 +858,33 @@ def list_opshop_pickup_collections(
         raise _to_http_exception(error) from error
 
 
+@router.get("/opshop/pickup-collections/export-excel")
+def export_opshop_pickup_collections_excel(
+    pickup_date: str,
+    dispatch_date: str = None,
+    status: str = None,
+):
+    try:
+        collections = service.list_opshop_pickup_collections_for_date_export(
+            pickup_date,
+            dispatch_date,
+            status,
+        )
+        workbook_bytes = build_opshop_pickup_collections_excel(
+            collections,
+            pickup_date,
+        )
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+    filename = f"Daily_OPSHOP_Collections_{_safe_filename_part(pickup_date)}.xlsx"
+    return Response(
+        content=workbook_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.get("/opshop/pickup-collections/{collection_id}")
 def get_opshop_pickup_collection(collection_id: str):
     try:
@@ -893,7 +921,7 @@ def cancel_generated_opshop_pickup_collection(collection_id: str):
 @router.get("/opshop/pickup-collections/{collection_id}/export-excel")
 def export_opshop_pickup_collection_excel(collection_id: str):
     try:
-        collection = service.get_saved_opshop_pickup_collection_for_export(
+        collection = service.get_opshop_pickup_collection_for_export(
             collection_id
         )
     except ValueError as error:

@@ -445,6 +445,26 @@ export async function apiExportOpShopPickupCollectionExcel(collectionId) {
 }
 
 
+export async function apiExportOpShopPickupCollectionsExcel({
+  pickupDate,
+  dispatchDate = "",
+  status = "",
+}) {
+  const query = new URLSearchParams();
+  query.set("pickup_date", pickupDate);
+  if (dispatchDate) {
+    query.set("dispatch_date", dispatchDate);
+  }
+  if (status) {
+    query.set("status", status);
+  }
+  return requestBlobDownload(
+    `/api/manual-dispatch/opshop/pickup-collections/export-excel?${query.toString()}`,
+    `Daily_OPSHOP_Collections_${pickupDate}.xlsx`,
+  );
+}
+
+
 export async function apiAssignTask(payload) {
   return requestJson("/api/manual-dispatch/assign", {
     method: "POST",
