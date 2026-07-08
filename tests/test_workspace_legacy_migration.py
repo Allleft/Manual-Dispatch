@@ -30,6 +30,9 @@ class WorkspaceLegacyMigrationTest(unittest.TestCase):
 
     def test_default_dry_run_is_read_only_and_reports_candidates(self):
         self._seed_summary("FTS-DRY", delivery_rows=1, opshop_rows=1)
+        # Dry-run must be semantically read-only. Avoid byte-for-byte SQLite
+        # comparisons here because journal/WAL bookkeeping can change without
+        # mutating legacy summaries or creating workspace snapshots.
         before_legacy = self._legacy_snapshot("FTS-DRY")
         before_workspace_counts = self._workspace_counts()
 
