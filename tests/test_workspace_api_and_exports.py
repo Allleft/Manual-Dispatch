@@ -279,7 +279,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
                 "TIME IN",
                 "TIME OUT",
                 "TROLLEYS OUT TO OPSHOPS",
-                "TROLLEYS IN TO MCC",
+                "TROLLEYS IN TO MCC ",
                 "HARD TOYS",
                 "SOFT TOYS",
                 "BLACK BAGS",

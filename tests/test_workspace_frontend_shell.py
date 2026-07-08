@@ -2822,7 +2822,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn('"CLOTHING KG"', self.opshop_renderer)
         self.assertIn('"SHOES KG"', self.opshop_renderer)
         self.assertIn('"TROLLEYS OUT TO OPSHOPS"', self.opshop_renderer)
-        self.assertIn('"TROLLEYS IN TO MCC"', self.opshop_renderer)
+        self.assertIn('"TROLLEYS IN TO MCC "', self.opshop_renderer)
         self.assertIn("collectionWeightSheetRowValues(pickup)", self.opshop_renderer)
         self.assertIn("workspace-opshop-weight-sheet-table-wrap", self.styles)
         self.assertIn("min-width: 980px", self.styles)
