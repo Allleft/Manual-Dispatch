@@ -2296,6 +2296,41 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             r"\.workspace-regular-pickup-list \.opshop-date-card-list\[hidden\]\s*\{\s*display: none;\s*\}",
         )
 
+    def test_oncall_template_picker_uses_high_contrast_option_styles(self):
+        oncall_renderer = self._read("js/render/opshop-oncall-pickup-list-modal-renderer.js")
+        self.assertIn("opshop-template-picker-option-main", oncall_renderer)
+        self.assertIn("opshop-template-picker-option-meta", oncall_renderer)
+        self.assertIn("opshop-template-picker-option-selected", oncall_renderer)
+        self.assertIn('option.setAttribute("aria-selected"', oncall_renderer)
+        option_styles = self.styles.split(".opshop-template-picker-option {", 1)[1].split(
+            ".opshop-template-picker-option-text",
+            1,
+        )[0]
+        main_styles = self.styles.split(".opshop-template-picker-option-main {", 1)[1].split(
+            ".opshop-template-picker-option-meta",
+            1,
+        )[0]
+        meta_styles = self.styles.split(".opshop-template-picker-option-meta {", 1)[1].split(
+            ".opshop-template-picker-selected-mark",
+            1,
+        )[0]
+        hover_styles = self.styles.split(".opshop-template-picker-option:hover,", 1)[1].split(
+            ".opshop-template-picker-option-selected",
+            1,
+        )[0]
+        selected_styles = self.styles.split(".opshop-template-picker-option-selected,", 1)[1].split(
+            ".opshop-template-picker-empty",
+            1,
+        )[0]
+        self.assertIn("background: #ffffff", option_styles)
+        self.assertIn("color: #0b2f23", main_styles)
+        self.assertIn("color: #435363", meta_styles)
+        self.assertIn(".opshop-template-picker-option:focus-visible", hover_styles)
+        self.assertIn("background: #eef8f1", hover_styles)
+        self.assertIn("color: #294237", hover_styles)
+        self.assertIn("background: #dff1e5", selected_styles)
+        self.assertIn("color: #213e32", selected_styles)
+
     def test_regular_date_toggle_preserves_drafts_without_board_reload(self):
         self._run_workspace_actions_script(
             """
