@@ -43,7 +43,11 @@ export function renderDeliveryWorkspace(
     if (state.workspaceRoute === "delivery/task-pool") {
       content.append(createDeliveryTaskPool(state.deliveryBoard, state, actions));
     } else if (state.workspaceRoute === "delivery/trip-summary") {
-      content.append(createDeliveryTripSummary(state.deliveryBoard, state, actions));
+      content.append(createDeliveryTripSummary(
+        state.deliveryTripSummaryBoard,
+        state,
+        actions,
+      ));
     } else {
       const savedOnly = state.workspaceRoute === "delivery/history";
       content.append(createRunSheetList(state.deliveryRunSheets, savedOnly, state, actions));
@@ -460,7 +464,11 @@ function createDriverTripSummaryCard(driver, board, deliveryDate, state, actions
   card.append(top);
 
   const driverOrders = assignedOrdersForDriver(board, deliveryDate, driver.driver_id);
-  const runSheet = findRunSheetForDriver(state.deliveryRunSheets, deliveryDate, driver.driver_id);
+  const runSheet = findRunSheetForDriver(
+    state.deliveryTripSummaryRunSheets,
+    deliveryDate,
+    driver.driver_id,
+  );
   const isLocked = Boolean(runSheet && ["GENERATED", "SAVED"].includes(runSheet.status));
   const totals = orderTotals(driverOrders);
   const facts = document.createElement("dl");
@@ -1038,7 +1046,9 @@ function createRunSheetPreview(runSheet) {
 function createDeliveryOrderModal(state, actions) {
   const formMode = state.deliveryOrderFormMode;
   const readOnly = Boolean(state.deliveryOrderDetailReadOnly);
-  const order = (state.deliveryBoard?.orders || []).find(
+  const board = deliveryModalBoard(state);
+  const runSheets = deliveryModalRunSheets(state);
+  const order = (board?.orders || []).find(
     (item) => item.order_id === state.deliveryOrderDetailId,
   );
   if (!formMode && !order) {
@@ -1071,7 +1081,7 @@ function createDeliveryOrderModal(state, actions) {
   if (formMode) {
     body.append(createDeliveryOrderForm(state, actions, formMode));
   } else {
-    const locked = isOrderCapturedByRunSheet(order, state.deliveryRunSheets);
+    const locked = isOrderCapturedByRunSheet(order, runSheets);
     body.append(
       readOnly
         ? createDeliveryOrderReadOnlyActions(actions)
@@ -1079,10 +1089,24 @@ function createDeliveryOrderModal(state, actions) {
       locked && !readOnly
         ? createStatus("This Delivery Order is captured by a Generated or Saved Delivery Run Sheet. Edit and Cancel are locked.", "loading")
         : document.createDocumentFragment(),
-      createDeliveryOrderReadOnly(order, state),
+      createDeliveryOrderReadOnly(order, state, board),
     );
   }
   return modal;
+}
+
+
+function deliveryModalBoard(state) {
+  return state.workspaceRoute === "delivery/trip-summary"
+    ? state.deliveryTripSummaryBoard || state.deliveryBoard
+    : state.deliveryBoard;
+}
+
+
+function deliveryModalRunSheets(state) {
+  return state.workspaceRoute === "delivery/trip-summary"
+    ? state.deliveryTripSummaryRunSheets || state.deliveryRunSheets
+    : state.deliveryRunSheets;
 }
 
 
@@ -1098,16 +1122,16 @@ function createDeliveryOrderReadOnlyActions(actions) {
 }
 
 
-function createDeliveryOrderReadOnly(order, state) {
+function createDeliveryOrderReadOnly(order, state, board) {
   const fragment = document.createDocumentFragment();
-  const assignmentFacts = deliveryOrderAssignmentFacts(order, state);
+  const assignmentFacts = deliveryOrderAssignmentFacts(order, board);
   fragment.append(
     createModalFactSection("General Information", [
       ["Invoice Number", order.invoice_number],
       ["Order Number", order.order_no],
       ["Company Name", order.company_name],
       ["Phone", order.phone],
-      ["Preferred Driver", driverName(state.deliveryBoard, order.preferred_driver_id)],
+      ["Preferred Driver", driverName(board, order.preferred_driver_id)],
     ]),
     createModalFactSection("Delivery Details", [
       ["Delivery Address", order.delivery_address],
@@ -1130,15 +1154,15 @@ function createDeliveryOrderReadOnly(order, state) {
 }
 
 
-function deliveryOrderAssignmentFacts(order, state) {
-  const assignment = (state.deliveryBoard?.assignments || []).find(
+function deliveryOrderAssignmentFacts(order, board) {
+  const assignment = (board?.assignments || []).find(
     (item) => item.task_type === "ORDER" && item.task_id === order.order_id,
   );
   if (!assignment) {
     return [];
   }
   return [
-    ["Current assigned driver", driverName(state.deliveryBoard, assignment.driver_id)],
+    ["Current assigned driver", driverName(board, assignment.driver_id)],
     ["Current trip", assignment.trip_no === "trip2" ? "Trip 2" : "Trip 1"],
   ];
 }

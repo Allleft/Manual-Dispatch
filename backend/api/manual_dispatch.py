@@ -94,10 +94,26 @@ def get_delivery_workspace_board(dispatch_date: str):
         raise _to_http_exception(error) from error
 
 
+@router.get("/delivery/trip-summary")
+def get_delivery_trip_summary_board(delivery_date: str):
+    try:
+        return to_dict(service.get_delivery_trip_summary_board(delivery_date))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
 @router.get("/opshop/board")
 def get_opshop_workspace_board(dispatch_date: str):
     try:
         return to_dict(service.get_opshop_workspace_board(dispatch_date))
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+@router.get("/opshop/trip-summary")
+def get_opshop_trip_summary_board(pickup_date: str):
+    try:
+        return to_dict(service.get_opshop_trip_summary_board(pickup_date))
     except ValueError as error:
         raise _to_http_exception(error) from error
 

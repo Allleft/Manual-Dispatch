@@ -91,6 +91,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             ("POST", "/api/manual-dispatch/delivery/orders/import-attache-pdf-preview"),
             ("POST", "/api/manual-dispatch/delivery/orders/import-attache-pdf-commit"),
             ("POST", "/api/manual-dispatch/delivery/run-sheets/generated"),
+            ("GET", "/api/manual-dispatch/delivery/trip-summary"),
             ("GET", "/api/manual-dispatch/delivery/run-sheets"),
             ("GET", "/api/manual-dispatch/delivery/run-sheets/export-excel"),
             ("GET", "/api/manual-dispatch/delivery/run-sheets/{run_sheet_id}"),
@@ -104,6 +105,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
                 "/api/manual-dispatch/delivery/run-sheets/{run_sheet_id}/export-excel",
             ),
             ("POST", "/api/manual-dispatch/opshop/pickup-collections/generated"),
+            ("GET", "/api/manual-dispatch/opshop/trip-summary"),
             ("GET", "/api/manual-dispatch/opshop/pickup-collections"),
             (
                 "GET",

@@ -13,6 +13,7 @@ from backend.schemas import (
     AssignTaskRequest,
     DeliveryWorkspaceAssignOrderRequest,
     DeliveryWorkspaceUnassignOrderRequest,
+    DeliveryWorkspaceVehicleAssignmentRequest,
     Driver,
     GenerateDeliveryRunSheetRequest,
     GenerateOpShopPickupCollectionRequest,
@@ -157,10 +158,100 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
         for path in (
             "/api/manual-dispatch/delivery/board",
             "/api/manual-dispatch/opshop/board",
+            "/api/manual-dispatch/delivery/trip-summary",
+            "/api/manual-dispatch/opshop/trip-summary",
         ):
-            invalid = self.client.get(path, params={"dispatch_date": "2026-02-31"})
+            date_param = (
+                "delivery_date" if "delivery/trip-summary" in path
+                else "pickup_date" if "opshop/trip-summary" in path
+                else "dispatch_date"
+            )
+            invalid = self.client.get(path, params={date_param: "2026-02-31"})
             self.assertEqual(400, invalid.status_code)
             self.assertIn("valid YYYY-MM-DD", invalid.json()["detail"])
+
+    def test_delivery_trip_summary_board_is_scoped_by_delivery_date(self):
+        delivery_date = "2026-05-06"
+        self._create_delivery_order("ORDER-2", delivery_date)
+        self.service.assign_delivery_workspace_order(
+            DeliveryWorkspaceAssignOrderRequest(
+                dispatch_date=self.dispatch_date,
+                order_id="ORDER-2",
+                driver_id="DRIVER-1",
+                trip_no="trip2",
+            )
+        )
+        self.service.assign_delivery_workspace_vehicle(
+            DeliveryWorkspaceVehicleAssignmentRequest(
+                dispatch_date=self.dispatch_date,
+                delivery_date=delivery_date,
+                driver_id="DRIVER-1",
+                vehicle_id="VEHICLE-1",
+            )
+        )
+
+        response = self.client.get(
+            "/api/manual-dispatch/delivery/trip-summary",
+            params={"delivery_date": delivery_date},
+        )
+        self.assertEqual(200, response.status_code)
+        payload = response.json()
+
+        self.assertEqual(delivery_date, payload["dispatch_date"])
+        self.assertEqual(["ORDER-2"], [order["order_id"] for order in payload["orders"]])
+        self.assertEqual(["ORDER-2"], [item["task_id"] for item in payload["assignments"]])
+        self.assertEqual(
+            [
+                {
+                    "dispatch_date": self.dispatch_date,
+                    "delivery_date": delivery_date,
+                    "driver_id": "DRIVER-1",
+                    "vehicle_id": "VEHICLE-1",
+                }
+            ],
+            payload["driver_vehicle_assignments"],
+        )
+
+        task_pool_response = self.client.get(
+            "/api/manual-dispatch/delivery/board",
+            params={"dispatch_date": self.dispatch_date},
+        )
+        self.assertEqual(200, task_pool_response.status_code)
+        self.assertIn(
+            "ORDER-1",
+            {order["order_id"] for order in task_pool_response.json()["orders"]},
+        )
+
+    def test_opshop_trip_summary_board_is_scoped_by_pickup_date(self):
+        pickup_date = "2026-05-06"
+        pickup_id = self._seed_and_assign_oncall_pickup(
+            pickup_id="PICKUP-ONCALL-FUTURE",
+            pickup_date=pickup_date,
+        )
+
+        response = self.client.get(
+            "/api/manual-dispatch/opshop/trip-summary",
+            params={"pickup_date": pickup_date},
+        )
+        self.assertEqual(200, response.status_code)
+        payload = response.json()
+
+        self.assertEqual(pickup_date, payload["dispatch_date"])
+        self.assertEqual([pickup_id], [pickup["pickup_task_id"] for pickup in payload["opshop_pickups"]])
+        self.assertEqual(["DRIVER-1"], [pickup["driver_id"] for pickup in payload["opshop_pickups"]])
+
+        task_pool_response = self.client.get(
+            "/api/manual-dispatch/opshop/board",
+            params={"dispatch_date": self.dispatch_date},
+        )
+        self.assertEqual(200, task_pool_response.status_code)
+        self.assertIn(
+            "PICKUP-ONCALL-FUTURE",
+            {
+                pickup["pickup_task_id"]
+                for pickup in task_pool_response.json()["opshop_pickups"]
+            },
+        )
 
     def test_delivery_and_shared_boards_do_not_ensure_regular_pickups(self):
         self.assertEqual([], self.repository.list_opshop_pickup_tasks())
@@ -450,7 +541,9 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
         self.assertIn(("GET", "/api/manual-dispatch/board"), route_pairs)
         self.assertIn(("POST", "/api/manual-dispatch/final-summaries"), route_pairs)
         self.assertIn(("GET", "/api/manual-dispatch/delivery/board"), route_pairs)
+        self.assertIn(("GET", "/api/manual-dispatch/delivery/trip-summary"), route_pairs)
         self.assertIn(("GET", "/api/manual-dispatch/opshop/board"), route_pairs)
+        self.assertIn(("GET", "/api/manual-dispatch/opshop/trip-summary"), route_pairs)
         self.assertIn(("GET", "/api/manual-dispatch/shared/specifications"), route_pairs)
 
         delivery_source = Path(
@@ -542,8 +635,12 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
             )
         )
 
-    def _seed_and_assign_oncall_pickup(self):
-        pickup_id = "PICKUP-ONCALL"
+    def _seed_and_assign_oncall_pickup(
+        self,
+        pickup_id="PICKUP-ONCALL",
+        pickup_date=None,
+    ):
+        pickup_date = pickup_date or self.dispatch_date
         self.repository.upsert_opshop_location(
             self._location("OPSHOP-ONCALL", "Oncall OP SHOP")
         )
@@ -560,7 +657,7 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
                 pickup_task_id=pickup_id,
                 schedule_id="SCHEDULE-ONCALL",
                 opshop_id="OPSHOP-ONCALL",
-                pickup_date=self.dispatch_date,
+                pickup_date=pickup_date,
                 task_type="OPSHOP_PICKUP",
                 generated_from="ON_CALL",
                 status="ACTIVE",

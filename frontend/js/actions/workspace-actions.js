@@ -20,11 +20,15 @@ import {
   apiExportOpShopPickupCollectionExcel,
   apiExportOpShopPickupCollectionsExcel,
   apiGetDeliverySpecifications,
+  apiGetDeliveryTripSummary,
   apiGetDeliveryWorkspaceBoard,
+  apiGetOpShopTripSummary,
   apiGetOpShopWorkspaceBoard,
   apiGetWorkspaceMigrationStatus,
   apiListDeliveryRunSheets,
+  apiListDeliveryRunSheetsByDeliveryDate,
   apiListOpShopPickupCollections,
+  apiListOpShopPickupCollectionsByPickupDate,
   apiPreviewDeliveryAttacheInvoices,
   apiSaveGeneratedDeliveryRunSheet,
   apiSaveGeneratedOpShopPickupCollection,
@@ -81,11 +85,15 @@ const DEFAULT_API = {
   exportOpShopPickupCollectionExcel: apiExportOpShopPickupCollectionExcel,
   exportOpShopPickupCollectionsExcel: apiExportOpShopPickupCollectionsExcel,
   getDeliverySpecifications: apiGetDeliverySpecifications,
+  getDeliveryTripSummary: apiGetDeliveryTripSummary,
   getDeliveryWorkspaceBoard: apiGetDeliveryWorkspaceBoard,
+  getOpShopTripSummary: apiGetOpShopTripSummary,
   getOpShopWorkspaceBoard: apiGetOpShopWorkspaceBoard,
   getWorkspaceMigrationStatus: apiGetWorkspaceMigrationStatus,
   listDeliveryRunSheets: apiListDeliveryRunSheets,
+  listDeliveryRunSheetsByDeliveryDate: apiListDeliveryRunSheetsByDeliveryDate,
   listOpShopPickupCollections: apiListOpShopPickupCollections,
+  listOpShopPickupCollectionsByPickupDate: apiListOpShopPickupCollectionsByPickupDate,
   previewDeliveryAttacheInvoices: apiPreviewDeliveryAttacheInvoices,
   saveGeneratedDeliveryRunSheet: apiSaveGeneratedDeliveryRunSheet,
   saveGeneratedOpShopPickupCollection: apiSaveGeneratedOpShopPickupCollection,
@@ -251,7 +259,11 @@ export function createWorkspaceActions({
           state.deliveryBoard = board;
           pruneDeliveryDrafts();
         }
-      } else if (route === "delivery/trip-summary" || route === "delivery/run-sheet") {
+      } else if (route === "delivery/trip-summary") {
+        const deliveryDate = state.deliveryTripSummaryDate || dispatchDate;
+        await loadDeliveryTripSummaryData(route, deliveryDate, requestVersion);
+        return;
+      } else if (route === "delivery/run-sheet") {
         const [board, runSheets] = await Promise.all([
           api.getDeliveryWorkspaceBoard(dispatchDate),
           api.listDeliveryRunSheets(dispatchDate, ""),
@@ -283,6 +295,31 @@ export function createWorkspaceActions({
     }
   }
 
+  async function loadDeliveryTripSummaryData(
+    route = state.workspaceRoute,
+    deliveryDate = state.deliveryTripSummaryDate || state.dispatchDate,
+    requestVersion = ++deliveryWorkspaceRequestVersion,
+  ) {
+    const dispatchDate = state.dispatchDate;
+    const scopedDeliveryDate = deliveryDate || dispatchDate;
+    const isCurrent = () =>
+      state.isLoggedIn &&
+      state.workspaceRoute === route &&
+      state.dispatchDate === dispatchDate &&
+      state.deliveryTripSummaryDate === scopedDeliveryDate &&
+      requestVersion === deliveryWorkspaceRequestVersion;
+
+    const [board, runSheets] = await Promise.all([
+      api.getDeliveryTripSummary(scopedDeliveryDate),
+      api.listDeliveryRunSheetsByDeliveryDate(scopedDeliveryDate, ""),
+    ]);
+    if (isCurrent()) {
+      state.deliveryTripSummaryBoard = board;
+      state.deliveryTripSummaryRunSheets = runSheets || [];
+      pruneDeliveryVehicleDrafts(state.deliveryTripSummaryBoard);
+    }
+  }
+
   async function loadOpShopRoute(route) {
     const dispatchDate = state.dispatchDate;
     const requestVersion = ++opshopWorkspaceRequestVersion;
@@ -297,7 +334,11 @@ export function createWorkspaceActions({
     state.opshopActionError = "";
     renderWorkspace();
     try {
-      if (route === "opshop/collections" || route === "opshop/trip-summary") {
+      if (route === "opshop/trip-summary") {
+        const pickupDate = state.opshopTripSummaryDate || dispatchDate;
+        await loadOpShopTripSummaryData(route, pickupDate, requestVersion);
+        return;
+      } else if (route === "opshop/collections") {
         const [board, collections] = await Promise.all([
           api.getOpShopWorkspaceBoard(dispatchDate),
           api.listOpShopPickupCollections(dispatchDate, ""),
@@ -348,6 +389,30 @@ export function createWorkspaceActions({
     }
   }
 
+  async function loadOpShopTripSummaryData(
+    route = state.workspaceRoute,
+    pickupDate = state.opshopTripSummaryDate || state.dispatchDate,
+    requestVersion = ++opshopWorkspaceRequestVersion,
+  ) {
+    const dispatchDate = state.dispatchDate;
+    const scopedPickupDate = pickupDate || dispatchDate;
+    const isCurrent = () =>
+      state.isLoggedIn &&
+      state.workspaceRoute === route &&
+      state.dispatchDate === dispatchDate &&
+      state.opshopTripSummaryDate === scopedPickupDate &&
+      requestVersion === opshopWorkspaceRequestVersion;
+
+    const [board, collections] = await Promise.all([
+      api.getOpShopTripSummary(scopedPickupDate),
+      api.listOpShopPickupCollectionsByPickupDate(scopedPickupDate, ""),
+    ]);
+    if (isCurrent()) {
+      state.opshopTripSummaryBoard = board;
+      state.opshopTripSummaryCollections = collections || [];
+    }
+  }
+
   async function updateDispatchDate(nextDate) {
     if (!nextDate || nextDate === state.dispatchDate) {
       return;
@@ -387,17 +452,28 @@ export function createWorkspaceActions({
     restoreWindowScroll(scrollSnapshot);
   }
 
-  function updateOpShopTripSummaryDate(nextDate) {
+  async function updateOpShopTripSummaryDate(nextDate) {
     state.opshopTripSummaryDate = nextDate || state.dispatchDate;
+    if (state.workspaceRoute === "opshop/trip-summary") {
+      await loadOpShopRoute(state.workspaceRoute);
+      return;
+    }
     renderWorkspace();
   }
 
-  function updateDeliveryTripSummaryDate(nextDate) {
+  async function updateDeliveryTripSummaryDate(nextDate) {
     const deliveryDate = nextDate || state.dispatchDate;
     if (deliveryDate !== state.deliveryTripSummaryDate) {
       clearDeliveryVehicleTransientState();
     }
     state.deliveryTripSummaryDate = deliveryDate;
+    if (
+      state.workspaceRoute === "delivery/trip-summary"
+      || state.workspaceRoute === "delivery/run-sheet"
+    ) {
+      await loadDeliveryRoute(state.workspaceRoute);
+      return;
+    }
     renderWorkspace();
   }
 
@@ -1272,7 +1348,7 @@ export function createWorkspaceActions({
     ) {
       const vehicleId = state.deliveryVehicleDrafts[key];
       const conflicts = getDeliveryVehicleConflictDriverNames({
-        board: state.deliveryBoard,
+        board: currentDeliveryBoard(),
         claims: state.deliveryVehicleClaims,
         deliveryDate,
         driverId,
@@ -1281,7 +1357,7 @@ export function createWorkspaceActions({
       if (conflicts.length) {
         return;
       }
-      const currentAssignment = (state.deliveryBoard?.driver_vehicle_assignments || []).find(
+      const currentAssignment = (currentDeliveryBoard()?.driver_vehicle_assignments || []).find(
         (assignment) =>
           assignment.delivery_date === deliveryDate && assignment.driver_id === driverId,
       );
@@ -1353,7 +1429,7 @@ export function createWorkspaceActions({
         const deliveryDate = key.slice(0, separatorIndex);
         const driverId = key.slice(separatorIndex + 1);
         const conflicts = getDeliveryVehicleConflictDriverNames({
-          board: state.deliveryBoard,
+          board: currentDeliveryBoard(),
           claims: state.deliveryVehicleClaims,
           deliveryDate,
           driverId,
@@ -1415,7 +1491,8 @@ export function createWorkspaceActions({
     if (!updatedBoard) {
       return;
     }
-    const otherAssignments = (state.deliveryBoard?.driver_vehicle_assignments || []).filter(
+    const targetBoard = currentDeliveryBoard();
+    const otherAssignments = (targetBoard?.driver_vehicle_assignments || []).filter(
       (assignment) =>
         assignment.delivery_date !== deliveryDate || assignment.driver_id !== driverId,
     );
@@ -1423,11 +1500,15 @@ export function createWorkspaceActions({
       (assignment) =>
         assignment.delivery_date === deliveryDate && assignment.driver_id === driverId,
     );
-    state.deliveryBoard = {
-      ...(state.deliveryBoard || {}),
-      ...updatedBoard,
+    const nextBoard = {
+      ...(targetBoard || {}),
       driver_vehicle_assignments: otherAssignments.concat(updatedAssignment),
     };
+    if (state.workspaceRoute === "delivery/trip-summary" && state.deliveryTripSummaryBoard) {
+      state.deliveryTripSummaryBoard = nextBoard;
+    } else {
+      state.deliveryBoard = nextBoard;
+    }
   }
 
   function generateDeliveryRunSheet(candidate) {
@@ -1813,15 +1894,21 @@ export function createWorkspaceActions({
   }
 
   function findDeliveryAssignment(orderId) {
-    return (state.deliveryBoard?.assignments || []).find(
+    return (currentDeliveryBoard()?.assignments || []).find(
       (assignment) => assignment.task_id === orderId,
     );
   }
 
   function findDeliveryOrder(orderId) {
-    return (state.deliveryBoard?.orders || []).find(
+    return (currentDeliveryBoard()?.orders || []).find(
       (order) => order.order_id === orderId,
     );
+  }
+
+  function currentDeliveryBoard() {
+    return state.workspaceRoute === "delivery/trip-summary"
+      ? state.deliveryTripSummaryBoard || state.deliveryBoard
+      : state.deliveryBoard;
   }
 
   function pruneDeliveryDrafts() {
@@ -1831,19 +1918,23 @@ export function createWorkspaceActions({
         orderIds.has(orderId),
       ),
     );
+    pruneDeliveryVehicleDrafts(state.deliveryBoard);
+  }
+
+  function pruneDeliveryVehicleDrafts(board = state.deliveryBoard) {
     const vehicleKeys = new Set();
-    (state.deliveryBoard?.driver_vehicle_assignments || []).forEach((assignment) => {
+    (board?.driver_vehicle_assignments || []).forEach((assignment) => {
       vehicleKeys.add(deliveryVehicleKey(assignment.delivery_date, assignment.driver_id));
     });
-    (state.deliveryBoard?.assignments || []).forEach((assignment) => {
-      const order = (state.deliveryBoard?.orders || []).find(
+    (board?.assignments || []).forEach((assignment) => {
+      const order = (board?.orders || []).find(
         (item) => item.order_id === assignment.task_id,
       );
       if (order?.delivery_date) {
         vehicleKeys.add(deliveryVehicleKey(order.delivery_date, assignment.driver_id));
       }
     });
-    (state.deliveryBoard?.drivers || []).forEach((driver) => {
+    (board?.drivers || []).forEach((driver) => {
       vehicleKeys.add(deliveryVehicleKey(
         state.deliveryTripSummaryDate || state.dispatchDate,
         driver.driver_id,
@@ -1857,7 +1948,7 @@ export function createWorkspaceActions({
         const separatorIndex = key.indexOf("|");
         const deliveryDate = key.slice(0, separatorIndex);
         const driverId = key.slice(separatorIndex + 1);
-        return !(state.deliveryBoard?.driver_vehicle_assignments || []).some(
+        return !(board?.driver_vehicle_assignments || []).some(
           (assignment) =>
             assignment.delivery_date === deliveryDate
             && assignment.driver_id === driverId
@@ -1913,6 +2004,8 @@ export function createWorkspaceActions({
 
   function clearWorkspaceDraftsForDispatchDateChange() {
     invalidateDeliveryAttachePreview();
+    state.deliveryTripSummaryBoard = null;
+    state.deliveryTripSummaryRunSheets = [];
     state.deliveryAssignmentDrafts = {};
     clearDeliveryVehicleTransientState();
     state.deliveryOrderDetailId = "";
@@ -1929,6 +2022,8 @@ export function createWorkspaceActions({
     state.deliverySpecificationError = "";
     state.deliverySpecificationBusyKey = "";
     state.opshopAssignmentDrafts = {};
+    state.opshopTripSummaryBoard = null;
+    state.opshopTripSummaryCollections = [];
     state.countrysideRouteGroupDrafts = {};
     state.collapsedRegularOpShopPickupDates = {};
     state.deliveryActionError = "";

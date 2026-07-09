@@ -102,7 +102,9 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
     def test_scoped_api_client_has_all_workspace_endpoints(self):
         for endpoint in (
             "/api/manual-dispatch/delivery/board",
+            "/api/manual-dispatch/delivery/trip-summary",
             "/api/manual-dispatch/opshop/board",
+            "/api/manual-dispatch/opshop/trip-summary",
             "/api/manual-dispatch/shared/specifications",
             "/api/manual-dispatch/delivery/run-sheets",
             "/api/manual-dispatch/opshop/pickup-collections",
@@ -229,9 +231,13 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             "workspaceMigrationStatusError",
             "deliveryBoard",
             "deliveryRunSheets",
+            "deliveryTripSummaryBoard",
+            "deliveryTripSummaryRunSheets",
             "deliveryTripSummaryDate",
             "opshopBoard",
             "opshopPickupCollections",
+            "opshopTripSummaryBoard",
+            "opshopTripSummaryCollections",
             "sharedSpecifications",
             "isDeliveryWorkspaceLoading",
             "deliveryWorkspaceError",
@@ -548,6 +554,8 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("saved_by_account_name: state.accountName || null", self.workspace_actions)
         self.assertIn("Delivery date", self.delivery_renderer)
         self.assertNotIn("input.min", self.delivery_renderer)
+        self.assertIn("state.deliveryTripSummaryBoard", self.delivery_renderer)
+        self.assertIn("state.deliveryTripSummaryRunSheets", self.delivery_renderer)
         self.assertIn("Trip 1", self.delivery_renderer)
         self.assertIn("Trip 2", self.delivery_renderer)
         self.assertIn("Add Order", self.delivery_renderer)
@@ -558,8 +566,12 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("navigateWorkspaceRoute = null", self.workspace_actions)
         self.assertIn('await navigateWorkspaceRoute("delivery/run-sheet")', self.workspace_actions)
         self.assertNotIn('window.history.pushState(null, "", "#delivery/run-sheet")', self.workspace_actions)
-        self.assertIn("state.deliveryTripSummaryDate = nextDate", self.workspace_actions)
+        self.assertIn("const deliveryDate = nextDate || state.dispatchDate", self.workspace_actions)
         self.assertIn("state.deliveryTripSummaryDate = deliveryDate", self.workspace_actions)
+        self.assertIn("loadDeliveryTripSummaryData", self.workspace_actions)
+        self.assertIn("api.getDeliveryTripSummary", self.workspace_actions)
+        self.assertIn("api.listDeliveryRunSheetsByDeliveryDate", self.workspace_actions)
+        self.assertIn("state.deliveryTripSummaryBoard = board", self.workspace_actions)
         self.assertIn("Trip 1 orders", self.delivery_renderer)
         self.assertIn("Trip 2 orders", self.delivery_renderer)
         self.assertIn("Saved Run Sheet History", self.delivery_renderer)
@@ -1370,6 +1382,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
               dispatchDate: "2026-06-29",
               deliveryTripSummaryDate: "2026-06-29",
               deliveryBoard: board(), deliveryRunSheets: [],
+              deliveryTripSummaryBoard: null, deliveryTripSummaryRunSheets: [],
               deliveryAssignmentDrafts: {}, deliveryVehicleDrafts: {},
               deliveryVehicleClaims: {}, deliveryVehicleClaimSequence: 0,
               deliveryVehicleErrors: {}, deliveryVehiclePendingKeys: {},
@@ -1378,7 +1391,9 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             const api = {
               assignDeliveryWorkspaceVehicle: async () => vehicleWrite.promise,
               getDeliveryWorkspaceBoard: async () => board(),
+              getDeliveryTripSummary: async () => board(),
               listDeliveryRunSheets: async () => [],
+              listDeliveryRunSheetsByDeliveryDate: async () => [],
             };
             const actions = createWorkspaceActions({ state, renderWorkspace: () => {}, api });
             const pending = actions.updateDeliveryVehicleSelection("2026-06-29", "A", "V1");
@@ -1409,7 +1424,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
 
             state.workspaceRoute = "delivery/trip-summary";
             await actions.loadWorkspaceRoute("delivery/trip-summary");
-            if (state.deliveryBoard.driver_vehicle_assignments[0]?.vehicle_id !== "V1") {
+            if (state.deliveryTripSummaryBoard.driver_vehicle_assignments[0]?.vehicle_id !== "V1") {
               throw new Error("Trip Summary did not reload the persisted scoped board state");
             }
             """
@@ -2166,8 +2181,8 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
               state: opshopState, renderWorkspace: () => {},
               api: {
                 createGeneratedOpShopPickupCollection: async () => { throw new Error("Pickup changed"); },
-                getOpShopWorkspaceBoard: async () => { reloads += 1; return opshopState.opshopBoard; },
-                listOpShopPickupCollections: async () => [],
+                getOpShopTripSummary: async () => { reloads += 1; return opshopState.opshopBoard; },
+                listOpShopPickupCollectionsByPickupDate: async () => [],
               },
             });
             opshopActions.generateOpShopPickupCollection({
@@ -2687,7 +2702,13 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("readyPickupCollectionCandidates(board, collections)", self.opshop_renderer)
         self.assertIn("Generate Pickup Collection", self.opshop_renderer)
         self.assertIn("opshopTripSummaryDate: DEFAULT_DISPATCH_DATE", self.state)
-        self.assertIn("function updateOpShopTripSummaryDate(nextDate)", self.workspace_actions)
+        self.assertIn("state.opshopTripSummaryBoard", self.opshop_renderer)
+        self.assertIn("state.opshopTripSummaryCollections", self.opshop_renderer)
+        self.assertIn("async function updateOpShopTripSummaryDate(nextDate)", self.workspace_actions)
+        self.assertIn("loadOpShopTripSummaryData", self.workspace_actions)
+        self.assertIn("api.getOpShopTripSummary", self.workspace_actions)
+        self.assertIn("api.listOpShopPickupCollectionsByPickupDate", self.workspace_actions)
+        self.assertIn("state.opshopTripSummaryBoard = board", self.workspace_actions)
 
     def test_opshop_trip_summary_pickup_cards_open_read_only_detail_modal(self):
         row_block = self.opshop_renderer.split(
@@ -2963,8 +2984,119 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("grid-template-columns: minmax(0, 1fr)", self.styles)
         self.assertIn("min-width: 980px", self.styles)
         self.assertIn(
-            'route === "opshop/collections" || route === "opshop/trip-summary"',
+            'route === "opshop/trip-summary"',
             self.workspace_actions,
+        )
+
+    def test_trip_summary_date_loads_service_date_scoped_data_without_polluting_task_pool_boards(self):
+        self._run_workspace_actions_script(
+            """
+            const deliveryTaskPoolBoard = { marker: "delivery-task-pool", orders: [], assignments: [], driver_vehicle_assignments: [], drivers: [] };
+            const deliveryTripBoard = {
+              marker: "delivery-trip-summary",
+              orders: [{ order_id: "ORDER-HIST", delivery_date: "2026-06-22" }],
+              assignments: [{ task_id: "ORDER-HIST", driver_id: "DRIVER-1" }],
+              driver_vehicle_assignments: [{ delivery_date: "2026-06-22", driver_id: "DRIVER-1", vehicle_id: "VEHICLE-1" }],
+              drivers: [{ driver_id: "DRIVER-1" }],
+            };
+            const opshopTaskPoolBoard = { marker: "opshop-task-pool", opshop_pickups: [], countryside_route_groups: [] };
+            const opshopTripBoard = {
+              marker: "opshop-trip-summary",
+              opshop_pickups: [{ pickup_task_id: "PICKUP-HIST", pickup_date: "2026-06-22", driver_id: "DRIVER-1" }],
+              drivers: [{ driver_id: "DRIVER-1" }],
+            };
+            const state = {
+              isLoggedIn: true,
+              workspaceRoute: "delivery/trip-summary",
+              activeWorkspace: "delivery",
+              dispatchDate: "2026-06-24",
+              deliveryBoard: deliveryTaskPoolBoard,
+              deliveryRunSheets: [],
+              deliveryTripSummaryDate: "2026-06-24",
+              deliveryTripSummaryBoard: null,
+              deliveryTripSummaryRunSheets: [],
+              deliveryAssignmentDrafts: { "ORDER-DRAFT": { driver_id: "DRIVER-2" } },
+              deliveryVehicleDrafts: {},
+              deliveryVehicleClaims: {},
+              deliveryVehicleErrors: {},
+              deliveryVehiclePendingKeys: {},
+              deliveryBusyActionKeys: {},
+              deliveryActionError: "",
+              opshopBoard: opshopTaskPoolBoard,
+              opshopPickupCollections: [],
+              opshopTripSummaryDate: "2026-06-24",
+              opshopTripSummaryBoard: null,
+              opshopTripSummaryCollections: [],
+              opshopAssignmentDrafts: { "PICKUP-DRAFT": "DRIVER-2" },
+              countrysideRouteGroupDrafts: {},
+              opshopBusyActionKeys: {},
+              opshopActionError: "",
+            };
+            const api = {
+              getWorkspaceMigrationStatus: async () => ({}),
+              getDeliveryWorkspaceBoard: async () => {
+                throw new Error("Delivery Trip Summary should not load dispatch board");
+              },
+              getDeliveryTripSummary: async (deliveryDate) => {
+                if (deliveryDate !== "2026-06-22") {
+                  throw new Error(`wrong Delivery Trip Summary date ${deliveryDate}`);
+                }
+                return deliveryTripBoard;
+              },
+              listDeliveryRunSheetsByDeliveryDate: async (deliveryDate) => {
+                if (deliveryDate !== "2026-06-22") {
+                  throw new Error(`wrong Delivery Run Sheet date ${deliveryDate}`);
+                }
+                return [{ run_sheet_id: "DRS-HIST", delivery_date: deliveryDate }];
+              },
+              getOpShopWorkspaceBoard: async () => {
+                throw new Error("OP SHOP Trip Summary should not load dispatch board");
+              },
+              getOpShopTripSummary: async (pickupDate) => {
+                if (pickupDate !== "2026-06-22") {
+                  throw new Error(`wrong OP SHOP Trip Summary date ${pickupDate}`);
+                }
+                return opshopTripBoard;
+              },
+              listOpShopPickupCollectionsByPickupDate: async (pickupDate) => {
+                if (pickupDate !== "2026-06-22") {
+                  throw new Error(`wrong OP SHOP collection date ${pickupDate}`);
+                }
+                return [{ collection_id: "OPC-HIST", pickup_date: pickupDate }];
+              },
+            };
+            const actions = createWorkspaceActions({
+              state,
+              renderWorkspace: () => {},
+              api,
+            });
+
+            await actions.updateDeliveryTripSummaryDate("2026-06-22");
+            if (state.deliveryBoard !== deliveryTaskPoolBoard) {
+              throw new Error("Delivery Task Pool board was polluted by Trip Summary reload");
+            }
+            if (state.deliveryTripSummaryBoard !== deliveryTripBoard ||
+                state.deliveryTripSummaryRunSheets[0].run_sheet_id !== "DRS-HIST") {
+              throw new Error("Delivery Trip Summary scoped board/run sheets were not loaded");
+            }
+            if (!Object.prototype.hasOwnProperty.call(state.deliveryAssignmentDrafts, "ORDER-DRAFT")) {
+              throw new Error("Delivery Task Pool assignment drafts were pruned by Trip Summary reload");
+            }
+
+            state.workspaceRoute = "opshop/trip-summary";
+            state.activeWorkspace = "opshop";
+            await actions.updateOpShopTripSummaryDate("2026-06-22");
+            if (state.opshopBoard !== opshopTaskPoolBoard) {
+              throw new Error("OP SHOP Task Pool board was polluted by Trip Summary reload");
+            }
+            if (state.opshopTripSummaryBoard !== opshopTripBoard ||
+                state.opshopTripSummaryCollections[0].collection_id !== "OPC-HIST") {
+              throw new Error("OP SHOP Trip Summary scoped board/collections were not loaded");
+            }
+            if (!Object.prototype.hasOwnProperty.call(state.opshopAssignmentDrafts, "PICKUP-DRAFT")) {
+              throw new Error("OP SHOP Task Pool assignment drafts were pruned by Trip Summary reload");
+            }
+            """
         )
 
     def test_opshop_default_driver_is_suggested_not_auto_submitted(self):

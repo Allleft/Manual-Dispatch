@@ -259,6 +259,35 @@ class InMemoryManualDispatchRepository:
             ),
         )
 
+    def list_assigned_opshop_pickup_board_items_for_pickup_date(self, pickup_date):
+        items = []
+        for assignment in self.assignments:
+            if assignment.task_type != "OPSHOP_PICKUP":
+                continue
+            task = self.get_opshop_pickup_task(assignment.task_id)
+            if not task or task.status != "ASSIGNED" or task.pickup_date != pickup_date:
+                continue
+            schedule = self.get_opshop_pickup_schedule(task.schedule_id)
+            location = self.get_opshop_location(task.opshop_id)
+            item = self._opshop_pickup_board_item(task, schedule, location)
+            item.dispatch_date = assignment.dispatch_date
+            item.driver_id = assignment.driver_id
+            item.trip_no = assignment.trip_no
+            item.is_assigned = True
+            items.append(item)
+
+        return sorted(
+            items,
+            key=lambda item: (
+                item.driver_id or "",
+                item.trip_no or "",
+                item.pickup_date,
+                item.suburb or "",
+                item.opshop_name or "",
+                item.pickup_task_id,
+            ),
+        )
+
     def list_collectable_opshop_pickup_board_items(self, pickup_date, driver_id):
         reserved_task_ids = {
             pickup.pickup_task_id_snapshot
@@ -302,6 +331,13 @@ class InMemoryManualDispatchRepository:
             assignment
             for assignment in self.driver_vehicle_assignments
             if assignment.dispatch_date == dispatch_date
+        ]
+
+    def list_driver_vehicle_assignments_for_delivery_date(self, delivery_date):
+        return [
+            assignment
+            for assignment in self.driver_vehicle_assignments
+            if assignment.delivery_date == delivery_date
         ]
 
     def list_final_trip_summaries(self, dispatch_date, delivery_date=None):

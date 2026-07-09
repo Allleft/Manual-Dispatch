@@ -41,8 +41,8 @@ export function renderOpShopWorkspace(
       content.append(createTemplateManagementPage(state, actions));
     } else if (state.workspaceRoute === "opshop/trip-summary") {
       content.append(createOpShopTripSummary(
-        state.opshopBoard,
-        state.opshopPickupCollections,
+        state.opshopTripSummaryBoard,
+        state.opshopTripSummaryCollections,
         state,
         actions,
         (pickup, trigger) => openOpShopPickupDetailModal(root, { pickup, trigger }),

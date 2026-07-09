@@ -165,6 +165,12 @@ export async function apiGetDeliveryWorkspaceBoard(dispatchDate) {
   });
 }
 
+export async function apiGetDeliveryTripSummary(deliveryDate) {
+  return requestJson("/api/manual-dispatch/delivery/trip-summary", {
+    query: { delivery_date: deliveryDate },
+  });
+}
+
 export async function apiGetWorkspaceMigrationStatus() {
   return requestJson("/api/manual-dispatch/workspace-migration-status");
 }
@@ -173,6 +179,12 @@ export async function apiGetWorkspaceMigrationStatus() {
 export async function apiGetOpShopWorkspaceBoard(dispatchDate) {
   return requestJson("/api/manual-dispatch/opshop/board", {
     query: { dispatch_date: dispatchDate },
+  });
+}
+
+export async function apiGetOpShopTripSummary(pickupDate) {
+  return requestJson("/api/manual-dispatch/opshop/trip-summary", {
+    query: { pickup_date: pickupDate },
   });
 }
 
@@ -193,10 +205,22 @@ export async function apiListDeliveryRunSheets(dispatchDate, status = "") {
   });
 }
 
+export async function apiListDeliveryRunSheetsByDeliveryDate(deliveryDate, status = "") {
+  return requestJson("/api/manual-dispatch/delivery/run-sheets", {
+    query: { delivery_date: deliveryDate, status },
+  });
+}
+
 
 export async function apiListOpShopPickupCollections(dispatchDate, status = "") {
   return requestJson("/api/manual-dispatch/opshop/pickup-collections", {
     query: { dispatch_date: dispatchDate, status },
+  });
+}
+
+export async function apiListOpShopPickupCollectionsByPickupDate(pickupDate, status = "") {
+  return requestJson("/api/manual-dispatch/opshop/pickup-collections", {
+    query: { pickup_date: pickupDate, status },
   });
 }
 

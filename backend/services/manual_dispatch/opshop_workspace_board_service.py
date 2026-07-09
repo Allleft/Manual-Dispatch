@@ -62,6 +62,51 @@ class OpShopWorkspaceBoardService:
             ),
         )
 
+    def get_trip_summary_board(self, pickup_date):
+        pickup_date = clean_required_iso_date(pickup_date, "pickup_date")
+        collections = self.repository.list_opshop_pickup_collections(
+            pickup_date=pickup_date
+        )
+        reserved_task_ids = self._reserved_task_ids(collections)
+
+        pickups_by_id = {}
+        for pickup in self.repository.list_assigned_opshop_pickup_board_items_for_pickup_date(
+            pickup_date
+        ):
+            if pickup.pickup_task_id in reserved_task_ids:
+                continue
+            pickup.assigned_to_locked = False
+            pickups_by_id[pickup.pickup_task_id] = pickup
+
+        collectable_task_ids = self._collectable_task_ids(pickups_by_id.values())
+        pickups = sorted(
+            (
+                self._workspace_pickup(
+                    pickup,
+                    pickup.pickup_task_id in collectable_task_ids,
+                )
+                for pickup in pickups_by_id.values()
+            ),
+            key=lambda pickup: (
+                pickup.pickup_date,
+                pickup.pickup_category or "",
+                pickup.route_group_name or "",
+                pickup.suburb or "",
+                pickup.opshop_name or "",
+                pickup.pickup_task_id,
+            ),
+        )
+
+        return OpShopWorkspaceBoardResponse(
+            dispatch_date=pickup_date,
+            opshop_pickups=pickups,
+            drivers=self.repository.list_drivers(),
+            templates=self.repository.list_opshop_templates(),
+            countryside_route_groups=(
+                self.repository.list_countryside_route_groups()
+            ),
+        )
+
     @staticmethod
     def _reserved_task_ids(collections):
         return {
