@@ -570,7 +570,12 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("state.deliveryTripSummaryDate = deliveryDate", self.workspace_actions)
         self.assertIn("loadDeliveryTripSummaryData", self.workspace_actions)
         self.assertIn("api.getDeliveryTripSummary", self.workspace_actions)
-        self.assertIn("api.listDeliveryRunSheetsByDeliveryDate", self.workspace_actions)
+        self.assertIn("dispatchDate,", self.workspace_actions)
+        self.assertIn("deliveryDate: scopedDeliveryDate", self.workspace_actions)
+        self.assertIn(
+            "api.listDeliveryRunSheetsByDispatchAndDeliveryDate",
+            self.workspace_actions,
+        )
         self.assertIn("state.deliveryTripSummaryBoard = board", self.workspace_actions)
         self.assertIn("Trip 1 orders", self.delivery_renderer)
         self.assertIn("Trip 2 orders", self.delivery_renderer)
@@ -583,6 +588,8 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertNotIn("Selected vehicle:", self.delivery_renderer)
         self.assertNotIn("Capacity:", self.delivery_renderer)
         self.assertNotIn("workspace-vehicle-capacity-summary", self.delivery_renderer)
+        self.assertIn("runSheet.dispatch_date === dispatchDate", self.delivery_renderer)
+        self.assertIn("assignment.dispatch_date === dispatchDate", self.delivery_renderer)
         action_block = self.delivery_renderer.split(
             "function createDeliveryOrderActions", 1
         )[1].split("function createDeliveryOrderForm", 1)[0]
@@ -1393,7 +1400,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
               getDeliveryWorkspaceBoard: async () => board(),
               getDeliveryTripSummary: async () => board(),
               listDeliveryRunSheets: async () => [],
-              listDeliveryRunSheetsByDeliveryDate: async () => [],
+              listDeliveryRunSheetsByDispatchAndDeliveryDate: async () => [],
             };
             const actions = createWorkspaceActions({ state, renderWorkspace: () => {}, api });
             const pending = actions.updateDeliveryVehicleSelection("2026-06-29", "A", "V1");
@@ -2182,7 +2189,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
               api: {
                 createGeneratedOpShopPickupCollection: async () => { throw new Error("Pickup changed"); },
                 getOpShopTripSummary: async () => { reloads += 1; return opshopState.opshopBoard; },
-                listOpShopPickupCollectionsByPickupDate: async () => [],
+                listOpShopPickupCollectionsByDispatchAndPickupDate: async () => [],
               },
             });
             opshopActions.generateOpShopPickupCollection({
@@ -2432,14 +2439,16 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             ".opshop-template-picker-empty",
             1,
         )[0]
-        self.assertIn("background: #ffffff", option_styles)
-        self.assertIn("color: #0b2f23", main_styles)
-        self.assertIn("color: #435363", meta_styles)
+        self.assertIn("background: linear-gradient(135deg, #0f5f46, #0a4635)", option_styles)
+        self.assertIn("color: #ffffff", option_styles)
+        self.assertIn(".opshop-template-picker-option *", self.styles)
+        self.assertIn("color: #ffffff", main_styles)
+        self.assertIn("color: #ffffff", meta_styles)
         self.assertIn(".opshop-template-picker-option:focus-visible", hover_styles)
-        self.assertIn("background: #eef8f1", hover_styles)
-        self.assertIn("color: #294237", hover_styles)
-        self.assertIn("background: #dff1e5", selected_styles)
-        self.assertIn("color: #213e32", selected_styles)
+        self.assertIn("background: linear-gradient(135deg, #137454, #0e5c45)", hover_styles)
+        self.assertIn("color: #ffffff", hover_styles)
+        self.assertIn("background: linear-gradient(135deg, #176d51, #0d513d)", selected_styles)
+        self.assertIn("color: #ffffff", selected_styles)
 
     def test_regular_date_toggle_preserves_drafts_without_board_reload(self):
         self._run_workspace_actions_script(
@@ -2707,8 +2716,13 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("async function updateOpShopTripSummaryDate(nextDate)", self.workspace_actions)
         self.assertIn("loadOpShopTripSummaryData", self.workspace_actions)
         self.assertIn("api.getOpShopTripSummary", self.workspace_actions)
-        self.assertIn("api.listOpShopPickupCollectionsByPickupDate", self.workspace_actions)
+        self.assertIn("pickupDate: scopedPickupDate", self.workspace_actions)
+        self.assertIn(
+            "api.listOpShopPickupCollectionsByDispatchAndPickupDate",
+            self.workspace_actions,
+        )
         self.assertIn("state.opshopTripSummaryBoard = board", self.workspace_actions)
+        self.assertIn("collection.dispatch_date === dispatchDate", self.opshop_renderer)
 
     def test_opshop_trip_summary_pickup_cards_open_read_only_detail_modal(self):
         row_block = self.opshop_renderer.split(
@@ -3037,30 +3051,30 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
               getDeliveryWorkspaceBoard: async () => {
                 throw new Error("Delivery Trip Summary should not load dispatch board");
               },
-              getDeliveryTripSummary: async (deliveryDate) => {
-                if (deliveryDate !== "2026-06-22") {
-                  throw new Error(`wrong Delivery Trip Summary date ${deliveryDate}`);
+              getDeliveryTripSummary: async ({ dispatchDate, deliveryDate }) => {
+                if (dispatchDate !== "2026-06-24" || deliveryDate !== "2026-06-22") {
+                  throw new Error(`wrong Delivery Trip Summary scope ${dispatchDate}/${deliveryDate}`);
                 }
                 return deliveryTripBoard;
               },
-              listDeliveryRunSheetsByDeliveryDate: async (deliveryDate) => {
-                if (deliveryDate !== "2026-06-22") {
-                  throw new Error(`wrong Delivery Run Sheet date ${deliveryDate}`);
+              listDeliveryRunSheetsByDispatchAndDeliveryDate: async (dispatchDate, deliveryDate) => {
+                if (dispatchDate !== "2026-06-24" || deliveryDate !== "2026-06-22") {
+                  throw new Error(`wrong Delivery Run Sheet scope ${dispatchDate}/${deliveryDate}`);
                 }
                 return [{ run_sheet_id: "DRS-HIST", delivery_date: deliveryDate }];
               },
               getOpShopWorkspaceBoard: async () => {
                 throw new Error("OP SHOP Trip Summary should not load dispatch board");
               },
-              getOpShopTripSummary: async (pickupDate) => {
-                if (pickupDate !== "2026-06-22") {
-                  throw new Error(`wrong OP SHOP Trip Summary date ${pickupDate}`);
+              getOpShopTripSummary: async ({ dispatchDate, pickupDate }) => {
+                if (dispatchDate !== "2026-06-24" || pickupDate !== "2026-06-22") {
+                  throw new Error(`wrong OP SHOP Trip Summary scope ${dispatchDate}/${pickupDate}`);
                 }
                 return opshopTripBoard;
               },
-              listOpShopPickupCollectionsByPickupDate: async (pickupDate) => {
-                if (pickupDate !== "2026-06-22") {
-                  throw new Error(`wrong OP SHOP collection date ${pickupDate}`);
+              listOpShopPickupCollectionsByDispatchAndPickupDate: async (dispatchDate, pickupDate) => {
+                if (dispatchDate !== "2026-06-24" || pickupDate !== "2026-06-22") {
+                  throw new Error(`wrong OP SHOP collection scope ${dispatchDate}/${pickupDate}`);
                 }
                 return [{ collection_id: "OPC-HIST", pickup_date: pickupDate }];
               },

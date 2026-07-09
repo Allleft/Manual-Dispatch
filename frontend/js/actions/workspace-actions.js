@@ -26,8 +26,10 @@ import {
   apiGetOpShopWorkspaceBoard,
   apiGetWorkspaceMigrationStatus,
   apiListDeliveryRunSheets,
+  apiListDeliveryRunSheetsByDispatchAndDeliveryDate,
   apiListDeliveryRunSheetsByDeliveryDate,
   apiListOpShopPickupCollections,
+  apiListOpShopPickupCollectionsByDispatchAndPickupDate,
   apiListOpShopPickupCollectionsByPickupDate,
   apiPreviewDeliveryAttacheInvoices,
   apiSaveGeneratedDeliveryRunSheet,
@@ -91,8 +93,10 @@ const DEFAULT_API = {
   getOpShopWorkspaceBoard: apiGetOpShopWorkspaceBoard,
   getWorkspaceMigrationStatus: apiGetWorkspaceMigrationStatus,
   listDeliveryRunSheets: apiListDeliveryRunSheets,
+  listDeliveryRunSheetsByDispatchAndDeliveryDate: apiListDeliveryRunSheetsByDispatchAndDeliveryDate,
   listDeliveryRunSheetsByDeliveryDate: apiListDeliveryRunSheetsByDeliveryDate,
   listOpShopPickupCollections: apiListOpShopPickupCollections,
+  listOpShopPickupCollectionsByDispatchAndPickupDate: apiListOpShopPickupCollectionsByDispatchAndPickupDate,
   listOpShopPickupCollectionsByPickupDate: apiListOpShopPickupCollectionsByPickupDate,
   previewDeliveryAttacheInvoices: apiPreviewDeliveryAttacheInvoices,
   saveGeneratedDeliveryRunSheet: apiSaveGeneratedDeliveryRunSheet,
@@ -310,8 +314,15 @@ export function createWorkspaceActions({
       requestVersion === deliveryWorkspaceRequestVersion;
 
     const [board, runSheets] = await Promise.all([
-      api.getDeliveryTripSummary(scopedDeliveryDate),
-      api.listDeliveryRunSheetsByDeliveryDate(scopedDeliveryDate, ""),
+      api.getDeliveryTripSummary({
+        dispatchDate,
+        deliveryDate: scopedDeliveryDate,
+      }),
+      api.listDeliveryRunSheetsByDispatchAndDeliveryDate(
+        dispatchDate,
+        scopedDeliveryDate,
+        "",
+      ),
     ]);
     if (isCurrent()) {
       state.deliveryTripSummaryBoard = board;
@@ -404,8 +415,15 @@ export function createWorkspaceActions({
       requestVersion === opshopWorkspaceRequestVersion;
 
     const [board, collections] = await Promise.all([
-      api.getOpShopTripSummary(scopedPickupDate),
-      api.listOpShopPickupCollectionsByPickupDate(scopedPickupDate, ""),
+      api.getOpShopTripSummary({
+        dispatchDate,
+        pickupDate: scopedPickupDate,
+      }),
+      api.listOpShopPickupCollectionsByDispatchAndPickupDate(
+        dispatchDate,
+        scopedPickupDate,
+        "",
+      ),
     ]);
     if (isCurrent()) {
       state.opshopTripSummaryBoard = board;

@@ -38,6 +38,8 @@ class OpShopWorkspaceMutationService:
             driver_id = clean_optional_text(item.get("driver_id"))
             task = self._mutable_pickup(dispatch_date, pickup_task_id)
             self._ensure_current_assignment_mutable(dispatch_date, task)
+            if not driver_id:
+                self._ensure_current_assignment_exists(dispatch_date, task)
             if driver_id:
                 self.validator.validate_driver_exists(driver_id)
                 ensure_opshop_pickup_collection_key_mutable(
@@ -62,6 +64,7 @@ class OpShopWorkspaceMutationService:
         )
         task = self._mutable_pickup(dispatch_date, pickup_task_id)
         self._ensure_current_assignment_mutable(dispatch_date, task)
+        self._ensure_current_assignment_exists(dispatch_date, task)
         self.repository.apply_opshop_pickup_assignment_batch(
             dispatch_date,
             [self._assignment_task(task, None)],
@@ -166,6 +169,17 @@ class OpShopWorkspaceMutationService:
                 dispatch_date,
                 assignment.driver_id,
                 task.pickup_date,
+            )
+
+    def _ensure_current_assignment_exists(self, dispatch_date, task):
+        assignment = self.repository.get_assignment(
+            dispatch_date,
+            "OPSHOP_PICKUP",
+            task.pickup_task_id,
+        )
+        if not assignment:
+            raise ValueError(
+                "OP SHOP pickup is not assigned in this workspace dispatch date."
             )
 
     @staticmethod

@@ -2029,8 +2029,8 @@ h1 {
   border: 1px solid rgba(39, 93, 69, 0.22);
   border-radius: var(--radius-sm);
   padding: 0.9rem 1rem 1.05rem;
-  color: #123528;
-  background: #ffffff;
+  color: #ffffff;
+  background: linear-gradient(135deg, #0f5f46, #0a4635);
   text-align: left;
   pointer-events: auto;
   touch-action: manipulation;
@@ -2041,6 +2041,10 @@ h1 {
     color 0.16s ease;
 }
 
+.opshop-template-picker-option * {
+  color: inherit;
+}
+
 .opshop-template-picker-option-text {
   display: grid;
   min-width: 0;
@@ -2048,7 +2052,7 @@ h1 {
 }
 
 .opshop-template-picker-option-main {
-  color: #0b2f23;
+  color: #ffffff;
   font-size: 0.94rem;
   font-weight: 900;
   line-height: 1.25;
@@ -2056,7 +2060,7 @@ h1 {
 }
 
 .opshop-template-picker-option-meta {
-  color: #435363;
+  color: #ffffff;
   font-size: 0.8rem;
   font-weight: 800;
   line-height: 1.42;
@@ -2068,8 +2072,8 @@ h1 {
   border: 1px solid rgba(39, 93, 69, 0.24);
   border-radius: 999px;
   padding: 0.18rem 0.5rem;
-  color: var(--accent-strong);
-  background: #fff;
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.14);
   font-size: 0.72rem;
   font-weight: 900;
   letter-spacing: 0.04em;
@@ -2078,9 +2082,9 @@ h1 {
 
 .opshop-template-picker-option:hover,
 .opshop-template-picker-option:focus-visible {
-  color: #082d21;
-  border-color: rgba(15, 105, 75, 0.62);
-  background: #eef8f1;
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.64);
+  background: linear-gradient(135deg, #137454, #0e5c45);
   box-shadow:
     0 8px 20px rgba(39, 93, 69, 0.14),
     0 0 0 3px rgba(25, 126, 88, 0.14);
@@ -2088,32 +2092,32 @@ h1 {
 
 .opshop-template-picker-option:hover .opshop-template-picker-option-main,
 .opshop-template-picker-option:focus-visible .opshop-template-picker-option-main {
-  color: #063222;
+  color: #ffffff;
 }
 
 .opshop-template-picker-option:hover .opshop-template-picker-option-meta,
 .opshop-template-picker-option:focus-visible .opshop-template-picker-option-meta {
-  color: #294237;
+  color: #ffffff;
 }
 
 .opshop-template-picker-option-selected,
 .opshop-template-picker-option[aria-selected="true"] {
-  border-color: rgba(15, 105, 75, 0.72);
-  color: #052d20;
-  background: #dff1e5;
+  border-color: rgba(255, 255, 255, 0.76);
+  color: #ffffff;
+  background: linear-gradient(135deg, #176d51, #0d513d);
   box-shadow:
-    inset 4px 0 0 var(--accent),
+    inset 4px 0 0 rgba(255, 255, 255, 0.82),
     0 10px 22px rgba(39, 93, 69, 0.14);
 }
 
 .opshop-template-picker-option-selected .opshop-template-picker-option-main,
 .opshop-template-picker-option[aria-selected="true"] .opshop-template-picker-option-main {
-  color: #052d20;
+  color: #ffffff;
 }
 
 .opshop-template-picker-option-selected .opshop-template-picker-option-meta,
 .opshop-template-picker-option[aria-selected="true"] .opshop-template-picker-option-meta {
-  color: #213e32;
+  color: #ffffff;
 }
 
 .opshop-template-picker-empty {

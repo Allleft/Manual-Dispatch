@@ -260,9 +260,21 @@ class InMemoryManualDispatchRepository:
         )
 
     def list_assigned_opshop_pickup_board_items_for_pickup_date(self, pickup_date):
+        return self.list_assigned_opshop_pickup_board_items_for_dispatch_and_pickup_date(
+            None,
+            pickup_date,
+        )
+
+    def list_assigned_opshop_pickup_board_items_for_dispatch_and_pickup_date(
+        self,
+        dispatch_date,
+        pickup_date,
+    ):
         items = []
         for assignment in self.assignments:
             if assignment.task_type != "OPSHOP_PICKUP":
+                continue
+            if dispatch_date and assignment.dispatch_date != dispatch_date:
                 continue
             task = self.get_opshop_pickup_task(assignment.task_id)
             if not task or task.status != "ASSIGNED" or task.pickup_date != pickup_date:
@@ -288,7 +300,12 @@ class InMemoryManualDispatchRepository:
             ),
         )
 
-    def list_collectable_opshop_pickup_board_items(self, pickup_date, driver_id):
+    def list_collectable_opshop_pickup_board_items(
+        self,
+        pickup_date,
+        driver_id,
+        dispatch_date=None,
+    ):
         reserved_task_ids = {
             pickup.pickup_task_id_snapshot
             for collection in self.opshop_pickup_collections
@@ -302,6 +319,7 @@ class InMemoryManualDispatchRepository:
                 assignment.task_type == "OPSHOP_PICKUP"
                 and assignment.task_id == task.pickup_task_id
                 and assignment.driver_id == task.driver_id
+                and (not dispatch_date or assignment.dispatch_date == dispatch_date)
                 for assignment in self.assignments
             )
             if (

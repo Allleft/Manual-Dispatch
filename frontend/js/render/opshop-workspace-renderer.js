@@ -832,7 +832,12 @@ function createOpShopDriverSummaryCard(
   const card = document.createElement("article");
   card.className = "workspace-record-card workspace-driver-card workspace-opshop-driver-card";
   const pickups = assignedOpShopPickupsForDriver(board, pickupDate, driver.driver_id);
-  const collection = findPickupCollectionForDriver(collections, pickupDate, driver.driver_id);
+  const collection = findPickupCollectionForDriver(
+    collections,
+    board.dispatch_date,
+    pickupDate,
+    driver.driver_id,
+  );
   const isLocked = Boolean(collection && ["GENERATED", "SAVED"].includes(collection.status));
   const candidates = readyPickupCollectionCandidates(board, collections);
   const candidate = candidates.find(
@@ -1265,10 +1270,11 @@ function assignedOpShopPickupsForDriver(board, pickupDate, driverId) {
 }
 
 
-function findPickupCollectionForDriver(collections, pickupDate, driverId) {
+function findPickupCollectionForDriver(collections, dispatchDate, pickupDate, driverId) {
   return (collections || []).find(
     (collection) =>
-      collection.pickup_date === pickupDate
+      collection.dispatch_date === dispatchDate
+      && collection.pickup_date === pickupDate
       && collection.driver_id === driverId
       && ["GENERATED", "SAVED"].includes(collection.status),
   );

@@ -188,7 +188,7 @@ class OpShopPickupCollectionGenerationTest(unittest.TestCase):
         self._seed_pickup(
             "REASSIGN-PICKUP",
             driver_id="D001",
-            assignment_dispatch_date=self.pickup_date,
+            assignment_dispatch_date=self.dispatch_date,
         )
 
         unassigned = self.client.post(

@@ -466,6 +466,7 @@ function createDriverTripSummaryCard(driver, board, deliveryDate, state, actions
   const driverOrders = assignedOrdersForDriver(board, deliveryDate, driver.driver_id);
   const runSheet = findRunSheetForDriver(
     state.deliveryTripSummaryRunSheets,
+    board.dispatch_date,
     deliveryDate,
     driver.driver_id,
   );
@@ -525,7 +526,12 @@ function createDriverTripSummaryCard(driver, board, deliveryDate, state, actions
 function createDriverVehicleControl(driver, board, deliveryDate, isLocked, state, actions) {
   const section = document.createElement("div");
   section.className = "workspace-context-row workspace-vehicle-control";
-  const currentAssignment = findVehicleAssignment(board, deliveryDate, driver.driver_id);
+  const currentAssignment = findVehicleAssignment(
+    board,
+    board.dispatch_date,
+    deliveryDate,
+    driver.driver_id,
+  );
   const draftKey = `${deliveryDate}|${driver.driver_id}`;
   const selectedVehicleId =
     state.deliveryVehicleDrafts[draftKey] ?? currentAssignment?.vehicle_id ?? "";
@@ -1800,9 +1806,10 @@ function assignedOrdersForDriver(board, deliveryDate, driverId) {
 }
 
 
-function findRunSheetForDriver(runSheets, deliveryDate, driverId) {
+function findRunSheetForDriver(runSheets, dispatchDate, deliveryDate, driverId) {
   return (runSheets || []).find(
     (runSheet) =>
+      runSheet.dispatch_date === dispatchDate &&
       runSheet.delivery_date === deliveryDate &&
       runSheet.driver_id === driverId &&
       ["GENERATED", "SAVED"].includes(runSheet.status),
@@ -1810,10 +1817,12 @@ function findRunSheetForDriver(runSheets, deliveryDate, driverId) {
 }
 
 
-function findVehicleAssignment(board, deliveryDate, driverId) {
+function findVehicleAssignment(board, dispatchDate, deliveryDate, driverId) {
   return (board.driver_vehicle_assignments || []).find(
     (assignment) =>
-      assignment.delivery_date === deliveryDate && assignment.driver_id === driverId,
+      assignment.dispatch_date === dispatchDate &&
+      assignment.delivery_date === deliveryDate &&
+      assignment.driver_id === driverId,
   );
 }
 
@@ -1843,7 +1852,12 @@ function createDeliveryGenerationCandidate(
   driverOrders,
   state,
 ) {
-  const vehicleAssignment = findVehicleAssignment(board, deliveryDate, driver.driver_id);
+  const vehicleAssignment = findVehicleAssignment(
+    board,
+    board.dispatch_date,
+    deliveryDate,
+    driver.driver_id,
+  );
   const vehicleDraftKey = `${deliveryDate}|${driver.driver_id}`;
   const vehicleId = state.deliveryVehicleDrafts?.[vehicleDraftKey]
     ?? vehicleAssignment?.vehicle_id

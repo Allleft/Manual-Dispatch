@@ -165,9 +165,9 @@ export async function apiGetDeliveryWorkspaceBoard(dispatchDate) {
   });
 }
 
-export async function apiGetDeliveryTripSummary(deliveryDate) {
+export async function apiGetDeliveryTripSummary({ dispatchDate, deliveryDate }) {
   return requestJson("/api/manual-dispatch/delivery/trip-summary", {
-    query: { delivery_date: deliveryDate },
+    query: { dispatch_date: dispatchDate, delivery_date: deliveryDate },
   });
 }
 
@@ -182,9 +182,9 @@ export async function apiGetOpShopWorkspaceBoard(dispatchDate) {
   });
 }
 
-export async function apiGetOpShopTripSummary(pickupDate) {
+export async function apiGetOpShopTripSummary({ dispatchDate, pickupDate }) {
   return requestJson("/api/manual-dispatch/opshop/trip-summary", {
-    query: { pickup_date: pickupDate },
+    query: { dispatch_date: dispatchDate, pickup_date: pickupDate },
   });
 }
 
@@ -211,6 +211,16 @@ export async function apiListDeliveryRunSheetsByDeliveryDate(deliveryDate, statu
   });
 }
 
+export async function apiListDeliveryRunSheetsByDispatchAndDeliveryDate(
+  dispatchDate,
+  deliveryDate,
+  status = "",
+) {
+  return requestJson("/api/manual-dispatch/delivery/run-sheets", {
+    query: { dispatch_date: dispatchDate, delivery_date: deliveryDate, status },
+  });
+}
+
 
 export async function apiListOpShopPickupCollections(dispatchDate, status = "") {
   return requestJson("/api/manual-dispatch/opshop/pickup-collections", {
@@ -221,6 +231,16 @@ export async function apiListOpShopPickupCollections(dispatchDate, status = "") 
 export async function apiListOpShopPickupCollectionsByPickupDate(pickupDate, status = "") {
   return requestJson("/api/manual-dispatch/opshop/pickup-collections", {
     query: { pickup_date: pickupDate, status },
+  });
+}
+
+export async function apiListOpShopPickupCollectionsByDispatchAndPickupDate(
+  dispatchDate,
+  pickupDate,
+  status = "",
+) {
+  return requestJson("/api/manual-dispatch/opshop/pickup-collections", {
+    query: { dispatch_date: dispatchDate, pickup_date: pickupDate, status },
   });
 }
 

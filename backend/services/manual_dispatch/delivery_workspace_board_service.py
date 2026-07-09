@@ -58,9 +58,11 @@ class DeliveryWorkspaceBoardService:
             saved_vehicle_assignment_locks=saved_locks,
         )
 
-    def get_trip_summary_board(self, delivery_date):
+    def get_trip_summary_board(self, dispatch_date, delivery_date):
+        dispatch_date = clean_required_iso_date(dispatch_date, "dispatch_date")
         delivery_date = clean_required_iso_date(delivery_date, "delivery_date")
         run_sheets = self.repository.list_delivery_run_sheets(
+            dispatch_date=dispatch_date,
             delivery_date=delivery_date
         )
         reserved_task_ids = self.repository.list_reserved_delivery_order_ids()
@@ -78,9 +80,7 @@ class DeliveryWorkspaceBoardService:
         order_ids = {order.order_id for order in orders}
         assignments = [
             assignment
-            for assignment in (
-                self.repository.list_globally_assigned_delivery_order_assignments()
-            )
+            for assignment in self.repository.list_assignments(dispatch_date)
             if assignment.task_type == "ORDER"
             and assignment.task_id in order_ids
             and assignment.task_id not in reserved_task_ids
@@ -97,15 +97,19 @@ class DeliveryWorkspaceBoardService:
         ]
 
         return DeliveryWorkspaceBoardResponse(
-            dispatch_date=delivery_date,
+            dispatch_date=dispatch_date,
             orders=orders,
             drivers=self.repository.list_drivers(),
             vehicles=self.repository.list_vehicles(),
             assignments=assignments,
             driver_vehicle_assignments=(
-                self.repository.list_driver_vehicle_assignments_for_delivery_date(
-                    delivery_date
-                )
+                [
+                    assignment
+                    for assignment in self.repository.list_driver_vehicle_assignments(
+                        dispatch_date
+                    )
+                    if assignment.delivery_date == delivery_date
+                ]
             ),
             saved_vehicle_assignment_locks=saved_locks,
         )

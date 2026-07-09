@@ -213,9 +213,29 @@ class SQLiteManualDispatchRepository:
         return [self._row_to_opshop_pickup_board_item(row) for row in rows]
 
     def list_assigned_opshop_pickup_board_items_for_pickup_date(self, pickup_date):
+        return self.list_assigned_opshop_pickup_board_items_for_dispatch_and_pickup_date(
+            None,
+            pickup_date,
+        )
+
+    def list_assigned_opshop_pickup_board_items_for_dispatch_and_pickup_date(
+        self,
+        dispatch_date,
+        pickup_date,
+    ):
+        clauses = [
+            "task.pickup_date = ?",
+            "assignment.task_type = 'OPSHOP_PICKUP'",
+            "task.status = 'ASSIGNED'",
+        ]
+        parameters = [pickup_date]
+        if dispatch_date:
+            clauses.append("assignment.dispatch_date = ?")
+            parameters.append(dispatch_date)
+        where_clause = " AND ".join(clauses)
         with connect(self.db_path) as connection:
             rows = connection.execute(
-                """
+                f"""
                 SELECT
                     task.pickup_task_id,
                     task.task_type,
@@ -264,9 +284,7 @@ class SQLiteManualDispatchRepository:
                     ON route_group.route_group_id = schedule.route_group_id
                 LEFT JOIN manual_drivers assigned_driver
                     ON assigned_driver.driver_id = assignment.driver_id
-                WHERE task.pickup_date = ?
-                    AND assignment.task_type = 'OPSHOP_PICKUP'
-                    AND task.status = 'ASSIGNED'
+                WHERE {where_clause}
                 ORDER BY
                     assignment.driver_id,
                     assignment.trip_no,
@@ -275,14 +293,27 @@ class SQLiteManualDispatchRepository:
                     COALESCE(location.name, ''),
                     task.pickup_task_id
                 """,
-                (pickup_date,),
+                parameters,
             ).fetchall()
         return [self._row_to_opshop_pickup_board_item(row) for row in rows]
 
-    def list_collectable_opshop_pickup_board_items(self, pickup_date, driver_id):
+    def list_collectable_opshop_pickup_board_items(
+        self,
+        pickup_date,
+        driver_id,
+        dispatch_date=None,
+    ):
+        assignment_dispatch_clause = (
+            "AND assignment.dispatch_date = ?"
+            if dispatch_date
+            else ""
+        )
+        parameters = [pickup_date, driver_id]
+        if dispatch_date:
+            parameters.append(dispatch_date)
         with connect(self.db_path) as connection:
             rows = connection.execute(
-                """
+                f"""
                 SELECT
                     task.pickup_task_id,
                     task.task_type,
@@ -339,6 +370,7 @@ class SQLiteManualDispatchRepository:
                         WHERE assignment.task_type = 'OPSHOP_PICKUP'
                             AND assignment.task_id = task.pickup_task_id
                             AND assignment.driver_id = task.driver_id
+                            {assignment_dispatch_clause}
                     )
                     AND NOT EXISTS (
                         SELECT 1
@@ -353,7 +385,7 @@ class SQLiteManualDispatchRepository:
                     COALESCE(location.name, ''),
                     task.pickup_task_id
                 """,
-                (pickup_date, driver_id),
+                parameters,
             ).fetchall()
         return [self._row_to_opshop_pickup_board_item(row) for row in rows]
 

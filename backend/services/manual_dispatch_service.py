@@ -110,9 +110,10 @@ class ManualDispatchService:
         self._ensure_workspace_ready("delivery")
         return self.delivery_workspace_board_service.get_board(dispatch_date)
 
-    def get_delivery_trip_summary_board(self, delivery_date):
+    def get_delivery_trip_summary_board(self, dispatch_date, delivery_date):
         self._ensure_workspace_ready("delivery")
         return self.delivery_workspace_board_service.get_trip_summary_board(
+            dispatch_date,
             delivery_date
         )
 
@@ -120,9 +121,10 @@ class ManualDispatchService:
         self._ensure_workspace_ready("opshop")
         return self.opshop_workspace_board_service.get_board(dispatch_date)
 
-    def get_opshop_trip_summary_board(self, pickup_date):
+    def get_opshop_trip_summary_board(self, dispatch_date, pickup_date):
         self._ensure_workspace_ready("opshop")
         return self.opshop_workspace_board_service.get_trip_summary_board(
+            dispatch_date,
             pickup_date
         )
 

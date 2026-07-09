@@ -161,12 +161,19 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
             "/api/manual-dispatch/delivery/trip-summary",
             "/api/manual-dispatch/opshop/trip-summary",
         ):
-            date_param = (
-                "delivery_date" if "delivery/trip-summary" in path
-                else "pickup_date" if "opshop/trip-summary" in path
-                else "dispatch_date"
-            )
-            invalid = self.client.get(path, params={date_param: "2026-02-31"})
+            if "delivery/trip-summary" in path:
+                params = {
+                    "dispatch_date": self.dispatch_date,
+                    "delivery_date": "2026-02-31",
+                }
+            elif "opshop/trip-summary" in path:
+                params = {
+                    "dispatch_date": self.dispatch_date,
+                    "pickup_date": "2026-02-31",
+                }
+            else:
+                params = {"dispatch_date": "2026-02-31"}
+            invalid = self.client.get(path, params=params)
             self.assertEqual(400, invalid.status_code)
             self.assertIn("valid YYYY-MM-DD", invalid.json()["detail"])
 
@@ -192,12 +199,15 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
 
         response = self.client.get(
             "/api/manual-dispatch/delivery/trip-summary",
-            params={"delivery_date": delivery_date},
+            params={
+                "dispatch_date": self.dispatch_date,
+                "delivery_date": delivery_date,
+            },
         )
         self.assertEqual(200, response.status_code)
         payload = response.json()
 
-        self.assertEqual(delivery_date, payload["dispatch_date"])
+        self.assertEqual(self.dispatch_date, payload["dispatch_date"])
         self.assertEqual(["ORDER-2"], [order["order_id"] for order in payload["orders"]])
         self.assertEqual(["ORDER-2"], [item["task_id"] for item in payload["assignments"]])
         self.assertEqual(
@@ -231,14 +241,161 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
 
         response = self.client.get(
             "/api/manual-dispatch/opshop/trip-summary",
-            params={"pickup_date": pickup_date},
+            params={
+                "dispatch_date": self.dispatch_date,
+                "pickup_date": pickup_date,
+            },
         )
         self.assertEqual(200, response.status_code)
         payload = response.json()
 
-        self.assertEqual(pickup_date, payload["dispatch_date"])
+        self.assertEqual(self.dispatch_date, payload["dispatch_date"])
         self.assertEqual([pickup_id], [pickup["pickup_task_id"] for pickup in payload["opshop_pickups"]])
         self.assertEqual(["DRIVER-1"], [pickup["driver_id"] for pickup in payload["opshop_pickups"]])
+
+    def test_delivery_trip_summary_isolates_same_service_date_across_dispatch_dates(self):
+        delivery_date = "2026-05-06"
+        other_dispatch_date = "2026-05-07"
+        self._create_delivery_order("ORDER-HIST", delivery_date)
+        self.service.assign_delivery_workspace_order(
+            DeliveryWorkspaceAssignOrderRequest(
+                dispatch_date=self.dispatch_date,
+                order_id="ORDER-HIST",
+                driver_id="DRIVER-1",
+                trip_no="trip1",
+            )
+        )
+        self.service.assign_delivery_workspace_vehicle(
+            DeliveryWorkspaceVehicleAssignmentRequest(
+                dispatch_date=self.dispatch_date,
+                delivery_date=delivery_date,
+                driver_id="DRIVER-1",
+                vehicle_id="VEHICLE-1",
+            )
+        )
+
+        current_response = self.client.get(
+            "/api/manual-dispatch/delivery/trip-summary",
+            params={
+                "dispatch_date": self.dispatch_date,
+                "delivery_date": delivery_date,
+            },
+        )
+        self.assertEqual(200, current_response.status_code)
+        current_payload = current_response.json()
+        self.assertEqual(self.dispatch_date, current_payload["dispatch_date"])
+        self.assertEqual(
+            ["ORDER-HIST"],
+            [assignment["task_id"] for assignment in current_payload["assignments"]],
+        )
+        self.assertEqual(
+            [self.dispatch_date],
+            [
+                assignment["dispatch_date"]
+                for assignment in current_payload["driver_vehicle_assignments"]
+            ],
+        )
+
+        saved = self.service.save_generated_delivery_run_sheet(
+            self.service.create_generated_delivery_run_sheet(
+                GenerateDeliveryRunSheetRequest(
+                    dispatch_date=self.dispatch_date,
+                    delivery_date=delivery_date,
+                    driver_id="DRIVER-1",
+                )
+            ).run_sheet_id,
+            self._save_request(),
+        )
+        other_response = self.client.get(
+            "/api/manual-dispatch/delivery/trip-summary",
+            params={
+                "dispatch_date": other_dispatch_date,
+                "delivery_date": delivery_date,
+            },
+        )
+        self.assertEqual(200, other_response.status_code)
+        other_payload = other_response.json()
+        self.assertEqual(other_dispatch_date, other_payload["dispatch_date"])
+        self.assertEqual([], other_payload["assignments"])
+        self.assertEqual([], other_payload["driver_vehicle_assignments"])
+        self.assertEqual([], other_payload["saved_vehicle_assignment_locks"])
+        self.assertEqual(
+            [],
+            [
+                run_sheet.run_sheet_id
+                for run_sheet in self.repository.list_delivery_run_sheets(
+                    other_dispatch_date,
+                    delivery_date,
+                )
+            ],
+        )
+        self.assertEqual(
+            [saved.run_sheet_id],
+            [
+                run_sheet.run_sheet_id
+                for run_sheet in self.repository.list_delivery_run_sheets(
+                    self.dispatch_date,
+                    delivery_date,
+                )
+            ],
+        )
+
+    def test_opshop_trip_summary_isolates_same_pickup_date_across_dispatch_dates(self):
+        pickup_date = "2026-05-06"
+        other_dispatch_date = "2026-05-07"
+        pickup_id = self._seed_and_assign_oncall_pickup(
+            pickup_id="PICKUP-HIST",
+            pickup_date=pickup_date,
+        )
+
+        current_response = self.client.get(
+            "/api/manual-dispatch/opshop/trip-summary",
+            params={
+                "dispatch_date": self.dispatch_date,
+                "pickup_date": pickup_date,
+            },
+        )
+        self.assertEqual(200, current_response.status_code)
+        current_payload = current_response.json()
+        self.assertEqual(self.dispatch_date, current_payload["dispatch_date"])
+        self.assertEqual(
+            [pickup_id],
+            [pickup["pickup_task_id"] for pickup in current_payload["opshop_pickups"]],
+        )
+
+        other_response = self.client.get(
+            "/api/manual-dispatch/opshop/trip-summary",
+            params={
+                "dispatch_date": other_dispatch_date,
+                "pickup_date": pickup_date,
+            },
+        )
+        self.assertEqual(200, other_response.status_code)
+        self.assertEqual(other_dispatch_date, other_response.json()["dispatch_date"])
+        self.assertEqual([], other_response.json()["opshop_pickups"])
+
+        unassign = self.client.post(
+            "/api/manual-dispatch/opshop/pickups/assignments/unassign",
+            json={
+                "dispatch_date": other_dispatch_date,
+                "pickup_task_id": pickup_id,
+            },
+        )
+        self.assertEqual(400, unassign.status_code)
+        self.assertIn(
+            "not assigned in this workspace dispatch date",
+            unassign.json()["detail"],
+        )
+        task = self.repository.get_opshop_pickup_task(pickup_id)
+        self.assertEqual("ASSIGNED", task.status)
+        self.assertEqual("DRIVER-1", task.driver_id)
+        self.assertIsNotNone(
+            self.repository.get_assignment(
+                self.dispatch_date,
+                "OPSHOP_PICKUP",
+                pickup_id,
+            )
+        )
 
         task_pool_response = self.client.get(
             "/api/manual-dispatch/opshop/board",
@@ -246,7 +403,7 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
         )
         self.assertEqual(200, task_pool_response.status_code)
         self.assertIn(
-            "PICKUP-ONCALL-FUTURE",
+            pickup_id,
             {
                 pickup["pickup_task_id"]
                 for pickup in task_pool_response.json()["opshop_pickups"]
