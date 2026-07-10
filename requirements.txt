@@ -3,3 +3,4 @@ uvicorn
 openpyxl
 pypdf
 python-multipart
+tzdata

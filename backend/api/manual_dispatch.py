@@ -1,8 +1,10 @@
 import os
+import hmac
+from hashlib import sha256
 from hashlib import sha1
 from typing import List
 
-from fastapi import APIRouter, Body, File, HTTPException, UploadFile
+from fastapi import APIRouter, Body, File, HTTPException, Request, UploadFile
 from fastapi.responses import Response
 
 from backend.schemas import (
@@ -74,6 +76,9 @@ router = APIRouter(prefix="/api/manual-dispatch", tags=["manual-dispatch"])
 service = ManualDispatchService(SQLiteManualDispatchRepository())
 ALLOW_REGISTRATION_ENV = "MANUAL_DISPATCH_ALLOW_REGISTRATION"
 REGISTRATION_DISABLED_MESSAGE = "Registration is disabled. Please contact an administrator."
+OPERATOR_COOKIE_NAME = "manual_dispatch_operator"
+OPERATOR_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 12
+OPERATOR_COOKIE_SECRET_ENV = "MANUAL_DISPATCH_AUTH_COOKIE_SECRET"
 
 
 @router.get("/board")
@@ -181,25 +186,38 @@ def delete_delivery_vehicle(vehicle_id: str):
 
 
 @router.post("/delivery/orders")
-def create_delivery_order(request: CreateOrderRequest):
+def create_delivery_order(request: CreateOrderRequest, http_request: Request = None):
     try:
-        return to_dict(service.create_delivery_order(request))
+        return _with_logbook_actor(
+            http_request,
+            lambda: to_dict(service.create_delivery_order(request)),
+        )
     except ValueError as error:
         raise _to_http_exception(error) from error
 
 
 @router.patch("/delivery/orders/{order_id}")
-def update_delivery_order(order_id: str, request: UpdateOrderRequest):
+def update_delivery_order(
+    order_id: str,
+    request: UpdateOrderRequest,
+    http_request: Request = None,
+):
     try:
-        return to_dict(service.update_delivery_order(order_id, request))
+        return _with_logbook_actor(
+            http_request,
+            lambda: to_dict(service.update_delivery_order(order_id, request)),
+        )
     except ValueError as error:
         raise _to_http_exception(error) from error
 
 
 @router.post("/delivery/orders/{order_id}/cancel")
-def cancel_delivery_order(order_id: str):
+def cancel_delivery_order(order_id: str, http_request: Request = None):
     try:
-        return to_dict(service.cancel_delivery_order(order_id))
+        return _with_logbook_actor(
+            http_request,
+            lambda: to_dict(service.cancel_delivery_order(order_id)),
+        )
     except ValueError as error:
         raise _to_http_exception(error) from error
 
@@ -212,16 +230,26 @@ async def preview_delivery_attache_invoice_pdf_import(files: List[UploadFile] = 
 @router.post("/delivery/orders/import-attache-pdf-commit")
 def commit_delivery_attache_invoice_pdf_import(
     request: CommitAttacheInvoicePdfImportRequest,
+    http_request: Request = None,
 ):
     try:
         service._ensure_workspace_ready("delivery")
-        return _commit_attache_invoice_pdf_import(request, service.create_delivery_order)
+        return _with_logbook_actor(
+            http_request,
+            lambda: _commit_attache_invoice_pdf_import(
+                request,
+                service.create_delivery_order,
+            ),
+        )
     except ValueError as error:
         raise _to_http_exception(error) from error
 
 
 @router.post("/delivery/assignments")
-def assign_delivery_workspace_order(payload: dict = Body(...)):
+def assign_delivery_workspace_order(
+    http_request: Request = None,
+    payload: dict = Body(...),
+):
     try:
         _reject_scoped_fields(payload, {"task_type"})
         request = DeliveryWorkspaceAssignOrderRequest(
@@ -230,26 +258,38 @@ def assign_delivery_workspace_order(payload: dict = Body(...)):
             driver_id=payload.get("driver_id"),
             trip_no=payload.get("trip_no"),
         )
-        return to_dict(service.assign_delivery_workspace_order(request))
+        return _with_logbook_actor(
+            http_request,
+            lambda: to_dict(service.assign_delivery_workspace_order(request)),
+        )
     except ValueError as error:
         raise _to_http_exception(error) from error
 
 
 @router.post("/delivery/assignments/unassign")
-def unassign_delivery_workspace_order(payload: dict = Body(...)):
+def unassign_delivery_workspace_order(
+    http_request: Request = None,
+    payload: dict = Body(...),
+):
     try:
         _reject_scoped_fields(payload, {"task_type"})
         request = DeliveryWorkspaceUnassignOrderRequest(
             dispatch_date=payload.get("dispatch_date"),
             order_id=payload.get("order_id"),
         )
-        return to_dict(service.unassign_delivery_workspace_order(request))
+        return _with_logbook_actor(
+            http_request,
+            lambda: to_dict(service.unassign_delivery_workspace_order(request)),
+        )
     except ValueError as error:
         raise _to_http_exception(error) from error
 
 
 @router.post("/delivery/vehicle-assignments")
-def assign_delivery_workspace_vehicle(payload: dict = Body(...)):
+def assign_delivery_workspace_vehicle(
+    http_request: Request = None,
+    payload: dict = Body(...),
+):
     try:
         _reject_scoped_fields(payload, {"task_type"})
         request = DeliveryWorkspaceVehicleAssignmentRequest(
@@ -258,13 +298,19 @@ def assign_delivery_workspace_vehicle(payload: dict = Body(...)):
             driver_id=payload.get("driver_id"),
             vehicle_id=payload.get("vehicle_id"),
         )
-        return to_dict(service.assign_delivery_workspace_vehicle(request))
+        return _with_logbook_actor(
+            http_request,
+            lambda: to_dict(service.assign_delivery_workspace_vehicle(request)),
+        )
     except ValueError as error:
         raise _to_http_exception(error) from error
 
 
 @router.post("/delivery/vehicle-assignments/clear")
-def clear_delivery_workspace_vehicle(payload: dict = Body(...)):
+def clear_delivery_workspace_vehicle(
+    http_request: Request = None,
+    payload: dict = Body(...),
+):
     try:
         _reject_scoped_fields(payload, {"task_type"})
         request = DeliveryWorkspaceVehicleClearRequest(
@@ -272,33 +318,48 @@ def clear_delivery_workspace_vehicle(payload: dict = Body(...)):
             delivery_date=payload.get("delivery_date"),
             driver_id=payload.get("driver_id"),
         )
-        return to_dict(service.clear_delivery_workspace_vehicle(request))
+        return _with_logbook_actor(
+            http_request,
+            lambda: to_dict(service.clear_delivery_workspace_vehicle(request)),
+        )
     except ValueError as error:
         raise _to_http_exception(error) from error
 
 
 @router.post("/opshop/pickups/assignments/apply")
-def apply_opshop_workspace_assignments(payload: dict = Body(...)):
+def apply_opshop_workspace_assignments(
+    http_request: Request = None,
+    payload: dict = Body(...),
+):
     try:
         _reject_scoped_fields(payload, {"task_type", "trip_no"})
         request = OpShopWorkspaceAssignmentBatchRequest(
             dispatch_date=payload.get("dispatch_date"),
             assignments=payload.get("assignments") or [],
         )
-        return to_dict(service.apply_opshop_workspace_assignments(request))
+        return _with_logbook_actor(
+            http_request,
+            lambda: to_dict(service.apply_opshop_workspace_assignments(request)),
+        )
     except ValueError as error:
         raise _to_http_exception(error) from error
 
 
 @router.post("/opshop/pickups/assignments/unassign")
-def unassign_opshop_workspace_pickup(payload: dict = Body(...)):
+def unassign_opshop_workspace_pickup(
+    http_request: Request = None,
+    payload: dict = Body(...),
+):
     try:
         _reject_scoped_fields(payload, {"task_type", "trip_no"})
         request = OpShopWorkspaceUnassignPickupRequest(
             dispatch_date=payload.get("dispatch_date"),
             pickup_task_id=payload.get("pickup_task_id"),
         )
-        return to_dict(service.unassign_opshop_workspace_pickup(request))
+        return _with_logbook_actor(
+            http_request,
+            lambda: to_dict(service.unassign_opshop_workspace_pickup(request)),
+        )
     except ValueError as error:
         raise _to_http_exception(error) from error
 
@@ -306,6 +367,7 @@ def unassign_opshop_workspace_pickup(payload: dict = Body(...)):
 @router.post("/opshop/countryside-route-groups/{route_group_id}/assign")
 def assign_opshop_workspace_countryside_route_group(
     route_group_id: str,
+    http_request: Request = None,
     payload: dict = Body(...),
 ):
     try:
@@ -316,11 +378,14 @@ def assign_opshop_workspace_countryside_route_group(
             assigned_driver_id=payload.get("assigned_driver_id"),
             notes=payload.get("notes"),
         )
-        return to_dict(
-            service.assign_opshop_workspace_countryside_route_group(
-                route_group_id,
-                request,
-            )
+        return _with_logbook_actor(
+            http_request,
+            lambda: to_dict(
+                service.assign_opshop_workspace_countryside_route_group(
+                    route_group_id,
+                    request,
+                )
+            ),
         )
     except ValueError as error:
         raise _to_http_exception(error) from error
@@ -346,20 +411,30 @@ def export_excel(dispatch_date: str):
 
 
 @router.post("/auth/register")
-def register_operator_account(request: RegisterOperatorAccountRequest):
+def register_operator_account(
+    request: RegisterOperatorAccountRequest,
+    response: Response,
+):
     if not _is_env_flag_enabled(ALLOW_REGISTRATION_ENV, default=True):
         raise HTTPException(status_code=403, detail=REGISTRATION_DISABLED_MESSAGE)
 
     try:
-        return to_dict(service.register_operator_account(request))
+        identity = service.register_operator_account(request)
+        _set_operator_cookie(response, identity)
+        return to_dict(identity)
     except ValueError as error:
         raise _to_http_exception(error) from error
 
 
 @router.post("/auth/login")
-def login_operator_account(request: LoginOperatorAccountRequest):
+def login_operator_account(
+    request: LoginOperatorAccountRequest,
+    response: Response,
+):
     try:
-        return to_dict(service.login_operator_account(request))
+        identity = service.login_operator_account(request)
+        _set_operator_cookie(response, identity)
+        return to_dict(identity)
     except ValueError as error:
         raise _to_http_exception(error) from error
 
@@ -373,34 +448,46 @@ def reset_operator_password(request: ResetOperatorPasswordRequest):
 
 
 @router.post("/assign")
-def assign_task(request: AssignTaskRequest):
+def assign_task(request: AssignTaskRequest, http_request: Request = None):
     try:
-        return to_dict(service.assign_task(request))
+        return _with_logbook_actor(
+            http_request,
+            lambda: to_dict(service.assign_task(request)),
+        )
     except ValueError as error:
         raise _to_http_exception(error) from error
 
 
 @router.post("/unassign")
-def unassign_task(request: UnassignTaskRequest):
+def unassign_task(request: UnassignTaskRequest, http_request: Request = None):
     try:
-        return to_dict(service.unassign_task(request))
+        return _with_logbook_actor(
+            http_request,
+            lambda: to_dict(service.unassign_task(request)),
+        )
     except ValueError as error:
         raise _to_http_exception(error) from error
 
 
 @router.post("/driver-vehicle")
-def assign_driver_vehicle(payload: dict = Body(...)):
+def assign_driver_vehicle(http_request: Request = None, payload: dict = Body(...)):
     request = _assign_driver_vehicle_request_from_payload(payload)
     try:
-        return to_dict(service.assign_vehicle_to_driver(request))
+        return _with_logbook_actor(
+            http_request,
+            lambda: to_dict(service.assign_vehicle_to_driver(request)),
+        )
     except ValueError as error:
         raise _to_http_exception(error) from error
 
 
 @router.post("/orders")
-def create_order(request: CreateOrderRequest):
+def create_order(request: CreateOrderRequest, http_request: Request = None):
     try:
-        return to_dict(service.create_order(request))
+        return _with_logbook_actor(
+            http_request,
+            lambda: to_dict(service.create_order(request)),
+        )
     except ValueError as error:
         raise _to_http_exception(error) from error
 
@@ -411,8 +498,14 @@ async def preview_attache_invoice_pdf_import(files: List[UploadFile] = File(...)
 
 
 @router.post("/orders/import-attache-pdf-commit")
-def commit_attache_invoice_pdf_import(request: CommitAttacheInvoicePdfImportRequest):
-    return _commit_attache_invoice_pdf_import(request, service.create_order)
+def commit_attache_invoice_pdf_import(
+    request: CommitAttacheInvoicePdfImportRequest,
+    http_request: Request = None,
+):
+    return _with_logbook_actor(
+        http_request,
+        lambda: _commit_attache_invoice_pdf_import(request, service.create_order),
+    )
 
 
 def _commit_attache_invoice_pdf_import(request, create_order):
@@ -471,17 +564,23 @@ def _commit_attache_invoice_pdf_import(request, create_order):
 
 
 @router.patch("/orders/{order_id}")
-def update_order(order_id: str, request: UpdateOrderRequest):
+def update_order(order_id: str, request: UpdateOrderRequest, http_request: Request = None):
     try:
-        return to_dict(service.update_order(order_id, request))
+        return _with_logbook_actor(
+            http_request,
+            lambda: to_dict(service.update_order(order_id, request)),
+        )
     except ValueError as error:
         raise _to_http_exception(error) from error
 
 
 @router.post("/orders/{order_id}/cancel")
-def cancel_order(order_id: str):
+def cancel_order(order_id: str, http_request: Request = None):
     try:
-        return to_dict(service.cancel_order(order_id))
+        return _with_logbook_actor(
+            http_request,
+            lambda: to_dict(service.cancel_order(order_id)),
+        )
     except ValueError as error:
         raise _to_http_exception(error) from error
 
@@ -626,33 +725,57 @@ def disable_opshop_template(schedule_id: str):
 
 
 @router.post("/opshop-pickups")
-def create_opshop_pickup(request: CreateOpShopPickupTaskRequest):
+def create_opshop_pickup(
+    request: CreateOpShopPickupTaskRequest,
+    http_request: Request = None,
+):
     try:
-        return to_dict(service.create_opshop_pickup_task(request))
+        return _with_logbook_actor(
+            http_request,
+            lambda: to_dict(service.create_opshop_pickup_task(request)),
+        )
     except ValueError as error:
         raise _to_http_exception(error) from error
 
 
 @router.post("/opshop-pickups/oncall")
-def create_oncall_opshop_pickup(request: CreateOpShopPickupTaskRequest):
+def create_oncall_opshop_pickup(
+    request: CreateOpShopPickupTaskRequest,
+    http_request: Request = None,
+):
     try:
-        return to_dict(service.create_oncall_opshop_pickup_task(request))
+        return _with_logbook_actor(
+            http_request,
+            lambda: to_dict(service.create_oncall_opshop_pickup_task(request)),
+        )
     except ValueError as error:
         raise _to_http_exception(error) from error
 
 
 @router.patch("/opshop-pickups/{pickup_task_id}")
-def update_opshop_pickup(pickup_task_id: str, request: UpdateOpShopPickupTaskRequest):
+def update_opshop_pickup(
+    pickup_task_id: str,
+    request: UpdateOpShopPickupTaskRequest,
+    http_request: Request = None,
+):
     try:
-        return to_dict(service.update_opshop_pickup_task(pickup_task_id, request))
+        return _with_logbook_actor(
+            http_request,
+            lambda: to_dict(
+                service.update_opshop_pickup_task(pickup_task_id, request)
+            ),
+        )
     except ValueError as error:
         raise _to_http_exception(error) from error
 
 
 @router.delete("/opshop-pickups/{pickup_task_id}")
-def delete_opshop_pickup(pickup_task_id: str):
+def delete_opshop_pickup(pickup_task_id: str, http_request: Request = None):
     try:
-        return to_dict(service.delete_opshop_pickup_task(pickup_task_id))
+        return _with_logbook_actor(
+            http_request,
+            lambda: to_dict(service.delete_opshop_pickup_task(pickup_task_id)),
+        )
     except ValueError as error:
         raise _to_http_exception(error) from error
 
@@ -701,9 +824,18 @@ def apply_countryside_opshop_pickup_assignments(
 def assign_countryside_route_group_pickups(
     route_group_id: str,
     request: AssignCountrysideRouteGroupRequest,
+    http_request: Request = None,
 ):
     try:
-        return to_dict(service.assign_countryside_route_group_pickups(route_group_id, request))
+        return _with_logbook_actor(
+            http_request,
+            lambda: to_dict(
+                service.assign_countryside_route_group_pickups(
+                    route_group_id,
+                    request,
+                )
+            ),
+        )
     except ValueError as error:
         raise _to_http_exception(error) from error
 
@@ -757,9 +889,15 @@ def delete_vehicle(vehicle_id: str):
 
 
 @router.post("/delivery/run-sheets/generated")
-def create_generated_delivery_run_sheet(request: GenerateDeliveryRunSheetRequest):
+def create_generated_delivery_run_sheet(
+    request: GenerateDeliveryRunSheetRequest,
+    http_request: Request = None,
+):
     try:
-        return to_dict(service.create_generated_delivery_run_sheet(request))
+        return _with_logbook_actor(
+            http_request,
+            lambda: to_dict(service.create_generated_delivery_run_sheet(request)),
+        )
     except ValueError as error:
         raise _to_http_exception(error) from error
 
@@ -811,21 +949,28 @@ def get_delivery_run_sheet(run_sheet_id: str):
 def save_generated_delivery_run_sheet(
     run_sheet_id: str,
     request: SaveGeneratedWorkspaceSnapshotRequest,
+    http_request: Request = None,
 ):
     try:
-        return to_dict(
-            service.save_generated_delivery_run_sheet(run_sheet_id, request)
+        return _with_logbook_actor(
+            http_request,
+            lambda: to_dict(
+                service.save_generated_delivery_run_sheet(run_sheet_id, request)
+            ),
         )
     except ValueError as error:
         raise _to_http_exception(error) from error
 
 
 @router.post("/delivery/run-sheets/{run_sheet_id}/cancel-generated")
-def cancel_generated_delivery_run_sheet(run_sheet_id: str):
+def cancel_generated_delivery_run_sheet(run_sheet_id: str, http_request: Request = None):
     try:
-        return {
-            "cancelled": service.cancel_generated_delivery_run_sheet(run_sheet_id)
-        }
+        return _with_logbook_actor(
+            http_request,
+            lambda: {
+                "cancelled": service.cancel_generated_delivery_run_sheet(run_sheet_id)
+            },
+        )
     except ValueError as error:
         raise _to_http_exception(error) from error
 
@@ -852,9 +997,13 @@ def export_delivery_run_sheet_excel(run_sheet_id: str):
 @router.post("/opshop/pickup-collections/generated")
 def create_generated_opshop_pickup_collection(
     request: GenerateOpShopPickupCollectionRequest,
+    http_request: Request = None,
 ):
     try:
-        return to_dict(service.create_generated_opshop_pickup_collection(request))
+        return _with_logbook_actor(
+            http_request,
+            lambda: to_dict(service.create_generated_opshop_pickup_collection(request)),
+        )
     except ValueError as error:
         raise _to_http_exception(error) from error
 
@@ -917,23 +1066,33 @@ def get_opshop_pickup_collection(collection_id: str):
 def save_generated_opshop_pickup_collection(
     collection_id: str,
     request: SaveGeneratedWorkspaceSnapshotRequest,
+    http_request: Request = None,
 ):
     try:
-        return to_dict(
-            service.save_generated_opshop_pickup_collection(collection_id, request)
+        return _with_logbook_actor(
+            http_request,
+            lambda: to_dict(
+                service.save_generated_opshop_pickup_collection(collection_id, request)
+            ),
         )
     except ValueError as error:
         raise _to_http_exception(error) from error
 
 
 @router.post("/opshop/pickup-collections/{collection_id}/cancel-generated")
-def cancel_generated_opshop_pickup_collection(collection_id: str):
+def cancel_generated_opshop_pickup_collection(
+    collection_id: str,
+    http_request: Request = None,
+):
     try:
-        return {
-            "cancelled": service.cancel_generated_opshop_pickup_collection(
-                collection_id
-            )
-        }
+        return _with_logbook_actor(
+            http_request,
+            lambda: {
+                "cancelled": service.cancel_generated_opshop_pickup_collection(
+                    collection_id
+                )
+            },
+        )
     except ValueError as error:
         raise _to_http_exception(error) from error
 
@@ -1092,6 +1251,63 @@ def _save_final_trip_summary_request_from_payload(payload):
         saved_by_account_name=payload.get("saved_by_account_name"),
         saved_by_account_id=payload.get("saved_by_account_id"),
     )
+
+
+def _with_logbook_actor(http_request, callback):
+    with service.logbook_actor(_current_operator_account_name(http_request)):
+        return callback()
+
+
+def _current_operator_account_name(http_request):
+    if not http_request:
+        return None
+    cookie_value = http_request.cookies.get(OPERATOR_COOKIE_NAME)
+    if not cookie_value:
+        # Some legacy/manual API clients still call mutation routes without the
+        # browser login cookie; those operations remain valid and log Unknown.
+        return None
+    parts = str(cookie_value).split(":", 1)
+    if len(parts) != 2:
+        return None
+    account_id_text, submitted_signature = parts
+    try:
+        account_id = int(account_id_text)
+    except (TypeError, ValueError):
+        return None
+    account = service.repository.get_operator_account_by_id(account_id)
+    if not account:
+        return None
+    expected_signature = _operator_cookie_signature(account)
+    if not hmac.compare_digest(submitted_signature, expected_signature):
+        return None
+    return account.account_name
+
+
+def _set_operator_cookie(response, identity):
+    account = service.repository.get_operator_account_by_id(identity.account_id)
+    if not account:
+        return
+    response.set_cookie(
+        OPERATOR_COOKIE_NAME,
+        f"{account.account_id}:{_operator_cookie_signature(account)}",
+        httponly=True,
+        max_age=OPERATOR_COOKIE_MAX_AGE_SECONDS,
+        samesite="lax",
+    )
+
+
+def _operator_cookie_signature(account):
+    message = (
+        f"{account.account_id}:{account.account_name}:{account.password_hash}"
+    ).encode("utf-8")
+    return hmac.new(_operator_cookie_secret(), message, sha256).hexdigest()
+
+
+def _operator_cookie_secret():
+    return os.environ.get(
+        OPERATOR_COOKIE_SECRET_ENV,
+        "manual-dispatch-local-operator-cookie",
+    ).encode("utf-8")
 
 
 def _to_http_exception(error):
