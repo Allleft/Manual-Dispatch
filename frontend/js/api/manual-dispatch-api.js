@@ -549,6 +549,13 @@ export async function apiLoginAccount(payload) {
 }
 
 
+export async function apiLogoutAccount() {
+  return requestJson("/api/manual-dispatch/auth/logout", {
+    method: "POST",
+  });
+}
+
+
 export async function apiResetPassword(payload) {
   return requestJson("/api/manual-dispatch/auth/reset-password", {
     method: "POST",

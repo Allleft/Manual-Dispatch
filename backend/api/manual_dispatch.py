@@ -439,6 +439,12 @@ def login_operator_account(
         raise _to_http_exception(error) from error
 
 
+@router.post("/auth/logout")
+def logout_operator_account(response: Response):
+    response.delete_cookie(OPERATOR_COOKIE_NAME, path="/")
+    return {"logged_out": True}
+
+
 @router.post("/auth/reset-password")
 def reset_operator_password(request: ResetOperatorPasswordRequest):
     try:

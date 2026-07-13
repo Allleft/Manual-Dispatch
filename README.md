@@ -192,6 +192,7 @@ backend/
     opshop_workspace_mutation_service.py
     opshop_pickup_collection_service.py
     opshop_pickup_collection_lock.py
+    logbook_file_service.py                         # Append-only JSON Lines System Logbook
     workspace_migration_readiness_service.py
   services/*_excel_export_service.py             # Snapshot-only workbook exporters
 
@@ -209,8 +210,10 @@ tools/
   import_oncall_opshop_pickups_to_db.py
   import_countryside_opshop_pickups_to_db.py
   backfill_opshop_source_driver_assignments.py
+  read_logbook.py                                # Read-only System Logbook query CLI
 
 tests/
+  test_logbook_reader.py                         # Reader and frontend logout static contracts
   test_workspace_*.py                            # Scoped APIs, locks, snapshots, migration, and frontend shell contracts
 ```
 
@@ -275,6 +278,35 @@ The importer manages workbook-backed route groups and memberships while preservi
 
 `tools/backfill_opshop_source_driver_assignments.py` is a controlled maintenance tool for materialising approved source-driver defaults. Start with a dry run, resolve ambiguity or unknown alias reports, back up SQLite, and only then use its explicit apply mode.
 
+## System Logbook
+
+The System Logbook is file-based runtime audit data. There is no frontend Logbook page and no logbook database table. Files use JSON Lines format, with one valid JSON object per non-blank line.
+
+The default directory is `data/logbook/`, and monthly files are named `manual_dispatch_logbook_YYYY-MM.txt`. Set `MANUAL_DISPATCH_LOGBOOK_DIR` to override the directory. During normal application operation, these files are append-only. `data/logbook/` is gitignored, and logbook writing is best-effort so a logging failure does not block Delivery or OP SHOP business operations.
+
+Logbook files may contain operational names, order identifiers, customer or company names, driver names, vehicle registrations, and OP SHOP information. Treat them as private runtime data: do not commit them, attach them to public issues, or share them without appropriate access controls.
+
+`tools/read_logbook.py` is a read-only query tool. It resolves the directory from `--logbook-dir`, then `MANUAL_DISPATCH_LOGBOOK_DIR`, then `data/logbook/`. By default it reads all matching monthly files, returns matching entries in chronological order, applies no hidden result limit, and prints concise text. Use `--format jsonl` for JSON Lines output. Malformed lines produce a filename-and-line warning on stderr while the query continues.
+
+Available filters are `--date-from`, `--date-to`, `--workspace`, `--actor`, `--action`, `--result`, `--driver`, `--entity-id`, and `--search`; use `--limit` only when an explicit result cap is wanted. Date boundaries are inclusive. Run `tools\read_logbook.py --help` for the complete command reference.
+
+```powershell
+.\tmp\route-test-venv\Scripts\python.exe tools\read_logbook.py
+
+.\tmp\route-test-venv\Scripts\python.exe tools\read_logbook.py `
+  --workspace DELIVERY `
+  --actor "Office Operator"
+
+.\tmp\route-test-venv\Scripts\python.exe tools\read_logbook.py `
+  --date-from 2026-07-01 `
+  --date-to 2026-07-31 `
+  --entity-id 184068
+
+.\tmp\route-test-venv\Scripts\python.exe tools\read_logbook.py `
+  --action PICKUP_COLLECTION_SAVED `
+  --format jsonl
+```
+
 ## Runtime Data and Repository Hygiene
 
 Never commit runtime or office data:
@@ -291,7 +323,15 @@ Before database imports, maintenance tools, NAS updates, or migration apply oper
 
 ## Validation
 
-Run the relevant focused checks during normal changes. Before a release or when requested, run the full local suite:
+Run the relevant focused checks during normal changes. For System Logbook changes, run:
+
+```powershell
+.\tmp\route-test-venv\Scripts\python.exe -m compileall backend tests tools
+.\tmp\route-test-venv\Scripts\python.exe -m unittest tests.test_logbook_file_service -v
+.\tmp\route-test-venv\Scripts\python.exe -m unittest tests.test_logbook_reader -v
+```
+
+Before a release or when requested, run the full local suite:
 
 ```powershell
 git diff --check

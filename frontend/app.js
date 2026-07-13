@@ -290,7 +290,7 @@ function renderAccountStatus() {
   renderAccountStatusView({
     onLogout: () => {
       workspaceActions.resetDeliveryVehicleTransientState();
-      authActions.logoutAccount();
+      void authActions.logoutAccount();
     },
   });
 }

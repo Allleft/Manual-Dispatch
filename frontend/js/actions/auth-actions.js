@@ -1,5 +1,6 @@
 import {
   apiLoginAccount,
+  apiLogoutAccount,
   apiRegisterAccount,
   apiResetPassword,
 } from "../api/manual-dispatch-api.js";
@@ -71,6 +72,13 @@ export function createAuthActions({
   }
 
   function logoutAccount() {
+    const logoutRequest = apiLogoutAccount().catch((error) => {
+      console.error(
+        "Backend logout failed; the local session was cleared but the operator cookie may remain.",
+        error,
+      );
+    });
+
     state.accountName = "";
     state.accountId = "";
     state.isLoggedIn = false;
@@ -85,6 +93,8 @@ export function createAuthActions({
     state.deliveryVehiclePendingKeys = {};
     clearAccountSession();
     renderBoard();
+
+    return logoutRequest;
   }
 
   async function handleLogin(event) {

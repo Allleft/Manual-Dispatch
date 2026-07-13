@@ -34,6 +34,7 @@ class ManualDispatchApiContractTest(unittest.TestCase):
             ("GET", "/api/manual-dispatch/export-excel"),
             ("POST", "/api/manual-dispatch/auth/register"),
             ("POST", "/api/manual-dispatch/auth/login"),
+            ("POST", "/api/manual-dispatch/auth/logout"),
             ("POST", "/api/manual-dispatch/auth/reset-password"),
             ("POST", "/api/manual-dispatch/assign"),
             ("POST", "/api/manual-dispatch/unassign"),

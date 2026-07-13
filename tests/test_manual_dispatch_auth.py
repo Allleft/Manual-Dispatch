@@ -322,6 +322,39 @@ class ManualDispatchAuthRouteTest(unittest.TestCase):
         self.assertNotIn("password_hash", login_response.json())
         self.assertNotIn("password_salt", login_response.json())
 
+    def test_logout_route_returns_success_and_deletes_operator_cookie(self):
+        self.client.post(
+            "/api/manual-dispatch/auth/register",
+            json={
+                "account_name": "Mandy",
+                "password": "secret123",
+                "confirm_password": "secret123",
+            },
+        )
+        cookie_name = self.api_module.OPERATOR_COOKIE_NAME
+        self.assertIn(cookie_name, self.client.cookies)
+
+        response = self.client.post("/api/manual-dispatch/auth/logout")
+
+        self.assertEqual(200, response.status_code)
+        self.assertEqual({"logged_out": True}, response.json())
+        self.assertNotIn(cookie_name, self.client.cookies)
+        set_cookie = response.headers.get("set-cookie", "")
+        self.assertIn(f"{cookie_name}=", set_cookie)
+        self.assertIn("Max-Age=0", set_cookie)
+        self.assertIn("Path=/", set_cookie)
+
+    def test_logout_route_is_idempotent_without_cookie(self):
+        cookie_name = self.api_module.OPERATOR_COOKIE_NAME
+        self.assertNotIn(cookie_name, self.client.cookies)
+
+        first_response = self.client.post("/api/manual-dispatch/auth/logout")
+        second_response = self.client.post("/api/manual-dispatch/auth/logout")
+
+        self.assertEqual({"logged_out": True}, first_response.json())
+        self.assertEqual({"logged_out": True}, second_response.json())
+        self.assertNotIn(cookie_name, self.client.cookies)
+
     def test_register_route_can_be_disabled_by_environment(self):
         os.environ["MANUAL_DISPATCH_ALLOW_REGISTRATION"] = "false"
 

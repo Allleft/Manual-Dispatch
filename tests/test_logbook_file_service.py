@@ -513,10 +513,45 @@ class ManualDispatchLogbookApiActorTest(unittest.TestCase):
         )
         self.assertEqual(200, register_response.status_code)
 
-        create_response = self.client.post(
+        create_response = self._create_order("LOG-001")
+
+        self.assertEqual(200, create_response.status_code)
+        created_entry = self._latest_entry("ORDER_CREATED")
+        self.assertEqual("Office Operator", created_entry["actor"])
+        self.assertNotEqual("Unknown", created_entry["actor"])
+
+    def test_logout_clears_operator_actor_for_later_mutation(self):
+        self.client.post(
+            "/api/manual-dispatch/auth/register",
+            json={
+                "account_name": "Office Operator",
+                "password": "secret123",
+                "confirm_password": "secret123",
+            },
+        )
+        login_response = self.client.post(
+            "/api/manual-dispatch/auth/login",
+            json={"account_name": "Office Operator", "password": "secret123"},
+        )
+        self.assertEqual(200, login_response.status_code)
+
+        cookie_name = self.api_module.OPERATOR_COOKIE_NAME
+        cookie_value = self.client.cookies.get(cookie_name)
+        self.assertRegex(cookie_value, r"^\d+:[0-9a-f]{64}$")
+
+        logout_response = self.client.post("/api/manual-dispatch/auth/logout")
+        self.assertEqual({"logged_out": True}, logout_response.json())
+        self.assertNotIn(cookie_name, self.client.cookies)
+
+        create_response = self._create_order("LOG-002")
+        self.assertEqual(200, create_response.status_code)
+        self.assertEqual("Unknown", self._latest_entry("ORDER_CREATED")["actor"])
+
+    def _create_order(self, invoice_number):
+        return self.client.post(
             "/api/manual-dispatch/delivery/orders",
             json={
-                "invoice_number": "LOG-001",
+                "invoice_number": invoice_number,
                 "order_no": "A100",
                 "company_name": "Logbook Customer",
                 "phone": "0400 000 000",
@@ -537,11 +572,6 @@ class ManualDispatchLogbookApiActorTest(unittest.TestCase):
                 ],
             },
         )
-
-        self.assertEqual(200, create_response.status_code)
-        created_entry = self._latest_entry("ORDER_CREATED")
-        self.assertEqual("Office Operator", created_entry["actor"])
-        self.assertNotEqual("Unknown", created_entry["actor"])
 
     def _entries(self):
         files = list(self.logbook_dir.glob("manual_dispatch_logbook_*.txt"))

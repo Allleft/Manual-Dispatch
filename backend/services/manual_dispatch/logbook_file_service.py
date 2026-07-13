@@ -12,6 +12,17 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 LOGGER = logging.getLogger(__name__)
 MELBOURNE_TIMEZONE_KEY = "Australia/Melbourne"
 DEFAULT_LOGBOOK_DIR = "data/logbook"
+LOGBOOK_DIR_ENV = "MANUAL_DISPATCH_LOGBOOK_DIR"
+
+
+def resolve_logbook_dir(
+    base_dir: str | Path | None = None,
+    *,
+    environ=None,
+) -> Path:
+    environment = os.environ if environ is None else environ
+    configured_dir = base_dir or environment.get(LOGBOOK_DIR_ENV)
+    return Path(configured_dir or DEFAULT_LOGBOOK_DIR)
 
 
 def _load_melbourne_timezone():
@@ -37,8 +48,7 @@ class LogbookFileService:
     """Append business audit events to monthly JSON Lines text files."""
 
     def __init__(self, base_dir: str | Path | None = None) -> None:
-        configured_dir = base_dir or os.environ.get("MANUAL_DISPATCH_LOGBOOK_DIR")
-        self.base_dir = Path(configured_dir or DEFAULT_LOGBOOK_DIR)
+        self.base_dir = resolve_logbook_dir(base_dir)
 
     def record(
         self,
