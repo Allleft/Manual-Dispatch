@@ -877,12 +877,231 @@ class ManualDispatchService:
             metadata=metadata,
         )
 
-    def _record_delivery_run_sheet_event(self, action, run_sheet, actor=None):
-        order_count = sum(len(trip.orders) for trip in run_sheet.trips)
-        trip_counts = {
-            trip.trip_no: len(trip.orders)
-            for trip in run_sheet.trips
+    @staticmethod
+    def _delivery_run_sheet_counts(run_sheet):
+        return (
+            sum(len(trip.orders) for trip in run_sheet.trips),
+            {trip.trip_no: len(trip.orders) for trip in run_sheet.trips},
+        )
+
+    @staticmethod
+    def _opshop_collection_counts(collection):
+        counts = {"REGULAR": 0, "ON_CALL": 0, "COUNTRYSIDE": 0}
+        for pickup in collection.pickups:
+            category = str(pickup.pickup_category_snapshot or "").upper()
+            run_type = str(pickup.run_type_snapshot or "").upper()
+            if category == "COUNTRYSIDE":
+                counts["COUNTRYSIDE"] += 1
+            elif run_type == "REGULAR":
+                counts["REGULAR"] += 1
+            else:
+                counts["ON_CALL"] += 1
+        return counts
+
+    def record_delivery_run_sheet_export(self, run_sheet, filename):
+        order_count, trip_counts = self._delivery_run_sheet_counts(run_sheet)
+        self._record_logbook(
+            result="SUCCESS",
+            workspace="DELIVERY",
+            action="DELIVERY_RUN_SHEET_EXPORTED",
+            entity_type="DELIVERY_RUN_SHEET",
+            entity_id=run_sheet.run_sheet_id,
+            summary=(
+                "Delivery Run Sheet Excel export was generated for "
+                f"{run_sheet.driver_name_snapshot} on {run_sheet.delivery_date}."
+            ),
+            dispatch_date=run_sheet.dispatch_date,
+            delivery_date=run_sheet.delivery_date,
+            driver=run_sheet.driver_name_snapshot,
+            vehicle=run_sheet.vehicle_rego_snapshot,
+            run_sheet_id=run_sheet.run_sheet_id,
+            metadata={
+                "export_scope": "single",
+                "status": run_sheet.status,
+                "order_count": order_count,
+                "trip1_count": trip_counts.get("trip1", 0),
+                "trip2_count": trip_counts.get("trip2", 0),
+                "filename": filename,
+            },
+        )
+
+    def record_delivery_run_sheets_daily_export(
+        self,
+        run_sheets,
+        delivery_date,
+        filename,
+    ):
+        statuses = [str(run_sheet.status or "").upper() for run_sheet in run_sheets]
+        run_sheet_label = "Run Sheet" if len(run_sheets) == 1 else "Run Sheets"
+        self._record_logbook(
+            result="SUCCESS",
+            workspace="DELIVERY",
+            action="DELIVERY_RUN_SHEETS_DAILY_EXPORTED",
+            entity_type="DELIVERY_RUN_SHEET_BATCH",
+            entity_id=delivery_date,
+            summary=(
+                "Daily Delivery Run Sheets Excel export was generated for "
+                f"{delivery_date} with {len(run_sheets)} {run_sheet_label}."
+            ),
+            delivery_date=delivery_date,
+            metadata={
+                "export_scope": "daily",
+                "run_sheet_count": len(run_sheets),
+                "saved_count": statuses.count("SAVED"),
+                "generated_count": statuses.count("GENERATED"),
+                "filename": filename,
+            },
+        )
+
+    def record_opshop_pickup_collection_export(self, collection, filename):
+        counts = self._opshop_collection_counts(collection)
+        self._record_logbook(
+            result="SUCCESS",
+            workspace="OPSHOP",
+            action="PICKUP_COLLECTION_EXPORTED",
+            entity_type="PICKUP_COLLECTION",
+            entity_id=collection.collection_id,
+            summary=(
+                "OP SHOP Pickup Collection Excel export was generated for "
+                f"{collection.driver_name_snapshot} on {collection.pickup_date}."
+            ),
+            dispatch_date=collection.dispatch_date,
+            pickup_date=collection.pickup_date,
+            driver=collection.driver_name_snapshot,
+            collection_id=collection.collection_id,
+            metadata={
+                "export_scope": "single",
+                "status": collection.status,
+                "pickup_count": len(collection.pickups),
+                "regular_count": counts["REGULAR"],
+                "oncall_count": counts["ON_CALL"],
+                "countryside_count": counts["COUNTRYSIDE"],
+                "filename": filename,
+            },
+        )
+
+    def record_opshop_pickup_collections_daily_export(
+        self,
+        collections,
+        pickup_date,
+        filename,
+        dispatch_date=None,
+        status=None,
+    ):
+        statuses = [str(collection.status or "").upper() for collection in collections]
+        metadata = {
+            "export_scope": "daily",
+            "collection_count": len(collections),
+            "saved_count": statuses.count("SAVED"),
+            "generated_count": statuses.count("GENERATED"),
+            "filename": filename,
         }
+        if status is not None:
+            metadata["status_filter"] = status
+        if dispatch_date is not None:
+            metadata["dispatch_date_filter"] = dispatch_date
+        collection_label = (
+            "Collection" if len(collections) == 1 else "Collections"
+        )
+        self._record_logbook(
+            result="SUCCESS",
+            workspace="OPSHOP",
+            action="PICKUP_COLLECTIONS_DAILY_EXPORTED",
+            entity_type="PICKUP_COLLECTION_BATCH",
+            entity_id=pickup_date,
+            summary=(
+                "Daily OP SHOP Pickup Collections Excel export was generated for "
+                f"{pickup_date} with {len(collections)} {collection_label}."
+            ),
+            pickup_date=pickup_date,
+            dispatch_date=dispatch_date,
+            metadata=metadata,
+        )
+
+    def record_attache_import_confirmation(self, rows, outcome):
+        rows = list(rows or [])
+        if not rows:
+            return
+        imported_count = int(outcome.get("imported_count") or 0)
+        skipped_count = int(outcome.get("skipped_count") or 0)
+        order_label = "order" if imported_count == 1 else "orders"
+        row_label = "row" if skipped_count == 1 else "rows"
+        if imported_count and skipped_count:
+            result = "PARTIAL"
+            summary = (
+                f"Attach\u00e9 import confirmed: {imported_count} {order_label} imported "
+                f"and {skipped_count} {row_label} skipped."
+            )
+        elif imported_count:
+            result = "SUCCESS"
+            summary = (
+                f"Attach\u00e9 import confirmed: {imported_count} {order_label} imported."
+            )
+        else:
+            result = "FAILED"
+            summary = (
+                "Attach\u00e9 import confirmed but no orders were imported; "
+                f"{skipped_count} {row_label} skipped."
+            )
+
+        source_filenames = []
+        for row in rows:
+            raw_name = getattr(row, "source_filename", None)
+            if not raw_name:
+                continue
+            basename = str(raw_name).replace("\\", "/").rsplit("/", 1)[-1]
+            if basename and basename not in source_filenames:
+                source_filenames.append(basename)
+
+        duplicate_row_ids = {
+            getattr(row, "row_id", None)
+            or getattr(row, "invoice_number", None)
+            or getattr(row, "source_filename", None)
+            or "row"
+            for row in rows
+            if bool(getattr(row, "is_duplicate", False))
+        }
+        duplicate_count = len(duplicate_row_ids)
+        for skipped in outcome.get("skipped_rows") or []:
+            if (
+                "duplicate" in str(skipped.get("reason") or "").lower()
+                and skipped.get("row_id") not in duplicate_row_ids
+            ):
+                duplicate_count += 1
+        unselected_count = sum(
+            not bool(getattr(row, "selected", False))
+            for row in rows
+        )
+        metadata = {
+            "selected_count": sum(
+                bool(getattr(row, "selected", False))
+                for row in rows
+            ),
+            "imported_count": imported_count,
+            "skipped_count": skipped_count,
+            "duplicate_count": duplicate_count,
+            "invalid_count": max(
+                skipped_count - unselected_count - duplicate_count,
+                0,
+            ),
+            "source_file_count": len(source_filenames),
+            "source_filenames": source_filenames[:20],
+            "source_filenames_truncated": len(source_filenames) > 20,
+        }
+        if result == "FAILED":
+            metadata["failure_reason"] = "No orders were imported"
+        self._record_logbook(
+            result=result,
+            workspace="DELIVERY",
+            action="ATTACHE_IMPORT_CONFIRMED",
+            entity_type="ATTACHE_IMPORT_BATCH",
+            entity_id=None,
+            summary=summary,
+            metadata=metadata,
+        )
+
+    def _record_delivery_run_sheet_event(self, action, run_sheet, actor=None):
+        order_count, trip_counts = self._delivery_run_sheet_counts(run_sheet)
         verb = {
             "DELIVERY_RUN_SHEET_GENERATED": "generated",
             "DELIVERY_RUN_SHEET_CANCELLED": "cancelled",
@@ -916,16 +1135,7 @@ class ManualDispatchService:
         )
 
     def _record_opshop_collection_event(self, action, collection, actor=None):
-        counts = {"REGULAR": 0, "ON_CALL": 0, "COUNTRYSIDE": 0}
-        for pickup in collection.pickups:
-            category = str(pickup.pickup_category_snapshot or "").upper()
-            run_type = str(pickup.run_type_snapshot or "").upper()
-            if category == "COUNTRYSIDE":
-                counts["COUNTRYSIDE"] += 1
-            elif run_type == "REGULAR":
-                counts["REGULAR"] += 1
-            else:
-                counts["ON_CALL"] += 1
+        counts = self._opshop_collection_counts(collection)
         pickup_count = len(collection.pickups)
         verb = {
             "PICKUP_COLLECTION_GENERATED": "generated",
@@ -1321,19 +1531,174 @@ class ManualDispatchService:
             include_inactive
         )
 
+    @staticmethod
+    def _template_business_snapshot(template):
+        fields = (
+            "run_type",
+            "run_day",
+            "name",
+            "suburb",
+            "street_address",
+            "area_region",
+            "primary_contact",
+            "primary_phone",
+            "secondary_contact",
+            "secondary_phone",
+            "pickup_frequency",
+            "time_window",
+            "call_before_arrival",
+            "call_timing",
+            "access_type",
+            "key_required",
+            "trailer_restriction",
+            "status_notes",
+            "default_driver_id",
+            "default_driver_name",
+            "pickup_category",
+            "route_group_id",
+        )
+        return {field: getattr(template, field, None) for field in fields}
+
+    def _find_opshop_template(self, schedule_id):
+        return next(
+            (
+                template
+                for template in self.opshop_template_service.list_opshop_templates(
+                    include_inactive=True
+                )
+                if template.schedule_id == schedule_id
+            ),
+            None,
+        )
+
+    @staticmethod
+    def _template_category(template):
+        if str(template.run_type or "").upper() == "REGULAR":
+            return "REGULAR", "Regular"
+        return "ONCALL", "Oncall"
+
+    def _record_template_event(
+        self,
+        suffix,
+        template,
+        before=None,
+        after=None,
+    ):
+        action_category, label = self._template_category(template)
+        metadata = {
+            "pickup_category": template.run_type,
+            "company_name": template.name,
+            "suburb": template.suburb,
+            "run_day": template.run_day,
+            "default_driver": template.default_driver_name,
+        }
+        if before is not None and after is not None:
+            changed = [
+                field
+                for field in before
+                if before.get(field) != after.get(field)
+            ]
+            if not changed:
+                return
+            metadata = {
+                "pickup_category": template.run_type,
+                "before": {field: before[field] for field in changed},
+                "after": {field: after[field] for field in changed},
+            }
+        elif suffix == "DISABLED":
+            metadata.update(
+                {
+                    "previous_status": before.get("status"),
+                    "new_status": template.status,
+                }
+            )
+        metadata = {key: value for key, value in metadata.items() if value is not None}
+        verb = {
+            "CREATED": "created",
+            "UPDATED": "updated",
+            "DISABLED": "disabled",
+        }[suffix]
+        self._record_logbook(
+            result="SUCCESS",
+            workspace="OPSHOP",
+            action=f"{action_category}_TEMPLATE_{suffix}",
+            entity_type="OPSHOP_TEMPLATE",
+            entity_id=template.schedule_id,
+            summary=f"{label} OP SHOP template for {template.name} was {verb}.",
+            metadata=metadata,
+        )
+
     def create_countryside_route_group(self, request):
-        return self.opshop_template_service.create_countryside_route_group(request)
+        route_group = self.opshop_template_service.create_countryside_route_group(
+            request
+        )
+        self._record_logbook(
+            result="SUCCESS",
+            workspace="OPSHOP",
+            action="COUNTRYSIDE_ROUTE_GROUP_CREATED",
+            entity_type="COUNTRYSIDE_ROUTE_GROUP",
+            entity_id=route_group.route_group_id,
+            summary=(
+                f"Countryside route group {route_group.route_group_name} was created."
+            ),
+            metadata={
+                "route_group_name": route_group.route_group_name,
+                "active": bool(route_group.active_flag),
+            },
+        )
+        return route_group
 
     def update_countryside_route_group(self, route_group_id, request):
-        return self.opshop_template_service.update_countryside_route_group(
+        existing = self.repository.get_countryside_route_group(route_group_id)
+        before_name = existing.route_group_name if existing else None
+        route_group = self.opshop_template_service.update_countryside_route_group(
             route_group_id,
             request,
         )
+        if before_name != route_group.route_group_name:
+            self._record_logbook(
+                result="SUCCESS",
+                workspace="OPSHOP",
+                action="COUNTRYSIDE_ROUTE_GROUP_RENAMED",
+                entity_type="COUNTRYSIDE_ROUTE_GROUP",
+                entity_id=route_group.route_group_id,
+                summary=(
+                    f"Countryside route group {before_name} was renamed to "
+                    f"{route_group.route_group_name}."
+                ),
+                metadata={
+                    "before": {"route_group_name": before_name},
+                    "after": {
+                        "route_group_name": route_group.route_group_name,
+                    },
+                },
+            )
+        return route_group
 
     def disable_countryside_route_group(self, route_group_id):
-        return self.opshop_template_service.disable_countryside_route_group(
+        existing = self.repository.get_countryside_route_group(route_group_id)
+        before_name = existing.route_group_name if existing else None
+        previous_active = bool(existing.active_flag) if existing else None
+        route_group = self.opshop_template_service.disable_countryside_route_group(
             route_group_id
         )
+        if previous_active and not route_group.active_flag:
+            self._record_logbook(
+                result="SUCCESS",
+                workspace="OPSHOP",
+                action="COUNTRYSIDE_ROUTE_GROUP_DISABLED",
+                entity_type="COUNTRYSIDE_ROUTE_GROUP",
+                entity_id=route_group.route_group_id,
+                summary=(
+                    f"Countryside route group {before_name} was disabled."
+                ),
+                metadata={
+                    "route_group_name": before_name,
+                    "previous_active": previous_active,
+                    "new_active": bool(route_group.active_flag),
+                },
+            )
+        return route_group
 
     def list_countryside_route_memberships(self, route_group_id):
         return self.opshop_template_service.list_countryside_route_memberships(
@@ -1341,30 +1706,127 @@ class ManualDispatchService:
         )
 
     def add_countryside_route_membership(self, route_group_id, request):
-        return self.opshop_template_service.add_countryside_route_membership(
+        template = self.opshop_template_service.add_countryside_route_membership(
             route_group_id,
             request,
         )
+        route_group = self.repository.get_countryside_route_group(
+            template.route_group_id
+        )
+        self._record_logbook(
+            result="SUCCESS",
+            workspace="OPSHOP",
+            action="COUNTRYSIDE_MEMBERSHIP_ADDED",
+            entity_type="COUNTRYSIDE_MEMBERSHIP",
+            entity_id=template.schedule_id,
+            summary=(
+                f"OP SHOP template {template.name} was added to countryside "
+                f"route group {route_group.route_group_name}."
+            ),
+            metadata={
+                "schedule_id": template.schedule_id,
+                "company_name": template.name,
+                "suburb": template.suburb,
+                "route_group_id": route_group.route_group_id,
+                "route_group_name": route_group.route_group_name,
+            },
+        )
+        return template
 
     def remove_countryside_route_membership(self, schedule_id):
-        return self.opshop_template_service.remove_countryside_route_membership(
+        existing = self._find_opshop_template(schedule_id)
+        before = self._template_business_snapshot(existing) if existing else {}
+        route_group = self.repository.get_countryside_route_group(
+            before.get("route_group_id")
+        )
+        template = self.opshop_template_service.remove_countryside_route_membership(
             schedule_id
         )
+        self._record_logbook(
+            result="SUCCESS",
+            workspace="OPSHOP",
+            action="COUNTRYSIDE_MEMBERSHIP_REMOVED",
+            entity_type="COUNTRYSIDE_MEMBERSHIP",
+            entity_id=schedule_id,
+            summary=(
+                f"OP SHOP template {before.get('name')} was removed from "
+                f"countryside route group {route_group.route_group_name}."
+            ),
+            metadata={
+                "schedule_id": schedule_id,
+                "company_name": before.get("name"),
+                "suburb": before.get("suburb"),
+                "route_group_id": route_group.route_group_id,
+                "route_group_name": route_group.route_group_name,
+            },
+        )
+        return template
 
     def move_countryside_route_membership(self, schedule_id, request):
-        return self.opshop_template_service.move_countryside_route_membership(
+        existing = self._find_opshop_template(schedule_id)
+        before = self._template_business_snapshot(existing) if existing else {}
+        source_group = self.repository.get_countryside_route_group(
+            before.get("route_group_id")
+        )
+        template = self.opshop_template_service.move_countryside_route_membership(
             schedule_id,
             request,
         )
+        target_group = self.repository.get_countryside_route_group(
+            template.route_group_id
+        )
+        self._record_logbook(
+            result="SUCCESS",
+            workspace="OPSHOP",
+            action="COUNTRYSIDE_MEMBERSHIP_MOVED",
+            entity_type="COUNTRYSIDE_MEMBERSHIP",
+            entity_id=template.schedule_id,
+            summary=(
+                f"OP SHOP template {template.name} was moved from route group "
+                f"{source_group.route_group_name} to route group "
+                f"{target_group.route_group_name}."
+            ),
+            metadata={
+                "schedule_id": template.schedule_id,
+                "company_name": template.name,
+                "before": {
+                    "route_group_id": source_group.route_group_id,
+                    "route_group_name": source_group.route_group_name,
+                },
+                "after": {
+                    "route_group_id": target_group.route_group_id,
+                    "route_group_name": target_group.route_group_name,
+                },
+            },
+        )
+        return template
 
     def create_opshop_template(self, request):
-        return self.opshop_template_service.create_opshop_template(request)
+        template = self.opshop_template_service.create_opshop_template(request)
+        self._record_template_event("CREATED", template)
+        return template
 
     def update_opshop_template(self, schedule_id, request):
-        return self.opshop_template_service.update_opshop_template(schedule_id, request)
+        existing = self._find_opshop_template(schedule_id)
+        before = self._template_business_snapshot(existing) if existing else {}
+        template = self.opshop_template_service.update_opshop_template(
+            schedule_id,
+            request,
+        )
+        after = self._template_business_snapshot(template)
+        self._record_template_event("UPDATED", template, before, after)
+        return template
 
     def disable_opshop_template(self, schedule_id):
-        return self.opshop_template_service.disable_opshop_template(schedule_id)
+        existing = self._find_opshop_template(schedule_id)
+        before = {
+            "status": existing.status if existing else None,
+            "active_flag": existing.active_flag if existing else None,
+        }
+        template = self.opshop_template_service.disable_opshop_template(schedule_id)
+        if before["active_flag"] and not template.active_flag:
+            self._record_template_event("DISABLED", template, before=before)
+        return template
 
     def create_opshop_pickup_task(self, request):
         task = self.opshop_pickup_service.create_opshop_pickup_task(request)

@@ -286,6 +286,12 @@ The default directory is `data/logbook/`, and monthly files are named `manual_di
 
 Logbook files may contain operational names, order identifiers, customer or company names, driver names, vehicle registrations, and OP SHOP information. Treat them as private runtime data: do not commit them, attach them to public issues, or share them without appropriate access controls.
 
+Current Delivery coverage includes order creation, update, cancellation and assignment; vehicle assignment changes; Run Sheet generation, cancellation and save; single and daily Run Sheet Excel exports; and Attaché confirmation batch summaries. `ATTACHE_IMPORT_CONFIRMED` is one summary event per attempted confirmation batch, while every successfully imported order continues to produce its existing `ORDER_CREATED` event.
+
+Current OP SHOP coverage includes Pickup Task creation, update, cancellation, assignment and Countryside assignment; Pickup Collection generation, cancellation and save; single and daily Pickup Collection Excel exports; Regular and Oncall template changes; Countryside route-group changes; and Countryside membership changes.
+
+An export event means the server successfully generated the workbook response. It does not prove that the browser completed or opened the download. Stage 2C maintenance-tool events, integrity verification, archive handling and retention policy are not yet implemented.
+
 `tools/read_logbook.py` is a read-only query tool. It resolves the directory from `--logbook-dir`, then `MANUAL_DISPATCH_LOGBOOK_DIR`, then `data/logbook/`. By default it reads all matching monthly files, returns matching entries in chronological order, applies no hidden result limit, and prints concise text. Use `--format jsonl` for JSON Lines output. Malformed lines produce a filename-and-line warning on stderr while the query continues.
 
 Available filters are `--date-from`, `--date-to`, `--workspace`, `--actor`, `--action`, `--result`, `--driver`, `--entity-id`, and `--search`; use `--limit` only when an explicit result cap is wanted. Date boundaries are inclusive. Run `tools\read_logbook.py --help` for the complete command reference.
@@ -329,6 +335,7 @@ Run the relevant focused checks during normal changes. For System Logbook change
 .\tmp\route-test-venv\Scripts\python.exe -m compileall backend tests tools
 .\tmp\route-test-venv\Scripts\python.exe -m unittest tests.test_logbook_file_service -v
 .\tmp\route-test-venv\Scripts\python.exe -m unittest tests.test_logbook_reader -v
+.\tmp\route-test-venv\Scripts\python.exe -m unittest tests.test_logbook_stage2b_events -v
 ```
 
 Before a release or when requested, run the full local suite:

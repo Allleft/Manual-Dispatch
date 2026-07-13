@@ -239,6 +239,7 @@ def commit_delivery_attache_invoice_pdf_import(
             lambda: _commit_attache_invoice_pdf_import(
                 request,
                 service.create_delivery_order,
+                service.record_attache_import_confirmation,
             ),
         )
     except ValueError as error:
@@ -510,11 +511,15 @@ def commit_attache_invoice_pdf_import(
 ):
     return _with_logbook_actor(
         http_request,
-        lambda: _commit_attache_invoice_pdf_import(request, service.create_order),
+        lambda: _commit_attache_invoice_pdf_import(
+            request,
+            service.create_order,
+            service.record_attache_import_confirmation,
+        ),
     )
 
 
-def _commit_attache_invoice_pdf_import(request, create_order):
+def _commit_attache_invoice_pdf_import(request, create_order, record_batch=None):
     created_orders = []
     skipped_rows = []
     existing_invoice_numbers = _existing_invoice_numbers()
@@ -561,12 +566,15 @@ def _commit_attache_invoice_pdf_import(request, create_order):
         except ValueError as error:
             skipped_rows.append({"row_id": row_id, "reason": str(error)})
 
-    return {
+    result = {
         "created_orders": created_orders,
         "skipped_rows": skipped_rows,
         "imported_count": len(created_orders),
         "skipped_count": len(skipped_rows),
     }
+    if record_batch is not None:
+        record_batch(request.rows or [], result)
+    return result
 
 
 @router.patch("/orders/{order_id}")
@@ -628,9 +636,13 @@ def list_opshop_countryside_route_groups(include_inactive: bool = False):
 @router.post("/opshop-countryside-route-groups")
 def create_opshop_countryside_route_group(
     request: CreateOpShopCountrysideRouteGroupRequest,
+    http_request: Request = None,
 ):
     try:
-        return to_dict(service.create_countryside_route_group(request))
+        return _with_logbook_actor(
+            http_request,
+            lambda: to_dict(service.create_countryside_route_group(request)),
+        )
     except ValueError as error:
         raise _to_http_exception(error) from error
 
@@ -639,17 +651,29 @@ def create_opshop_countryside_route_group(
 def update_opshop_countryside_route_group(
     route_group_id: str,
     request: UpdateOpShopCountrysideRouteGroupRequest,
+    http_request: Request = None,
 ):
     try:
-        return to_dict(service.update_countryside_route_group(route_group_id, request))
+        return _with_logbook_actor(
+            http_request,
+            lambda: to_dict(
+                service.update_countryside_route_group(route_group_id, request)
+            ),
+        )
     except ValueError as error:
         raise _to_http_exception(error) from error
 
 
 @router.post("/opshop-countryside-route-groups/{route_group_id}/disable")
-def disable_opshop_countryside_route_group(route_group_id: str):
+def disable_opshop_countryside_route_group(
+    route_group_id: str,
+    http_request: Request = None,
+):
     try:
-        return to_dict(service.disable_countryside_route_group(route_group_id))
+        return _with_logbook_actor(
+            http_request,
+            lambda: to_dict(service.disable_countryside_route_group(route_group_id)),
+        )
     except ValueError as error:
         raise _to_http_exception(error) from error
 
@@ -669,17 +693,29 @@ def list_opshop_countryside_route_memberships(route_group_id: str):
 def add_opshop_countryside_route_membership(
     route_group_id: str,
     request: AddCountrysideRouteMembershipRequest,
+    http_request: Request = None,
 ):
     try:
-        return to_dict(service.add_countryside_route_membership(route_group_id, request))
+        return _with_logbook_actor(
+            http_request,
+            lambda: to_dict(
+                service.add_countryside_route_membership(route_group_id, request)
+            ),
+        )
     except ValueError as error:
         raise _to_http_exception(error) from error
 
 
 @router.post("/opshop-countryside-memberships/{schedule_id}/remove")
-def remove_opshop_countryside_route_membership(schedule_id: str):
+def remove_opshop_countryside_route_membership(
+    schedule_id: str,
+    http_request: Request = None,
+):
     try:
-        return to_dict(service.remove_countryside_route_membership(schedule_id))
+        return _with_logbook_actor(
+            http_request,
+            lambda: to_dict(service.remove_countryside_route_membership(schedule_id)),
+        )
     except ValueError as error:
         raise _to_http_exception(error) from error
 
@@ -688,9 +724,15 @@ def remove_opshop_countryside_route_membership(schedule_id: str):
 def move_opshop_countryside_route_membership(
     schedule_id: str,
     request: MoveCountrysideRouteMembershipRequest,
+    http_request: Request = None,
 ):
     try:
-        return to_dict(service.move_countryside_route_membership(schedule_id, request))
+        return _with_logbook_actor(
+            http_request,
+            lambda: to_dict(
+                service.move_countryside_route_membership(schedule_id, request)
+            ),
+        )
     except ValueError as error:
         raise _to_http_exception(error) from error
 
@@ -707,25 +749,41 @@ def list_opshop_templates(run_type: str = None, include_inactive: bool = False):
 
 
 @router.post("/opshop-templates")
-def create_opshop_template(request: CreateOpShopTemplateRequest):
+def create_opshop_template(
+    request: CreateOpShopTemplateRequest,
+    http_request: Request = None,
+):
     try:
-        return to_dict(service.create_opshop_template(request))
+        return _with_logbook_actor(
+            http_request,
+            lambda: to_dict(service.create_opshop_template(request)),
+        )
     except ValueError as error:
         raise _to_http_exception(error) from error
 
 
 @router.patch("/opshop-templates/{schedule_id}")
-def update_opshop_template(schedule_id: str, request: UpdateOpShopTemplateRequest):
+def update_opshop_template(
+    schedule_id: str,
+    request: UpdateOpShopTemplateRequest,
+    http_request: Request = None,
+):
     try:
-        return to_dict(service.update_opshop_template(schedule_id, request))
+        return _with_logbook_actor(
+            http_request,
+            lambda: to_dict(service.update_opshop_template(schedule_id, request)),
+        )
     except ValueError as error:
         raise _to_http_exception(error) from error
 
 
 @router.post("/opshop-templates/{schedule_id}/disable")
-def disable_opshop_template(schedule_id: str):
+def disable_opshop_template(schedule_id: str, http_request: Request = None):
     try:
-        return to_dict(service.disable_opshop_template(schedule_id))
+        return _with_logbook_actor(
+            http_request,
+            lambda: to_dict(service.disable_opshop_template(schedule_id)),
+        )
     except ValueError as error:
         raise _to_http_exception(error) from error
 
@@ -928,7 +986,10 @@ def list_delivery_run_sheets(
 
 
 @router.get("/delivery/run-sheets/export-excel")
-def export_delivery_run_sheets_excel(delivery_date: str):
+def export_delivery_run_sheets_excel(
+    delivery_date: str,
+    http_request: Request = None,
+):
     try:
         run_sheets = service.list_delivery_run_sheets_for_date_export(delivery_date)
         workbook_bytes = build_delivery_run_sheets_excel(run_sheets, delivery_date)
@@ -936,6 +997,14 @@ def export_delivery_run_sheets_excel(delivery_date: str):
         raise _to_http_exception(error) from error
 
     filename = f"Daily_Run_Sheets_{_safe_filename_part(delivery_date)}.xlsx"
+    _with_logbook_actor(
+        http_request,
+        lambda: service.record_delivery_run_sheets_daily_export(
+            run_sheets,
+            delivery_date,
+            filename,
+        ),
+    )
     return Response(
         content=workbook_bytes,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -982,7 +1051,10 @@ def cancel_generated_delivery_run_sheet(run_sheet_id: str, http_request: Request
 
 
 @router.get("/delivery/run-sheets/{run_sheet_id}/export-excel")
-def export_delivery_run_sheet_excel(run_sheet_id: str):
+def export_delivery_run_sheet_excel(
+    run_sheet_id: str,
+    http_request: Request = None,
+):
     try:
         run_sheet = service.get_saved_delivery_run_sheet_for_export(run_sheet_id)
     except ValueError as error:
@@ -992,6 +1064,10 @@ def export_delivery_run_sheet_excel(run_sheet_id: str):
     filename = (
         f"Delivery_Run_Sheet_{_safe_filename_part(run_sheet.delivery_date)}_"
         f"{_safe_filename_part(run_sheet.driver_name_snapshot)}.xlsx"
+    )
+    _with_logbook_actor(
+        http_request,
+        lambda: service.record_delivery_run_sheet_export(run_sheet, filename),
     )
     return Response(
         content=workbook_bytes,
@@ -1038,6 +1114,7 @@ def export_opshop_pickup_collections_excel(
     pickup_date: str,
     dispatch_date: str = None,
     status: str = None,
+    http_request: Request = None,
 ):
     try:
         collections = service.list_opshop_pickup_collections_for_date_export(
@@ -1053,6 +1130,16 @@ def export_opshop_pickup_collections_excel(
         raise _to_http_exception(error) from error
 
     filename = f"Daily_OPSHOP_Collections_{_safe_filename_part(pickup_date)}.xlsx"
+    _with_logbook_actor(
+        http_request,
+        lambda: service.record_opshop_pickup_collections_daily_export(
+            collections,
+            pickup_date,
+            filename,
+            dispatch_date=dispatch_date,
+            status=status,
+        ),
+    )
     return Response(
         content=workbook_bytes,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -1104,7 +1191,10 @@ def cancel_generated_opshop_pickup_collection(
 
 
 @router.get("/opshop/pickup-collections/{collection_id}/export-excel")
-def export_opshop_pickup_collection_excel(collection_id: str):
+def export_opshop_pickup_collection_excel(
+    collection_id: str,
+    http_request: Request = None,
+):
     try:
         collection = service.get_opshop_pickup_collection_for_export(
             collection_id
@@ -1116,6 +1206,13 @@ def export_opshop_pickup_collection_excel(collection_id: str):
     filename = (
         f"OPSHOP_Pickup_Collection_{_safe_filename_part(collection.pickup_date)}_"
         f"{_safe_filename_part(collection.driver_name_snapshot)}.xlsx"
+    )
+    _with_logbook_actor(
+        http_request,
+        lambda: service.record_opshop_pickup_collection_export(
+            collection,
+            filename,
+        ),
     )
     return Response(
         content=workbook_bytes,
