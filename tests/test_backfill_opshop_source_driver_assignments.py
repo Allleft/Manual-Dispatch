@@ -1,3 +1,5 @@
+import contextlib
+import gc
 import shutil
 import sqlite3
 import unittest
@@ -63,10 +65,13 @@ class BackfillOpShopSourceDriverAssignmentsTest(unittest.TestCase):
             "MONDAY",
             "REGULAR",
         )
+        gc.collect()
         before = self._database_snapshot()
+        before_bytes = self.db_path.read_bytes()
 
         analysis = self._analyze()
 
+        self.assertEqual(before_bytes, self.db_path.read_bytes())
         self.assertEqual(before, self._database_snapshot())
         self.assertEqual(0, analysis["summary"]["matched_templates"])
         self.assertTrue(
@@ -393,7 +398,7 @@ class BackfillOpShopSourceDriverAssignmentsTest(unittest.TestCase):
             )
 
     def _database_snapshot(self):
-        with sqlite3.connect(self.db_path) as connection:
+        with contextlib.closing(sqlite3.connect(self.db_path)) as connection:
             return "\n".join(connection.iterdump())
 
 

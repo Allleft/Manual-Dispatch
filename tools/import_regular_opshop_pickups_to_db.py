@@ -28,6 +28,15 @@ from backend.repositories.sqlite_manual_dispatch_repository import (  # noqa: E4
     SQLiteManualDispatchRepository,
 )
 from backend.schemas import OpShopLocation, OpShopPickupSchedule  # noqa: E402
+from tools.maintenance_logbook import (  # noqa: E402
+    add_maintenance_logbook_arguments,
+    record_maintenance_event,
+    resolve_maintenance_actor,
+    safe_basename,
+    sanitized_failure_metadata,
+    workbook_import_failure_phase,
+    workbook_import_metadata,
+)
 
 
 DEFAULT_DB_PATH = PROJECT_ROOT / "data" / "manual_dispatch.sqlite3"
@@ -546,10 +555,74 @@ def main(argv=None):
     )
     parser.add_argument("--file", required=True, help="Path to Opshop reuglar pickup.xlsx")
     parser.add_argument("--db-path", help="Target SQLite database path")
+    add_maintenance_logbook_arguments(parser)
     args = parser.parse_args(argv)
 
-    summary = import_regular_opshop_pickups_to_db(args.file, args.db_path)
-    print_summary(summary)
+    actor = resolve_maintenance_actor(args.actor)
+    database_path = resolve_db_path(args.db_path)
+    workbook_filename = safe_basename(args.file)
+    try:
+        summary = import_regular_opshop_pickups_to_db(args.file, args.db_path)
+        print_summary(summary)
+    except Exception as error:
+        record_maintenance_event(
+            action="REGULAR_WORKBOOK_IMPORT_COMPLETED",
+            result="FAILED",
+            workspace="OPSHOP",
+            actor=actor,
+            entity_type="OPSHOP_WORKBOOK_IMPORT",
+            entity_id=f"regular:{workbook_filename}",
+            summary="Regular OP SHOP workbook import failed.",
+            metadata={
+                "mode": "apply",
+                "workbook_filename": workbook_filename,
+                "database_filename": safe_basename(database_path),
+                **sanitized_failure_metadata(
+                    error,
+                    workbook_import_failure_phase(error, args.file),
+                ),
+            },
+            logbook_dir=args.logbook_dir,
+        )
+        raise
+
+    metadata = workbook_import_metadata(
+        summary,
+        workbook_path=args.file,
+        database_path=database_path,
+        count_fields=(
+            "rows_read",
+            "rows_imported",
+            "rows_skipped_inactive",
+            "locations_inserted",
+            "locations_updated",
+            "schedules_inserted",
+            "schedules_updated",
+            "schedules_deactivated",
+        ),
+    )
+    has_unresolved_aliases = metadata["unresolved_alias_occurrence_count"] > 0
+    result = "PARTIAL" if has_unresolved_aliases else "SUCCESS"
+    event_summary = (
+        "Regular OP SHOP workbook import completed with unresolved driver aliases: "
+        f"{summary.rows_imported} rows imported."
+        if has_unresolved_aliases
+        else (
+            "Regular OP SHOP workbook import completed: "
+            f"{summary.rows_imported} rows imported."
+        )
+    )
+    record_maintenance_event(
+        action="REGULAR_WORKBOOK_IMPORT_COMPLETED",
+        result=result,
+        workspace="OPSHOP",
+        actor=actor,
+        entity_type="OPSHOP_WORKBOOK_IMPORT",
+        entity_id=f"regular:{workbook_filename}",
+        summary=event_summary,
+        metadata=metadata,
+        logbook_dir=args.logbook_dir,
+    )
 
 
 if __name__ == "__main__":

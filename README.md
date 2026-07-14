@@ -290,7 +290,74 @@ Current Delivery coverage includes order creation, update, cancellation and assi
 
 Current OP SHOP coverage includes Pickup Task creation, update, cancellation, assignment and Countryside assignment; Pickup Collection generation, cancellation and save; single and daily Pickup Collection Excel exports; Regular and Oncall template changes; Countryside route-group changes; and Countryside membership changes.
 
-An export event means the server successfully generated the workbook response. It does not prove that the browser completed or opened the download. Stage 2C maintenance-tool events, integrity verification, archive handling and retention policy are not yet implemented.
+An export event means the server successfully generated the workbook response. It does not prove that the browser completed or opened the download.
+
+### Maintenance Tool Logging
+
+Stage 2C.1 records one best-effort operational event for each attempted maintenance CLI invocation after argument parsing:
+
+- `REGULAR_WORKBOOK_IMPORT_COMPLETED`
+- `ONCALL_WORKBOOK_IMPORT_COMPLETED`
+- `COUNTRYSIDE_WORKBOOK_IMPORT_COMPLETED`
+- `SOURCE_DRIVER_BACKFILL_DRY_RUN`
+- `SOURCE_DRIVER_BACKFILL_APPLIED`
+- `LEGACY_WORKSPACE_MIGRATION_DRY_RUN`
+- `LEGACY_WORKSPACE_MIGRATION_APPLIED`
+
+The maintenance actor resolves in this order: an explicit `--actor` value, `MANUAL_DISPATCH_MAINTENANCE_ACTOR`, then `Unknown`. All five tools also accept an optional `--logbook-dir`; when omitted, the existing `MANUAL_DISPATCH_LOGBOOK_DIR` and `data/logbook/` resolution remains available. Actor values are trimmed.
+
+Safe examples:
+
+```powershell
+$env:MANUAL_DISPATCH_MAINTENANCE_ACTOR="Albert"
+
+.\tmp\route-test-venv\Scripts\python.exe tools\import_regular_opshop_pickups_to_db.py `
+  --file "<regular-workbook.xlsx>" `
+  --db-path "data\manual_dispatch.sqlite3" `
+  --actor "Albert"
+
+.\tmp\route-test-venv\Scripts\python.exe tools\import_oncall_opshop_pickups_to_db.py `
+  --file "<oncall-workbook.xlsx>" `
+  --db-path "data\manual_dispatch.sqlite3" `
+  --actor "Albert"
+
+.\tmp\route-test-venv\Scripts\python.exe tools\import_countryside_opshop_pickups_to_db.py `
+  --file "<countryside-workbook.xlsx>" `
+  --db-path "data\manual_dispatch.sqlite3" `
+  --actor "Albert"
+
+.\tmp\route-test-venv\Scripts\python.exe tools\backfill_opshop_source_driver_assignments.py `
+  --regular-workbook "<regular-workbook.xlsx>" `
+  --oncall-workbook "<oncall-workbook.xlsx>" `
+  --db-path "data\manual_dispatch.sqlite3" `
+  --from-date "2026-07-14" `
+  --dry-run `
+  --report-path "tmp\source-driver-backfill-dry-run.json" `
+  --actor "Albert"
+
+.\tmp\route-test-venv\Scripts\python.exe tools\backfill_opshop_source_driver_assignments.py `
+  --regular-workbook "<regular-workbook.xlsx>" `
+  --oncall-workbook "<oncall-workbook.xlsx>" `
+  --db-path "data\manual_dispatch.sqlite3" `
+  --from-date "2026-07-14" `
+  --apply `
+  --report-path "tmp\source-driver-backfill-apply.json" `
+  --actor "Albert"
+
+.\tmp\route-test-venv\Scripts\python.exe tools\migrate_legacy_final_summaries_to_workspaces.py `
+  --db-path "data\manual_dispatch.sqlite3" `
+  --actor "Albert"
+
+.\tmp\route-test-venv\Scripts\python.exe tools\migrate_legacy_final_summaries_to_workspaces.py `
+  --db-path "data\manual_dispatch.sqlite3" `
+  --apply `
+  --yes `
+  --actor "Albert"
+```
+
+Workbook importers and apply modes modify the target database, and their existing backup requirements remain mandatory. Backfill and migration dry-runs remain read-only for the target database, but now intentionally append one operational audit event; the backfill dry-run also writes its existing JSON report. Workbook, database, backup and report paths are reduced to basenames in logbook events. Maintenance events remain private runtime data. There is still no frontend Logbook page and no logbook database table.
+
+Stage 2C.2 read-only integrity checking is deferred; malformed or truncated line detection, required-field and action-registry validation, event/month consistency, and duplicate incident-annotation checks are not implemented here. Stage 2C.3 archive and retention work is also deferred; monthly archives, SHA-256 archive manifests, retention policy, NAS backup instructions and restore verification are not implemented here.
 
 `tools/read_logbook.py` is a read-only query tool. It resolves the directory from `--logbook-dir`, then `MANUAL_DISPATCH_LOGBOOK_DIR`, then `data/logbook/`. By default it reads all matching monthly files, returns matching entries in chronological order, applies no hidden result limit, and prints concise text. Use `--format jsonl` for JSON Lines output. Malformed lines produce a filename-and-line warning on stderr while the query continues.
 

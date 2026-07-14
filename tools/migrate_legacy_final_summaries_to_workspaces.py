@@ -6,13 +6,28 @@ The default mode is read-only dry-run. Writes require both --apply and --yes.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import os
+import shutil
 import sqlite3
 import sys
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from tools.maintenance_logbook import (  # noqa: E402
+    add_maintenance_logbook_arguments,
+    record_maintenance_event,
+    resolve_maintenance_actor,
+    safe_basename,
+    sanitized_failure_metadata,
+)
 
 
 REQUIRED_TABLES = {
@@ -32,11 +47,26 @@ class MigrationBlockedError(ValueError):
         self.report = report
 
 
+@contextlib.contextmanager
+def _read_only_database_snapshot(db_path):
+    """Copy the database and WAL so inspection never opens the target with SQLite."""
+    source_path = Path(db_path).resolve()
+    with tempfile.TemporaryDirectory(prefix="manual-dispatch-read-") as temp_dir:
+        snapshot_path = Path(temp_dir) / source_path.name
+        shutil.copy2(source_path, snapshot_path)
+        wal_path = Path(f"{source_path}-wal")
+        if wal_path.exists():
+            shutil.copy2(wal_path, Path(f"{snapshot_path}-wal"))
+        yield snapshot_path
+
+
 def inspect_migration(db_path: str | Path) -> Dict[str, Any]:
     path = _validated_database_path(db_path)
-    with sqlite3.connect(f"file:{path}?mode=ro", uri=True) as connection:
-        connection.row_factory = sqlite3.Row
-        return _build_preflight_report(connection, path)
+    with _read_only_database_snapshot(path) as snapshot_path:
+        uri = snapshot_path.as_uri() + "?mode=ro"
+        with contextlib.closing(sqlite3.connect(uri, uri=True)) as connection:
+            connection.row_factory = sqlite3.Row
+            return _build_preflight_report(connection, path)
 
 
 def migrate_legacy_final_summaries(
@@ -150,12 +180,85 @@ def format_console_report(report: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _migration_metadata(db_path, report, mode):
+    summary = dict((report or {}).get("summary") or {})
+    applied = dict((report or {}).get("applied") or {})
+    backup_path = (report or {}).get("backup_path")
+    metadata = {
+        "mode": mode,
+        "database_filename": safe_basename(db_path),
+        "saved_legacy_summaries": int(
+            summary.get("saved_legacy_summaries", 0) or 0
+        ),
+        "generated_legacy_summaries": int(
+            summary.get("generated_legacy_summaries", 0) or 0
+        ),
+        "delivery_to_create": int(
+            applied.get("delivery_run_sheets", summary.get("delivery_to_create", 0))
+            or 0
+        ),
+        "opshop_to_create": int(
+            applied.get("opshop_collections", summary.get("opshop_to_create", 0))
+            or 0
+        ),
+        "already_migrated": int(summary.get("already_migrated", 0) or 0),
+        "conflicts": int(summary.get("conflicts", 0) or 0),
+        "skipped": int(summary.get("skipped", 0) or 0),
+        "backup_created": bool(backup_path),
+        "backup_filename": safe_basename(backup_path),
+    }
+    if mode == "apply":
+        metadata.update(
+            {
+                "delivery_run_sheets_created": int(
+                    applied.get("delivery_run_sheets", 0) or 0
+                ),
+                "delivery_rows_created": int(applied.get("delivery_rows", 0) or 0),
+                "opshop_collections_created": int(
+                    applied.get("opshop_collections", 0) or 0
+                ),
+                "opshop_rows_created": int(applied.get("opshop_rows", 0) or 0),
+            }
+        )
+    return metadata
+
+
+def _migration_failure_phase(error, apply):
+    if isinstance(error, MigrationBlockedError):
+        return "preflight"
+    if isinstance(error, OSError):
+        return "database_backup" if apply else "inspection"
+    if isinstance(error, sqlite3.Error):
+        return "database_apply" if apply else "inspection"
+    return "database_apply" if apply else "inspection"
+
+
+def _record_migration_event(args, actor, db_path, result, summary, metadata):
+    return record_maintenance_event(
+        action=(
+            "LEGACY_WORKSPACE_MIGRATION_APPLIED"
+            if args.apply
+            else "LEGACY_WORKSPACE_MIGRATION_DRY_RUN"
+        ),
+        result=result,
+        workspace="SYSTEM",
+        actor=actor,
+        entity_type="WORKSPACE_MIGRATION",
+        entity_id=safe_basename(db_path),
+        summary=summary,
+        metadata=metadata,
+        logbook_dir=args.logbook_dir,
+    )
+
+
 def main(argv: Optional[Iterable[str]] = None) -> int:
     args = _build_parser().parse_args(argv)
     db_path = args.db_path or os.environ.get("MANUAL_DISPATCH_DB_PATH")
     if not db_path:
         print("Database path is required.", file=sys.stderr)
         return 2
+    actor = resolve_maintenance_actor(args.actor)
+    mode = "apply" if args.apply else "dry-run"
     try:
         report = migrate_legacy_final_summaries(
             db_path,
@@ -164,11 +267,86 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             backup_dir=args.backup_dir,
         )
     except (MigrationBlockedError, OSError, sqlite3.Error) as error:
-        if isinstance(error, MigrationBlockedError) and error.report:
-            print(format_console_report(error.report))
+        error_report = error.report if isinstance(error, MigrationBlockedError) else None
+        if error_report:
+            print(format_console_report(error_report))
         print(f"Migration blocked: {error}", file=sys.stderr)
+        metadata = _migration_metadata(db_path, error_report, mode)
+        metadata.update(
+            sanitized_failure_metadata(
+                error,
+                _migration_failure_phase(error, args.apply),
+            )
+        )
+        _record_migration_event(
+            args,
+            actor,
+            db_path,
+            "FAILED",
+            (
+                "Legacy workspace migration apply was blocked by preflight checks."
+                if args.apply and isinstance(error, MigrationBlockedError)
+                else (
+                    "Legacy workspace migration apply failed."
+                    if args.apply
+                    else "Legacy workspace migration dry-run failed."
+                )
+            ),
+            metadata,
+        )
         return 2
+    except Exception as error:
+        metadata = _migration_metadata(db_path, None, mode)
+        metadata.update(
+            sanitized_failure_metadata(
+                error,
+                _migration_failure_phase(error, args.apply),
+            )
+        )
+        _record_migration_event(
+            args,
+            actor,
+            db_path,
+            "FAILED",
+            (
+                "Legacy workspace migration apply failed."
+                if args.apply
+                else "Legacy workspace migration dry-run failed."
+            ),
+            metadata,
+        )
+        raise
+
     print(format_console_report(report))
+    metadata = _migration_metadata(db_path, report, mode)
+    if args.apply:
+        applied = report.get("applied") or {}
+        result = "SUCCESS"
+        event_summary = (
+            "Legacy workspace migration was applied: "
+            f"{applied.get('delivery_run_sheets', 0)} Delivery Run Sheets and "
+            f"{applied.get('opshop_collections', 0)} OP SHOP Collections created."
+        )
+    else:
+        summary = report["summary"]
+        has_blockers = bool(
+            summary.get("generated_legacy_summaries") or summary.get("conflicts")
+        )
+        result = "PARTIAL" if has_blockers else "SUCCESS"
+        event_summary = (
+            "Legacy workspace migration dry-run completed with apply blockers "
+            "requiring review."
+            if has_blockers
+            else "Legacy workspace migration dry-run completed with no apply blockers."
+        )
+    _record_migration_event(
+        args,
+        actor,
+        db_path,
+        result,
+        event_summary,
+        metadata,
+    )
     return 0
 
 
@@ -620,6 +798,7 @@ def _build_parser():
         action="store_true",
         help="Required non-interactive confirmation for --apply.",
     )
+    add_maintenance_logbook_arguments(parser)
     return parser
 
 

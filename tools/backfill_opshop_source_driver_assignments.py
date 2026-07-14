@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import re
+import shutil
 import sqlite3
 import sys
+import tempfile
 import unicodedata
 from collections import Counter, defaultdict
 from dataclasses import dataclass, replace
@@ -26,6 +29,13 @@ from tools.import_oncall_opshop_pickups_to_db import (  # noqa: E402
 )
 from tools.import_regular_opshop_pickups_to_db import (  # noqa: E402
     read_regular_workbook_rows,
+)
+from tools.maintenance_logbook import (  # noqa: E402
+    add_maintenance_logbook_arguments,
+    record_maintenance_event,
+    resolve_maintenance_actor,
+    safe_basename,
+    sanitized_failure_metadata,
 )
 
 
@@ -155,6 +165,19 @@ def load_source_rows(regular_workbook, oncall_workbook):
     return sources
 
 
+@contextlib.contextmanager
+def _read_only_database_snapshot(db_path):
+    """Copy the database and WAL so analysis never opens the target with SQLite."""
+    source_path = Path(db_path).resolve()
+    with tempfile.TemporaryDirectory(prefix="manual-dispatch-read-") as temp_dir:
+        snapshot_path = Path(temp_dir) / source_path.name
+        shutil.copy2(source_path, snapshot_path)
+        wal_path = Path(f"{source_path}-wal")
+        if wal_path.exists():
+            shutil.copy2(wal_path, Path(f"{snapshot_path}-wal"))
+        yield snapshot_path
+
+
 def _connect_read_only(db_path):
     uri = Path(db_path).resolve().as_uri() + "?mode=ro"
     connection = sqlite3.connect(uri, uri=True)
@@ -163,7 +186,9 @@ def _connect_read_only(db_path):
 
 
 def load_database_state(db_path, from_date):
-    with _connect_read_only(db_path) as connection:
+    with _read_only_database_snapshot(db_path) as snapshot_path, contextlib.closing(
+        _connect_read_only(snapshot_path)
+    ) as connection:
         drivers = connection.execute(
             """
             SELECT driver_id, name
@@ -561,6 +586,120 @@ def print_summary(summary):
         print(f"{label}: {summary[key]}")
 
 
+def _backfill_common_metadata(args, mode, *, backup_path=None, report_created=False):
+    return {
+        "mode": mode,
+        "database_filename": safe_basename(args.db_path),
+        "regular_workbook_filename": safe_basename(args.regular_workbook),
+        "oncall_workbook_filename": safe_basename(args.oncall_workbook),
+        "report_filename": safe_basename(args.report_path),
+        "from_date": args.from_date,
+        "backup_created": bool(backup_path),
+        "backup_filename": safe_basename(backup_path),
+        "report_created": bool(report_created),
+    }
+
+
+def _backfill_success_metadata(
+    args,
+    summary,
+    mode,
+    *,
+    backup_path=None,
+    report_created=False,
+):
+    metadata = _backfill_common_metadata(
+        args,
+        mode,
+        backup_path=backup_path,
+        report_created=report_created,
+    )
+    if mode == "dry-run":
+        for key in (
+            "regular_source_rows",
+            "oncall_source_rows",
+            "matched_templates",
+            "templates_to_update",
+            "tasks_to_assign",
+            "already_correct",
+            "existing_assignments_preserved",
+            "unmatched",
+            "ambiguous",
+            "generated_lock_skipped",
+            "saved_lock_skipped",
+            "conflicts",
+            "unknown_driver_aliases",
+            "blocking_findings",
+        ):
+            metadata[key] = int(summary.get(key, 0) or 0)
+    else:
+        metadata.update(
+            {
+                "regular_source_rows": int(summary.get("regular_source_rows", 0) or 0),
+                "oncall_source_rows": int(summary.get("oncall_source_rows", 0) or 0),
+                "matched_templates": int(summary.get("matched_templates", 0) or 0),
+                "templates_updated": int(summary.get("templates_to_update", 0) or 0),
+                "tasks_assigned": int(summary.get("tasks_to_assign", 0) or 0),
+                "already_correct": int(summary.get("already_correct", 0) or 0),
+                "existing_assignments_preserved": int(
+                    summary.get("existing_assignments_preserved", 0) or 0
+                ),
+                "generated_lock_skipped": int(
+                    summary.get("generated_lock_skipped", 0) or 0
+                ),
+                "saved_lock_skipped": int(
+                    summary.get("saved_lock_skipped", 0) or 0
+                ),
+                "blocking_findings": int(
+                    summary.get("blocking_findings", 0) or 0
+                ),
+            }
+        )
+    return metadata
+
+
+def _backfill_failure_metadata(
+    args,
+    mode,
+    error,
+    phase,
+    *,
+    summary=None,
+    backup_path=None,
+    report_created=False,
+):
+    metadata = _backfill_common_metadata(
+        args,
+        mode,
+        backup_path=backup_path,
+        report_created=report_created,
+    )
+    if summary:
+        for key in (
+            "blocking_findings",
+            "ambiguous",
+            "conflicts",
+            "unknown_driver_aliases",
+        ):
+            metadata[key] = int(summary.get(key, 0) or 0)
+    metadata.update(sanitized_failure_metadata(error, phase))
+    return metadata
+
+
+def _record_backfill_event(args, actor, action, result, summary, metadata):
+    return record_maintenance_event(
+        action=action,
+        result=result,
+        workspace="OPSHOP",
+        actor=actor,
+        entity_type="OPSHOP_SOURCE_DRIVER_BACKFILL",
+        entity_id=args.from_date,
+        summary=summary,
+        metadata=metadata,
+        logbook_dir=args.logbook_dir,
+    )
+
+
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--regular-workbook", required=True)
@@ -571,28 +710,137 @@ def parse_args(argv=None):
     mode.add_argument("--dry-run", action="store_true")
     mode.add_argument("--apply", action="store_true")
     parser.add_argument("--report-path", required=True)
+    add_maintenance_logbook_arguments(parser)
     return parser.parse_args(argv)
 
 
 def main(argv=None):
     args = parse_args(argv)
-    analysis = analyze_backfill(
-        args.regular_workbook,
-        args.oncall_workbook,
-        args.db_path,
-        args.from_date,
-    )
-    backup_path = None
+    actor = resolve_maintenance_actor(args.actor)
     mode = "dry-run" if args.dry_run else "apply"
-    if args.apply:
-        if analysis["summary"]["blocking_findings"]:
+    action = (
+        "SOURCE_DRIVER_BACKFILL_DRY_RUN"
+        if args.dry_run
+        else "SOURCE_DRIVER_BACKFILL_APPLIED"
+    )
+    analysis = None
+    backup_path = None
+    report_created = False
+    event_recorded = False
+    phase = "analysis"
+
+    try:
+        analysis = analyze_backfill(
+            args.regular_workbook,
+            args.oncall_workbook,
+            args.db_path,
+            args.from_date,
+        )
+        summary = analysis["summary"]
+        if args.apply and summary["blocking_findings"]:
+            phase = "report_write"
             write_report(args.report_path, analysis, mode)
-            print_summary(analysis["summary"])
+            report_created = True
+            print_summary(summary)
+            metadata = _backfill_common_metadata(
+                args,
+                mode,
+                report_created=True,
+            )
+            for key in (
+                "blocking_findings",
+                "ambiguous",
+                "conflicts",
+                "unknown_driver_aliases",
+            ):
+                metadata[key] = int(summary.get(key, 0) or 0)
+            metadata.update(
+                {
+                    "failure_phase": "preflight",
+                    "error_type": "BackfillBlocked",
+                }
+            )
+            _record_backfill_event(
+                args,
+                actor,
+                action,
+                "FAILED",
+                "OP SHOP source-driver backfill apply was blocked by unresolved findings.",
+                metadata,
+            )
+            event_recorded = True
             raise SystemExit("Apply refused because blocking findings remain")
-        backup_path = apply_backfill(analysis, args.db_path)
-    write_report(args.report_path, analysis, mode, backup_path)
-    print_summary(analysis["summary"])
-    return 0
+
+        if args.apply:
+            phase = "database_apply"
+            backup_path = apply_backfill(analysis, args.db_path)
+
+        phase = "report_write"
+        write_report(args.report_path, analysis, mode, backup_path)
+        report_created = True
+        phase = "console_output"
+        print_summary(summary)
+
+        if args.dry_run:
+            has_blockers = int(summary.get("blocking_findings", 0) or 0) > 0
+            result = "PARTIAL" if has_blockers else "SUCCESS"
+            event_summary = (
+                "OP SHOP source-driver backfill dry-run completed with blocking "
+                "findings requiring review."
+                if has_blockers
+                else (
+                    "OP SHOP source-driver backfill dry-run completed with no "
+                    "blocking findings."
+                )
+            )
+        else:
+            result = "SUCCESS"
+            event_summary = (
+                "OP SHOP source-driver backfill was applied: "
+                f"{summary['templates_to_update']} template defaults updated and "
+                f"{summary['tasks_to_assign']} Pickup Tasks assigned."
+            )
+
+        _record_backfill_event(
+            args,
+            actor,
+            action,
+            result,
+            event_summary,
+            _backfill_success_metadata(
+                args,
+                summary,
+                mode,
+                backup_path=backup_path,
+                report_created=report_created,
+            ),
+        )
+        event_recorded = True
+        return 0
+    except Exception as error:
+        if not event_recorded:
+            summary = analysis["summary"] if analysis else None
+            _record_backfill_event(
+                args,
+                actor,
+                action,
+                "FAILED",
+                (
+                    "OP SHOP source-driver backfill apply failed."
+                    if args.apply
+                    else "OP SHOP source-driver backfill dry-run failed."
+                ),
+                _backfill_failure_metadata(
+                    args,
+                    mode,
+                    error,
+                    phase,
+                    summary=summary,
+                    backup_path=backup_path,
+                    report_created=report_created,
+                ),
+            )
+        raise
 
 
 if __name__ == "__main__":
