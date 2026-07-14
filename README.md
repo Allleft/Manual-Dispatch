@@ -357,7 +357,42 @@ $env:MANUAL_DISPATCH_MAINTENANCE_ACTOR="Albert"
 
 Workbook importers and apply modes modify the target database, and their existing backup requirements remain mandatory. Backfill and migration dry-runs remain read-only for the target database, but now intentionally append one operational audit event; the backfill dry-run also writes its existing JSON report. Workbook, database, backup and report paths are reduced to basenames in logbook events. Maintenance events remain private runtime data. There is still no frontend Logbook page and no logbook database table.
 
-Stage 2C.2 read-only integrity checking is deferred; malformed or truncated line detection, required-field and action-registry validation, event/month consistency, and duplicate incident-annotation checks are not implemented here. Stage 2C.3 archive and retention work is also deferred; monthly archives, SHA-256 archive manifests, retention policy, NAS backup instructions and restore verification are not implemented here.
+### Logbook Integrity Checking
+
+`tools/check_logbook_integrity.py` is the Stage 2C.2 read-only integrity checker. It never appends a Logbook event, repairs or rewrites a file, creates a correction record, or changes the database. Detected problems must be reviewed manually.
+
+The checker validates monthly filenames, strict UTF-8, JSON Lines structure, truncated final lines, final newlines, required fields, field types, timezone-aware timestamps, event/month placement, canonical results, workspaces, registered actions, optional business dates, and duplicate `LOGBOOK_TEST_DATA_ANNOTATED` incident annotations. Diagnostics contain only safe filenames, line numbers, issue codes, and generic messages; raw Logbook lines and metadata are never printed.
+
+Directory resolution remains `--logbook-dir`, then `MANUAL_DISPATCH_LOGBOOK_DIR`, then `data/logbook/`. The default output is concise text; `--format json` prints one machine-readable JSON object. `--strict` makes warnings fail the command.
+
+Exit codes are:
+
+- `0`: the checker ran and found no integrity errors; warnings are allowed unless `--strict` is set.
+- `1`: integrity errors were found, no Logbook files were found, or strict mode found warnings.
+- `2`: invalid arguments or a fatal directory/checker problem prevented a valid integrity result.
+
+Examples:
+
+```powershell
+.\tmp\route-test-venv\Scripts\python.exe tools\check_logbook_integrity.py
+
+.\tmp\route-test-venv\Scripts\python.exe tools\check_logbook_integrity.py `
+  --logbook-dir "data\logbook"
+
+.\tmp\route-test-venv\Scripts\python.exe tools\check_logbook_integrity.py `
+  --format json
+
+.\tmp\route-test-venv\Scripts\python.exe tools\check_logbook_integrity.py `
+  --strict
+
+.\tmp\route-test-venv\Scripts\python.exe tools\check_logbook_integrity.py `
+  --format json `
+  > "tmp\logbook-integrity-report.json"
+```
+
+Do not redirect a report into `data/logbook/`: every matching file there is treated as private runtime Logbook data. Stage 2C.2 does not alter or repair that data and does not write a `LOGBOOK_INTEGRITY_CHECKED` self-audit event.
+
+Stage 2C.3 archive and retention work remains deferred; monthly archives, SHA-256 archive manifests, archive destination rules, retention policy, NAS backup instructions, restore verification, current-month protection, and approved deletion processes are not implemented here.
 
 `tools/read_logbook.py` is a read-only query tool. It resolves the directory from `--logbook-dir`, then `MANUAL_DISPATCH_LOGBOOK_DIR`, then `data/logbook/`. By default it reads all matching monthly files, returns matching entries in chronological order, applies no hidden result limit, and prints concise text. Use `--format jsonl` for JSON Lines output. Malformed lines produce a filename-and-line warning on stderr while the query continues.
 
@@ -400,6 +435,7 @@ Run the relevant focused checks during normal changes. For System Logbook change
 
 ```powershell
 .\tmp\route-test-venv\Scripts\python.exe -m compileall backend tests tools
+.\tmp\route-test-venv\Scripts\python.exe -m unittest tests.test_logbook_integrity_checker -v
 .\tmp\route-test-venv\Scripts\python.exe -m unittest tests.test_logbook_file_service -v
 .\tmp\route-test-venv\Scripts\python.exe -m unittest tests.test_logbook_reader -v
 .\tmp\route-test-venv\Scripts\python.exe -m unittest tests.test_logbook_stage2b_events -v
