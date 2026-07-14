@@ -22,7 +22,7 @@ from tools.logbook_contract import (  # noqa: E402
     ALLOWED_RESULTS,
     ALLOWED_WORKSPACES,
     DATE_FIELDS,
-    INCIDENT_ANNOTATION_ACTION,
+    INCIDENT_ANNOTATION_ACTIONS,
     KNOWN_ACTIONS,
     LOGBOOK_FILENAME_PATTERN,
     LOGBOOK_FILENAME_REGEX,
@@ -316,7 +316,8 @@ def _validate_record(
                 f"Field '{name}' must use a valid YYYY-MM-DD date.",
             )
 
-    if record.get("action") == INCIDENT_ANNOTATION_ACTION:
+    annotation_action = record.get("action")
+    if annotation_action in INCIDENT_ANNOTATION_ACTIONS:
         entity_id = record.get("entity_id")
         if entity_id is None:
             add(
@@ -329,7 +330,7 @@ def _validate_record(
                 "Incident annotation entity_id must not be empty.",
             )
         elif isinstance(entity_id, str):
-            key = (INCIDENT_ANNOTATION_ACTION, entity_id)
+            key = (annotation_action, entity_id)
             first = incident_annotations.get(key)
             if first is None:
                 incident_annotations[key] = (filename, line_number)

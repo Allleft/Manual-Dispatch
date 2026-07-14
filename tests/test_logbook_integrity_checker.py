@@ -13,6 +13,8 @@ from tools.logbook_contract import (
     ALLOWED_RESULTS,
     ALLOWED_WORKSPACES,
     INCIDENT_ANNOTATION_ACTION,
+    INCIDENT_ANNOTATION_ACTIONS,
+    INTEGRITY_INCIDENT_ANNOTATION_ACTION,
     KNOWN_ACTIONS,
     LOGBOOK_FILENAME_PATTERN,
     LOGBOOK_FILENAME_REGEX,
@@ -43,14 +45,16 @@ class LogbookIntegrityCheckerTest(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def test_contract_registry_contains_expected_actions_only(self):
-        self.assertEqual(47, len(KNOWN_ACTIONS))
+        self.assertEqual(48, len(KNOWN_ACTIONS))
         self.assertEqual(
-            1,
-            sum(
-                action == INCIDENT_ANNOTATION_ACTION
-                for action in KNOWN_ACTIONS
-            ),
+            {
+                "LOGBOOK_TEST_DATA_ANNOTATED",
+                "LOGBOOK_INTEGRITY_INCIDENT_ANNOTATED",
+            },
+            INCIDENT_ANNOTATION_ACTIONS,
         )
+        self.assertEqual("LOGBOOK_TEST_DATA_ANNOTATED", INCIDENT_ANNOTATION_ACTION)
+        self.assertIn(INTEGRITY_INCIDENT_ANNOTATION_ACTION, KNOWN_ACTIONS)
         self.assertTrue(MAINTENANCE_ACTIONS.issubset(KNOWN_ACTIONS))
         self.assertFalse(
             any(
@@ -103,7 +107,7 @@ class LogbookIntegrityCheckerTest(unittest.TestCase):
 
         result = self._check_records(records)
 
-        self.assertEqual(47, result.records_checked)
+        self.assertEqual(48, result.records_checked)
         self.assertEqual(0, result.error_count)
         self.assertEqual(0, result.warning_count)
 
@@ -286,17 +290,18 @@ class LogbookIntegrityCheckerTest(unittest.TestCase):
                 self.assertIn("INVALID_DATE_FIELD", self._codes(invalid))
 
     def test_incident_annotation_requires_non_empty_entity_id(self):
-        for entity_id in (None, "  "):
-            with self.subTest(entity_id=entity_id):
-                result = self._check_records(
-                    [
-                        self._valid_record(
-                            action=INCIDENT_ANNOTATION_ACTION,
-                            entity_id=entity_id,
-                        )
-                    ]
-                )
-                self.assertGreater(result.error_count, 0)
+        for action in INCIDENT_ANNOTATION_ACTIONS:
+            for entity_id in (None, "  "):
+                with self.subTest(action=action, entity_id=entity_id):
+                    result = self._check_records(
+                        [
+                            self._valid_record(
+                                action=action,
+                                entity_id=entity_id,
+                            )
+                        ]
+                    )
+                    self.assertGreater(result.error_count, 0)
 
     def test_duplicate_incident_annotation_is_detected_across_files(self):
         directory = self._new_directory()
@@ -338,12 +343,29 @@ class LogbookIntegrityCheckerTest(unittest.TestCase):
         self.assertNotIn("DO-NOT-PRINT", text_output)
         self.assertNotIn("DO-NOT-PRINT", json_output)
 
+    def test_duplicate_generic_incident_annotation_is_detected(self):
+        records = [
+            self._valid_record(
+                action=INTEGRITY_INCIDENT_ANNOTATION_ACTION,
+                entity_id="generic-incident",
+            )
+            for _ in range(2)
+        ]
+
+        result = self._check_records(records)
+
+        self.assertEqual(
+            1,
+            self._codes(result).count("DUPLICATE_INCIDENT_ANNOTATION"),
+        )
+
     def test_distinct_incident_annotations_pass(self):
         records = [
             self._valid_record(
-                action=INCIDENT_ANNOTATION_ACTION,
-                entity_id=f"incident-{index}",
+                action=action,
+                entity_id=f"{action}-{index}",
             )
+            for action in INCIDENT_ANNOTATION_ACTIONS
             for index in range(2)
         ]
 

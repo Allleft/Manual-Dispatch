@@ -1,6 +1,7 @@
 import logging
 from contextlib import contextmanager
 from contextvars import ContextVar
+from datetime import date
 
 from backend.schemas import ManualDispatchSpecificationResponse
 from backend.repositories.in_memory_manual_dispatch_repository import (
@@ -45,6 +46,25 @@ from backend.services.manual_dispatch.workspace_migration_readiness_service impo
 
 LOGGER = logging.getLogger(__name__)
 LOGBOOK_ACTOR_CONTEXT = ContextVar("manual_dispatch_logbook_actor", default=None)
+LOGBOOK_DATE_FIELDS = ("dispatch_date", "delivery_date", "pickup_date")
+REJECTED_LOGBOOK_DATE_FIELDS_KEY = "rejected_logbook_date_fields"
+
+
+def _canonical_failed_logbook_date(value):
+    """Return a strict optional date without letting audit cleanup raise."""
+    try:
+        if value is None:
+            return None, False
+        if not isinstance(value, str):
+            return None, True
+        text = value.strip()
+        if not text:
+            return None, False
+        if text != value or date.fromisoformat(text).isoformat() != text:
+            return None, True
+        return text, False
+    except Exception:
+        return None, True
 
 
 class ManualDispatchService:
@@ -653,6 +673,16 @@ class ManualDispatchService:
     def _record_failed_logbook(self, **entry):
         metadata = dict(entry.pop("metadata", {}) or {})
         metadata.setdefault("failure_reason", "Operation failed")
+        rejected_date_fields = []
+        for field_name in LOGBOOK_DATE_FIELDS:
+            if field_name not in entry:
+                continue
+            normalized, rejected = _canonical_failed_logbook_date(entry[field_name])
+            entry[field_name] = normalized
+            if rejected:
+                rejected_date_fields.append(field_name)
+        if rejected_date_fields:
+            metadata[REJECTED_LOGBOOK_DATE_FIELDS_KEY] = rejected_date_fields
         self._record_logbook(result="FAILED", metadata=metadata, **entry)
 
     def _record_order_event(self, action, order):

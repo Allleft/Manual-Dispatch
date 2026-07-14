@@ -284,6 +284,8 @@ The System Logbook is file-based runtime audit data. There is no frontend Logboo
 
 The default directory is `data/logbook/`, and monthly files are named `manual_dispatch_logbook_YYYY-MM.txt`. Set `MANUAL_DISPATCH_LOGBOOK_DIR` to override the directory. During normal application operation, these files are append-only. `data/logbook/` is gitignored, and logbook writing is best-effort so a logging failure does not block Delivery or OP SHOP business operations.
 
+Failed business events retain strict optional-date fields: `None`, empty and whitespace-only values are written as `null`; valid `YYYY-MM-DD` values remain unchanged; and malformed non-empty values are rejected from the structured date field without being guessed or copied into Logbook metadata. The metadata records only the rejected field names so the failed attempt remains auditable without creating another invalid date record.
+
 Logbook files may contain operational names, order identifiers, customer or company names, driver names, vehicle registrations, and OP SHOP information. Treat them as private runtime data: do not commit them, attach them to public issues, or share them without appropriate access controls.
 
 Current Delivery coverage includes order creation, update, cancellation and assignment; vehicle assignment changes; Run Sheet generation, cancellation and save; single and daily Run Sheet Excel exports; and Attaché confirmation batch summaries. `ATTACHE_IMPORT_CONFIRMED` is one summary event per attempted confirmation batch, while every successfully imported order continues to produce its existing `ORDER_CREATED` event.
@@ -361,7 +363,9 @@ Workbook importers and apply modes modify the target database, and their existin
 
 `tools/check_logbook_integrity.py` is the Stage 2C.2 read-only integrity checker. It never appends a Logbook event, repairs or rewrites a file, creates a correction record, or changes the database. Detected problems must be reviewed manually.
 
-The checker validates monthly filenames, strict UTF-8, JSON Lines structure, truncated final lines, final newlines, required fields, field types, timezone-aware timestamps, event/month placement, canonical results, workspaces, registered actions, optional business dates, and duplicate `LOGBOOK_TEST_DATA_ANNOTATED` incident annotations. Diagnostics contain only safe filenames, line numbers, issue codes, and generic messages; raw Logbook lines and metadata are never printed.
+The checker validates monthly filenames, strict UTF-8, JSON Lines structure, truncated final lines, final newlines, required fields, field types, timezone-aware timestamps, event/month placement, canonical results, workspaces, registered actions, optional business dates, and duplicate `LOGBOOK_TEST_DATA_ANNOTATED` or `LOGBOOK_INTEGRITY_INCIDENT_ANNOTATED` incident annotations. Diagnostics contain only safe filenames, line numbers, issue codes, and generic messages; raw Logbook lines and metadata are never printed.
+
+`LOGBOOK_INTEGRITY_INCIDENT_ANNOTATED` is an append-only operational note for a reviewed historical integrity incident. It does not repair, replace, suppress or make the original checker findings disappear; the original records remain unchanged and visible to the checker.
 
 Directory resolution remains `--logbook-dir`, then `MANUAL_DISPATCH_LOGBOOK_DIR`, then `data/logbook/`. The default output is concise text; `--format json` prints one machine-readable JSON object. `--strict` makes warnings fail the command.
 

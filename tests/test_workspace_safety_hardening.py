@@ -31,6 +31,7 @@ from backend.schemas import (
 from backend.services.manual_dispatch.delivery_run_sheet_service import (
     DeliveryRunSheetService,
 )
+from backend.services.manual_dispatch.logbook_file_service import LogbookFileService
 from backend.services.manual_dispatch.opshop_pickup_collection_service import (
     OpShopPickupCollectionService,
 )
@@ -52,13 +53,17 @@ class WorkspaceSafetyHardeningTest(unittest.TestCase):
         self.temp_dir = temp_parent / f"workspace-safety-{uuid.uuid4().hex}"
         self.temp_dir.mkdir()
         self.db_path = self.temp_dir / "manual_dispatch.sqlite3"
+        self.logbook_dir = self.temp_dir / "logbook"
         self.previous_db_path = os.environ.get("MANUAL_DISPATCH_DB_PATH")
         self.previous_seed_flag = os.environ.get("MANUAL_DISPATCH_SEED_DEMO_DATA")
         os.environ["MANUAL_DISPATCH_DB_PATH"] = str(self.db_path)
         os.environ["MANUAL_DISPATCH_SEED_DEMO_DATA"] = "0"
 
         self.repository = SQLiteManualDispatchRepository(self.db_path)
-        self.service = ManualDispatchService(self.repository)
+        self.service = ManualDispatchService(
+            self.repository,
+            logbook=LogbookFileService(self.logbook_dir),
+        )
         self.account = self.service.register_operator_account(
             RegisterOperatorAccountRequest(
                 account_name="Workspace Safety Tester",
