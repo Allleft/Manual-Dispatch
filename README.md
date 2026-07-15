@@ -32,7 +32,7 @@ After login, Home provides the two workspace entry points and checks migration r
 | `#delivery/task-pool` | Review active unassigned Delivery Orders, filter them, create/edit/cancel orders, import Attache invoices, and assign each order to a driver and trip. |
 | `#delivery/trip-summary` | Review Orders by driver and Delivery Date, move Orders between Trip 1 and Trip 2, assign vehicles, and generate a Delivery Run Sheet. |
 | `#delivery/run-sheet` | Review current Generated and Saved Delivery Run Sheets, cancel Generated sheets, save, and export. |
-| `#delivery/history` | Review Saved Delivery Run Sheet history and re-export immutable snapshots. |
+| `#delivery/history` | Search `SAVED` Delivery Run Sheets by actual Delivery Date, review their full immutable paper snapshots across Dispatch Dates, and re-export Excel. |
 
 ### OP SHOP Pickup
 
@@ -44,14 +44,15 @@ After login, Home provides the two workspace entry points and checks migration r
 | `#opshop/templates` | Manage Regular/Oncall templates and Countryside route groups and memberships. |
 | `#opshop/trip-summary` | Review assigned pickups by driver and Pickup Date, then generate a Pickup Collection. |
 | `#opshop/collections` | Review Generated and Saved Pickup Collections, cancel Generated collections, save, and export. |
+| `#opshop/history` | Search `SAVED` Pickup Collections by actual Pickup Date, review their full immutable Weight Sheets across Dispatch Dates, and re-export Excel. |
 
 Workspace navigation is hash-based. Browser refresh, copied links, Back, and Forward retain the active workspace route. Switching between Regular, Oncall, and Countryside preserves pending OP SHOP assignment drafts rather than silently applying or discarding them.
 
 ## Dates and Scope
 
-- **Dispatch Date** identifies the operational board session loaded by each workspace.
-- **Delivery Date** identifies the day being reviewed in Delivery Trip Summary and Delivery Run Sheets.
-- **Pickup Date** identifies the day being reviewed in OP SHOP Trip Summary and Pickup Collections.
+- **Dispatch Date** identifies the operational board session loaded by each workspace. Saved History keeps it as record metadata and does not use it as a query filter.
+- **Delivery Date** identifies the day being reviewed in Delivery Trip Summary and Delivery Run Sheets. Delivery Saved History queries only this date plus `status=SAVED`, so one result set may include snapshots generated under different Dispatch Dates.
+- **Pickup Date** identifies the day being reviewed in OP SHOP Trip Summary and Pickup Collections. OP SHOP Saved History queries only this date plus `status=SAVED`, so one result set may include snapshots generated under different Dispatch Dates.
 - Delivery Orders, OP SHOP tasks, scoped snapshots, locks, histories, and Excel exports are intentionally separated.
 
 ## Order Delivery Workflow
@@ -64,7 +65,7 @@ Workspace navigation is hash-based. Browser refresh, copied links, Back, and For
 6. Select Generate for a driver/date and confirm the information in the confirmation modal.
 7. Generation creates an immutable `GENERATED` Delivery Run Sheet snapshot and reserves its captured Orders and vehicle target.
 8. From **Run Sheets**, either cancel an incorrect Generated sheet or save/export it. Cancel Generated removes only the snapshot reservation; the original Order assignments remain in Trip Summary until staff manually unassign them. Saving promotes the same snapshot to `SAVED`; it does not rebuild it from mutable live records.
-9. Saved Delivery Run Sheets remain immutable history and can be re-exported from their stored snapshot rows.
+9. Open **Saved History**, select the actual Delivery Date, and review or re-export the full immutable paper snapshots. History is read-only: it never offers Generate, Save, Cancel, assignment, or editing actions.
 
 ### Delivery Orders and Attache Invoice Import
 
@@ -96,7 +97,7 @@ Delivery Orders support manual add, edit, and soft-cancel operations. Delivery T
 5. Select Generate for a driver/date and confirm the Pickup Collection details in the confirmation modal.
 6. Generation creates an immutable `GENERATED` Pickup Collection and reserves the captured pickup tasks.
 7. From **Pickup Collections**, cancel an incorrect Generated collection or save/export it as a `SAVED` collection.
-8. Saved Pickup Collections are immutable history and export from stored snapshot rows rather than live pickup data.
+8. Open **Saved History**, select the actual Pickup Date, and review or re-export the full immutable Weight Sheets from stored snapshot rows. History is read-only: it never offers Generate, Save, Cancel, assignment, or editing actions.
 
 ### Regular Pickups
 

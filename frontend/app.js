@@ -67,6 +67,7 @@ const WORKSPACE_ROUTES = new Set([
   "opshop/trip-summary",
   "opshop/templates",
   "opshop/collections",
+  "opshop/history",
 ]);
 const LEGACY_WORKSPACE_REDIRECTS = {
   "task-pool": "delivery/task-pool",
@@ -77,7 +78,6 @@ const LEGACY_WORKSPACE_REDIRECTS = {
   "opshop/regular": "opshop/task-pool/regular",
   "opshop/oncall": "opshop/task-pool/oncall",
   "opshop/countryside": "opshop/task-pool/countryside",
-  "opshop/history": "opshop/collections",
 };
 const OPSHOP_TASK_POOL_ROUTE_VIEWS = {
   "opshop/task-pool/regular": "regular",

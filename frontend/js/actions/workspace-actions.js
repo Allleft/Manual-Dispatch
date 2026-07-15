@@ -241,6 +241,10 @@ export function createWorkspaceActions({
   }
 
   async function loadDeliveryRoute(route) {
+    if (route === "delivery/history") {
+      await loadDeliverySavedHistoryData(route);
+      return;
+    }
     const dispatchDate = state.dispatchDate;
     const requestVersion = ++deliveryWorkspaceRequestVersion;
     const isCurrent = () =>
@@ -277,11 +281,6 @@ export function createWorkspaceActions({
           state.deliveryRunSheets = runSheets || [];
           pruneDeliveryDrafts();
         }
-      } else {
-        const runSheets = await api.listDeliveryRunSheets(dispatchDate, "SAVED");
-        if (isCurrent()) {
-          state.deliveryRunSheets = runSheets || [];
-        }
       }
     } catch (error) {
       if (await handleWorkspaceMigrationGuard(error)) {
@@ -290,6 +289,53 @@ export function createWorkspaceActions({
       if (isCurrent()) {
         state.deliveryWorkspaceError =
           `Unable to load Order Delivery workspace. ${error.message}`;
+      }
+    } finally {
+      if (isCurrent()) {
+        state.isDeliveryWorkspaceLoading = false;
+        renderWorkspace();
+      }
+    }
+  }
+
+  async function loadDeliverySavedHistoryData(
+    route = state.workspaceRoute,
+    historyDate = state.deliverySavedHistoryDate,
+    requestVersion = ++deliveryWorkspaceRequestVersion,
+  ) {
+    const requestedHistoryDate =
+      historyDate || state.deliverySavedHistoryDate || state.dispatchDate;
+    state.deliverySavedHistoryDate = requestedHistoryDate;
+    const isCurrent = () =>
+      state.isLoggedIn &&
+      state.workspaceRoute === "delivery/history" &&
+      route === "delivery/history" &&
+      state.deliverySavedHistoryDate === requestedHistoryDate &&
+      requestVersion === deliveryWorkspaceRequestVersion;
+
+    state.deliverySavedHistoryRunSheets = [];
+    state.isDeliveryWorkspaceLoading = true;
+    state.deliveryWorkspaceError = "";
+    state.deliveryActionError = "";
+    renderWorkspace();
+    try {
+      const runSheets = await api.listDeliveryRunSheetsByDeliveryDate(
+        requestedHistoryDate,
+        "SAVED",
+      );
+      if (isCurrent()) {
+        state.deliverySavedHistoryRunSheets = sortDeliverySavedHistory(runSheets);
+      }
+    } catch (error) {
+      if (!isCurrent()) {
+        return;
+      }
+      if (await handleWorkspaceMigrationGuard(error)) {
+        return;
+      }
+      if (isCurrent()) {
+        state.deliveryWorkspaceError =
+          `Unable to load Saved Run Sheet history. ${error.message}`;
       }
     } finally {
       if (isCurrent()) {
@@ -332,6 +378,10 @@ export function createWorkspaceActions({
   }
 
   async function loadOpShopRoute(route) {
+    if (route === "opshop/history") {
+      await loadOpShopSavedHistoryData(route);
+      return;
+    }
     const dispatchDate = state.dispatchDate;
     const requestVersion = ++opshopWorkspaceRequestVersion;
     const isCurrent = () =>
@@ -359,14 +409,6 @@ export function createWorkspaceActions({
           state.opshopPickupCollections = collections || [];
           pruneOpShopDrafts();
         }
-      } else if (route === "opshop/history") {
-        const collections = await api.listOpShopPickupCollections(
-          dispatchDate,
-          "SAVED",
-        );
-        if (isCurrent()) {
-          state.opshopPickupCollections = collections || [];
-        }
       } else if (route.startsWith("opshop/task-pool/")) {
         const [board, collections] = await Promise.all([
           api.getOpShopWorkspaceBoard(dispatchDate),
@@ -391,6 +433,54 @@ export function createWorkspaceActions({
       if (isCurrent()) {
         state.opshopWorkspaceError =
           `Unable to load OP SHOP Pickup workspace. ${error.message}`;
+      }
+    } finally {
+      if (isCurrent()) {
+        state.isOpShopWorkspaceLoading = false;
+        renderWorkspace();
+      }
+    }
+  }
+
+  async function loadOpShopSavedHistoryData(
+    route = state.workspaceRoute,
+    historyDate = state.opshopSavedHistoryDate,
+    requestVersion = ++opshopWorkspaceRequestVersion,
+  ) {
+    const requestedHistoryDate =
+      historyDate || state.opshopSavedHistoryDate || state.dispatchDate;
+    state.opshopSavedHistoryDate = requestedHistoryDate;
+    const isCurrent = () =>
+      state.isLoggedIn &&
+      state.workspaceRoute === "opshop/history" &&
+      route === "opshop/history" &&
+      state.opshopSavedHistoryDate === requestedHistoryDate &&
+      requestVersion === opshopWorkspaceRequestVersion;
+
+    state.opshopSavedHistoryCollections = [];
+    state.isOpShopWorkspaceLoading = true;
+    state.opshopWorkspaceError = "";
+    state.opshopActionError = "";
+    renderWorkspace();
+    try {
+      const collections = await api.listOpShopPickupCollectionsByPickupDate(
+        requestedHistoryDate,
+        "SAVED",
+      );
+      if (isCurrent()) {
+        state.opshopSavedHistoryCollections =
+          sortOpShopSavedHistory(collections);
+      }
+    } catch (error) {
+      if (!isCurrent()) {
+        return;
+      }
+      if (await handleWorkspaceMigrationGuard(error)) {
+        return;
+      }
+      if (isCurrent()) {
+        state.opshopWorkspaceError =
+          `Unable to load Saved Pickup Collection history. ${error.message}`;
       }
     } finally {
       if (isCurrent()) {
@@ -440,6 +530,32 @@ export function createWorkspaceActions({
     state.deliveryTripSummaryDate = nextDate;
     state.opshopTripSummaryDate = nextDate;
     await loadWorkspaceRoute(state.workspaceRoute);
+  }
+
+  async function updateDeliverySavedHistoryDate(nextDate) {
+    state.deliverySavedHistoryDate =
+      nextDate || state.deliverySavedHistoryDate || state.dispatchDate;
+    if (state.workspaceRoute === "delivery/history") {
+      await loadDeliverySavedHistoryData(
+        state.workspaceRoute,
+        state.deliverySavedHistoryDate,
+      );
+      return;
+    }
+    renderWorkspace();
+  }
+
+  async function updateOpShopSavedHistoryDate(nextDate) {
+    state.opshopSavedHistoryDate =
+      nextDate || state.opshopSavedHistoryDate || state.dispatchDate;
+    if (state.workspaceRoute === "opshop/history") {
+      await loadOpShopSavedHistoryData(
+        state.workspaceRoute,
+        state.opshopSavedHistoryDate,
+      );
+      return;
+    }
+    renderWorkspace();
   }
 
   function updateOpShopTaskPoolView(view) {
@@ -2283,16 +2399,59 @@ export function createWorkspaceActions({
     updateDeliveryDriverForm,
     updateDeliveryOrderForm,
     updateDeliveryOrderProductLine,
+    updateDeliverySavedHistoryDate,
     updateDeliveryTaskPoolFilter,
     updateDeliveryTripSummaryDate,
     updateDeliveryVehicleSelection,
     updateDeliveryVehicleForm,
     updateDispatchDate,
+    updateOpShopSavedHistoryDate,
     updateOpShopAssignmentDraft,
     updateOpShopTaskPoolView,
     updateOpShopTripSummaryDate,
     toggleRegularOpShopDateGroup,
   };
+}
+
+
+function sortDeliverySavedHistory(runSheets) {
+  return (runSheets || [])
+    .filter((runSheet) => runSheet.status === "SAVED")
+    .slice()
+    .sort((left, right) =>
+      String(right.delivery_date || "").localeCompare(
+        String(left.delivery_date || ""),
+      )
+      || compareHistoryText(
+        left.driver_name_snapshot || left.driver_id,
+        right.driver_name_snapshot || right.driver_id,
+      )
+      || compareHistoryText(left.run_sheet_id, right.run_sheet_id),
+    );
+}
+
+
+function sortOpShopSavedHistory(collections) {
+  return (collections || [])
+    .filter((collection) => collection.status === "SAVED")
+    .slice()
+    .sort((left, right) =>
+      String(right.pickup_date || "").localeCompare(
+        String(left.pickup_date || ""),
+      )
+      || compareHistoryText(
+        left.driver_name_snapshot || left.driver_id,
+        right.driver_name_snapshot || right.driver_id,
+      )
+      || compareHistoryText(left.collection_id, right.collection_id),
+    );
+}
+
+
+function compareHistoryText(left, right) {
+  return String(left || "").localeCompare(String(right || ""), undefined, {
+    sensitivity: "base",
+  });
 }
 
 

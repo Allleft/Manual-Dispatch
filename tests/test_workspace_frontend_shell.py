@@ -80,7 +80,6 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             ("opshop/regular", "opshop/task-pool/regular"),
             ("opshop/oncall", "opshop/task-pool/oncall"),
             ("opshop/countryside", "opshop/task-pool/countryside"),
-            ("opshop/history", "opshop/collections"),
         ):
             self.assertIn(f'"{legacy_route}": "{scoped_route}"', self.app)
         self.assertIn('window.addEventListener("hashchange"', self.app)
@@ -132,6 +131,23 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("Content-Disposition", self.api)
         self.assertIn("error.status = response.status", self.api)
         self.assertIn("error.detail = detail", self.api)
+
+    def test_history_api_clients_use_service_date_without_dispatch_date(self):
+        delivery_block = self.api.split(
+            "export async function apiListDeliveryRunSheetsByDeliveryDate", 1
+        )[1].split(
+            "export async function apiListDeliveryRunSheetsByDispatchAndDeliveryDate", 1
+        )[0]
+        self.assertIn("query: { delivery_date: deliveryDate, status }", delivery_block)
+        self.assertNotIn("dispatch_date", delivery_block)
+
+        opshop_block = self.api.split(
+            "export async function apiListOpShopPickupCollectionsByPickupDate", 1
+        )[1].split(
+            "export async function apiListOpShopPickupCollectionsByDispatchAndPickupDate", 1
+        )[0]
+        self.assertIn("query: { pickup_date: pickupDate, status }", opshop_block)
+        self.assertNotIn("dispatch_date", opshop_block)
 
     def test_delivery_and_opshop_loaders_are_independent(self):
         delivery_loader = self.workspace_actions.split(
@@ -234,10 +250,14 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             "deliveryTripSummaryBoard",
             "deliveryTripSummaryRunSheets",
             "deliveryTripSummaryDate",
+            "deliverySavedHistoryDate",
+            "deliverySavedHistoryRunSheets",
             "opshopBoard",
             "opshopPickupCollections",
             "opshopTripSummaryBoard",
             "opshopTripSummaryCollections",
+            "opshopSavedHistoryDate",
+            "opshopSavedHistoryCollections",
             "sharedSpecifications",
             "isDeliveryWorkspaceLoading",
             "deliveryWorkspaceError",
@@ -271,6 +291,9 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             "deliverySpecificationBusyKey",
         ):
             self.assertIn(f"{state_field}:", self.state)
+        self.assertNotIn('"opshop/history": "opshop/collections"', self.app)
+        self.assertIn('state.deliverySavedHistoryRunSheets = []', self.auth_actions)
+        self.assertIn('state.opshopSavedHistoryCollections = []', self.auth_actions)
         self.assertIn('step: "files"', self.state)
         self.assertIn("expandedRowIds: {}", self.state)
         for transient_field in (
@@ -625,55 +648,61 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn(".workspace-order-detail-trigger", self.workspace_actions)
         self.assertIn("item.dataset.orderId === orderId", self.workspace_actions)
 
-    def test_generated_delivery_run_sheets_use_daily_form_snapshot_preview(self):
-        generated_block = self.delivery_renderer.split(
-            "function createGeneratedDailyRunSheet", 1
+    def test_generated_and_history_delivery_run_sheets_share_full_snapshot_paper(self):
+        history_block = self.delivery_renderer.split(
+            "function createSavedRunSheetHistory", 1
+        )[1].split("function createRunSheetList", 1)[0]
+        operational_block = self.delivery_renderer.split(
+            "function createRunSheetSection", 1
+        )[1].split("function createDailyRunSheetPaper", 1)[0]
+        paper_suite = self.delivery_renderer.split(
+            "function createDailyRunSheetPaper", 1
         )[1].split("function createRunSheetCard", 1)[0]
-        self.assertIn('"DAILY RUN SHEET"', generated_block)
-        self.assertIn('"DATE:"', generated_block)
-        self.assertIn('"DRIVER:"', generated_block)
-        self.assertIn('"REGO#:"', generated_block)
-        self.assertIn("runSheet.vehicle_rego_snapshot", generated_block)
-        self.assertIn("${labelText} ${valueText}", generated_block)
-        self.assertIn('"Not selected"', generated_block)
-        self.assertIn('createBadge("GENERATED"', generated_block)
-        self.assertNotIn("Vehicle:", generated_block)
-        self.assertIn("START TIME: ______________________", generated_block)
-        self.assertIn("TIME LOADING STARTED (TO BE FILLED IN BY STOREMAN)", generated_block)
-        self.assertIn("TIME LOADING COMPLETED (TO BE FILLED IN BY STOREMAN)", generated_block)
-        self.assertIn("FINISH TIME: ______________________", generated_block)
-        self.assertIn(
-            """const DAILY_RUN_SHEET_COLUMNS = [
-  "",
-  "Customer Name",
-  "Suburb",
-  "Invoice #",
-  "PRODUCT",
-  "KG'S",
-  "Pallets",
-  "COD",
-  "CQ",
-  "Time In",
-  "Time Out",
-  "PRINT NAME",
-  "SIGNATURE",
-  "NO. # PALLETS RETND",
-];""",
-            generated_block,
+        paper_function = paper_suite.split("const DAILY_RUN_SHEET_COLUMNS", 1)[0]
+
+        self.assertEqual(
+            1,
+            self.delivery_renderer.count("function createDailyRunSheetPaper"),
         )
-        self.assertIn("formatRunSheetProduct(order)", generated_block)
-        self.assertIn("product_lines_snapshot", generated_block)
-        self.assertIn("product_snapshot", generated_block)
-        self.assertIn('names.join("\\n")', generated_block)
-        row_values_block = generated_block.split(
-            "function dailyRunSheetRowValues", 1
-        )[1].split("function formatRunSheetProduct", 1)[0]
-        self.assertNotIn("loose_bags_quantity_snapshot", row_values_block)
-        self.assertIn("workspace-daily-run-sheet-product-cell", generated_block)
-        self.assertIn("dailyRunSheetSnapshotRows(runSheet)", generated_block)
-        self.assertIn("runSheet.trips", generated_block)
-        self.assertNotIn("state.deliveryBoard", generated_block)
-        for manual_column in (
+        self.assertIn(
+            'createDailyRunSheetPaper(runSheet, state, actions, { context: "history" })',
+            history_block,
+        )
+        self.assertNotIn("createRunSheetCard", history_block)
+        self.assertIn("createDailyRunSheetPaper(runSheet, state, actions)", operational_block)
+        self.assertIn('"Saved Run Sheet History"', history_block)
+        self.assertIn(
+            '"Search saved Delivery Run Sheets by their actual Delivery Date."',
+            history_block,
+        )
+        self.assertIn('field.textContent = "Delivery date"', history_block)
+        self.assertIn("actions.updateDeliverySavedHistoryDate", history_block)
+        self.assertIn(
+            '"No saved Delivery Run Sheets were found for this Delivery Date."',
+            history_block,
+        )
+        self.assertNotIn('"Save Run Sheet"', history_block)
+        self.assertNotIn('"Cancel Generated"', history_block)
+
+        for expected in (
+            '"DAILY RUN SHEET"',
+            '"DATE:"',
+            '"DRIVER:"',
+            '"REGO#:"',
+            "runSheet.vehicle_rego_snapshot",
+            '"Not selected"',
+            "START TIME: ______________________",
+            "TIME LOADING STARTED (TO BE FILLED IN BY STOREMAN)",
+            "TIME LOADING COMPLETED (TO BE FILLED IN BY STOREMAN)",
+            "FINISH TIME: ______________________",
+            "dailyRunSheetSnapshotRows(runSheet)",
+            "runSheet.trips",
+            "product_lines_snapshot",
+            "product_snapshot",
+            'names.join("\\n")',
+            "workspace-daily-run-sheet-product-cell",
+            "formatRunSheetProduct(order)",
+            '${labelText} ${valueText}',
             '"COD"',
             '"CQ"',
             '"Time In"',
@@ -682,18 +711,35 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             '"SIGNATURE"',
             '"NO. # PALLETS RETND"',
         ):
-            self.assertIn(manual_column, generated_block)
-        self.assertIn('"Save Run Sheet"', generated_block)
-        self.assertIn('"Cancel Generated"', generated_block)
-        saved_block = self.delivery_renderer.split(
-            "function createRunSheetCard", 1
-        )[1].split("function createRunSheetPreview", 1)[0]
-        self.assertIn("createRunSheetPreview(runSheet)", saved_block)
-        self.assertIn('"Export Daily Run Sheet"', saved_block)
+            self.assertIn(expected, paper_suite)
+        row_values_block = paper_suite.split(
+            "function dailyRunSheetRowValues", 1
+        )[1].split("function formatRunSheetProduct", 1)[0]
+        self.assertNotIn("loose_bags_quantity_snapshot", row_values_block)
+        self.assertNotIn("state.deliveryBoard", paper_suite)
+        self.assertIn("runSheet.status", paper_function)
+        self.assertIn("context === \"history\"", paper_function)
+        self.assertIn("Saved:", paper_function)
+        self.assertIn("Saved by:", paper_function)
+        self.assertIn("Workspace date:", paper_function)
+
+        actions_block = paper_function.split(
+            'actionsRow.className = "workspace-action-row workspace-daily-run-sheet-actions"', 1
+        )[1]
+        history_actions, operational_actions = actions_block.split("} else {", 1)
+        self.assertIn('"Export Excel"', history_actions)
+        self.assertIn("actions.exportDeliveryRunSheet", history_actions)
+        self.assertNotIn('"Save Run Sheet"', history_actions)
+        self.assertNotIn('"Cancel Generated"', history_actions)
+        self.assertIn('"Save Run Sheet"', operational_actions)
+        self.assertIn('"Cancel Generated"', operational_actions)
+        self.assertNotIn('"Export Excel"', operational_actions)
+
         self.assertIn("workspace-daily-run-sheet-table-scroll", self.styles)
         self.assertIn("overflow-x: auto", self.styles)
         self.assertIn("min-width: 820px", self.styles)
-        self.assertIn("workspace-daily-run-sheet-product-cell", self.styles)
+        self.assertIn(".workspace-run-sheet-paper-list", self.styles)
+        self.assertIn("grid-template-columns: minmax(0, 1fr)", self.styles)
         self.assertIn("white-space: pre-line", self.styles)
 
     def test_delivery_date_excel_export_is_scoped_busy_and_non_mutating(self):
@@ -2280,7 +2326,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn('{ route: "opshop/collections", label: "Pickup Collections" }', self.opshop_renderer)
         top_tabs = self.opshop_renderer.split("const OPSHOP_TABS", 1)[1].split("];", 1)[0]
         self.assertNotIn("Templates", top_tabs)
-        self.assertNotIn("Saved History", top_tabs)
+        self.assertIn('{ route: "opshop/history", label: "Saved History" }', top_tabs)
         self.assertIn('{ view: "regular", label: "Regular" }', self.opshop_renderer)
         self.assertIn('{ view: "oncall", label: "Oncall" }', self.opshop_renderer)
         self.assertIn('{ view: "countryside", label: "Countryside" }', self.opshop_renderer)
@@ -2927,7 +2973,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertNotIn("openOpShopPickupDetailModal", self.delivery_renderer)
         self.assertNotIn("workspace-opshop-pickup-detail", self.delivery_renderer)
 
-    def test_opshop_collections_merge_generated_and_saved_history(self):
+    def test_opshop_collections_and_history_share_full_weight_sheet(self):
         self.assertIn("Pickup Collections", self.opshop_renderer)
         self.assertIn("groupCollectionsByPickupDate", self.opshop_renderer)
         self.assertIn("createCollectionDateGroup", self.opshop_renderer)
@@ -2935,12 +2981,30 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("Workspace date:", self.opshop_renderer)
         self.assertIn("actions.exportOpShopPickupCollections(pickupDate)", self.opshop_renderer)
         self.assertIn("dataset.opshopDailyCollectionExport", self.opshop_renderer)
-        self.assertIn('collection.status === "GENERATED"', self.opshop_renderer)
-        self.assertIn('collection.status === "SAVED"', self.opshop_renderer)
         self.assertIn("saveOpShopPickupCollection", self.opshop_renderer)
         self.assertIn("cancelOpShopPickupCollection", self.opshop_renderer)
         self.assertIn("exportOpShopPickupCollection", self.opshop_renderer)
         self.assertIn("exportOpShopPickupCollections", self.opshop_renderer)
+
+        history_block = self.opshop_renderer.split(
+            "function createSavedPickupCollectionHistory", 1
+        )[1].split("function createCollectionList", 1)[0]
+        self.assertIn('"Saved Pickup Collection History"', history_block)
+        self.assertIn(
+            '"Search saved OP SHOP Pickup Collections by their actual Pickup Date."',
+            history_block,
+        )
+        self.assertIn('field.textContent = "Pickup date"', history_block)
+        self.assertIn("actions.updateOpShopSavedHistoryDate", history_block)
+        self.assertIn(
+            '"No saved Pickup Collections were found for this Pickup Date."',
+            history_block,
+        )
+        self.assertIn("{ historyMode: true }", history_block)
+        self.assertNotIn("createCollectionDateGroup", history_block)
+        self.assertNotIn("exportOpShopPickupCollections", history_block)
+        self.assertNotIn("Save Collection", history_block)
+        self.assertNotIn("Cancel Generated", history_block)
 
         collection_card_block = self.opshop_renderer.split(
             "function createCollectionCard", 1
@@ -2950,19 +3014,27 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertNotIn("Regular pickups", collection_card_block)
         self.assertNotIn("Oncall pickups", collection_card_block)
         self.assertNotIn("Countryside pickups", collection_card_block)
-        self.assertNotIn("Saved by", collection_card_block)
+        self.assertIn("{ historyMode = false }", collection_card_block)
+        self.assertIn("if (historyMode)", collection_card_block)
+        self.assertIn("Saved by:", collection_card_block)
+        self.assertIn("Generated:", collection_card_block)
+        self.assertIn("Saved:", collection_card_block)
+        self.assertIn("!historyMode && collection.status === \"GENERATED\"", collection_card_block)
         self.assertIn('"Save Collection"', collection_card_block)
         self.assertIn('"Cancel Generated"', collection_card_block)
         self.assertIn('"Export Excel"', collection_card_block)
         self.assertIn('"Exporting..."', collection_card_block)
-        self.assertIn("workspace-collection-card-meta", collection_card_block)
-        self.assertIn("workspace-collection-actions", collection_card_block)
+        self.assertIn("historyMode", collection_card_block)
+        self.assertIn("collection.status === \"SAVED\"", collection_card_block)
         self.assertIn(
             "card.append(top, meta, createCollectionWeightSheetPreview(collection), actionsRow)",
             collection_card_block,
         )
 
-        self.assertIn("createCollectionWeightSheetPreview(collection)", self.opshop_renderer)
+        self.assertEqual(
+            1,
+            self.opshop_renderer.count("function createCollectionWeightSheetPreview"),
+        )
         self.assertIn("DAILY OP SHOP COLLECTIONS - WEIGHT SHEET", self.opshop_renderer)
         self.assertIn("PLEASE RECORD WEIGHT OF BAGS FOR EACH OP SHOP", self.opshop_renderer)
         column_block = self.opshop_renderer.split(
@@ -2994,8 +3066,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn('formatOptional(pickup.suburb_snapshot, ""),\n    "",\n    "",', row_values_block)
         self.assertIn("collectionWeightSheetRowValues(pickup)", self.opshop_renderer)
         self.assertIn("workspace-opshop-weight-sheet-table-wrap", self.styles)
-        self.assertIn(".workspace-collection-grid", self.styles)
-        self.assertIn("grid-template-columns: minmax(0, 1fr)", self.styles)
+        self.assertIn(".workspace-pickup-collection-paper-list", self.styles)
         self.assertIn("min-width: 980px", self.styles)
         self.assertIn(
             'route === "opshop/trip-summary"',
@@ -3474,6 +3545,59 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             """
         )
 
+    def test_dispatch_date_change_does_not_modify_saved_history_state(self):
+        self._run_workspace_actions_script(
+            """
+            const deliveryHistory = [{ run_sheet_id: "DRS-HISTORY" }];
+            const opshopHistory = [{ collection_id: "OPC-HISTORY" }];
+            const state = {
+              isLoggedIn: true,
+              workspaceRoute: "delivery/task-pool",
+              activeWorkspace: "delivery",
+              dispatchDate: "2026-06-24",
+              deliveryTripSummaryDate: "2026-06-24",
+              opshopTripSummaryDate: "2026-06-24",
+              deliverySavedHistoryDate: "2026-05-10",
+              deliverySavedHistoryRunSheets: deliveryHistory,
+              opshopSavedHistoryDate: "2026-05-11",
+              opshopSavedHistoryCollections: opshopHistory,
+              deliveryBoard: { orders: [], assignments: [], driver_vehicle_assignments: [] },
+              deliveryRunSheets: [],
+              deliveryAssignmentDrafts: {},
+              deliveryVehicleDrafts: {},
+              deliveryVehicleClaims: {},
+              deliveryVehicleErrors: {},
+              deliveryVehiclePendingKeys: {},
+              deliveryBusyActionKeys: {},
+              deliveryActionError: "",
+              opshopAssignmentDrafts: {},
+              countrysideRouteGroupDrafts: {},
+              opshopBusyActionKeys: {},
+              opshopActionError: "",
+              isDeliveryWorkspaceLoading: false,
+              deliveryWorkspaceError: "",
+              isOpShopWorkspaceLoading: false,
+              opshopWorkspaceError: "",
+            };
+            const api = {
+              getDeliveryWorkspaceBoard: async () => state.deliveryBoard,
+            };
+            const actions = createWorkspaceActions({
+              state,
+              renderWorkspace: () => {},
+              api,
+            });
+
+            await actions.updateDispatchDate("2026-06-25");
+            if (state.deliverySavedHistoryDate !== "2026-05-10"
+                || state.deliverySavedHistoryRunSheets !== deliveryHistory
+                || state.opshopSavedHistoryDate !== "2026-05-11"
+                || state.opshopSavedHistoryCollections !== opshopHistory) {
+              throw new Error("Dispatch Date changed independent History state");
+            }
+            """
+        )
+
     def test_concurrent_delivery_busy_keys_are_independent_and_token_guarded(self):
         self._run_workspace_actions_script(
             """
@@ -3843,27 +3967,212 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             """
         )
 
-    def test_history_loaders_do_not_depend_on_shared_specifications(self):
+    def test_history_loaders_handle_current_empty_and_error_states(self):
         self._run_workspace_actions_script(
             """
             const state = {
               isLoggedIn: true,
               workspaceRoute: "delivery/history",
+              activeWorkspace: "delivery",
               dispatchDate: "2026-06-24",
-              deliveryRunSheets: [],
-              opshopPickupCollections: [],
+              deliverySavedHistoryDate: "2026-06-22",
+              deliverySavedHistoryRunSheets: [{ run_sheet_id: "OLD" }],
+              opshopSavedHistoryDate: "2026-06-22",
+              opshopSavedHistoryCollections: [{ collection_id: "OLD" }],
               isDeliveryWorkspaceLoading: false,
               deliveryWorkspaceError: "",
+              deliveryActionError: "",
               isOpShopWorkspaceLoading: false,
               opshopWorkspaceError: "",
+              opshopActionError: "",
             };
+            let deliveryMode = "empty";
+            let opshopMode = "empty";
+            const api = {
+              listDeliveryRunSheetsByDeliveryDate: async () => {
+                if (deliveryMode === "error") {
+                  throw new Error("Delivery unavailable");
+                }
+                return [];
+              },
+              listOpShopPickupCollectionsByPickupDate: async () => {
+                if (opshopMode === "error") {
+                  throw new Error("OP SHOP unavailable");
+                }
+                return [];
+              },
+            };
+            const actions = createWorkspaceActions({
+              state,
+              renderWorkspace: () => {},
+              api,
+            });
+
+            await actions.loadWorkspaceRoute("delivery/history");
+            if (state.deliverySavedHistoryRunSheets.length
+                || state.isDeliveryWorkspaceLoading
+                || state.deliveryWorkspaceError) {
+              throw new Error("Delivery empty History state was not clean");
+            }
+            deliveryMode = "error";
+            await actions.loadWorkspaceRoute("delivery/history");
+            if (state.deliverySavedHistoryRunSheets.length
+                || state.isDeliveryWorkspaceLoading
+                || !state.deliveryWorkspaceError.includes("Unable to load Saved Run Sheet history. Delivery unavailable")) {
+              throw new Error("Delivery current History error was not scoped");
+            }
+
+            state.workspaceRoute = "opshop/history";
+            state.activeWorkspace = "opshop";
+            await actions.loadWorkspaceRoute("opshop/history");
+            if (state.opshopSavedHistoryCollections.length
+                || state.isOpShopWorkspaceLoading
+                || state.opshopWorkspaceError) {
+              throw new Error("OP SHOP empty History state was not clean");
+            }
+            opshopMode = "error";
+            await actions.loadWorkspaceRoute("opshop/history");
+            if (state.opshopSavedHistoryCollections.length
+                || state.isOpShopWorkspaceLoading
+                || !state.opshopWorkspaceError.includes("Unable to load Saved Pickup Collection history. OP SHOP unavailable")) {
+              throw new Error("OP SHOP current History error was not scoped");
+            }
+            """
+        )
+    def test_history_loaders_ignore_stale_date_responses_and_errors(self):
+        self._run_workspace_actions_script(
+            """
+            function deferred() {
+              let resolve;
+              let reject;
+              const promise = new Promise((done, fail) => {
+                resolve = done;
+                reject = fail;
+              });
+              return { promise, resolve, reject };
+            }
+
+            const oldDelivery = deferred();
+            const newDelivery = deferred();
+            const oldOpShop = deferred();
+            const newOpShop = deferred();
+            const state = {
+              isLoggedIn: true,
+              workspaceRoute: "delivery/history",
+              activeWorkspace: "delivery",
+              dispatchDate: "2026-06-24",
+              deliverySavedHistoryDate: "2026-06-22",
+              deliverySavedHistoryRunSheets: [],
+              deliveryRunSheets: [{ run_sheet_id: "DRS-OPERATIONAL" }],
+              opshopSavedHistoryDate: "2026-06-22",
+              opshopSavedHistoryCollections: [],
+              opshopPickupCollections: [{ collection_id: "OPC-OPERATIONAL" }],
+              isDeliveryWorkspaceLoading: false,
+              deliveryWorkspaceError: "",
+              deliveryActionError: "",
+              isOpShopWorkspaceLoading: false,
+              opshopWorkspaceError: "",
+              opshopActionError: "",
+            };
+            const api = {
+              listDeliveryRunSheetsByDeliveryDate: (date) =>
+                date === "2026-06-22" ? oldDelivery.promise : newDelivery.promise,
+              listOpShopPickupCollectionsByPickupDate: (date) =>
+                date === "2026-06-22" ? oldOpShop.promise : newOpShop.promise,
+            };
+            const actions = createWorkspaceActions({
+              state,
+              renderWorkspace: () => {},
+              api,
+            });
+
+            const oldDeliveryRequest = actions.loadWorkspaceRoute("delivery/history");
+            const newDeliveryRequest = actions.updateDeliverySavedHistoryDate("2026-06-23");
+            newDelivery.resolve([
+              { run_sheet_id: "DRS-NEW", status: "SAVED", delivery_date: "2026-06-23" },
+            ]);
+            await newDeliveryRequest;
+            const staleDeliveryFailure = new Error("stale Delivery migration conflict");
+            staleDeliveryFailure.status = 409;
+            oldDelivery.reject(staleDeliveryFailure);
+            await oldDeliveryRequest;
+            if (state.deliverySavedHistoryDate !== "2026-06-23"
+                || state.deliverySavedHistoryRunSheets[0].run_sheet_id !== "DRS-NEW"
+                || state.isDeliveryWorkspaceLoading
+                || state.deliveryWorkspaceError) {
+              throw new Error("stale Delivery history request changed current state");
+            }
+
+            state.workspaceRoute = "opshop/history";
+            state.activeWorkspace = "opshop";
+            const oldOpShopRequest = actions.loadWorkspaceRoute("opshop/history");
+            const newOpShopRequest = actions.updateOpShopSavedHistoryDate("2026-06-23");
+            newOpShop.resolve([
+              { collection_id: "OPC-NEW", status: "SAVED", pickup_date: "2026-06-23" },
+            ]);
+            await newOpShopRequest;
+            oldOpShop.reject(new Error("stale OP SHOP failure"));
+            await oldOpShopRequest;
+            if (state.opshopSavedHistoryDate !== "2026-06-23"
+                || state.opshopSavedHistoryCollections[0].collection_id !== "OPC-NEW"
+                || state.isOpShopWorkspaceLoading
+                || state.opshopWorkspaceError) {
+              throw new Error("stale OP SHOP history request changed current state");
+            }
+            """
+        )
+
+    def test_history_loaders_use_only_service_date_and_preserve_operational_state(self):
+        self._run_workspace_actions_script(
+            """
+            const deliveryOperational = [{ run_sheet_id: "DRS-OPERATIONAL" }];
+            const opshopOperational = [{ collection_id: "OPC-OPERATIONAL" }];
+            const state = {
+              isLoggedIn: true,
+              workspaceRoute: "delivery/history",
+              activeWorkspace: "delivery",
+              dispatchDate: "2026-06-24",
+              deliverySavedHistoryDate: "2026-06-22",
+              deliverySavedHistoryRunSheets: [],
+              deliveryRunSheets: deliveryOperational,
+              opshopSavedHistoryDate: "2026-06-23",
+              opshopSavedHistoryCollections: [],
+              opshopPickupCollections: opshopOperational,
+              isDeliveryWorkspaceLoading: false,
+              deliveryWorkspaceError: "",
+              deliveryActionError: "",
+              isOpShopWorkspaceLoading: false,
+              opshopWorkspaceError: "",
+              opshopActionError: "",
+            };
+            const deliveryCalls = [];
+            const opshopCalls = [];
             let sharedCalls = 0;
             const api = {
-              getWorkspaceMigrationStatus: async () => ({}),
-              getDeliveryWorkspaceBoard: async () => ({}),
-              getOpShopWorkspaceBoard: async () => ({}),
-              listDeliveryRunSheets: async () => [{ run_sheet_id: "DRS-1" }],
-              listOpShopPickupCollections: async () => [{ collection_id: "OPC-1" }],
+              listDeliveryRunSheetsByDeliveryDate: async (date, status) => {
+                deliveryCalls.push([date, status]);
+                return [
+                  { run_sheet_id: "DRS-Z", status: "SAVED", delivery_date: date, driver_name_snapshot: "Zulu", dispatch_date: "2026-06-01" },
+                  { run_sheet_id: "DRS-G", status: "GENERATED", delivery_date: date, driver_name_snapshot: "Generated", dispatch_date: "2026-06-24" },
+                  { run_sheet_id: "DRS-B", status: "SAVED", delivery_date: date, driver_name_snapshot: "Alpha", dispatch_date: "2026-06-24" },
+                  { run_sheet_id: "DRS-A", status: "SAVED", delivery_date: date, driver_name_snapshot: "Alpha", dispatch_date: "2026-05-31" },
+                ];
+              },
+              listOpShopPickupCollectionsByPickupDate: async (date, status) => {
+                opshopCalls.push([date, status]);
+                return [
+                  { collection_id: "OPC-Z", status: "SAVED", pickup_date: date, driver_name_snapshot: "Zulu", dispatch_date: "2026-06-01" },
+                  { collection_id: "OPC-G", status: "GENERATED", pickup_date: date, driver_name_snapshot: "Generated", dispatch_date: "2026-06-24" },
+                  { collection_id: "OPC-B", status: "SAVED", pickup_date: date, driver_name_snapshot: "Alpha", dispatch_date: "2026-06-24" },
+                  { collection_id: "OPC-A", status: "SAVED", pickup_date: date, driver_name_snapshot: "Alpha", dispatch_date: "2026-05-31" },
+                ];
+              },
+              listDeliveryRunSheets: async () => {
+                throw new Error("dispatch-scoped Delivery API called");
+              },
+              listOpShopPickupCollections: async () => {
+                throw new Error("dispatch-scoped OP SHOP API called");
+              },
               getSharedSpecifications: async () => {
                 sharedCalls += 1;
                 throw new Error("shared specifications unavailable");
@@ -3876,13 +4185,27 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             });
 
             await actions.loadWorkspaceRoute("delivery/history");
-            if (state.deliveryRunSheets[0].run_sheet_id !== "DRS-1") {
-              throw new Error("Delivery history did not load independently");
+            if (deliveryCalls.length !== 1 || deliveryCalls[0].join("|") !== "2026-06-22|SAVED") {
+              throw new Error("Delivery history query was not service-date-only SAVED");
             }
+            if (state.deliverySavedHistoryRunSheets.map((item) => item.run_sheet_id).join(",") !== "DRS-A,DRS-B,DRS-Z") {
+              throw new Error("Delivery history was not filtered and stably sorted");
+            }
+            if (state.deliveryRunSheets !== deliveryOperational || state.dispatchDate !== "2026-06-24") {
+              throw new Error("Delivery history polluted operational state");
+            }
+
             state.workspaceRoute = "opshop/history";
+            state.activeWorkspace = "opshop";
             await actions.loadWorkspaceRoute("opshop/history");
-            if (state.opshopPickupCollections[0].collection_id !== "OPC-1") {
-              throw new Error("OP SHOP history did not load independently");
+            if (opshopCalls.length !== 1 || opshopCalls[0].join("|") !== "2026-06-23|SAVED") {
+              throw new Error("OP SHOP history query was not service-date-only SAVED");
+            }
+            if (state.opshopSavedHistoryCollections.map((item) => item.collection_id).join(",") !== "OPC-A,OPC-B,OPC-Z") {
+              throw new Error("OP SHOP history was not filtered and stably sorted");
+            }
+            if (state.opshopPickupCollections !== opshopOperational || state.dispatchDate !== "2026-06-24") {
+              throw new Error("OP SHOP history polluted operational state");
             }
             if (sharedCalls !== 0) {
               throw new Error("history unexpectedly requested shared specifications");

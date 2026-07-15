@@ -91,6 +91,12 @@ export function createAuthActions({
     state.deliveryVehicleClaims = {};
     state.deliveryVehicleErrors = {};
     state.deliveryVehiclePendingKeys = {};
+    state.deliverySavedHistoryRunSheets = [];
+    state.opshopSavedHistoryCollections = [];
+    state.isDeliveryWorkspaceLoading = false;
+    state.deliveryWorkspaceError = "";
+    state.isOpShopWorkspaceLoading = false;
+    state.opshopWorkspaceError = "";
     clearAccountSession();
     renderBoard();
 

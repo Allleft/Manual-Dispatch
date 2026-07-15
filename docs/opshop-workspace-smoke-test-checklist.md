@@ -88,6 +88,7 @@ Open each route directly, refresh, and copy it into a second browser tab:
 - `#opshop/templates`
 - `#opshop/trip-summary`
 - `#opshop/collections`
+- `#opshop/history`
 
 Verify legacy normalization:
 
@@ -98,7 +99,6 @@ Verify legacy normalization:
 | `#opshop/regular` | `#opshop/task-pool/regular` |
 | `#opshop/oncall` | `#opshop/task-pool/oncall` |
 | `#opshop/countryside` | `#opshop/task-pool/countryside` |
-| `#opshop/history` | `#opshop/collections` |
 | malformed `#opshop/task-pool/*` | `#opshop/task-pool/regular` |
 
 Use browser Back and Forward between all three Task Pool subtypes. Confirm the subtype and URL remain synchronized and no full-page reload occurs.
@@ -190,11 +190,23 @@ From each originating subtype, open `Manage Templates` and verify Back returns t
 7. Confirm only OP SHOP rows are present and category/route data is sensible.
 8. Keep the downloaded workbook outside git and delete it after QA.
 
+## Saved Pickup Collection History
+
+1. Open `#opshop/history` directly and confirm the Saved History tab is active.
+2. Select the actual Pickup Date of the saved collection. Do not use its Dispatch Date as the search date.
+3. Confirm every result is `SAVED` and the list shows distinct records even when their Workspace/Dispatch Dates differ.
+4. Confirm each result renders the full `DAILY OP SHOP COLLECTIONS - WEIGHT SHEET` snapshot with all stored pickup rows and columns.
+5. Confirm Generated, Saved, Saved by, Workspace date, Pickup date, Driver, and Status metadata are visible.
+6. Confirm the only record action is `Export Excel`; History must not show Generate, Save Collection, Cancel Generated, assignment, unassignment, editing, or daily batch export.
+7. Change Pickup Date rapidly twice and confirm the last selected date wins; an older response must not replace results, loading, error, or route state.
+8. Select a date with no saved records and confirm the History empty state is shown without changing Task Pool, Trip Summary, or ordinary Collections state.
+
 ## Delivery Regression
 
 - Open `#delivery/task-pool`.
 - Open `#delivery/trip-summary`.
-- Open Delivery Run Sheets/history.
+- Open `#delivery/run-sheet` and `#delivery/history` directly.
+- In Delivery Saved History, select the actual Delivery Date, confirm full DAILY RUN SHEET snapshots from any Workspace/Dispatch Date, and confirm per-record Export Excel is the only action.
 - Confirm Order assignment, trip grouping, vehicle controls, totals, and Run Sheet lifecycle remain available.
 - Confirm OP SHOP drafts/templates/collections do not appear in Delivery state.
 
@@ -231,6 +243,7 @@ ORDER BY row_no;
 - Uncaught promise errors: `0`
 - No accidental full-page reloads
 - No stale route/date response replaces current state
+- Rapid History date changes keep only the latest Delivery/Pickup Date results, loading state, and error state
 - No draft reset during subtype navigation
 
 ## Cleanup

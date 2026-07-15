@@ -75,17 +75,21 @@ Generated snapshots reserve captured tasks. Saved snapshots are immutable histor
 - `app-state.js`: scoped boards, histories, drafts, busy keys, and modal state.
 - `selectors.js`: read-only derived lookup helpers.
 
-Canonical OP SHOP Task Pool routes are:
+Canonical OP SHOP routes are:
 
 - `#opshop/task-pool/regular`
 - `#opshop/task-pool/oncall`
 - `#opshop/task-pool/countryside`
+- `#opshop/templates`
+- `#opshop/trip-summary`
+- `#opshop/collections`
+- `#opshop/history`
 
 The route is the subtype source of truth. Subtype-only navigation reuses the loaded scoped board, so browser Back/Forward and explicit empty-string assignment drafts remain intact.
 
 ### OP SHOP Workspace UI
 
-- `opshop-workspace-renderer.js`: Task Pool, Trip Summary, Templates page, Generated/Saved Pickup Collections, and export controls.
+- `opshop-workspace-renderer.js`: Task Pool, Trip Summary, Templates page, Generated/Saved Pickup Collections, and an independent Saved History page that reuses the full Weight Sheet in export-only mode.
 - `opshop-template-management-modal-renderer.js` + `opshop-template-actions.js`: shared Regular/Oncall template forms reused inline at `#opshop/templates`.
 - `opshop-countryside-pickup-list-modal-renderer.js` + `opshop-countryside-pickup-actions.js`: shared Countryside route-group/membership management and live pickup task forms.
 - `opshop-pickup-list-modal-renderer.js` / `opshop-pickup-actions.js`: Regular live-task add/edit/delete forms.
@@ -97,7 +101,8 @@ Persisted source-backed assignments come from controlled backfill or initial tem
 
 ### Delivery Workspace UI
 
-- `delivery-workspace-renderer.js`: Delivery Task Pool, Trip Summary, Run Sheets/history, Order tools, and vehicle controls.
+- `delivery-workspace-renderer.js`: Delivery Task Pool, Trip Summary, Run Sheets, and an independent Saved History page that reuses the full DAILY RUN SHEET paper in export-only mode.
+- `workspace-actions.js` queries Saved History only by actual service date plus `status=SAVED` (`delivery_date` or `pickup_date`), keeps Dispatch Date as snapshot metadata, and guards stale date responses with workspace-specific request versions.
 - Delivery-specific state and actions remain independent from OP SHOP subtype, template, route, and collection state.
 
 ## Import and Migration Tools

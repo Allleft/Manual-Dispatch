@@ -14,6 +14,7 @@ const OPSHOP_TABS = [
   { route: "opshop/task-pool/regular", label: "Task Pool" },
   { route: "opshop/trip-summary", label: "Trip Summary" },
   { route: "opshop/collections", label: "Pickup Collections" },
+  { route: "opshop/history", label: "Saved History" },
 ];
 const OPSHOP_TASK_POOL_VIEWS = [
   { view: "regular", label: "Regular" },
@@ -30,7 +31,12 @@ export function renderOpShopWorkspace(
   content.className = "workspace-content";
 
   if (state.isOpShopWorkspaceLoading) {
-    content.append(createStatus("Loading OP SHOP Pickup workspace...", "loading"));
+    content.append(createStatus(
+      state.workspaceRoute === "opshop/history"
+        ? "Loading saved Pickup Collection history..."
+        : "Loading OP SHOP Pickup workspace...",
+      "loading",
+    ));
   } else if (state.opshopWorkspaceError) {
     content.append(createStatus(state.opshopWorkspaceError, "error"));
   } else {
@@ -55,6 +61,8 @@ export function renderOpShopWorkspace(
           actions,
         ),
       );
+    } else if (state.workspaceRoute === "opshop/history") {
+      content.append(createSavedPickupCollectionHistory(state, actions));
     } else {
       content.append(createOpShopTaskPool(
         state.opshopBoard,
@@ -106,7 +114,10 @@ function createWorkspacePage(state, onDispatchDateChange) {
   description.textContent = "Assign pickups and manage independent saved pickup collections.";
   copy.append(kicker, title, description);
   titleGroup.append(icon, copy);
-  heading.append(titleGroup, createDateControl(state, onDispatchDateChange));
+  heading.append(titleGroup);
+  if (state.workspaceRoute !== "opshop/history") {
+    heading.append(createDateControl(state, onDispatchDateChange));
+  }
 
   const nav = document.createElement("nav");
   nav.className = "workspace-tabs workspace-tabs-opshop";
@@ -968,6 +979,56 @@ function createOpShopTripPickupRow(pickup, isLocked, state, actions, onOpenPicku
 }
 
 
+function createSavedPickupCollectionHistory(state, actions) {
+  const collections = state.opshopSavedHistoryCollections || [];
+  const wrapper = document.createElement("div");
+  wrapper.className = "workspace-stack workspace-saved-history";
+
+  const toolbar = document.createElement("section");
+  toolbar.className =
+    "workspace-context-panel workspace-context-panel-opshop workspace-history-toolbar";
+  const heading = createSectionHeading(
+    "Saved Pickup Collection History",
+    "Search saved OP SHOP Pickup Collections by their actual Pickup Date.",
+  );
+  const field = document.createElement("label");
+  field.className = "workspace-date-control workspace-opshop-pickup-date-control";
+  field.textContent = "Pickup date";
+  const input = document.createElement("input");
+  input.type = "date";
+  input.value = state.opshopSavedHistoryDate || "";
+  input.disabled = state.isOpShopWorkspaceLoading;
+  input.addEventListener("change", () =>
+    actions.updateOpShopSavedHistoryDate(input.value));
+  field.append(input);
+  toolbar.append(heading, field);
+
+  const results = document.createElement("section");
+  results.className =
+    "workspace-context-panel workspace-context-panel-opshop workspace-history-results";
+  results.append(createSectionHeading(
+    "Saved Pickup Collections",
+    `${collections.length} records`,
+  ));
+  const list = document.createElement("div");
+  list.className =
+    "workspace-card-grid workspace-collection-grid workspace-pickup-collection-paper-list";
+  if (!collections.length) {
+    list.append(createEmptyState(
+      "No saved Pickup Collections were found for this Pickup Date.",
+      "history",
+    ));
+  } else {
+    collections.forEach((collection) => list.append(
+      createCollectionCard(collection, state, actions, { historyMode: true }),
+    ));
+  }
+  results.append(list);
+  wrapper.append(toolbar, results);
+  return wrapper;
+}
+
+
 function createCollectionList(collections, state, actions) {
   const exportableCollections = (collections || []).filter(
     (collection) => ["GENERATED", "SAVED"].includes(collection.status),
@@ -1028,7 +1089,12 @@ function createCollectionDateGroup(pickupDate, collections, state, actions) {
 }
 
 
-function createCollectionCard(collection, state, actions) {
+function createCollectionCard(
+  collection,
+  state,
+  actions,
+  { historyMode = false } = {},
+) {
   const card = document.createElement("article");
   card.className = "workspace-record-card workspace-collection-card";
 
@@ -1044,16 +1110,24 @@ function createCollectionCard(collection, state, actions) {
   top.append(identity, createBadge(collection.status));
   const meta = document.createElement("p");
   meta.className = "workspace-collection-card-meta";
-  meta.textContent = [
+  const metadata = [
     `Workspace date: ${formatOptional(collection.dispatch_date)}`,
     `Pickup date: ${formatOptional(collection.pickup_date)}`,
     `Driver: ${formatOptional(collection.driver_name_snapshot, collection.driver_id)}`,
     `Status: ${formatOptional(collection.status)}`,
-  ].join(" | ");
+  ];
+  if (historyMode) {
+    metadata.push(
+      `Generated: ${formatOptional(collection.generated_at)}`,
+      `Saved: ${formatOptional(collection.saved_at)}`,
+      `Saved by: ${formatOptional(collection.saved_by_account_name, "Unknown")}`,
+    );
+  }
+  meta.textContent = metadata.join(" | ");
 
   const actionsRow = document.createElement("div");
   actionsRow.className = "workspace-action-row workspace-collection-actions";
-  if (collection.status === "GENERATED") {
+  if (!historyMode && collection.status === "GENERATED") {
     actionsRow.append(
       createActionButton(
         "Save Collection",
@@ -1070,7 +1144,10 @@ function createCollectionCard(collection, state, actions) {
       ),
     );
   }
-  if (["GENERATED", "SAVED"].includes(collection.status)) {
+  const isExportable = historyMode
+    ? collection.status === "SAVED"
+    : ["GENERATED", "SAVED"].includes(collection.status);
+  if (isExportable) {
     const isExporting = isBusy(state, `opshop-export:${collection.collection_id}`);
     actionsRow.append(
       createActionButton(
@@ -1078,7 +1155,7 @@ function createCollectionCard(collection, state, actions) {
         () => actions.exportOpShopPickupCollection(collection.collection_id),
         {
           disabled: isExporting,
-          primary: collection.status === "SAVED",
+          primary: historyMode || collection.status === "SAVED",
         },
       ),
     );

@@ -741,6 +741,27 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
+.workspace-history-toolbar {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+}
+
+.workspace-history-toolbar .workspace-date-control {
+  min-width: 190px;
+}
+
+.workspace-history-results,
+.workspace-run-sheet-paper-list,
+.workspace-pickup-collection-paper-list {
+  min-width: 0;
+}
+
+.workspace-run-sheet-paper-list,
+.workspace-pickup-collection-paper-list {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.85rem;
+}
+
 .workspace-collection-card {
   display: grid;
   gap: 0.75rem;
@@ -6218,6 +6239,14 @@ select:disabled {
 }
 
 @media (max-width: 760px) {
+  .workspace-history-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .workspace-history-toolbar .workspace-date-control {
+    min-width: 0;
+  }
+
   .workspace-run-sheet-toolbar {
     grid-template-columns: minmax(0, 1fr);
   }

@@ -16,6 +16,7 @@ Home
     Task Pool
     Trip Summary
     Delivery Run Sheets
+    Saved Run Sheet History
   OP SHOP Pickup
     Task Pool
       Regular
@@ -24,6 +25,7 @@ Home
       Manage Templates
     Trip Summary
     Pickup Collections
+    Saved Pickup Collection History
 ```
 
 ### Canonical OP SHOP Routes
@@ -36,13 +38,13 @@ Home
 | `#opshop/templates` | Regular/Oncall templates plus Countryside groups/memberships |
 | `#opshop/trip-summary` | Pickup Date review grouped by driver/category |
 | `#opshop/collections` | Generated and Saved Pickup Collections, lifecycle, and export |
+| `#opshop/history` | Saved Pickup Collections by actual Pickup Date, full immutable Weight Sheet preview, and per-record export |
 
 Legacy aliases normalize without duplicate history entries:
 
 - `#opshop`, `#opshop/task-pool`, and `#opshop/regular` -> Regular
 - `#opshop/oncall` -> Oncall
 - `#opshop/countryside` -> Countryside
-- `#opshop/history` -> Pickup Collections
 - malformed `#opshop/task-pool/*` -> Regular
 
 The hash route is the subtype source of truth. Subtype navigation does not reload the scoped board and therefore preserves pending assignment drafts and explicit `Unassigned` values.
@@ -96,6 +98,14 @@ Generated/Saved reserved tasks do not appear as editable Task Pool records. Past
 
 Read-only detail and export routes are not migration-write guards. Scoped mutations and lifecycle writes return migration guidance until legacy saved records are represented by validated independent snapshots.
 
+## Saved History Workspaces
+
+- `#delivery/history` queries Delivery Run Sheets by `delivery_date + status=SAVED`; it never adds `dispatch_date`.
+- `#opshop/history` queries Pickup Collections by `pickup_date + status=SAVED`; it never adds `dispatch_date`.
+- Each result may therefore contain distinct saved records from multiple Dispatch Dates. Dispatch Date is displayed as record metadata, not used as a History filter.
+- Delivery History reuses the full DAILY RUN SHEET paper snapshot; OP SHOP History reuses the full Pickup Collection Weight Sheet snapshot.
+- History owns independent in-memory dates/results, guards stale date responses, and exposes per-record Excel export only. Generate, Save, Cancel, assignment, unassignment, and editing remain operational-page actions.
+
 ## Legacy Compatibility and Migration
 
 - Legacy Final Summary tables, routes, saved history, and workbook behavior remain available.
@@ -122,6 +132,7 @@ See [the migration runbook](separate-delivery-and-opshop-workspaces-migration.md
 - Browser refresh, copied links, Back, and Forward preserve canonical subtype behavior.
 - Persisted source defaults require no Apply; later manual drafts survive subtype navigation and Apply remains their persistence boundary.
 - Generated and Saved lifecycle state survives refresh/restart.
+- Delivery and OP SHOP Saved History are independent routes queried by actual service date across Dispatch Dates, display full immutable papers, and expose export-only actions.
 - Delivery remains unchanged by OP SHOP navigation, management, drafts, and collections.
 - New and existing SQLite databases initialize safely and repeatedly.
 
