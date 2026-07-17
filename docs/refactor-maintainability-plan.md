@@ -53,6 +53,7 @@ Python 3.13 emits existing `ResourceWarning` messages for unclosed SQLite connec
 | `createWorkspaceActions` ordered returned names | 78 | `a5c0c3e74c1ef76d26c7967f4c038c6f6317a11fa002b7c42456dc9f0646ddf1` |
 | top-level app-state ordered fields | 183 | `8b1d9ae0c1470d603cd3b908927941b9d471394f7bc28d59f7963050e000bec2` |
 | canonical workspace routes | 12 | `ff321ae9f5aabfde2b1b1513fcb7defe66485a8a0b9c8086a67edef6556e4c86` |
+| Frontend API facade exports | 96 | `070b57b6f76c5c1ced567ebd6ca4761abb499e3e54fe7e9eedd6b58d9269eb80` |
 | SQLite schema objects | 22 | `b7d4bc8f8b9e5ade8c4dc259d7138036780743f377b1f6ca5d6082a65686f703` |
 
 SQLite and In-Memory repositories currently expose identical 108-method public contracts.
@@ -753,30 +754,40 @@ Canonical workspace routes:
 | 243 | `frontend/js/actions/auth-actions.js` |
 | 237 | `frontend/js/render/auth-renderer.js` |
 
-## Planned Module Split
+## Implemented Module Structure
 
-1. Keep `backend/api/manual_dispatch.py` as the stable router/service facade; move route groups into `backend/api/manual_dispatch_routes/` factories receiving `get_service`.
-2. Keep `ManualDispatchService(repository=None, logbook=None)` as the stable facade; separate application orchestration and audit recorders.
-3. Keep both Repository import paths/classes as stable facades; move cohesive persistence responsibilities into SQLite and In-Memory mixins.
-4. Keep `createWorkspaceActions` parameters and returned names stable; separate request context, async guards, route loaders, and bounded Delivery/OP SHOP action groups.
-5. Keep `renderDeliveryWorkspace(root, options)` stable; separate Delivery page sections and modals without DOM or CSS changes.
-6. Keep `renderOpShopWorkspace(root, options)` stable; separate OP SHOP page sections and modals without DOM or CSS changes.
-7. Organize API/state modules only if the preceding work proves a clear low-risk need. Keep barrels and state shape unchanged.
-8. Consolidate maintenance helpers only if exact safe duplication is demonstrated. Keep CLI contracts unchanged.
+1. `backend/api/manual_dispatch.py` remains the stable facade; `backend/api/manual_dispatch_routes/` owns shared helpers and bounded route groups.
+2. `ManualDispatchService(repository=None, logbook=None)` remains the stable 93-method facade; five application services and five audit components own orchestration.
+3. SQLite and In-Memory repositories remain stable 108-method facades; matching mixins own cohesive persistence concerns.
+4. `createWorkspaceActions` keeps its five parameters and ordered 78-action return contract; 18 modules own context, guards, loaders, reset, and bounded workflows.
+5. `renderDeliveryWorkspace(root, options)` remains stable; 10 Delivery modules own page sections, documents, history, modals, and utilities.
+6. `renderOpShopWorkspace(root, options)` remains stable; 10 OP SHOP modules own page sections, subtype renderers, collections, history, templates, and utilities.
+7. `manual-dispatch-api.js` remains the 96-export barrel; shared, Delivery, OP SHOP, and legacy modules own the original request implementations.
+8. `app-state.js`, `selectors.js`, `frontend/styles.css`, and maintenance tools remain unchanged. State splitting risked shared-object order/reference contracts, and no safe, clear tool-helper duplication justified a CLI refactor.
 
-## Atomic Commit Order
+Child modules do not import their compatibility facade. API, action, and renderer dependency graphs are acyclic.
 
-1. `docs: record maintainability refactor baseline`
-2. `test: capture behavior before modular refactor` when missing coverage is confirmed
-3. `refactor(api): split manual dispatch route modules`
-4. `refactor(service): separate application and audit orchestration`
-5. `refactor(repository): separate persistence concerns`
-6. `refactor(frontend): modularize workspace action orchestration`
-7. `refactor(frontend): split delivery workspace renderer`
-8. `refactor(frontend): split opshop workspace renderer`
-9. Optional `refactor(frontend): organize api and workspace state modules`
-10. Optional `refactor(tools): consolidate maintenance helpers`
-11. `docs: update architecture after modular refactor`
+## Atomic Commit Sequence
+
+1. `10aec55 docs: record maintainability refactor baseline`
+2. `7cc0815 test: capture behavior before modular refactor`
+3. `1a768c0 refactor(api): split manual dispatch route modules`
+4. `0b47b61 refactor(service): separate application and audit orchestration`
+5. `1ba8977 refactor(repository): separate persistence concerns`
+6. `4f48da5 refactor(frontend): modularize workspace action orchestration`
+7. `2431a0c refactor(frontend): split delivery workspace renderer`
+8. `5fc3c26 refactor(frontend): split opshop workspace renderer`
+9. `ec704fd refactor(frontend): organize manual dispatch api modules`
+10. The final documentation commit uses `docs: update architecture after modular refactor`.
+
+## Implementation Verification
+
+- Characterization coverage added five tests; the full suite is 657 tests.
+- Every structural phase passed focused tests and a 657-test full regression before commit.
+- The 92-route, 93-Service-method, 108/108-Repository-method, 78-action, 183-state-field, 12-route, 22-schema-object, and 96-frontend-API-export fingerprints remain unchanged.
+- Delivery owns 97 renderer child functions; OP SHOP owns 61; both graphs are acyclic.
+- The frontend API split preserves 102/102 function bodies after export-only helper declarations and retains the 96-export digest.
+- No dependencies, schema objects, SQL, CSS, environment variables, public routes, business dates, Excel formats, Logbook contracts, or runtime data changed.
 
 ## Batch Guardrails
 
