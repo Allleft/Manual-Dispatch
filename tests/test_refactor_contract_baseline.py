@@ -120,6 +120,9 @@ class RefactorContractBaselineTest(unittest.TestCase):
         action_uri = (
             PROJECT_ROOT / "frontend" / "js" / "actions" / "workspace-actions.js"
         ).as_uri()
+        api_uri = (
+            PROJECT_ROOT / "frontend" / "js" / "api" / "manual-dispatch-api.js"
+        ).as_uri()
         state_uri = (
             PROJECT_ROOT / "frontend" / "js" / "state" / "app-state.js"
         ).as_uri()
@@ -141,13 +144,14 @@ class RefactorContractBaselineTest(unittest.TestCase):
             f"""
             globalThis.window = {{
               MANUAL_DISPATCH_API_BASE_URL: "",
-              location: {{ protocol: "http:", hash: "" }},
+              location: {{ protocol: "http:", origin: "http://127.0.0.1", hash: "" }},
               history: {{
                 pushState: (_state, _title, url) => {{
                   window.location.hash = String(url || "");
                 }},
               }},
             }};
+            const api = await import({api_uri!r});
             const {{ createWorkspaceActions }} = await import({action_uri!r});
             const {{ state }} = await import({state_uri!r});
             const {{ renderDeliveryWorkspace }} = await import({delivery_renderer_uri!r});
@@ -162,6 +166,7 @@ class RefactorContractBaselineTest(unittest.TestCase):
             }});
 
             console.log(JSON.stringify({{
+              apiExportNames: Object.keys(api),
               actionNames: Object.keys(actions),
               stateFields: Object.keys(state),
               rendererTypes: [
@@ -182,6 +187,11 @@ class RefactorContractBaselineTest(unittest.TestCase):
         contract = json.loads(completed.stdout)
 
         self.assertEqual(["function", "function"], contract["rendererTypes"])
+        self.assertEqual(96, len(contract["apiExportNames"]))
+        self.assertEqual(
+            "070b57b6f76c5c1ced567ebd6ca4761abb499e3e54fe7e9eedd6b58d9269eb80",
+            self._contract_digest(contract["apiExportNames"]),
+        )
         self.assertEqual(78, len(contract["actionNames"]))
         self.assertEqual(
             "a5c0c3e74c1ef76d26c7967f4c038c6f6317a11fa002b7c42456dc9f0646ddf1",

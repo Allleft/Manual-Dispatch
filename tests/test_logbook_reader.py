@@ -312,9 +312,14 @@ class LogbookReaderTest(unittest.TestCase):
 
 class FrontendLogoutStaticContractTest(unittest.TestCase):
     def test_logout_api_and_local_cleanup_contract(self):
-        api_source = (
-            PROJECT_ROOT / "frontend" / "js" / "api" / "manual-dispatch-api.js"
-        ).read_text(encoding="utf-8")
+        api_root = PROJECT_ROOT / "frontend" / "js" / "api"
+        api_source = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in [
+                api_root / "manual-dispatch-api.js",
+                *sorted((api_root / "manual-dispatch").glob("*.js")),
+            ]
+        )
         auth_source = (
             PROJECT_ROOT / "frontend" / "js" / "actions" / "auth-actions.js"
         ).read_text(encoding="utf-8")

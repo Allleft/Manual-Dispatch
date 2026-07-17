@@ -12,7 +12,16 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
     def setUp(self):
         self.app = self._read("app.js")
         self.state = self._read("js/state/app-state.js")
-        self.api = self._read("js/api/manual-dispatch-api.js")
+        self.api = "\n".join(
+            self._read(path)
+            for path in (
+                "js/api/manual-dispatch-api.js",
+                "js/api/manual-dispatch/shared-api.js",
+                "js/api/manual-dispatch/delivery-api.js",
+                "js/api/manual-dispatch/opshop-api.js",
+                "js/api/manual-dispatch/legacy-api.js",
+            )
+        )
         self.auth_actions = self._read("js/actions/auth-actions.js")
         self.workspace_actions = "\n".join(
             self._read(path)

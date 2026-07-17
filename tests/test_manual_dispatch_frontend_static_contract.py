@@ -5,6 +5,15 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 FRONTEND_ROOT = PROJECT_ROOT / "frontend"
+API_ROOT = FRONTEND_ROOT / "js" / "api"
+
+
+def read_manual_dispatch_api_source():
+    module_paths = [
+        API_ROOT / "manual-dispatch-api.js",
+        *sorted((API_ROOT / "manual-dispatch").glob("*.js")),
+    ]
+    return "\n".join(path.read_text(encoding="utf-8") for path in module_paths)
 
 
 class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
@@ -168,9 +177,7 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         task_pool_renderer = (
             FRONTEND_ROOT / "js" / "render" / "task-pool-renderer.js"
         ).read_text(encoding="utf-8")
-        api_module = (
-            FRONTEND_ROOT / "js" / "api" / "manual-dispatch-api.js"
-        ).read_text(encoding="utf-8")
+        api_module = read_manual_dispatch_api_source()
         app_state = (
             FRONTEND_ROOT / "js" / "state" / "app-state.js"
         ).read_text(encoding="utf-8")
@@ -498,9 +505,7 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         final_summary_actions = (
             FRONTEND_ROOT / "js" / "actions" / "final-summary-actions.js"
         ).read_text(encoding="utf-8")
-        api_module = (
-            FRONTEND_ROOT / "js" / "api" / "manual-dispatch-api.js"
-        ).read_text(encoding="utf-8")
+        api_module = read_manual_dispatch_api_source()
         board_state_sync = (
             FRONTEND_ROOT / "js" / "state" / "board-state-sync.js"
         ).read_text(encoding="utf-8")
@@ -555,9 +560,7 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
     def test_phase8_opshop_pickup_list_frontend_contract(self):
         app_js = (FRONTEND_ROOT / "app.js").read_text(encoding="utf-8")
         index_html = (FRONTEND_ROOT / "index.html").read_text(encoding="utf-8")
-        api_module = (
-            FRONTEND_ROOT / "js" / "api" / "manual-dispatch-api.js"
-        ).read_text(encoding="utf-8")
+        api_module = read_manual_dispatch_api_source()
         actions = (
             FRONTEND_ROOT / "js" / "actions" / "opshop-pickup-actions.js"
         ).read_text(encoding="utf-8")
@@ -824,9 +827,7 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         board_state_sync = (
             FRONTEND_ROOT / "js" / "state" / "board-state-sync.js"
         ).read_text(encoding="utf-8")
-        api_module = (
-            FRONTEND_ROOT / "js" / "api" / "manual-dispatch-api.js"
-        ).read_text(encoding="utf-8")
+        api_module = read_manual_dispatch_api_source()
         actions = (
             FRONTEND_ROOT / "js" / "actions" / "opshop-oncall-pickup-actions.js"
         ).read_text(encoding="utf-8")
@@ -1052,9 +1053,7 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         board_state_sync = (
             FRONTEND_ROOT / "js" / "state" / "board-state-sync.js"
         ).read_text(encoding="utf-8")
-        api_module = (
-            FRONTEND_ROOT / "js" / "api" / "manual-dispatch-api.js"
-        ).read_text(encoding="utf-8")
+        api_module = read_manual_dispatch_api_source()
         actions = (
             FRONTEND_ROOT / "js" / "actions" / "opshop-countryside-pickup-actions.js"
         ).read_text(encoding="utf-8")
@@ -1295,9 +1294,7 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
 
     def test_opshop_template_management_frontend_contract(self):
         app_js = (FRONTEND_ROOT / "app.js").read_text(encoding="utf-8")
-        api_module = (
-            FRONTEND_ROOT / "js" / "api" / "manual-dispatch-api.js"
-        ).read_text(encoding="utf-8")
+        api_module = read_manual_dispatch_api_source()
         task_pool_renderer = (
             FRONTEND_ROOT / "js" / "render" / "task-pool-renderer.js"
         ).read_text(encoding="utf-8")
@@ -1400,10 +1397,31 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
             self.assertNotIn("fetch(", source, f"Action module should use API client helpers: {source_path}")
 
     def test_frontend_fetch_calls_remain_in_api_module(self):
-        api_module = FRONTEND_ROOT / "js" / "api" / "manual-dispatch-api.js"
+        facade_source = (API_ROOT / "manual-dispatch-api.js").read_text(encoding="utf-8")
+        expected_modules = {
+            "shared-api.js",
+            "delivery-api.js",
+            "opshop-api.js",
+            "legacy-api.js",
+        }
+
+        self.assertEqual(
+            expected_modules,
+            {path.name for path in (API_ROOT / "manual-dispatch").glob("*.js")},
+        )
+        for module_name in expected_modules:
+            self.assertIn(
+                f'from "./manual-dispatch/{module_name}"',
+                facade_source,
+            )
+        self.assertNotIn("fetch(", facade_source)
 
         for source_path in FRONTEND_ROOT.rglob("*.js"):
             source = source_path.read_text(encoding="utf-8")
-            if source_path == api_module:
+            if API_ROOT in source_path.parents:
                 continue
-            self.assertNotIn("fetch(", source, f"Fetch should stay centralized in API module: {source_path}")
+            self.assertNotIn(
+                "fetch(",
+                source,
+                f"Fetch should stay centralized in API modules: {source_path}",
+            )
