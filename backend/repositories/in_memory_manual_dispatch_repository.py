@@ -230,6 +230,16 @@ class InMemoryManualDispatchRepository:
             )
         ]
 
+    def list_delivery_order_assignments_for_delivery_date(self, delivery_date):
+        return [
+            assignment
+            for assignment in self.assignments
+            if assignment.task_type == "ORDER"
+            and (order := self.get_order(assignment.task_id))
+            and order.status == "ACTIVE"
+            and order.delivery_date == delivery_date
+        ]
+
     def list_assigned_opshop_pickup_board_items(self, dispatch_date):
         items = []
         for assignment in self.assignments:
@@ -352,11 +362,27 @@ class InMemoryManualDispatchRepository:
         ]
 
     def list_driver_vehicle_assignments_for_delivery_date(self, delivery_date):
-        return [
+        assignments = [
             assignment
             for assignment in self.driver_vehicle_assignments
             if assignment.delivery_date == delivery_date
         ]
+        seen_drivers = set()
+        seen_vehicles = set()
+        for assignment in assignments:
+            if assignment.driver_id in seen_drivers:
+                raise ValueError(
+                    "Driver vehicle assignment integrity error for "
+                    f"{delivery_date}:{assignment.driver_id}: duplicate driver."
+                )
+            if assignment.vehicle_id in seen_vehicles:
+                raise ValueError(
+                    "Driver vehicle assignment integrity error for "
+                    f"{delivery_date}:{assignment.vehicle_id}: duplicate vehicle."
+                )
+            seen_drivers.add(assignment.driver_id)
+            seen_vehicles.add(assignment.vehicle_id)
+        return assignments
 
     def list_final_trip_summaries(self, dispatch_date, delivery_date=None):
         return [
@@ -628,16 +654,18 @@ class InMemoryManualDispatchRepository:
         delivery_date,
         driver_id,
     ):
-        return next(
-            (
-                run_sheet
-                for run_sheet in self.delivery_run_sheets
-                if run_sheet.dispatch_date == dispatch_date
-                and run_sheet.delivery_date == delivery_date
-                and run_sheet.driver_id == driver_id
-            ),
-            None,
-        )
+        matches = [
+            run_sheet
+            for run_sheet in self.delivery_run_sheets
+            if run_sheet.delivery_date == delivery_date
+            and run_sheet.driver_id == driver_id
+        ]
+        if len(matches) > 1:
+            raise ValueError(
+                "Delivery Run Sheet integrity error for "
+                f"{delivery_date}:{driver_id}: expected at most one active document."
+            )
+        return matches[0] if matches else None
 
     def has_saved_delivery_run_sheet(self, dispatch_date, driver_id, delivery_date):
         run_sheet = self.get_delivery_run_sheet_for_driver(
@@ -653,7 +681,6 @@ class InMemoryManualDispatchRepository:
                 existing
                 for existing in self.delivery_run_sheets
                 if existing.run_sheet_id != run_sheet.run_sheet_id
-                and existing.dispatch_date == run_sheet.dispatch_date
                 and existing.delivery_date == run_sheet.delivery_date
                 and existing.driver_id == run_sheet.driver_id
             ),
@@ -742,16 +769,18 @@ class InMemoryManualDispatchRepository:
         pickup_date,
         driver_id,
     ):
-        return next(
-            (
-                collection
-                for collection in self.opshop_pickup_collections
-                if collection.dispatch_date == dispatch_date
-                and collection.pickup_date == pickup_date
-                and collection.driver_id == driver_id
-            ),
-            None,
-        )
+        matches = [
+            collection
+            for collection in self.opshop_pickup_collections
+            if collection.pickup_date == pickup_date
+            and collection.driver_id == driver_id
+        ]
+        if len(matches) > 1:
+            raise ValueError(
+                "OP SHOP Pickup Collection integrity error for "
+                f"{pickup_date}:{driver_id}: expected at most one active document."
+            )
+        return matches[0] if matches else None
 
     def has_saved_opshop_pickup_collection(self, dispatch_date, driver_id, pickup_date):
         collection = self.get_opshop_pickup_collection_for_driver(
@@ -767,7 +796,6 @@ class InMemoryManualDispatchRepository:
                 existing
                 for existing in self.opshop_pickup_collections
                 if existing.collection_id != collection.collection_id
-                and existing.dispatch_date == collection.dispatch_date
                 and existing.pickup_date == collection.pickup_date
                 and existing.driver_id == collection.driver_id
             ),
@@ -1311,8 +1339,7 @@ class InMemoryManualDispatchRepository:
                         "trip1",
                     )
                 else:
-                    self.remove_assignment(
-                        dispatch_date,
+                    self.remove_assignments_for_task(
                         "OPSHOP_PICKUP",
                         task.pickup_task_id,
                     )
@@ -1491,8 +1518,14 @@ class InMemoryManualDispatchRepository:
         )
 
     def upsert_assignment(self, dispatch_date, task_type, task_id, driver_id, trip_no):
-        existing = self.get_assignment(dispatch_date, task_type, task_id)
-        if existing:
+        assignments = self.list_assignments_for_task(task_type, task_id)
+        if len(assignments) > 1:
+            raise ValueError(
+                "Manual dispatch assignment integrity error for "
+                f"{task_type}:{task_id}: expected at most one row."
+            )
+        if assignments:
+            existing = assignments[0]
             existing.driver_id = driver_id
             existing.trip_no = trip_no
             return existing
@@ -1521,15 +1554,13 @@ class InMemoryManualDispatchRepository:
         )
 
     def find_assignment_for_task(self, task_type, task_id):
-        return next(
-            (
-                assignment
-                for assignment in self.assignments
-                if assignment.task_type == task_type
-                and assignment.task_id == task_id
-            ),
-            None,
-        )
+        assignments = self.list_assignments_for_task(task_type, task_id)
+        if len(assignments) > 1:
+            raise ValueError(
+                "Manual dispatch assignment integrity error for "
+                f"{task_type}:{task_id}: expected at most one row."
+            )
+        return assignments[0] if assignments else None
 
     def list_assignments_for_task(self, task_type, task_id):
         return [
@@ -1552,16 +1583,21 @@ class InMemoryManualDispatchRepository:
         return len(self.assignments) != before_count
 
     def remove_assignments_for_task(self, task_type, task_id):
-        before_count = len(self.assignments)
+        assignments = self.list_assignments_for_task(task_type, task_id)
+        if len(assignments) > 1:
+            raise ValueError(
+                "Manual dispatch assignment integrity error for "
+                f"{task_type}:{task_id}: expected at most one row."
+            )
+        if not assignments:
+            return False
+        assignment_id = assignments[0].assignment_id
         self.assignments = [
             assignment
             for assignment in self.assignments
-            if not (
-                assignment.task_type == task_type
-                and assignment.task_id == task_id
-            )
+            if assignment.assignment_id != assignment_id
         ]
-        return len(self.assignments) != before_count
+        return True
 
     def upsert_driver_vehicle_assignment(self, dispatch_date, delivery_date, driver_id, vehicle_id):
         existing = next(
@@ -1590,12 +1626,22 @@ class InMemoryManualDispatchRepository:
     def upsert_delivery_workspace_vehicle_assignment(
         self, dispatch_date, delivery_date, driver_id, vehicle_id
     ):
+        current_rows = [
+            assignment
+            for assignment in self.driver_vehicle_assignments
+            if assignment.delivery_date == delivery_date
+            and assignment.driver_id == driver_id
+        ]
+        if len(current_rows) > 1:
+            raise ValueError(
+                "Driver vehicle assignment integrity error for "
+                f"{delivery_date}:{driver_id}: expected at most one row."
+            )
         conflict = next(
             (
                 assignment
                 for assignment in self.driver_vehicle_assignments
-                if assignment.dispatch_date == dispatch_date
-                and assignment.delivery_date == delivery_date
+                if assignment.delivery_date == delivery_date
                 and assignment.vehicle_id == vehicle_id
                 and assignment.driver_id != driver_id
             ),
@@ -1603,17 +1649,47 @@ class InMemoryManualDispatchRepository:
         )
         if conflict:
             return None, conflict.driver_id
-        return (
-            self.upsert_driver_vehicle_assignment(
-                dispatch_date,
-                delivery_date,
-                driver_id,
-                vehicle_id,
-            ),
-            None,
-        )
+        if current_rows:
+            current_rows[0].vehicle_id = vehicle_id
+            return current_rows[0], None
 
-    def remove_driver_vehicle_assignment(self, dispatch_date, driver_id, delivery_date=None):
+        assignment = ManualDriverVehicleAssignment(
+            dispatch_date=dispatch_date,
+            delivery_date=delivery_date,
+            driver_id=driver_id,
+            vehicle_id=vehicle_id,
+        )
+        self.driver_vehicle_assignments.append(assignment)
+        return assignment, None
+
+    def remove_driver_vehicle_assignment(
+        self,
+        dispatch_date,
+        driver_id,
+        delivery_date=None,
+    ):
+        if delivery_date:
+            current_rows = [
+                assignment
+                for assignment in self.driver_vehicle_assignments
+                if assignment.delivery_date == delivery_date
+                and assignment.driver_id == driver_id
+            ]
+            if len(current_rows) > 1:
+                raise ValueError(
+                    "Driver vehicle assignment integrity error for "
+                    f"{delivery_date}:{driver_id}: expected at most one row."
+                )
+            if not current_rows:
+                return False
+            current = current_rows[0]
+            self.driver_vehicle_assignments = [
+                assignment
+                for assignment in self.driver_vehicle_assignments
+                if assignment is not current
+            ]
+            return True
+
         before_count = len(self.driver_vehicle_assignments)
         self.driver_vehicle_assignments = [
             assignment
@@ -1621,7 +1697,6 @@ class InMemoryManualDispatchRepository:
             if not (
                 assignment.dispatch_date == dispatch_date
                 and assignment.driver_id == driver_id
-                and (not delivery_date or assignment.delivery_date == delivery_date)
             )
         ]
         return len(self.driver_vehicle_assignments) != before_count

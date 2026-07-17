@@ -762,36 +762,59 @@
   gap: 0.85rem;
 }
 
-.workspace-collection-card {
+.workspace-collection-card,
+.workspace-run-sheet-document-card {
   display: grid;
   gap: 0.75rem;
 }
 
-.workspace-collection-card .workspace-record-card-top {
+.workspace-collection-card .workspace-record-card-top,
+.workspace-run-sheet-document-card .workspace-record-card-top {
   margin-bottom: 0;
 }
 
-.workspace-collection-date-group {
+.workspace-collection-date-group,
+.workspace-run-sheet-date-group {
   gap: 0.85rem;
 }
 
-.workspace-collection-date-group-header {
+.workspace-collection-date-group-header,
+.workspace-run-sheet-date-group-header {
   align-items: flex-start;
   gap: 0.75rem;
 }
 
-.workspace-collection-card-meta {
+.workspace-collection-card-meta,
+.workspace-run-sheet-card-meta {
   margin: 0;
+  overflow-wrap: anywhere;
   color: var(--muted);
   font-size: 0.78rem;
   font-weight: 750;
   line-height: 1.35;
 }
 
-.workspace-collection-actions {
+.workspace-run-sheet-document-card h3 {
+  font-size: 1.2rem;
+}
+
+.workspace-collection-actions,
+.workspace-run-sheet-actions {
   justify-content: flex-end;
-  border-top: 1px solid rgba(39, 93, 69, 0.12);
   padding-top: 0.7rem;
+}
+
+.workspace-collection-actions {
+  border-top: 1px solid rgba(39, 93, 69, 0.12);
+}
+
+.workspace-run-sheet-actions {
+  border-top: 1px solid rgba(31, 101, 232, 0.14);
+}
+
+.workspace-run-sheet-date-group-header .workspace-action-button,
+.workspace-run-sheet-actions .workspace-action-button {
+  min-height: 44px;
 }
 
 .workspace-opshop-weight-sheet {
@@ -6034,22 +6057,6 @@ select:disabled {
   background: #f8fbff;
 }
 
-.workspace-run-sheet-toolbar {
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-}
-
-.workspace-run-sheet-toolbar-controls {
-  display: flex;
-  align-items: end;
-  justify-content: flex-end;
-  gap: 0.65rem;
-}
-
-.workspace-run-sheet-toolbar-controls .workspace-date-control {
-  min-width: 190px;
-}
-
 .workspace-daily-run-sheet-list {
   grid-template-columns: minmax(0, 1fr);
 }
@@ -6247,17 +6254,17 @@ select:disabled {
     min-width: 0;
   }
 
-  .workspace-run-sheet-toolbar {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .workspace-run-sheet-toolbar-controls {
-    align-items: stretch;
+  .workspace-run-sheet-date-group-header {
     flex-direction: column;
+    align-items: stretch;
   }
 
-  .workspace-run-sheet-toolbar-controls .workspace-date-control {
-    min-width: 0;
+  .workspace-run-sheet-date-group-header .workspace-action-button {
+    width: 100%;
+  }
+
+  .workspace-run-sheet-actions .workspace-action-button {
+    flex: 1 1 180px;
   }
 
   .workspace-daily-run-sheet-header {

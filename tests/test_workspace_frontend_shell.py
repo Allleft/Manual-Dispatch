@@ -596,23 +596,23 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("dispatchDate,", self.workspace_actions)
         self.assertIn("deliveryDate: scopedDeliveryDate", self.workspace_actions)
         self.assertIn(
-            "api.listDeliveryRunSheetsByDispatchAndDeliveryDate",
+            "api.listDeliveryRunSheetsByDeliveryDate",
             self.workspace_actions,
         )
         self.assertIn("state.deliveryTripSummaryBoard = board", self.workspace_actions)
         self.assertIn("Trip 1 orders", self.delivery_renderer)
         self.assertIn("Trip 2 orders", self.delivery_renderer)
         self.assertIn("Saved Run Sheet History", self.delivery_renderer)
-        self.assertIn("Export Daily Run Sheet", self.delivery_renderer)
-        self.assertIn("View Run Sheet details / preview", self.delivery_renderer)
+        self.assertIn("Export Excel", self.delivery_renderer)
+        self.assertIn("workspace-run-sheet-document-card", self.delivery_renderer)
         self.assertIn("Vehicle", self.delivery_renderer)
         self.assertIn('label: "Select vehicle"', self.delivery_renderer)
         self.assertIn("formatDeliveryVehicleOptionLabel", self.delivery_renderer)
         self.assertNotIn("Selected vehicle:", self.delivery_renderer)
         self.assertNotIn("Capacity:", self.delivery_renderer)
         self.assertNotIn("workspace-vehicle-capacity-summary", self.delivery_renderer)
-        self.assertIn("runSheet.dispatch_date === dispatchDate", self.delivery_renderer)
-        self.assertIn("assignment.dispatch_date === dispatchDate", self.delivery_renderer)
+        self.assertNotIn("runSheet.dispatch_date === dispatchDate", self.delivery_renderer)
+        self.assertNotIn("assignment.dispatch_date === dispatchDate", self.delivery_renderer)
         action_block = self.delivery_renderer.split(
             "function createDeliveryOrderActions", 1
         )[1].split("function createDeliveryOrderForm", 1)[0]
@@ -648,17 +648,20 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn(".workspace-order-detail-trigger", self.workspace_actions)
         self.assertIn("item.dataset.orderId === orderId", self.workspace_actions)
 
-    def test_generated_and_history_delivery_run_sheets_share_full_snapshot_paper(self):
+    def test_delivery_run_sheets_align_document_cards_and_preserve_full_snapshot_paper(self):
         history_block = self.delivery_renderer.split(
             "function createSavedRunSheetHistory", 1
         )[1].split("function createRunSheetList", 1)[0]
         operational_block = self.delivery_renderer.split(
-            "function createRunSheetSection", 1
+            "function createRunSheetList", 1
         )[1].split("function createDailyRunSheetPaper", 1)[0]
         paper_suite = self.delivery_renderer.split(
             "function createDailyRunSheetPaper", 1
-        )[1].split("function createRunSheetCard", 1)[0]
+        )[1].split("function createRunSheetDocumentCard", 1)[0]
         paper_function = paper_suite.split("const DAILY_RUN_SHEET_COLUMNS", 1)[0]
+        document_card_block = self.delivery_renderer.split(
+            "function createRunSheetDocumentCard", 1
+        )[1].split("function createDeliveryOrderModal", 1)[0]
 
         self.assertEqual(
             1,
@@ -668,8 +671,14 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             'createDailyRunSheetPaper(runSheet, state, actions, { context: "history" })',
             history_block,
         )
-        self.assertNotIn("createRunSheetCard", history_block)
-        self.assertIn("createDailyRunSheetPaper(runSheet, state, actions)", operational_block)
+        self.assertNotIn("createRunSheetDocumentCard", history_block)
+        self.assertIn("createRunSheetDateGroup", operational_block)
+        self.assertIn("createRunSheetDocumentCard(runSheet, state, actions)", operational_block)
+        self.assertIn("Delivery date:", operational_block)
+        self.assertIn("generated/saved run sheets for this Delivery Date", operational_block)
+        self.assertIn("dataset.deliveryRunSheetExport", operational_block)
+        self.assertNotIn('"Generated Run Sheets"', operational_block)
+        self.assertNotIn('"Saved Run Sheets"', operational_block)
         self.assertIn('"Saved Run Sheet History"', history_block)
         self.assertIn(
             '"Search saved Delivery Run Sheets by their actual Delivery Date."',
@@ -722,6 +731,24 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("Saved:", paper_function)
         self.assertIn("Saved by:", paper_function)
         self.assertIn("Workspace date:", paper_function)
+        self.assertIn("embedded = false", paper_function)
+        self.assertIn("if (!embedded)", paper_function)
+
+        for expected in (
+            "workspace-run-sheet-document-card",
+            "workspace-run-sheet-card-meta",
+            "workspace-run-sheet-actions",
+            "Workspace date:",
+            "Delivery date:",
+            "Driver:",
+            "Status:",
+            "createBadge(runSheet.status",
+            "createDailyRunSheetPaper(runSheet, state, actions, { embedded: true })",
+            '"Save Run Sheet"',
+            '"Cancel Generated"',
+            '"Export Excel"',
+        ):
+            self.assertIn(expected, document_card_block)
 
         actions_block = paper_function.split(
             'actionsRow.className = "workspace-action-row workspace-daily-run-sheet-actions"', 1
@@ -738,8 +765,13 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("workspace-daily-run-sheet-table-scroll", self.styles)
         self.assertIn("overflow-x: auto", self.styles)
         self.assertIn("min-width: 820px", self.styles)
+        self.assertIn(".workspace-run-sheet-document-card", self.styles)
+        self.assertIn(".workspace-run-sheet-date-group", self.styles)
+        self.assertIn(".workspace-run-sheet-card-meta", self.styles)
+        self.assertIn(".workspace-run-sheet-actions", self.styles)
         self.assertIn(".workspace-run-sheet-paper-list", self.styles)
         self.assertIn("grid-template-columns: minmax(0, 1fr)", self.styles)
+        self.assertIn("min-height: 44px", self.styles)
         self.assertIn("white-space: pre-line", self.styles)
 
     def test_delivery_date_excel_export_is_scoped_busy_and_non_mutating(self):
@@ -859,6 +891,11 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("deliveryVehicleClaims", vehicle_action)
         self.assertIn("deliveryVehiclePendingKeys", vehicle_control)
         self.assertIn("deliveryVehicleQueues", vehicle_action)
+        vehicle_current_check = self.workspace_actions.split(
+            "function isDeliveryVehicleQueueCurrent", 1
+        )[1].split("function updateDeliveryVehicleClaim", 1)[0]
+        self.assertIn("state.deliveryTripSummaryDate", vehicle_current_check)
+        self.assertNotIn("state.dispatchDate", vehicle_current_check)
         self.assertNotIn("applyDeliveryVehicleAssignment", self.workspace_actions)
         self.assertNotIn("clearDeliveryVehicleAssignment", self.workspace_actions)
         self.assertIn("pallet capacity", self.delivery_vehicle_utils)
@@ -1446,7 +1483,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
               getDeliveryWorkspaceBoard: async () => board(),
               getDeliveryTripSummary: async () => board(),
               listDeliveryRunSheets: async () => [],
-              listDeliveryRunSheetsByDispatchAndDeliveryDate: async () => [],
+              listDeliveryRunSheetsByDeliveryDate: async () => [],
             };
             const actions = createWorkspaceActions({ state, renderWorkspace: () => {}, api });
             const pending = actions.updateDeliveryVehicleSelection("2026-06-29", "A", "V1");
@@ -1532,11 +1569,11 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
 
             state.workspaceRoute = "delivery/trip-summary";
             await actions.moveDeliveryOrderToTrip("ORDER-1", "A", "trip2");
-            if (state.deliveryBoard.assignments[0].trip_no !== "trip2") {
+            if (state.deliveryTripSummaryBoard.assignments[0].trip_no !== "trip2") {
               throw new Error("Move did not update the returned board in place");
             }
             await actions.unassignDeliveryOrder("ORDER-1");
-            if (state.deliveryBoard.assignments.length) {
+            if (state.deliveryTripSummaryBoard.assignments.length) {
               throw new Error("Unassign did not update the returned board in place");
             }
             if (!restored.length || restored.some(([x, y]) => x !== 18 || y !== 640)) {
@@ -1923,14 +1960,13 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             actions.updateDeliveryAssignmentDraft("ORDER-1", "trip_no", "trip1");
             await actions.applyDeliveryOrderAssignment("ORDER-1");
             await actions.moveDeliveryOrderToTrip("ORDER-2", "D001", "trip2");
-            const expectedKeys = "dispatch_date,driver_id,order_id,trip_no";
+            const expectedKeys = "driver_id,order_id,trip_no";
             for (const payload of assignedPayloads) {
               if (Object.keys(payload).sort().join(",") !== expectedKeys) {
                 throw new Error("Delivery assignment payload contains unexpected fields");
               }
             }
-            if (assignedPayloads[0].dispatch_date !== "2026-06-24" ||
-                assignedPayloads[0].order_id !== "ORDER-1" ||
+            if (assignedPayloads[0].order_id !== "ORDER-1" ||
                 assignedPayloads[0].driver_id !== "D001" ||
                 assignedPayloads[0].trip_no !== "trip1") {
               throw new Error("Add Order payload was not scoped correctly");
@@ -1951,8 +1987,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
               throw new Error("opening Delivery confirmation called Generate API");
             }
             await actions.confirmGenerateDeliveryRunSheet();
-            if (generatedPayloads[0].dispatch_date !== "2026-06-24" ||
-                generatedPayloads[0].delivery_date !== "2026-06-22" ||
+            if (generatedPayloads[0].delivery_date !== "2026-06-22" ||
                 generatedPayloads[0].driver_id !== "D001") {
               throw new Error("Generate Run Sheet payload was not scoped correctly");
             }
@@ -1964,10 +1999,10 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             """
         )
 
-    def test_stale_delivery_generate_responses_do_not_navigate(self):
+    def test_delivery_generate_ignores_dispatch_changes_but_rejects_stale_routes(self):
         self._run_workspace_actions_script(
             """
-            async function runScenario(mutator) {
+            async function runScenario(mutator, shouldNavigate) {
               const state = {
                 isLoggedIn: true,
                 workspaceRoute: "delivery/trip-summary",
@@ -2014,17 +2049,20 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
               mutator(state);
               resolveGenerate();
               await pending;
-              if (navigatedRoutes.length !== 0) {
-                throw new Error("Stale Generate response navigated unexpectedly");
+              if (shouldNavigate && navigatedRoutes.join(",") !== "delivery/run-sheet") {
+                throw new Error("Dispatch-only change incorrectly made Generate stale");
+              }
+              if (!shouldNavigate && navigatedRoutes.length !== 0) {
+                throw new Error("Stale route Generate response navigated unexpectedly");
               }
             }
 
-            await runScenario((state) => { state.dispatchDate = "2026-06-25"; });
-            await runScenario((state) => { state.workspaceRoute = "delivery/task-pool"; });
+            await runScenario((state) => { state.dispatchDate = "2026-06-25"; }, true);
+            await runScenario((state) => { state.workspaceRoute = "delivery/task-pool"; }, false);
             await runScenario((state) => {
               state.workspaceRoute = "opshop/regular";
               state.activeWorkspace = "opshop";
-            });
+            }, false);
             """
         )
 
@@ -2235,7 +2273,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
               api: {
                 createGeneratedOpShopPickupCollection: async () => { throw new Error("Pickup changed"); },
                 getOpShopTripSummary: async () => { reloads += 1; return opshopState.opshopBoard; },
-                listOpShopPickupCollectionsByDispatchAndPickupDate: async () => [],
+                listOpShopPickupCollectionsByPickupDate: async () => [],
               },
             });
             opshopActions.generateOpShopPickupCollection({
@@ -2311,7 +2349,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             "async function runOpShopAction", 1
         )[1].split("function getDeliveryAssignmentDraft", 1)[0]
 
-        self.assertIn("dispatch_date: context.dispatchDate", generate_block)
+        self.assertNotIn("dispatch_date: context.dispatchDate", generate_block)
         self.assertIn("pickup_date: candidate.pickup_date", generate_block)
         self.assertIn("driver_id: candidate.driver_id", generate_block)
         self.assertIn("await loadOpShopRoute(context.route)", generate_block)
@@ -2410,10 +2448,10 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
               state,
               renderWorkspace: () => {},
               api: {
-                exportOpShopPickupCollectionsExcel: async ({ pickupDate, dispatchDate }) => {
+                exportOpShopPickupCollectionsExcel: async ({ pickupDate }) => {
                   exportCalls += 1;
-                  if (pickupDate !== "2026-07-07" || dispatchDate !== "2026-07-06") {
-                    throw new Error(`wrong export scope: ${dispatchDate}/${pickupDate}`);
+                  if (pickupDate !== "2026-07-07") {
+                    throw new Error(`wrong export scope: ${pickupDate}`);
                   }
                   return exportGate;
                 },
@@ -2764,11 +2802,11 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("api.getOpShopTripSummary", self.workspace_actions)
         self.assertIn("pickupDate: scopedPickupDate", self.workspace_actions)
         self.assertIn(
-            "api.listOpShopPickupCollectionsByDispatchAndPickupDate",
+            "api.listOpShopPickupCollectionsByPickupDate",
             self.workspace_actions,
         )
         self.assertIn("state.opshopTripSummaryBoard = board", self.workspace_actions)
-        self.assertIn("collection.dispatch_date === dispatchDate", self.opshop_renderer)
+        self.assertNotIn("collection.dispatch_date === dispatchDate", self.opshop_renderer)
 
     def test_opshop_trip_summary_pickup_cards_open_read_only_detail_modal(self):
         row_block = self.opshop_renderer.split(
@@ -3122,30 +3160,30 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
               getDeliveryWorkspaceBoard: async () => {
                 throw new Error("Delivery Trip Summary should not load dispatch board");
               },
-              getDeliveryTripSummary: async ({ dispatchDate, deliveryDate }) => {
-                if (dispatchDate !== "2026-06-24" || deliveryDate !== "2026-06-22") {
-                  throw new Error(`wrong Delivery Trip Summary scope ${dispatchDate}/${deliveryDate}`);
+              getDeliveryTripSummary: async ({ deliveryDate }) => {
+                if (deliveryDate !== "2026-06-22") {
+                  throw new Error(`wrong Delivery Trip Summary scope ${deliveryDate}`);
                 }
                 return deliveryTripBoard;
               },
-              listDeliveryRunSheetsByDispatchAndDeliveryDate: async (dispatchDate, deliveryDate) => {
-                if (dispatchDate !== "2026-06-24" || deliveryDate !== "2026-06-22") {
-                  throw new Error(`wrong Delivery Run Sheet scope ${dispatchDate}/${deliveryDate}`);
+              listDeliveryRunSheetsByDeliveryDate: async (deliveryDate) => {
+                if (deliveryDate !== "2026-06-22") {
+                  throw new Error(`wrong Delivery Run Sheet scope ${deliveryDate}`);
                 }
                 return [{ run_sheet_id: "DRS-HIST", delivery_date: deliveryDate }];
               },
               getOpShopWorkspaceBoard: async () => {
                 throw new Error("OP SHOP Trip Summary should not load dispatch board");
               },
-              getOpShopTripSummary: async ({ dispatchDate, pickupDate }) => {
-                if (dispatchDate !== "2026-06-24" || pickupDate !== "2026-06-22") {
-                  throw new Error(`wrong OP SHOP Trip Summary scope ${dispatchDate}/${pickupDate}`);
+              getOpShopTripSummary: async ({ pickupDate }) => {
+                if (pickupDate !== "2026-06-22") {
+                  throw new Error(`wrong OP SHOP Trip Summary scope ${pickupDate}`);
                 }
                 return opshopTripBoard;
               },
-              listOpShopPickupCollectionsByDispatchAndPickupDate: async (dispatchDate, pickupDate) => {
-                if (dispatchDate !== "2026-06-24" || pickupDate !== "2026-06-22") {
-                  throw new Error(`wrong OP SHOP collection scope ${dispatchDate}/${pickupDate}`);
+              listOpShopPickupCollectionsByPickupDate: async (pickupDate) => {
+                if (pickupDate !== "2026-06-22") {
+                  throw new Error(`wrong OP SHOP collection scope ${pickupDate}`);
                 }
                 return [{ collection_id: "OPC-HIST", pickup_date: pickupDate }];
               },
@@ -3527,8 +3565,6 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
               deliveryVehiclePendingKeys: state.deliveryVehiclePendingKeys,
               opshopAssignmentDrafts: state.opshopAssignmentDrafts,
               countrysideRouteGroupDrafts: state.countrysideRouteGroupDrafts,
-              deliveryBusyActionKeys: state.deliveryBusyActionKeys,
-              opshopBusyActionKeys: state.opshopBusyActionKeys,
             })) {
               if (Object.keys(value || {}).length) {
                 throw new Error(`${name} was not cleared on dispatch date change`);
@@ -3589,6 +3625,10 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             });
 
             await actions.updateDispatchDate("2026-06-25");
+            if (state.deliveryTripSummaryDate !== "2026-06-24"
+                || state.opshopTripSummaryDate !== "2026-06-24") {
+              throw new Error("Dispatch Date changed independent Trip Summary dates");
+            }
             if (state.deliverySavedHistoryDate !== "2026-05-10"
                 || state.deliverySavedHistoryRunSheets !== deliveryHistory
                 || state.opshopSavedHistoryDate !== "2026-05-11"

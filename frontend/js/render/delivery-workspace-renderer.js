@@ -98,7 +98,7 @@ function createWorkspacePage(state, onDispatchDateChange) {
   copy.append(kicker, title, description);
   titleGroup.append(icon, copy);
   heading.append(titleGroup);
-  if (state.workspaceRoute !== "delivery/history") {
+  if (state.workspaceRoute === "delivery/task-pool") {
     heading.append(createDateControl(state, onDispatchDateChange));
   }
 
@@ -475,7 +475,6 @@ function createDriverTripSummaryCard(driver, board, deliveryDate, state, actions
   const driverOrders = assignedOrdersForDriver(board, deliveryDate, driver.driver_id);
   const runSheet = findRunSheetForDriver(
     state.deliveryTripSummaryRunSheets,
-    board.dispatch_date,
     deliveryDate,
     driver.driver_id,
   );
@@ -537,7 +536,6 @@ function createDriverVehicleControl(driver, board, deliveryDate, isLocked, state
   section.className = "workspace-context-row workspace-vehicle-control";
   const currentAssignment = findVehicleAssignment(
     board,
-    board.dispatch_date,
     deliveryDate,
     driver.driver_id,
   );
@@ -720,42 +718,28 @@ function createSavedRunSheetHistory(state, actions) {
 
 function createRunSheetList(runSheets, state, actions) {
   const wrapper = document.createElement("div");
-  wrapper.className = "workspace-stack";
+  wrapper.className = "workspace-stack workspace-run-sheets";
   const deliveryDate = scopedDeliveryDate(state);
   const filtered = (runSheets || []).filter((runSheet) => (
     runSheet.delivery_date === deliveryDate
     && ["GENERATED", "SAVED"].includes(runSheet.status)
   ));
 
-  wrapper.append(createRunSheetToolbar(deliveryDate, filtered, state, actions));
   wrapper.append(
-    createRunSheetSection(
-      "Generated Run Sheets",
-      filtered.filter((runSheet) => runSheet.status === "GENERATED"),
-      state,
-      actions,
-      { dailyPreview: true },
-    ),
-    createRunSheetSection(
-      "Saved Run Sheets",
-      filtered.filter((runSheet) => runSheet.status === "SAVED"),
-      state,
-      actions,
-    ),
+    createRunSheetToolbar(deliveryDate, state, actions),
+    createRunSheetDateGroup(deliveryDate, filtered, state, actions),
   );
   return wrapper;
 }
 
 
-function createRunSheetToolbar(deliveryDate, runSheets, state, actions) {
+function createRunSheetToolbar(deliveryDate, state, actions) {
   const panel = document.createElement("section");
-  panel.className = "workspace-context-panel workspace-context-panel-delivery workspace-run-sheet-toolbar";
+  panel.className = "workspace-context-panel workspace-context-panel-delivery workspace-run-sheet-intro";
   panel.append(createSectionHeading(
     "Delivery Run Sheets",
-    "Review generated documents, save them, or export the selected Delivery Date.",
+    "Review generated and saved Delivery Run Sheets by actual Delivery date.",
   ));
-  const controls = document.createElement("div");
-  controls.className = "workspace-run-sheet-toolbar-controls";
   const field = document.createElement("label");
   field.className = "workspace-date-control workspace-delivery-date-control";
   field.textContent = "Delivery date";
@@ -765,6 +749,20 @@ function createRunSheetToolbar(deliveryDate, runSheets, state, actions) {
   input.disabled = state.isDeliveryWorkspaceLoading;
   input.addEventListener("change", () => actions.updateDeliveryTripSummaryDate(input.value));
   field.append(input);
+  panel.append(field);
+  return panel;
+}
+
+
+function createRunSheetDateGroup(deliveryDate, runSheets, state, actions) {
+  const section = document.createElement("section");
+  section.className = "workspace-context-panel workspace-context-panel-delivery workspace-run-sheet-date-group";
+  const header = document.createElement("div");
+  header.className = "workspace-record-card-top workspace-run-sheet-date-group-header";
+  header.append(createSectionHeading(
+    `Delivery date: ${deliveryDate}`,
+    `${runSheets.length} generated/saved run sheets for this Delivery Date`,
+  ));
   const exportKey = `delivery-export-date:${deliveryDate}`;
   const isExporting = isBusy(state, exportKey);
   const exportButton = createActionButton(
@@ -775,34 +773,18 @@ function createRunSheetToolbar(deliveryDate, runSheets, state, actions) {
     },
   );
   exportButton.dataset.deliveryRunSheetExport = deliveryDate;
-  controls.append(field, exportButton);
-  panel.append(controls);
-  return panel;
-}
-
-
-function createRunSheetSection(
-  titleText,
-  runSheets,
-  state,
-  actions,
-  { dailyPreview = false } = {},
-) {
-  const section = document.createElement("section");
-  section.className = "workspace-context-panel workspace-context-panel-delivery";
-  section.append(createSectionHeading(titleText, `${runSheets.length} records`));
+  header.append(exportButton);
+  section.append(header);
   const grid = document.createElement("div");
-  grid.className = "workspace-card-grid workspace-run-sheet-grid";
-  if (dailyPreview) {
-    grid.classList.add("workspace-daily-run-sheet-list");
-  }
+  grid.className = "workspace-card-grid workspace-run-sheet-grid workspace-run-sheet-paper-list";
   if (!runSheets.length) {
-    grid.append(createEmptyState(`No ${titleText.toLowerCase()} for this Delivery Date.`, "history"));
+    grid.append(createEmptyState(
+      "No generated or saved Delivery Run Sheets for this Delivery Date.",
+      "history",
+    ));
   } else {
     runSheets.forEach((runSheet) => grid.append(
-      dailyPreview
-        ? createDailyRunSheetPaper(runSheet, state, actions)
-        : createRunSheetCard(runSheet, state, actions),
+      createRunSheetDocumentCard(runSheet, state, actions),
     ));
   }
   section.append(grid);
@@ -814,7 +796,7 @@ function createDailyRunSheetPaper(
   runSheet,
   state,
   actions,
-  { context = "operational" } = {},
+  { context = "operational", embedded = false } = {},
 ) {
   const isHistory = context === "history";
   const paper = document.createElement("article");
@@ -925,7 +907,14 @@ function createDailyRunSheetPaper(
       ),
     );
   }
-  paper.append(header, metadata, operationalFields, tableRegion, finish, actionsRow);
+  paper.append(header);
+  if (!embedded) {
+    paper.append(metadata);
+  }
+  paper.append(operationalFields, tableRegion, finish);
+  if (!embedded) {
+    paper.append(actionsRow);
+  }
   return paper;
 }
 
@@ -1048,39 +1037,39 @@ function formatDailyRunSheetDate(value) {
 }
 
 
-function createRunSheetCard(runSheet, state, actions) {
+function createRunSheetDocumentCard(runSheet, state, actions) {
   const card = document.createElement("article");
-  card.className = "workspace-record-card workspace-run-sheet-card";
+  card.className = "workspace-record-card workspace-run-sheet-document-card";
   const top = document.createElement("div");
   top.className = "workspace-record-card-top";
-  const title = document.createElement("div");
+  const identity = document.createElement("div");
   const kicker = document.createElement("span");
   kicker.className = "workspace-record-kicker";
   kicker.textContent = runSheet.delivery_date;
   const heading = document.createElement("h3");
   heading.textContent = formatOptional(runSheet.driver_name_snapshot, runSheet.driver_id);
-  title.append(kicker, heading);
-  top.append(title, createBadge(runSheet.status, runSheet.status.toLowerCase()));
+  identity.append(kicker, heading);
+  top.append(identity, createBadge(runSheet.status, runSheet.status.toLowerCase()));
 
-  const tripCounts = new Map(
-    (runSheet.trips || []).map((trip) => [trip.trip_no, (trip.orders || []).length]),
-  );
-  const facts = document.createElement("dl");
-  facts.className = "workspace-fact-grid";
-  appendFact(facts, "Delivery date", runSheet.delivery_date);
-  appendFact(facts, "Driver", formatOptional(runSheet.driver_name_snapshot, runSheet.driver_id));
-  appendFact(facts, "Vehicle", formatOptional(runSheet.vehicle_rego_snapshot, "Not selected"));
-  appendFact(facts, "Trip 1 orders", tripCounts.get("trip1") || 0);
-  appendFact(facts, "Trip 2 orders", tripCounts.get("trip2") || 0);
-  appendFact(facts, "Total pallets", runSheet.total_pallets || 0);
-  appendFact(facts, "Total loose bags", runSheet.total_loose_bags || 0);
-  appendFact(facts, "Generated", runSheet.generated_at);
+  const meta = document.createElement("p");
+  meta.className = "workspace-run-sheet-card-meta";
+  const metadata = [
+    `Workspace date: ${formatOptional(runSheet.dispatch_date)}`,
+    `Delivery date: ${formatOptional(runSheet.delivery_date)}`,
+    `Driver: ${formatOptional(runSheet.driver_name_snapshot, runSheet.driver_id)}`,
+    `Status: ${formatOptional(runSheet.status)}`,
+    `Generated: ${formatOptional(runSheet.generated_at)}`,
+  ];
   if (runSheet.status === "SAVED") {
-    appendFact(facts, "Saved", runSheet.saved_at);
-    appendFact(facts, "Saved by", runSheet.saved_by_account_name || "Unknown");
+    metadata.push(
+      `Saved: ${formatOptional(runSheet.saved_at)}`,
+      `Saved by: ${formatOptional(runSheet.saved_by_account_name, "Unknown")}`,
+    );
   }
+  meta.textContent = metadata.join(" | ");
+
   const actionsRow = document.createElement("div");
-  actionsRow.className = "workspace-action-row";
+  actionsRow.className = "workspace-action-row workspace-run-sheet-actions";
   if (runSheet.status === "GENERATED") {
     actionsRow.append(
       createActionButton("Save Run Sheet", () => actions.saveDeliveryRunSheet(runSheet.run_sheet_id), {
@@ -1093,38 +1082,23 @@ function createRunSheetCard(runSheet, state, actions) {
     );
   }
   if (runSheet.status === "SAVED") {
+    const isExporting = isBusy(state, `delivery-export:${runSheet.run_sheet_id}`);
     actionsRow.append(
-      createActionButton("Export Daily Run Sheet", () => actions.exportDeliveryRunSheet(runSheet.run_sheet_id), {
-        disabled: isBusy(state, `delivery-export:${runSheet.run_sheet_id}`),
-        primary: true,
-      }),
+      createActionButton(
+        isExporting ? "Exporting..." : "Export Excel",
+        () => actions.exportDeliveryRunSheet(runSheet.run_sheet_id),
+        { disabled: isExporting, primary: true },
+      ),
     );
   }
-  card.append(top, facts, createRunSheetPreview(runSheet), actionsRow);
+  card.append(
+    top,
+    meta,
+    createDailyRunSheetPaper(runSheet, state, actions, { embedded: true }),
+    actionsRow,
+  );
   return card;
 }
-
-
-function createRunSheetPreview(runSheet) {
-  const details = document.createElement("details");
-  details.className = "workspace-run-sheet-preview";
-  const summary = document.createElement("summary");
-  summary.textContent = "View Run Sheet details / preview";
-  details.append(summary);
-  (runSheet.trips || []).forEach((trip) => {
-    const title = document.createElement("h4");
-    title.textContent = trip.trip_no === "trip2" ? "Trip 2" : "Trip 1";
-    const list = document.createElement("ul");
-    (trip.orders || []).forEach((order) => {
-      const item = document.createElement("li");
-      item.textContent = `${formatOptional(order.company_name_snapshot)} - ${formatOptional(order.suburb_snapshot)} - ${formatOptional(order.invoice_number_snapshot, order.task_id)}`;
-      list.append(item);
-    });
-    details.append(title, list);
-  });
-  return details;
-}
-
 
 function createDeliveryOrderModal(state, actions) {
   const formMode = state.deliveryOrderFormMode;
@@ -1866,7 +1840,6 @@ function assignedOrdersForDriver(board, deliveryDate, driverId) {
   const orders = new Map((board.orders || []).map((order) => [order.order_id, order]));
   return (board.assignments || [])
     .filter((assignment) =>
-      assignment.dispatch_date === board.dispatch_date &&
       assignment.driver_id === driverId
     )
     .map((assignment) => ({ assignment, order: orders.get(assignment.task_id) }))
@@ -1883,10 +1856,9 @@ function assignedOrdersForDriver(board, deliveryDate, driverId) {
 }
 
 
-function findRunSheetForDriver(runSheets, dispatchDate, deliveryDate, driverId) {
+function findRunSheetForDriver(runSheets, deliveryDate, driverId) {
   return (runSheets || []).find(
     (runSheet) =>
-      runSheet.dispatch_date === dispatchDate &&
       runSheet.delivery_date === deliveryDate &&
       runSheet.driver_id === driverId &&
       ["GENERATED", "SAVED"].includes(runSheet.status),
@@ -1894,10 +1866,9 @@ function findRunSheetForDriver(runSheets, dispatchDate, deliveryDate, driverId) 
 }
 
 
-function findVehicleAssignment(board, dispatchDate, deliveryDate, driverId) {
+function findVehicleAssignment(board, deliveryDate, driverId) {
   return (board.driver_vehicle_assignments || []).find(
     (assignment) =>
-      assignment.dispatch_date === dispatchDate &&
       assignment.delivery_date === deliveryDate &&
       assignment.driver_id === driverId,
   );
@@ -1931,7 +1902,6 @@ function createDeliveryGenerationCandidate(
 ) {
   const vehicleAssignment = findVehicleAssignment(
     board,
-    board.dispatch_date,
     deliveryDate,
     driver.driver_id,
   );

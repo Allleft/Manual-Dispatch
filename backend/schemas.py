@@ -462,12 +462,34 @@ class DeliveryWorkspaceBoardResponse:
 
 
 @dataclass
+class DeliveryTripSummaryResponse:
+    delivery_date: str
+    orders: List[Order]
+    drivers: List[Driver]
+    vehicles: List[Vehicle]
+    assignments: List[ManualDispatchAssignment]
+    driver_vehicle_assignments: List[ManualDriverVehicleAssignment]
+    saved_vehicle_assignment_locks: List[DeliveryVehicleAssignmentLock]
+    dispatch_date: Optional[str] = None
+
+
+@dataclass
 class OpShopWorkspaceBoardResponse:
     dispatch_date: str
     opshop_pickups: List[OpShopWorkspacePickupItem]
     drivers: List[Driver]
     templates: List[OpShopTemplate]
     countryside_route_groups: List[OpShopCountrysideRouteGroup]
+
+
+@dataclass
+class OpShopTripSummaryResponse:
+    pickup_date: str
+    opshop_pickups: List[OpShopWorkspacePickupItem]
+    drivers: List[Driver]
+    templates: List[OpShopTemplate]
+    countryside_route_groups: List[OpShopCountrysideRouteGroup]
+    dispatch_date: Optional[str] = None
 
 
 @dataclass

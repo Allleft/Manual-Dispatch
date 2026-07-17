@@ -148,10 +148,9 @@ class ManualDispatchService:
         self._ensure_workspace_ready("delivery")
         return self.delivery_workspace_board_service.get_board(dispatch_date)
 
-    def get_delivery_trip_summary_board(self, dispatch_date, delivery_date):
+    def get_delivery_trip_summary_board(self, delivery_date):
         self._ensure_workspace_ready("delivery")
         return self.delivery_workspace_board_service.get_trip_summary_board(
-            dispatch_date,
             delivery_date
         )
 
@@ -159,10 +158,9 @@ class ManualDispatchService:
         self._ensure_workspace_ready("opshop")
         return self.opshop_workspace_board_service.get_board(dispatch_date)
 
-    def get_opshop_trip_summary_board(self, dispatch_date, pickup_date):
+    def get_opshop_trip_summary_board(self, pickup_date):
         self._ensure_workspace_ready("opshop")
         return self.opshop_workspace_board_service.get_trip_summary_board(
-            dispatch_date,
             pickup_date
         )
 
@@ -197,7 +195,7 @@ class ManualDispatchService:
                     f"Order {self._order_entity_id_by_id(request.order_id)} "
                     "assignment failed."
                 ),
-                dispatch_date=request.dispatch_date,
+                dispatch_date=request.dispatch_date or self._order_delivery_date(request.order_id),
                 delivery_date=self._order_delivery_date(request.order_id),
                 driver=self._driver_name(request.driver_id),
                 metadata={"failure_reason": str(error)},
@@ -235,7 +233,7 @@ class ManualDispatchService:
                     f"Order {self._order_entity_id_by_id(request.order_id)} "
                     "unassignment failed."
                 ),
-                dispatch_date=request.dispatch_date,
+                dispatch_date=request.dispatch_date or self._order_delivery_date(request.order_id),
                 delivery_date=self._order_delivery_date(request.order_id),
                 driver=before.get("driver") if before else None,
                 metadata={"failure_reason": str(error)},
@@ -269,7 +267,7 @@ class ManualDispatchService:
                     f"Vehicle {self._vehicle_label(request.vehicle_id)} assignment "
                     f"to {self._driver_name(request.driver_id)} failed."
                 ),
-                dispatch_date=request.dispatch_date,
+                dispatch_date=request.dispatch_date or request.delivery_date,
                 delivery_date=request.delivery_date,
                 driver=self._driver_name(request.driver_id),
                 vehicle=self._vehicle_label(request.vehicle_id),
@@ -309,7 +307,7 @@ class ManualDispatchService:
                     f"Vehicle clear for {self._driver_name(request.driver_id)} "
                     "failed."
                 ),
-                dispatch_date=request.dispatch_date,
+                dispatch_date=request.dispatch_date or request.delivery_date,
                 delivery_date=request.delivery_date,
                 driver=self._driver_name(request.driver_id),
                 vehicle=before.get("vehicle") if before else None,
@@ -346,7 +344,8 @@ class ManualDispatchService:
                 entity_type="OPSHOP_PICKUP",
                 entity_id=None,
                 summary="OP SHOP pickup assignment update failed.",
-                dispatch_date=request.dispatch_date,
+                dispatch_date=request.dispatch_date or self._opshop_assignment_pickup_date(request.assignments),
+                pickup_date=self._opshop_assignment_pickup_date(request.assignments),
                 metadata={"failure_reason": str(error)},
             )
             raise
@@ -385,7 +384,7 @@ class ManualDispatchService:
                     f"OP SHOP pickup {self._opshop_pickup_name(request.pickup_task_id)} "
                     "unassignment failed."
                 ),
-                dispatch_date=request.dispatch_date,
+                dispatch_date=request.dispatch_date or self._opshop_pickup_date(request.pickup_task_id),
                 pickup_date=self._opshop_pickup_date(request.pickup_task_id),
                 driver=before.get("driver") if before else None,
                 metadata={"failure_reason": str(error)},
@@ -458,7 +457,7 @@ class ManualDispatchService:
                 action="DELIVERY_RUN_SHEET_GENERATED",
                 entity_type="DELIVERY_RUN_SHEET",
                 summary="Delivery Run Sheet generation failed.",
-                dispatch_date=request.dispatch_date,
+                dispatch_date=request.dispatch_date or request.delivery_date,
                 delivery_date=request.delivery_date,
                 driver=self._driver_name(request.driver_id),
                 metadata={"failure_reason": str(error)},
@@ -554,7 +553,7 @@ class ManualDispatchService:
                 action="PICKUP_COLLECTION_GENERATED",
                 entity_type="OPSHOP_PICKUP_COLLECTION",
                 summary="OP SHOP Pickup Collection generation failed.",
-                dispatch_date=request.dispatch_date,
+                dispatch_date=request.dispatch_date or request.pickup_date,
                 pickup_date=request.pickup_date,
                 driver=self._driver_name(request.driver_id),
                 metadata={"failure_reason": str(error)},
@@ -724,6 +723,11 @@ class ManualDispatchService:
             return
         order = self.repository.get_order(order_id) if order_id else None
         entity_id = self._order_entity_id(order) if order else order_id
+        dispatch_date = (
+            (after or before or {}).get("dispatch_date")
+            or dispatch_date
+            or (order.delivery_date if order else None)
+        )
         metadata = {
             "before": self._assignment_log_metadata(before),
             "after": self._assignment_log_metadata(after),
@@ -793,6 +797,11 @@ class ManualDispatchService:
             return
         pickup_name = self._opshop_pickup_name(pickup_task_id)
         pickup_date = self._opshop_pickup_date(pickup_task_id)
+        dispatch_date = (
+            (after or before or {}).get("dispatch_date")
+            or dispatch_date
+            or pickup_date
+        )
         metadata = {
             "before": self._assignment_log_metadata(before),
             "after": self._assignment_log_metadata(after),
@@ -861,6 +870,11 @@ class ManualDispatchService:
         if before == after:
             return
         driver = self._driver_name(driver_id)
+        dispatch_date = (
+            (after or before or {}).get("dispatch_date")
+            or dispatch_date
+            or delivery_date
+        )
         metadata = {"before": before or {}, "after": after or {}}
         if before and not after:
             self._record_logbook(
@@ -1258,17 +1272,16 @@ class ManualDispatchService:
                 metadata={"failure_reason": str(error)},
             )
 
-    def _assignment_snapshot(self, dispatch_date, task_type, task_id):
-        if not dispatch_date or not task_type or not task_id:
+    def _assignment_snapshot(self, _dispatch_date, task_type, task_id):
+        if not task_type or not task_id:
             return None
-        assignment = self.repository.get_assignment(
-            dispatch_date,
-            task_type,
-            task_id,
+        assignment = self.repository.find_assignment_for_task(
+            task_type, task_id
         )
         if not assignment:
             return None
         return {
+            "dispatch_date": assignment.dispatch_date,
             "driver_id": assignment.driver_id,
             "driver": self._driver_name(assignment.driver_id),
             "trip_no": assignment.trip_no,
@@ -1279,6 +1292,7 @@ class ManualDispatchService:
         if not snapshot:
             return None
         return {
+            "dispatch_date": snapshot.get("dispatch_date"),
             "driver_id": snapshot.get("driver_id"),
             "driver": snapshot.get("driver"),
             "trip": snapshot.get("trip_no"),
@@ -1289,23 +1303,24 @@ class ManualDispatchService:
             return "Unassigned"
         return f"{snapshot.get('driver') or 'Unknown'} / {snapshot.get('trip') or 'Trip'}"
 
-    def _vehicle_assignment_snapshot(self, dispatch_date, delivery_date, driver_id):
-        if not dispatch_date or not delivery_date or not driver_id:
+    def _vehicle_assignment_snapshot(self, _dispatch_date, delivery_date, driver_id):
+        if not delivery_date or not driver_id:
             return None
+        assignments = self.repository.list_driver_vehicle_assignments_for_delivery_date(
+            delivery_date
+        )
         assignment = next(
             (
                 item
-                for item in self.repository.list_driver_vehicle_assignments(
-                    dispatch_date
-                )
-                if item.delivery_date == delivery_date
-                and item.driver_id == driver_id
+                for item in assignments
+                if item.driver_id == driver_id
             ),
             None,
         )
         if not assignment:
             return None
         return {
+            "dispatch_date": assignment.dispatch_date,
             "vehicle_id": assignment.vehicle_id,
             "vehicle": self._vehicle_label(assignment.vehicle_id),
         }
@@ -1351,6 +1366,15 @@ class ManualDispatchService:
             else None
         )
         return task.pickup_date if task else None
+
+    def _opshop_assignment_pickup_date(self, assignments):
+        for item in assignments or []:
+            if not isinstance(item, dict):
+                continue
+            pickup_date = self._opshop_pickup_date(item.get("pickup_task_id"))
+            if pickup_date:
+                return pickup_date
+        return None
 
     def _route_group_name(self, route_group_id):
         route_group = (

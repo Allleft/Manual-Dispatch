@@ -62,6 +62,17 @@ The hash route is the subtype source of truth. Subtype navigation does not reloa
 
 Saving one module must not lock or mutate the other. The same driver/date may have both a Saved Delivery Run Sheet and a Saved OP SHOP Pickup Collection.
 
+## Business Date Contract
+
+- Dispatch Date controls Delivery and OP SHOP Task Pool operational scope. It remains the provenance date on assignments, generated documents, and logbook events.
+- Delivery Date exclusively controls Delivery Trip Summary membership, driver/trip grouping, vehicle assignment, Run Sheet candidates and locks, Run Sheets pages, history, and daily export.
+- Pickup Date exclusively controls OP SHOP Trip Summary membership, driver grouping, Pickup Collection candidates and locks, Collections pages, history, and daily export.
+- Assignment identity is `task_type + task_id`, not Dispatch Date. Reassign and unassign operate on that one global assignment; reassignment preserves the stored origin Dispatch Date.
+- Vehicle identity is `delivery_date + driver_id`. Active Delivery Run Sheet identity is `delivery_date + driver_id`; active Pickup Collection identity is `pickup_date + driver_id`.
+- `GENERATED` and `SAVED` locks cross Dispatch Dates for the same service-date identity.
+
+Legacy `dispatch_date` query/request fields remain accepted where required for compatibility and provenance, but they do not narrow Trip Summary or service-date document reads.
+
 ## OP SHOP Task Pool Semantics
 
 ### Regular
@@ -133,6 +144,9 @@ See [the migration runbook](separate-delivery-and-opshop-workspaces-migration.md
 - Persisted source defaults require no Apply; later manual drafts survive subtype navigation and Apply remains their persistence boundary.
 - Generated and Saved lifecycle state survives refresh/restart.
 - Delivery and OP SHOP Saved History are independent routes queried by actual service date across Dispatch Dates, display full immutable papers, and expose export-only actions.
+- Changing Dispatch Date alone leaves Delivery and OP SHOP Trip Summary content unchanged for the selected service date.
+- Changing Delivery Date or Pickup Date removes content belonging only to the previous service date.
+- Vehicle selection, generation, and Generated/Saved locks remain valid across Dispatch Date changes for the same service date.
 - Delivery remains unchanged by OP SHOP navigation, management, drafts, and collections.
 - New and existing SQLite databases initialize safely and repeatedly.
 

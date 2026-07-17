@@ -200,14 +200,14 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
         response = self.client.get(
             "/api/manual-dispatch/delivery/trip-summary",
             params={
-                "dispatch_date": self.dispatch_date,
                 "delivery_date": delivery_date,
             },
         )
         self.assertEqual(200, response.status_code)
         payload = response.json()
 
-        self.assertEqual(self.dispatch_date, payload["dispatch_date"])
+        self.assertIsNone(payload["dispatch_date"])
+        self.assertEqual(delivery_date, payload["delivery_date"])
         self.assertEqual(["ORDER-2"], [order["order_id"] for order in payload["orders"]])
         self.assertEqual(["ORDER-2"], [item["task_id"] for item in payload["assignments"]])
         self.assertEqual(
@@ -242,18 +242,18 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
         response = self.client.get(
             "/api/manual-dispatch/opshop/trip-summary",
             params={
-                "dispatch_date": self.dispatch_date,
                 "pickup_date": pickup_date,
             },
         )
         self.assertEqual(200, response.status_code)
         payload = response.json()
 
-        self.assertEqual(self.dispatch_date, payload["dispatch_date"])
+        self.assertIsNone(payload["dispatch_date"])
+        self.assertEqual(pickup_date, payload["pickup_date"])
         self.assertEqual([pickup_id], [pickup["pickup_task_id"] for pickup in payload["opshop_pickups"]])
         self.assertEqual(["DRIVER-1"], [pickup["driver_id"] for pickup in payload["opshop_pickups"]])
 
-    def test_delivery_trip_summary_isolates_same_service_date_across_dispatch_dates(self):
+    def test_delivery_trip_summary_ignores_legacy_dispatch_date_filter(self):
         delivery_date = "2026-05-06"
         other_dispatch_date = "2026-05-07"
         self._create_delivery_order("ORDER-HIST", delivery_date)
@@ -283,7 +283,7 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
         )
         self.assertEqual(200, current_response.status_code)
         current_payload = current_response.json()
-        self.assertEqual(self.dispatch_date, current_payload["dispatch_date"])
+        self.assertIsNone(current_payload["dispatch_date"])
         self.assertEqual(
             ["ORDER-HIST"],
             [assignment["task_id"] for assignment in current_payload["assignments"]],
@@ -315,10 +315,24 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
         )
         self.assertEqual(200, other_response.status_code)
         other_payload = other_response.json()
-        self.assertEqual(other_dispatch_date, other_payload["dispatch_date"])
+        self.assertIsNone(other_payload["dispatch_date"])
         self.assertEqual([], other_payload["assignments"])
-        self.assertEqual([], other_payload["driver_vehicle_assignments"])
-        self.assertEqual([], other_payload["saved_vehicle_assignment_locks"])
+        self.assertEqual(
+            [self.dispatch_date],
+            [
+                assignment["dispatch_date"]
+                for assignment in other_payload["driver_vehicle_assignments"]
+            ],
+        )
+        self.assertEqual(1, len(other_payload["saved_vehicle_assignment_locks"]))
+        current_locked_response = self.client.get(
+            "/api/manual-dispatch/delivery/trip-summary",
+            params={
+                "dispatch_date": self.dispatch_date,
+                "delivery_date": delivery_date,
+            },
+        )
+        self.assertEqual(other_payload, current_locked_response.json())
         self.assertEqual(
             [],
             [
@@ -340,7 +354,7 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
             ],
         )
 
-    def test_opshop_trip_summary_isolates_same_pickup_date_across_dispatch_dates(self):
+    def test_opshop_trip_summary_ignores_legacy_dispatch_date_filter(self):
         pickup_date = "2026-05-06"
         other_dispatch_date = "2026-05-07"
         pickup_id = self._seed_and_assign_oncall_pickup(
@@ -357,7 +371,7 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
         )
         self.assertEqual(200, current_response.status_code)
         current_payload = current_response.json()
-        self.assertEqual(self.dispatch_date, current_payload["dispatch_date"])
+        self.assertIsNone(current_payload["dispatch_date"])
         self.assertEqual(
             [pickup_id],
             [pickup["pickup_task_id"] for pickup in current_payload["opshop_pickups"]],
@@ -371,8 +385,8 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
             },
         )
         self.assertEqual(200, other_response.status_code)
-        self.assertEqual(other_dispatch_date, other_response.json()["dispatch_date"])
-        self.assertEqual([], other_response.json()["opshop_pickups"])
+        self.assertIsNone(other_response.json()["dispatch_date"])
+        self.assertEqual(current_payload, other_response.json())
 
         unassign = self.client.post(
             "/api/manual-dispatch/opshop/pickups/assignments/unassign",
@@ -381,20 +395,12 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
                 "pickup_task_id": pickup_id,
             },
         )
-        self.assertEqual(400, unassign.status_code)
-        self.assertIn(
-            "not assigned in this workspace dispatch date",
-            unassign.json()["detail"],
-        )
+        self.assertEqual(200, unassign.status_code)
         task = self.repository.get_opshop_pickup_task(pickup_id)
-        self.assertEqual("ASSIGNED", task.status)
-        self.assertEqual("DRIVER-1", task.driver_id)
-        self.assertIsNotNone(
-            self.repository.get_assignment(
-                self.dispatch_date,
-                "OPSHOP_PICKUP",
-                pickup_id,
-            )
+        self.assertEqual("ACTIVE", task.status)
+        self.assertIsNone(task.driver_id)
+        self.assertIsNone(
+            self.repository.find_assignment_for_task("OPSHOP_PICKUP", pickup_id)
         )
 
         task_pool_response = self.client.get(
@@ -604,7 +610,7 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
                 )
             )
 
-    def test_manual_assignment_reserves_order_across_dispatch_dates_until_unassigned(self):
+    def test_manual_assignment_is_global_and_reassigns_without_duplicates(self):
         other_dispatch_date = "2026-05-06"
         third_dispatch_date = "2026-05-08"
         self._create_delivery_order("ORDER-2", self.dispatch_date)
@@ -621,21 +627,36 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
         original_board = self.service.get_delivery_workspace_board(self.dispatch_date)
         self.assertIn("ORDER-1", self._delivery_assignment_ids(original_board))
         self.assertIn("ORDER-2", self._delivery_assignment_ids(original_board))
-        with self.assertRaisesRegex(ValueError, "already assigned"):
-            self.service.assign_delivery_workspace_order(
-                DeliveryWorkspaceAssignOrderRequest(
-                    dispatch_date=other_dispatch_date,
-                    order_id="ORDER-1",
-                    driver_id="DRIVER-1",
-                    trip_no="trip1",
-                )
+        self.service.assign_delivery_workspace_order(
+            DeliveryWorkspaceAssignOrderRequest(
+                dispatch_date=other_dispatch_date,
+                order_id="ORDER-1",
+                driver_id="DRIVER-1",
+                trip_no="trip2",
             )
+        )
+        assignment = self.repository.find_assignment_for_task("ORDER", "ORDER-1")
+        self.assertEqual(self.dispatch_date, assignment.dispatch_date)
+        self.assertEqual("DRIVER-1", assignment.driver_id)
+        self.assertEqual("trip2", assignment.trip_no)
+        self.assertEqual(
+            1,
+            len(
+                self.repository.list_assignments_for_task(
+                    "ORDER",
+                    "ORDER-1",
+                )
+            ),
+        )
 
         self.service.unassign_delivery_workspace_order(
             DeliveryWorkspaceUnassignOrderRequest(
-                dispatch_date=self.dispatch_date,
+                dispatch_date=other_dispatch_date,
                 order_id="ORDER-1",
             )
+        )
+        self.assertIsNone(
+            self.repository.find_assignment_for_task("ORDER", "ORDER-1")
         )
 
         released_other = self.service.get_delivery_workspace_board(other_dispatch_date)

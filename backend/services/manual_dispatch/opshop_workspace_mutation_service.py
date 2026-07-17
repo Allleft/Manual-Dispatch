@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 from backend.schemas import OpShopPickupTask
 from backend.services.manual_dispatch.normalization import (
+    clean_optional_iso_date,
     clean_optional_text,
     clean_required_iso_date,
     clean_required_text,
@@ -21,7 +22,11 @@ class OpShopWorkspaceMutationService:
         self.board_service = board_service
 
     def apply_assignments(self, request):
-        dispatch_date = clean_required_iso_date(request.dispatch_date, "dispatch_date")
+        request_dispatch_date = clean_optional_iso_date(
+            request.dispatch_date,
+            "dispatch_date",
+        )
+        dispatch_date = request_dispatch_date
         changes = []
         seen_task_ids = set()
         for item in request.assignments or []:
@@ -37,6 +42,7 @@ class OpShopWorkspaceMutationService:
             seen_task_ids.add(pickup_task_id)
             driver_id = clean_optional_text(item.get("driver_id"))
             task = self._mutable_pickup(dispatch_date, pickup_task_id)
+            dispatch_date = dispatch_date or task.dispatch_date or task.pickup_date
             self._ensure_current_assignment_mutable(dispatch_date, task)
             if not driver_id:
                 self._ensure_current_assignment_exists(dispatch_date, task)
@@ -54,22 +60,36 @@ class OpShopWorkspaceMutationService:
             dispatch_date,
             changes,
         )
-        return self.board_service.get_board(dispatch_date)
+        return self._response_board(
+            request_dispatch_date,
+            dispatch_date,
+            changes,
+        )
 
     def unassign_pickup(self, request):
-        dispatch_date = clean_required_iso_date(request.dispatch_date, "dispatch_date")
+        request_dispatch_date = clean_optional_iso_date(
+            request.dispatch_date,
+            "dispatch_date",
+        )
         pickup_task_id = clean_required_text(
             request.pickup_task_id,
             "pickup_task_id",
         )
-        task = self._mutable_pickup(dispatch_date, pickup_task_id)
+        task = self._mutable_pickup(request_dispatch_date, pickup_task_id)
+        dispatch_date = (
+            request_dispatch_date or task.dispatch_date or task.pickup_date
+        )
         self._ensure_current_assignment_mutable(dispatch_date, task)
         self._ensure_current_assignment_exists(dispatch_date, task)
         self.repository.apply_opshop_pickup_assignment_batch(
             dispatch_date,
             [self._assignment_task(task, None)],
         )
-        return self.board_service.get_board(dispatch_date)
+        return self._response_board(
+            request_dispatch_date,
+            dispatch_date,
+            [task],
+        )
 
     def assign_countryside_route_group(self, route_group_id, request):
         route_group_id = clean_required_text(route_group_id, "route_group_id")
@@ -158,8 +178,7 @@ class OpShopWorkspaceMutationService:
         return task
 
     def _ensure_current_assignment_mutable(self, dispatch_date, task):
-        assignment = self.repository.get_assignment(
-            dispatch_date,
+        assignment = self.repository.find_assignment_for_task(
             "OPSHOP_PICKUP",
             task.pickup_task_id,
         )
@@ -172,15 +191,18 @@ class OpShopWorkspaceMutationService:
             )
 
     def _ensure_current_assignment_exists(self, dispatch_date, task):
-        assignment = self.repository.get_assignment(
-            dispatch_date,
+        assignment = self.repository.find_assignment_for_task(
             "OPSHOP_PICKUP",
             task.pickup_task_id,
         )
         if not assignment:
-            raise ValueError(
-                "OP SHOP pickup is not assigned in this workspace dispatch date."
-            )
+            raise ValueError("OP SHOP pickup is not assigned.")
+
+    def _response_board(self, request_dispatch_date, dispatch_date, tasks):
+        pickup_dates = {task.pickup_date for task in tasks}
+        if not request_dispatch_date and len(pickup_dates) == 1:
+            return self.board_service.get_trip_summary_board(pickup_dates.pop())
+        return self.board_service.get_board(dispatch_date)
 
     @staticmethod
     def _assignment_task(task, driver_id):

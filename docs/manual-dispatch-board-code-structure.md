@@ -18,6 +18,17 @@ The two modules may use the same driver and date independently. A saved Delivery
 
 Legacy Final Trip Summary tables, routes, services, and exports remain readable for compatibility and migration only. New scoped workflow code must not write OP SHOP rows into Delivery rows or totals.
 
+## Business Date Ownership
+
+- Dispatch Date scopes Task Pool operations and remains assignment/document/logbook provenance. A legacy Trip Summary query may still supply it, but scoped reads ignore it.
+- Delivery Date alone scopes Delivery Trip Summary, driver/trip grouping, vehicle assignment, Run Sheet candidates, active locks, document lists, and date exports.
+- Pickup Date alone scopes OP SHOP Trip Summary, driver grouping, Pickup Collection candidates, active locks, document lists, and date exports.
+- Assignment identity is `task_type + task_id`; repositories reject corrupt duplicate rows rather than choosing or deleting one. Reassignment updates the one real assignment and preserves its origin Dispatch Date.
+- Vehicle identity is `delivery_date + driver_id`. Delivery Run Sheet active identity is `delivery_date + driver_id`; Pickup Collection active identity is `pickup_date + driver_id`.
+- `GENERATED` and `SAVED` locks apply across Dispatch Dates for the same service-date identity.
+
+SQLite and in-memory repositories implement the same global lookup and mutation contracts. Snapshot rows keep their stored `dispatch_date` for audit provenance even though the current UI Dispatch Date is not a Trip Summary filter.
+
 ## Backend
 
 ### Entry and Route Layer
@@ -102,7 +113,8 @@ Persisted source-backed assignments come from controlled backfill or initial tem
 ### Delivery Workspace UI
 
 - `delivery-workspace-renderer.js`: Delivery Task Pool, Trip Summary, Run Sheets, and an independent Saved History page that reuses the full DAILY RUN SHEET paper in export-only mode.
-- `workspace-actions.js` queries Saved History only by actual service date plus `status=SAVED` (`delivery_date` or `pickup_date`), keeps Dispatch Date as snapshot metadata, and guards stale date responses with workspace-specific request versions.
+- `workspace-actions.js` loads Trip Summary and Saved History only by their service date (`delivery_date` or `pickup_date`), keeps Dispatch Date as provenance metadata, and guards stale responses by route, workspace, and service date rather than the current Dispatch Date.
+- Vehicle autosave queues are keyed and validated by Delivery Date plus Driver. A Dispatch Date change does not invalidate a valid queue response for the unchanged Delivery Date.
 - Delivery-specific state and actions remain independent from OP SHOP subtype, template, route, and collection state.
 
 ## Import and Migration Tools

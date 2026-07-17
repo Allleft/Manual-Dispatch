@@ -50,9 +50,11 @@ Workspace navigation is hash-based. Browser refresh, copied links, Back, and For
 
 ## Dates and Scope
 
-- **Dispatch Date** identifies the operational board session loaded by each workspace. Saved History keeps it as record metadata and does not use it as a query filter.
-- **Delivery Date** identifies the day being reviewed in Delivery Trip Summary and Delivery Run Sheets. Delivery Saved History queries only this date plus `status=SAVED`, so one result set may include snapshots generated under different Dispatch Dates.
-- **Pickup Date** identifies the day being reviewed in OP SHOP Trip Summary and Pickup Collections. OP SHOP Saved History queries only this date plus `status=SAVED`, so one result set may include snapshots generated under different Dispatch Dates.
+- **Dispatch Date** controls Delivery and OP SHOP Task Pool operational views. Assignments and generated documents retain their original Dispatch Date as provenance metadata, but changing the current Dispatch Date does not filter Trip Summary, vehicles, locks, Run Sheets, Pickup Collections, or service-date exports.
+- **Delivery Date** is the sole business scope for Delivery Trip Summary, driver/trip grouping, vehicle assignment, Run Sheet candidates and locks, Run Sheets pages, Saved History, and Delivery date export.
+- **Pickup Date** is the sole business scope for OP SHOP Trip Summary, driver grouping, Pickup Collection candidates and locks, Collections pages, Saved History, and Pickup date export.
+- An assignment's business identity is `task_type + task_id`. Reassignment updates that record and preserves its original Dispatch Date provenance instead of creating a second assignment for another Dispatch Date.
+- Delivery Saved History queries `delivery_date + status=SAVED`; OP SHOP Saved History queries `pickup_date + status=SAVED`. Results may therefore include snapshots generated under different Dispatch Dates.
 - Delivery Orders, OP SHOP tasks, scoped snapshots, locks, histories, and Excel exports are intentionally separated.
 
 ## Order Delivery Workflow

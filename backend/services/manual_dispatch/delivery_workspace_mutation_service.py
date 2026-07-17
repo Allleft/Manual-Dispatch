@@ -1,9 +1,9 @@
 from backend.services.manual_dispatch.delivery_run_sheet_lock import (
     ensure_delivery_run_sheet_key_mutable,
-    ensure_order_not_assigned_elsewhere,
     ensure_order_not_reserved,
 )
 from backend.services.manual_dispatch.normalization import (
+    clean_optional_iso_date,
     clean_required_iso_date,
     clean_required_text,
 )
@@ -16,25 +16,22 @@ class DeliveryWorkspaceMutationService:
         self.board_service = board_service
 
     def assign_order(self, request):
-        dispatch_date = clean_required_iso_date(request.dispatch_date, "dispatch_date")
         order = self._active_order(request.order_id)
+        request_dispatch_date = clean_optional_iso_date(
+            request.dispatch_date,
+            "dispatch_date",
+        )
+        dispatch_date = request_dispatch_date or order.delivery_date
         driver_id = clean_required_text(request.driver_id, "driver_id")
         trip_no = clean_required_text(request.trip_no, "trip_no")
         self.validator.validate_driver_exists(driver_id)
         self.validator.validate_trip_no(trip_no)
 
-        current = self.repository.get_assignment(
-            dispatch_date,
+        current = self.repository.find_assignment_for_task(
             "ORDER",
             order.order_id,
         )
         ensure_order_not_reserved(self.repository, dispatch_date, order.order_id)
-        if not current:
-            ensure_order_not_assigned_elsewhere(
-                self.repository,
-                dispatch_date,
-                order.order_id,
-            )
         if current:
             ensure_delivery_run_sheet_key_mutable(
                 self.repository,
@@ -55,14 +52,21 @@ class DeliveryWorkspaceMutationService:
             driver_id,
             trip_no,
         )
-        return self.board_service.get_board(dispatch_date)
+        return self._response_board(
+            request_dispatch_date,
+            dispatch_date,
+            order.delivery_date,
+        )
 
     def unassign_order(self, request):
-        dispatch_date = clean_required_iso_date(request.dispatch_date, "dispatch_date")
         order = self._active_order(request.order_id)
+        request_dispatch_date = clean_optional_iso_date(
+            request.dispatch_date,
+            "dispatch_date",
+        )
+        dispatch_date = request_dispatch_date or order.delivery_date
         ensure_order_not_reserved(self.repository, dispatch_date, order.order_id)
-        current = self.repository.get_assignment(
-            dispatch_date,
+        current = self.repository.find_assignment_for_task(
             "ORDER",
             order.order_id,
         )
@@ -73,16 +77,23 @@ class DeliveryWorkspaceMutationService:
                 current.driver_id,
                 order.delivery_date,
             )
-            self.repository.remove_assignment(
-                dispatch_date,
+            self.repository.remove_assignments_for_task(
                 "ORDER",
                 order.order_id,
             )
-        return self.board_service.get_board(dispatch_date)
+        return self._response_board(
+            request_dispatch_date,
+            dispatch_date,
+            order.delivery_date,
+        )
 
     def assign_vehicle(self, request):
-        dispatch_date = clean_required_iso_date(request.dispatch_date, "dispatch_date")
         delivery_date = clean_required_iso_date(request.delivery_date, "delivery_date")
+        request_dispatch_date = clean_optional_iso_date(
+            request.dispatch_date,
+            "dispatch_date",
+        )
+        dispatch_date = request_dispatch_date or delivery_date
         driver_id = clean_required_text(request.driver_id, "driver_id")
         vehicle_id = clean_required_text(request.vehicle_id, "vehicle_id")
         self.validator.validate_driver_exists(driver_id)
@@ -110,11 +121,19 @@ class DeliveryWorkspaceMutationService:
                 f"Vehicle {vehicle_name} is already assigned to "
                 f"{driver_name} for this delivery date."
             )
-        return self.board_service.get_board(dispatch_date)
+        return self._response_board(
+            request_dispatch_date,
+            dispatch_date,
+            delivery_date,
+        )
 
     def clear_vehicle(self, request):
-        dispatch_date = clean_required_iso_date(request.dispatch_date, "dispatch_date")
         delivery_date = clean_required_iso_date(request.delivery_date, "delivery_date")
+        request_dispatch_date = clean_optional_iso_date(
+            request.dispatch_date,
+            "dispatch_date",
+        )
+        dispatch_date = request_dispatch_date or delivery_date
         driver_id = clean_required_text(request.driver_id, "driver_id")
         self.validator.validate_driver_exists(driver_id)
         ensure_delivery_run_sheet_key_mutable(
@@ -128,7 +147,16 @@ class DeliveryWorkspaceMutationService:
             driver_id,
             delivery_date,
         )
-        return self.board_service.get_board(dispatch_date)
+        return self._response_board(
+            request_dispatch_date,
+            dispatch_date,
+            delivery_date,
+        )
+
+    def _response_board(self, request_dispatch_date, dispatch_date, delivery_date):
+        if request_dispatch_date:
+            return self.board_service.get_board(dispatch_date)
+        return self.board_service.get_trip_summary_board(delivery_date)
 
     def _active_order(self, order_id):
         order_id = clean_required_text(order_id, "order_id")

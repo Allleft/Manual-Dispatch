@@ -201,11 +201,14 @@ class LogbookStage2BEventsTest(unittest.TestCase):
         self.assertEqual(1, single_entry["metadata"]["oncall_count"])
         self.assertEqual(1, single_entry["metadata"]["countryside_count"])
         daily_entry = self._only_entry("PICKUP_COLLECTIONS_DAILY_EXPORTED")
+        self.assertEqual("SUCCESS", daily_entry["result"])
+        self.assertEqual("Stage 2B Operator", daily_entry["actor"])
+        self.assertEqual("2026-07-10", daily_entry["pickup_date"])
         self.assertEqual(1, daily_entry["metadata"]["collection_count"])
         self.assertEqual("SAVED", daily_entry["metadata"]["status_filter"])
-        self.assertEqual(
-            "2026-07-09",
-            daily_entry["metadata"]["dispatch_date_filter"],
+        self.assertNotIn(
+            "dispatch_date_filter",
+            daily_entry["metadata"],
         )
 
     def test_attache_commit_records_batch_results_and_keeps_order_events(self):

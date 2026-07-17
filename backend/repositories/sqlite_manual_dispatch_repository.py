@@ -145,6 +145,23 @@ class SQLiteManualDispatchRepository:
             ).fetchall()
         return [self._row_to_assignment(row) for row in rows]
 
+    def list_delivery_order_assignments_for_delivery_date(self, delivery_date):
+        with connect(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT assignment.*
+                FROM manual_dispatch_assignments AS assignment
+                JOIN manual_orders AS manual_order
+                    ON manual_order.order_id = assignment.task_id
+                WHERE assignment.task_type = 'ORDER'
+                    AND manual_order.status = 'ACTIVE'
+                    AND manual_order.delivery_date = ?
+                ORDER BY assignment.assignment_id
+                """,
+                (delivery_date,),
+            ).fetchall()
+        return [self._row_to_assignment(row) for row in rows]
+
     def list_assigned_opshop_pickup_board_items(self, dispatch_date):
         with connect(self.db_path) as connection:
             rows = connection.execute(
@@ -413,7 +430,23 @@ class SQLiteManualDispatchRepository:
                 """,
                 (delivery_date,),
             ).fetchall()
-        return [self._row_to_driver_vehicle_assignment(row) for row in rows]
+        assignments = [self._row_to_driver_vehicle_assignment(row) for row in rows]
+        seen_drivers = set()
+        seen_vehicles = set()
+        for assignment in assignments:
+            if assignment.driver_id in seen_drivers:
+                raise ValueError(
+                    "Driver vehicle assignment integrity error for "
+                    f"{delivery_date}:{assignment.driver_id}: duplicate driver."
+                )
+            if assignment.vehicle_id in seen_vehicles:
+                raise ValueError(
+                    "Driver vehicle assignment integrity error for "
+                    f"{delivery_date}:{assignment.vehicle_id}: duplicate vehicle."
+                )
+            seen_drivers.add(assignment.driver_id)
+            seen_vehicles.add(assignment.vehicle_id)
+        return assignments
 
     def list_final_trip_summaries(self, dispatch_date, delivery_date=None):
         with connect(self.db_path) as connection:
@@ -792,16 +825,21 @@ class SQLiteManualDispatchRepository:
         driver_id,
     ):
         with connect(self.db_path) as connection:
-            row = connection.execute(
+            rows = connection.execute(
                 """
                 SELECT *
                 FROM delivery_run_sheets
-                WHERE dispatch_date = ? AND delivery_date = ? AND driver_id = ?
-                LIMIT 1
+                WHERE delivery_date = ? AND driver_id = ?
+                ORDER BY dispatch_date, run_sheet_id
                 """,
-                (dispatch_date, delivery_date, driver_id),
-            ).fetchone()
-        return self._row_to_delivery_run_sheet(row) if row else None
+                (delivery_date, driver_id),
+            ).fetchall()
+        if len(rows) > 1:
+            raise ValueError(
+                "Delivery Run Sheet integrity error for "
+                f"{delivery_date}:{driver_id}: expected at most one active document."
+            )
+        return self._row_to_delivery_run_sheet(rows[0]) if rows else None
 
     def has_saved_delivery_run_sheet(self, dispatch_date, driver_id, delivery_date):
         run_sheet = self.get_delivery_run_sheet_for_driver(
@@ -813,6 +851,29 @@ class SQLiteManualDispatchRepository:
 
     def upsert_delivery_run_sheet(self, run_sheet):
         with connect(self.db_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            duplicate = connection.execute(
+                """
+                SELECT run_sheet_id
+                FROM delivery_run_sheets
+                WHERE delivery_date = ?
+                    AND driver_id = ?
+                    AND run_sheet_id != ?
+                ORDER BY dispatch_date, run_sheet_id
+                LIMIT 1
+                """,
+                (
+                    run_sheet.delivery_date,
+                    run_sheet.driver_id,
+                    run_sheet.run_sheet_id,
+                ),
+            ).fetchone()
+            if duplicate:
+                connection.rollback()
+                raise ValueError(
+                    "Delivery Run Sheet already exists for this driver "
+                    "and delivery date."
+                )
             connection.execute(
                 """
                 INSERT INTO delivery_run_sheets (
@@ -1013,16 +1074,21 @@ class SQLiteManualDispatchRepository:
         driver_id,
     ):
         with connect(self.db_path) as connection:
-            row = connection.execute(
+            rows = connection.execute(
                 """
                 SELECT *
                 FROM opshop_pickup_collections
-                WHERE dispatch_date = ? AND pickup_date = ? AND driver_id = ?
-                LIMIT 1
+                WHERE pickup_date = ? AND driver_id = ?
+                ORDER BY dispatch_date, collection_id
                 """,
-                (dispatch_date, pickup_date, driver_id),
-            ).fetchone()
-        return self._row_to_opshop_pickup_collection(row) if row else None
+                (pickup_date, driver_id),
+            ).fetchall()
+        if len(rows) > 1:
+            raise ValueError(
+                "OP SHOP Pickup Collection integrity error for "
+                f"{pickup_date}:{driver_id}: expected at most one active document."
+            )
+        return self._row_to_opshop_pickup_collection(rows[0]) if rows else None
 
     def has_saved_opshop_pickup_collection(self, dispatch_date, driver_id, pickup_date):
         collection = self.get_opshop_pickup_collection_for_driver(
@@ -1034,6 +1100,29 @@ class SQLiteManualDispatchRepository:
 
     def upsert_opshop_pickup_collection(self, collection):
         with connect(self.db_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            duplicate = connection.execute(
+                """
+                SELECT collection_id
+                FROM opshop_pickup_collections
+                WHERE pickup_date = ?
+                    AND driver_id = ?
+                    AND collection_id != ?
+                ORDER BY dispatch_date, collection_id
+                LIMIT 1
+                """,
+                (
+                    collection.pickup_date,
+                    collection.driver_id,
+                    collection.collection_id,
+                ),
+            ).fetchone()
+            if duplicate:
+                connection.rollback()
+                raise ValueError(
+                    "OP SHOP Pickup Collection already exists for this driver "
+                    "and pickup date."
+                )
             connection.execute(
                 """
                 INSERT INTO opshop_pickup_collections (
@@ -2114,7 +2203,25 @@ class SQLiteManualDispatchRepository:
         remove_all_existing=False,
     ):
         with connect(self.db_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
             for task in tasks:
+                assignment_rows = connection.execute(
+                    """
+                    SELECT *
+                    FROM manual_dispatch_assignments
+                    WHERE task_type = 'OPSHOP_PICKUP' AND task_id = ?
+                    ORDER BY assignment_id
+                    """,
+                    (task.pickup_task_id,),
+                ).fetchall()
+                if len(assignment_rows) > 1:
+                    raise ValueError(
+                        "Manual dispatch assignment integrity error for "
+                        f"OPSHOP_PICKUP:{task.pickup_task_id}: "
+                        "expected at most one row."
+                    )
+                existing = assignment_rows[0] if assignment_rows else None
+
                 connection.execute(
                     """
                     INSERT INTO opshop_pickup_tasks (
@@ -2152,36 +2259,29 @@ class SQLiteManualDispatchRepository:
                         task.updated_at,
                     ),
                 )
-                if remove_all_existing:
+                if remove_all_existing and existing:
                     connection.execute(
                         """
                         DELETE FROM manual_dispatch_assignments
-                        WHERE task_type = 'OPSHOP_PICKUP' AND task_id = ?
+                        WHERE assignment_id = ?
                         """,
-                        (task.pickup_task_id,),
+                        (existing["assignment_id"],),
                     )
+                    existing = None
+
                 if task.driver_id:
-                    existing = self._fetch_assignment_row(
-                        connection,
-                        dispatch_date,
-                        "OPSHOP_PICKUP",
-                        task.pickup_task_id,
-                    )
                     timestamp = self._timestamp()
                     if existing:
                         connection.execute(
                             """
                             UPDATE manual_dispatch_assignments
                             SET driver_id = ?, trip_no = 'trip1', updated_at = ?
-                            WHERE dispatch_date = ?
-                                AND task_type = 'OPSHOP_PICKUP'
-                                AND task_id = ?
+                            WHERE assignment_id = ?
                             """,
                             (
                                 task.driver_id,
                                 timestamp,
-                                dispatch_date,
-                                task.pickup_task_id,
+                                existing["assignment_id"],
                             ),
                         )
                     else:
@@ -2202,15 +2302,13 @@ class SQLiteManualDispatchRepository:
                                 timestamp,
                             ),
                         )
-                else:
+                elif existing:
                     connection.execute(
                         """
                         DELETE FROM manual_dispatch_assignments
-                        WHERE dispatch_date = ?
-                            AND task_type = 'OPSHOP_PICKUP'
-                            AND task_id = ?
+                        WHERE assignment_id = ?
                         """,
-                        (dispatch_date, task.pickup_task_id),
+                        (existing["assignment_id"],),
                     )
             connection.commit()
         return [self.get_opshop_pickup_task(task.pickup_task_id) for task in tasks]
@@ -2621,31 +2719,37 @@ class SQLiteManualDispatchRepository:
         timestamp = self._timestamp()
 
         with connect(self.db_path) as connection:
-            existing = self._fetch_assignment_row(
-                connection,
-                dispatch_date,
-                task_type,
-                task_id,
-            )
+            connection.execute("BEGIN IMMEDIATE")
+            rows = connection.execute(
+                """
+                SELECT *
+                FROM manual_dispatch_assignments
+                WHERE task_type = ? AND task_id = ?
+                ORDER BY assignment_id
+                """,
+                (task_type, task_id),
+            ).fetchall()
+            if len(rows) > 1:
+                connection.rollback()
+                raise ValueError(
+                    "Manual dispatch assignment integrity error for "
+                    f"{task_type}:{task_id}: expected at most one row."
+                )
+            existing = rows[0] if rows else None
             if existing:
                 assignment_id = existing["assignment_id"]
+                origin_dispatch_date = existing["dispatch_date"]
                 connection.execute(
                     """
                     UPDATE manual_dispatch_assignments
                     SET driver_id = ?, trip_no = ?, updated_at = ?
-                    WHERE dispatch_date = ? AND task_type = ? AND task_id = ?
+                    WHERE assignment_id = ?
                     """,
-                    (
-                        driver_id,
-                        trip_no,
-                        timestamp,
-                        dispatch_date,
-                        task_type,
-                        task_id,
-                    ),
+                    (driver_id, trip_no, timestamp, assignment_id),
                 )
             else:
                 assignment_id = self._create_assignment_id(connection)
+                origin_dispatch_date = dispatch_date
                 connection.execute(
                     """
                     INSERT INTO manual_dispatch_assignments (
@@ -2661,7 +2765,7 @@ class SQLiteManualDispatchRepository:
                     """,
                     (
                         assignment_id,
-                        dispatch_date,
+                        origin_dispatch_date,
                         task_type,
                         task_id,
                         driver_id,
@@ -2670,12 +2774,11 @@ class SQLiteManualDispatchRepository:
                         timestamp,
                     ),
                 )
-
             connection.commit()
 
         return ManualDispatchAssignment(
             assignment_id=assignment_id,
-            dispatch_date=dispatch_date,
+            dispatch_date=origin_dispatch_date,
             task_type=task_type,
             task_id=task_id,
             driver_id=driver_id,
@@ -2693,18 +2796,13 @@ class SQLiteManualDispatchRepository:
         return self._row_to_assignment(row) if row else None
 
     def find_assignment_for_task(self, task_type, task_id):
-        with connect(self.db_path) as connection:
-            row = connection.execute(
-                """
-                SELECT *
-                FROM manual_dispatch_assignments
-                WHERE task_type = ? AND task_id = ?
-                ORDER BY updated_at DESC, assigned_at DESC, assignment_id DESC
-                LIMIT 1
-                """,
-                (task_type, task_id),
-            ).fetchone()
-        return self._row_to_assignment(row) if row else None
+        assignments = self.list_assignments_for_task(task_type, task_id)
+        if len(assignments) > 1:
+            raise ValueError(
+                "Manual dispatch assignment integrity error for "
+                f"{task_type}:{task_id}: expected at most one row."
+            )
+        return assignments[0] if assignments else None
 
     def list_assignments_for_task(self, task_type, task_id):
         with connect(self.db_path) as connection:
@@ -2713,7 +2811,7 @@ class SQLiteManualDispatchRepository:
                 SELECT *
                 FROM manual_dispatch_assignments
                 WHERE task_type = ? AND task_id = ?
-                ORDER BY updated_at DESC, assigned_at DESC, assignment_id DESC
+                ORDER BY assignment_id
                 """,
                 (task_type, task_id),
             ).fetchall()
@@ -2733,12 +2831,31 @@ class SQLiteManualDispatchRepository:
 
     def remove_assignments_for_task(self, task_type, task_id):
         with connect(self.db_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            rows = connection.execute(
+                """
+                SELECT assignment_id
+                FROM manual_dispatch_assignments
+                WHERE task_type = ? AND task_id = ?
+                ORDER BY assignment_id
+                """,
+                (task_type, task_id),
+            ).fetchall()
+            if len(rows) > 1:
+                connection.rollback()
+                raise ValueError(
+                    "Manual dispatch assignment integrity error for "
+                    f"{task_type}:{task_id}: expected at most one row."
+                )
+            if not rows:
+                connection.commit()
+                return False
             cursor = connection.execute(
                 """
                 DELETE FROM manual_dispatch_assignments
-                WHERE task_type = ? AND task_id = ?
+                WHERE assignment_id = ?
                 """,
-                (task_type, task_id),
+                (rows[0]["assignment_id"],),
             )
             connection.commit()
         return cursor.rowcount > 0
@@ -2779,42 +2896,83 @@ class SQLiteManualDispatchRepository:
         timestamp = self._timestamp()
         with connect(self.db_path) as connection:
             connection.execute("BEGIN IMMEDIATE")
+            current_rows = connection.execute(
+                """
+                SELECT *
+                FROM manual_driver_vehicle_assignments
+                WHERE delivery_date = ? AND driver_id = ?
+                ORDER BY dispatch_date
+                """,
+                (delivery_date, driver_id),
+            ).fetchall()
+            if len(current_rows) > 1:
+                connection.rollback()
+                raise ValueError(
+                    "Driver vehicle assignment integrity error for "
+                    f"{delivery_date}:{driver_id}: expected at most one row."
+                )
             conflict = connection.execute(
                 """
                 SELECT driver_id
                 FROM manual_driver_vehicle_assignments
-                WHERE dispatch_date = ?
-                    AND delivery_date = ?
+                WHERE delivery_date = ?
                     AND vehicle_id = ?
                     AND driver_id != ?
+                ORDER BY driver_id
                 LIMIT 1
                 """,
-                (dispatch_date, delivery_date, vehicle_id, driver_id),
+                (delivery_date, vehicle_id, driver_id),
             ).fetchone()
             if conflict:
                 connection.rollback()
                 return None, conflict["driver_id"]
-            connection.execute(
-                """
-                INSERT INTO manual_driver_vehicle_assignments (
-                    dispatch_date,
-                    delivery_date,
-                    driver_id,
-                    vehicle_id,
-                    created_at,
-                    updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?)
-                ON CONFLICT(dispatch_date, delivery_date, driver_id)
-                DO UPDATE SET
-                    vehicle_id = excluded.vehicle_id,
-                    updated_at = excluded.updated_at
-                """,
-                (dispatch_date, delivery_date, driver_id, vehicle_id, timestamp, timestamp),
+
+            current = current_rows[0] if current_rows else None
+            origin_dispatch_date = (
+                current["dispatch_date"] if current else dispatch_date
             )
+            if current:
+                connection.execute(
+                    """
+                    UPDATE manual_driver_vehicle_assignments
+                    SET vehicle_id = ?, updated_at = ?
+                    WHERE dispatch_date = ?
+                        AND delivery_date = ?
+                        AND driver_id = ?
+                    """,
+                    (
+                        vehicle_id,
+                        timestamp,
+                        origin_dispatch_date,
+                        delivery_date,
+                        driver_id,
+                    ),
+                )
+            else:
+                connection.execute(
+                    """
+                    INSERT INTO manual_driver_vehicle_assignments (
+                        dispatch_date,
+                        delivery_date,
+                        driver_id,
+                        vehicle_id,
+                        created_at,
+                        updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        origin_dispatch_date,
+                        delivery_date,
+                        driver_id,
+                        vehicle_id,
+                        timestamp,
+                        timestamp,
+                    ),
+                )
             connection.commit()
         return (
             ManualDriverVehicleAssignment(
-                dispatch_date=dispatch_date,
+                dispatch_date=origin_dispatch_date,
                 delivery_date=delivery_date,
                 driver_id=driver_id,
                 vehicle_id=vehicle_id,
@@ -2822,15 +2980,41 @@ class SQLiteManualDispatchRepository:
             None,
         )
 
-    def remove_driver_vehicle_assignment(self, dispatch_date, driver_id, delivery_date=None):
+    def remove_driver_vehicle_assignment(
+        self,
+        dispatch_date,
+        driver_id,
+        delivery_date=None,
+    ):
         with connect(self.db_path) as connection:
             if delivery_date:
+                connection.execute("BEGIN IMMEDIATE")
+                rows = connection.execute(
+                    """
+                    SELECT dispatch_date
+                    FROM manual_driver_vehicle_assignments
+                    WHERE delivery_date = ? AND driver_id = ?
+                    ORDER BY dispatch_date
+                    """,
+                    (delivery_date, driver_id),
+                ).fetchall()
+                if len(rows) > 1:
+                    connection.rollback()
+                    raise ValueError(
+                        "Driver vehicle assignment integrity error for "
+                        f"{delivery_date}:{driver_id}: expected at most one row."
+                    )
+                if not rows:
+                    connection.commit()
+                    return False
                 cursor = connection.execute(
                     """
                     DELETE FROM manual_driver_vehicle_assignments
-                    WHERE dispatch_date = ? AND delivery_date = ? AND driver_id = ?
+                    WHERE dispatch_date = ?
+                        AND delivery_date = ?
+                        AND driver_id = ?
                     """,
-                    (dispatch_date, delivery_date, driver_id),
+                    (rows[0]["dispatch_date"], delivery_date, driver_id),
                 )
             else:
                 cursor = connection.execute(

@@ -19,8 +19,11 @@ class OpShopPickupCollectionService:
         self.validator = validator
 
     def create_generated(self, request):
-        dispatch_date = clean_required_iso_date(request.dispatch_date, "dispatch_date")
         pickup_date = clean_required_iso_date(request.pickup_date, "pickup_date")
+        dispatch_date = (
+            clean_optional_iso_date(request.dispatch_date, "dispatch_date")
+            or pickup_date
+        )
         driver_id = clean_required_text(request.driver_id, "driver_id")
         self.validator.validate_driver_exists(driver_id)
 
@@ -119,7 +122,6 @@ class OpShopPickupCollectionService:
 
     def list_for_date_export(self, pickup_date, dispatch_date=None, status=None):
         pickup_date = clean_required_iso_date(pickup_date, "pickup_date")
-        dispatch_date = clean_optional_iso_date(dispatch_date, "dispatch_date")
         status = clean_optional_text(status)
         normalized_status = status.upper() if status else None
         if normalized_status and normalized_status not in {"GENERATED", "SAVED"}:
@@ -127,7 +129,7 @@ class OpShopPickupCollectionService:
                 "status must be GENERATED or SAVED for OP SHOP Pickup Collection export."
             )
         collections = self.repository.list_opshop_pickup_collections(
-            dispatch_date,
+            None,
             pickup_date,
             normalized_status,
         )

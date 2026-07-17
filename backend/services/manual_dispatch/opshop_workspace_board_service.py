@@ -1,4 +1,8 @@
-from backend.schemas import OpShopWorkspaceBoardResponse, OpShopWorkspacePickupItem
+from backend.schemas import (
+    OpShopTripSummaryResponse,
+    OpShopWorkspaceBoardResponse,
+    OpShopWorkspacePickupItem,
+)
 from backend.services.manual_dispatch.normalization import clean_required_iso_date
 from backend.services.manual_dispatch.opshop_pickup_service import OpShopPickupService
 
@@ -34,8 +38,7 @@ class OpShopWorkspaceBoardService:
                 pickups_by_id[pickup.pickup_task_id] = pickup
 
         collectable_task_ids = self._collectable_task_ids(
-            pickups_by_id.values(),
-            dispatch_date,
+            pickups_by_id.values()
         )
 
         pickups = sorted(
@@ -65,29 +68,25 @@ class OpShopWorkspaceBoardService:
             ),
         )
 
-    def get_trip_summary_board(self, dispatch_date, pickup_date):
-        dispatch_date = clean_required_iso_date(dispatch_date, "dispatch_date")
+    def get_trip_summary_board(self, pickup_date):
         pickup_date = clean_required_iso_date(pickup_date, "pickup_date")
         collections = self.repository.list_opshop_pickup_collections(
-            dispatch_date=dispatch_date,
             pickup_date=pickup_date
         )
         reserved_task_ids = self._reserved_task_ids(collections)
 
         pickups_by_id = {}
-        for pickup in self.repository.list_assigned_opshop_pickup_board_items_for_dispatch_and_pickup_date(
-            dispatch_date,
-            pickup_date
+        for pickup in (
+            self.repository.list_assigned_opshop_pickup_board_items_for_pickup_date(
+                pickup_date
+            )
         ):
             if pickup.pickup_task_id in reserved_task_ids:
                 continue
             pickup.assigned_to_locked = False
             pickups_by_id[pickup.pickup_task_id] = pickup
 
-        collectable_task_ids = self._collectable_task_ids(
-            pickups_by_id.values(),
-            dispatch_date,
-        )
+        collectable_task_ids = self._collectable_task_ids(pickups_by_id.values())
         pickups = sorted(
             (
                 self._workspace_pickup(
@@ -106,8 +105,8 @@ class OpShopWorkspaceBoardService:
             ),
         )
 
-        return OpShopWorkspaceBoardResponse(
-            dispatch_date=dispatch_date,
+        return OpShopTripSummaryResponse(
+            pickup_date=pickup_date,
             opshop_pickups=pickups,
             drivers=self.repository.list_drivers(),
             templates=self.repository.list_opshop_templates(),
@@ -126,7 +125,7 @@ class OpShopWorkspaceBoardService:
             if pickup.pickup_task_id_snapshot
         }
 
-    def _collectable_task_ids(self, pickups, dispatch_date):
+    def _collectable_task_ids(self, pickups):
         candidate_keys = {
             (pickup.pickup_date, pickup.driver_id)
             for pickup in pickups

@@ -100,11 +100,10 @@ def get_delivery_workspace_board(dispatch_date: str):
 
 
 @router.get("/delivery/trip-summary")
-def get_delivery_trip_summary_board(dispatch_date: str, delivery_date: str):
+def get_delivery_trip_summary_board(delivery_date: str, dispatch_date: str = None):
     try:
-        return to_dict(
-            service.get_delivery_trip_summary_board(dispatch_date, delivery_date)
-        )
+        # dispatch_date remains an optional legacy query parameter only.
+        return to_dict(service.get_delivery_trip_summary_board(delivery_date))
     except ValueError as error:
         raise _to_http_exception(error) from error
 
@@ -118,11 +117,10 @@ def get_opshop_workspace_board(dispatch_date: str):
 
 
 @router.get("/opshop/trip-summary")
-def get_opshop_trip_summary_board(dispatch_date: str, pickup_date: str):
+def get_opshop_trip_summary_board(pickup_date: str, dispatch_date: str = None):
     try:
-        return to_dict(
-            service.get_opshop_trip_summary_board(dispatch_date, pickup_date)
-        )
+        # dispatch_date remains an optional legacy query parameter only.
+        return to_dict(service.get_opshop_trip_summary_board(pickup_date))
     except ValueError as error:
         raise _to_http_exception(error) from error
 
@@ -1136,7 +1134,6 @@ def export_opshop_pickup_collections_excel(
             collections,
             pickup_date,
             filename,
-            dispatch_date=dispatch_date,
             status=status,
         ),
     )

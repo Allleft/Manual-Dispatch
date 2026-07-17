@@ -165,9 +165,9 @@ export async function apiGetDeliveryWorkspaceBoard(dispatchDate) {
   });
 }
 
-export async function apiGetDeliveryTripSummary({ dispatchDate, deliveryDate }) {
+export async function apiGetDeliveryTripSummary({ deliveryDate }) {
   return requestJson("/api/manual-dispatch/delivery/trip-summary", {
-    query: { dispatch_date: dispatchDate, delivery_date: deliveryDate },
+    query: { delivery_date: deliveryDate },
   });
 }
 
@@ -182,9 +182,9 @@ export async function apiGetOpShopWorkspaceBoard(dispatchDate) {
   });
 }
 
-export async function apiGetOpShopTripSummary({ dispatchDate, pickupDate }) {
+export async function apiGetOpShopTripSummary({ pickupDate }) {
   return requestJson("/api/manual-dispatch/opshop/trip-summary", {
-    query: { dispatch_date: dispatchDate, pickup_date: pickupDate },
+    query: { pickup_date: pickupDate },
   });
 }
 
@@ -491,14 +491,10 @@ export async function apiExportOpShopPickupCollectionExcel(collectionId) {
 
 export async function apiExportOpShopPickupCollectionsExcel({
   pickupDate,
-  dispatchDate = "",
   status = "",
 }) {
   const query = new URLSearchParams();
   query.set("pickup_date", pickupDate);
-  if (dispatchDate) {
-    query.set("dispatch_date", dispatchDate);
-  }
   if (status) {
     query.set("status", status);
   }

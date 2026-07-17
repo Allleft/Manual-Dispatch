@@ -50,7 +50,7 @@ def ensure_opshop_pickup_collection_key_mutable(
 
 
 def ensure_opshop_pickup_not_reserved(repository, dispatch_date, pickup_task_id):
-    for collection in repository.list_opshop_pickup_collections(dispatch_date):
+    for collection in repository.list_opshop_pickup_collections():
         if any(
             pickup.pickup_task_id_snapshot == pickup_task_id
             for pickup in collection.pickups

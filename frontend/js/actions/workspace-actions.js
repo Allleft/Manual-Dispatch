@@ -26,10 +26,8 @@ import {
   apiGetOpShopWorkspaceBoard,
   apiGetWorkspaceMigrationStatus,
   apiListDeliveryRunSheets,
-  apiListDeliveryRunSheetsByDispatchAndDeliveryDate,
   apiListDeliveryRunSheetsByDeliveryDate,
   apiListOpShopPickupCollections,
-  apiListOpShopPickupCollectionsByDispatchAndPickupDate,
   apiListOpShopPickupCollectionsByPickupDate,
   apiPreviewDeliveryAttacheInvoices,
   apiSaveGeneratedDeliveryRunSheet,
@@ -93,10 +91,8 @@ const DEFAULT_API = {
   getOpShopWorkspaceBoard: apiGetOpShopWorkspaceBoard,
   getWorkspaceMigrationStatus: apiGetWorkspaceMigrationStatus,
   listDeliveryRunSheets: apiListDeliveryRunSheets,
-  listDeliveryRunSheetsByDispatchAndDeliveryDate: apiListDeliveryRunSheetsByDispatchAndDeliveryDate,
   listDeliveryRunSheetsByDeliveryDate: apiListDeliveryRunSheetsByDeliveryDate,
   listOpShopPickupCollections: apiListOpShopPickupCollections,
-  listOpShopPickupCollectionsByDispatchAndPickupDate: apiListOpShopPickupCollectionsByDispatchAndPickupDate,
   listOpShopPickupCollectionsByPickupDate: apiListOpShopPickupCollectionsByPickupDate,
   previewDeliveryAttacheInvoices: apiPreviewDeliveryAttacheInvoices,
   saveGeneratedDeliveryRunSheet: apiSaveGeneratedDeliveryRunSheet,
@@ -272,14 +268,18 @@ export function createWorkspaceActions({
         await loadDeliveryTripSummaryData(route, deliveryDate, requestVersion);
         return;
       } else if (route === "delivery/run-sheet") {
-        const [board, runSheets] = await Promise.all([
-          api.getDeliveryWorkspaceBoard(dispatchDate),
-          api.listDeliveryRunSheets(dispatchDate, ""),
-        ]);
-        if (isCurrent()) {
-          state.deliveryBoard = board;
+        const deliveryDate = state.deliveryTripSummaryDate || dispatchDate;
+        const runSheets = await api.listDeliveryRunSheetsByDeliveryDate(
+          deliveryDate,
+          "",
+        );
+        if (
+          state.isLoggedIn
+          && state.workspaceRoute === route
+          && state.deliveryTripSummaryDate === deliveryDate
+          && requestVersion === deliveryWorkspaceRequestVersion
+        ) {
           state.deliveryRunSheets = runSheets || [];
-          pruneDeliveryDrafts();
         }
       }
     } catch (error) {
@@ -350,22 +350,19 @@ export function createWorkspaceActions({
     deliveryDate = state.deliveryTripSummaryDate || state.dispatchDate,
     requestVersion = ++deliveryWorkspaceRequestVersion,
   ) {
-    const dispatchDate = state.dispatchDate;
-    const scopedDeliveryDate = deliveryDate || dispatchDate;
+    const scopedDeliveryDate =
+      deliveryDate || state.deliveryTripSummaryDate || state.dispatchDate;
     const isCurrent = () =>
       state.isLoggedIn &&
       state.workspaceRoute === route &&
-      state.dispatchDate === dispatchDate &&
       state.deliveryTripSummaryDate === scopedDeliveryDate &&
       requestVersion === deliveryWorkspaceRequestVersion;
 
     const [board, runSheets] = await Promise.all([
       api.getDeliveryTripSummary({
-        dispatchDate,
         deliveryDate: scopedDeliveryDate,
       }),
-      api.listDeliveryRunSheetsByDispatchAndDeliveryDate(
-        dispatchDate,
+      api.listDeliveryRunSheetsByDeliveryDate(
         scopedDeliveryDate,
         "",
       ),
@@ -400,14 +397,18 @@ export function createWorkspaceActions({
         await loadOpShopTripSummaryData(route, pickupDate, requestVersion);
         return;
       } else if (route === "opshop/collections") {
-        const [board, collections] = await Promise.all([
-          api.getOpShopWorkspaceBoard(dispatchDate),
-          api.listOpShopPickupCollections(dispatchDate, ""),
-        ]);
-        if (isCurrent()) {
-          state.opshopBoard = board;
+        const pickupDate = state.opshopTripSummaryDate || dispatchDate;
+        const collections = await api.listOpShopPickupCollectionsByPickupDate(
+          pickupDate,
+          "",
+        );
+        if (
+          state.isLoggedIn
+          && state.workspaceRoute === route
+          && state.opshopTripSummaryDate === pickupDate
+          && requestVersion === opshopWorkspaceRequestVersion
+        ) {
           state.opshopPickupCollections = collections || [];
-          pruneOpShopDrafts();
         }
       } else if (route.startsWith("opshop/task-pool/")) {
         const [board, collections] = await Promise.all([
@@ -495,22 +496,19 @@ export function createWorkspaceActions({
     pickupDate = state.opshopTripSummaryDate || state.dispatchDate,
     requestVersion = ++opshopWorkspaceRequestVersion,
   ) {
-    const dispatchDate = state.dispatchDate;
-    const scopedPickupDate = pickupDate || dispatchDate;
+    const scopedPickupDate =
+      pickupDate || state.opshopTripSummaryDate || state.dispatchDate;
     const isCurrent = () =>
       state.isLoggedIn &&
       state.workspaceRoute === route &&
-      state.dispatchDate === dispatchDate &&
       state.opshopTripSummaryDate === scopedPickupDate &&
       requestVersion === opshopWorkspaceRequestVersion;
 
     const [board, collections] = await Promise.all([
       api.getOpShopTripSummary({
-        dispatchDate,
         pickupDate: scopedPickupDate,
       }),
-      api.listOpShopPickupCollectionsByDispatchAndPickupDate(
-        dispatchDate,
+      api.listOpShopPickupCollectionsByPickupDate(
         scopedPickupDate,
         "",
       ),
@@ -527,8 +525,6 @@ export function createWorkspaceActions({
     }
     clearWorkspaceDraftsForDispatchDateChange();
     state.dispatchDate = nextDate;
-    state.deliveryTripSummaryDate = nextDate;
-    state.opshopTripSummaryDate = nextDate;
     await loadWorkspaceRoute(state.workspaceRoute);
   }
 
@@ -588,7 +584,10 @@ export function createWorkspaceActions({
 
   async function updateOpShopTripSummaryDate(nextDate) {
     state.opshopTripSummaryDate = nextDate || state.dispatchDate;
-    if (state.workspaceRoute === "opshop/trip-summary") {
+    if (
+      state.workspaceRoute === "opshop/trip-summary"
+      || state.workspaceRoute === "opshop/collections"
+    ) {
       await loadOpShopRoute(state.workspaceRoute);
       return;
     }
@@ -1322,16 +1321,21 @@ export function createWorkspaceActions({
     }
     await runDeliveryAction(`delivery-assignment:${orderId}`, async (context) => {
       const updatedBoard = await api.assignDeliveryWorkspaceOrder({
-        dispatch_date: context.dispatchDate,
+        ...dispatchMetadataForContext(context),
         order_id: orderId,
         driver_id: draft.driver_id,
         trip_no: draft.trip_no || "trip1",
       });
       if (isDeliveryMutationCurrent(context)) {
-        state.deliveryBoard = updatedBoard;
+        if (context.route === "delivery/trip-summary") {
+          state.deliveryTripSummaryBoard = updatedBoard;
+          pruneDeliveryVehicleDrafts(updatedBoard);
+        } else {
+          state.deliveryBoard = updatedBoard;
+          pruneDeliveryDrafts();
+        }
         const { [orderId]: _removed, ...remaining } = state.deliveryAssignmentDrafts;
         state.deliveryAssignmentDrafts = remaining;
-        pruneDeliveryDrafts();
         renderDeliveryWorkspacePreservingScroll();
       }
     }, null, { preserveScroll: true });
@@ -1340,16 +1344,21 @@ export function createWorkspaceActions({
   async function moveDeliveryOrderToTrip(orderId, driverId, tripNo) {
     await runDeliveryAction(`delivery-move:${orderId}:${tripNo}`, async (context) => {
       const updatedBoard = await api.assignDeliveryWorkspaceOrder({
-        dispatch_date: context.dispatchDate,
+        ...dispatchMetadataForContext(context),
         order_id: orderId,
         driver_id: driverId,
         trip_no: tripNo,
       });
       if (isDeliveryMutationCurrent(context)) {
-        state.deliveryBoard = updatedBoard;
+        if (context.route === "delivery/trip-summary") {
+          state.deliveryTripSummaryBoard = updatedBoard;
+          pruneDeliveryVehicleDrafts(updatedBoard);
+        } else {
+          state.deliveryBoard = updatedBoard;
+          pruneDeliveryDrafts();
+        }
         const { [orderId]: _removed, ...remaining } = state.deliveryAssignmentDrafts;
         state.deliveryAssignmentDrafts = remaining;
-        pruneDeliveryDrafts();
         renderDeliveryWorkspacePreservingScroll();
       }
     }, null, { preserveScroll: true });
@@ -1358,14 +1367,19 @@ export function createWorkspaceActions({
   async function unassignDeliveryOrder(orderId) {
     await runDeliveryAction(`delivery-unassign:${orderId}`, async (context) => {
       const updatedBoard = await api.unassignDeliveryWorkspaceOrder({
-        dispatch_date: context.dispatchDate,
+        ...dispatchMetadataForContext(context),
         order_id: orderId,
       });
       if (isDeliveryMutationCurrent(context)) {
-        state.deliveryBoard = updatedBoard;
+        if (context.route === "delivery/trip-summary") {
+          state.deliveryTripSummaryBoard = updatedBoard;
+          pruneDeliveryVehicleDrafts(updatedBoard);
+        } else {
+          state.deliveryBoard = updatedBoard;
+          pruneDeliveryDrafts();
+        }
         const { [orderId]: _removed, ...remaining } = state.deliveryAssignmentDrafts;
         state.deliveryAssignmentDrafts = remaining;
-        pruneDeliveryDrafts();
         renderDeliveryWorkspacePreservingScroll();
       }
     }, null, { preserveScroll: true });
@@ -1418,7 +1432,6 @@ export function createWorkspaceActions({
     const entry = {
       queueId: ++deliveryVehicleQueueIdCounter,
       mutationVersion: deliveryVehicleMutationVersion,
-      dispatchDate: state.dispatchDate,
       deliveryDate,
       promise: null,
     };
@@ -1509,13 +1522,11 @@ export function createWorkspaceActions({
       try {
         updatedBoard = vehicleId
           ? await api.assignDeliveryWorkspaceVehicle({
-            dispatch_date: context.dispatchDate,
             delivery_date: deliveryDate,
             driver_id: driverId,
             vehicle_id: vehicleId,
           })
           : await api.clearDeliveryWorkspaceVehicle({
-            dispatch_date: context.dispatchDate,
             delivery_date: deliveryDate,
             driver_id: driverId,
           });
@@ -1582,7 +1593,6 @@ export function createWorkspaceActions({
       && state.isLoggedIn
       && state.workspaceRoute === "delivery/trip-summary"
       && state.activeWorkspace === "delivery"
-      && state.dispatchDate === entry.dispatchDate
       && (state.deliveryTripSummaryDate || entry.deliveryDate) === entry.deliveryDate
     );
   }
@@ -1680,7 +1690,6 @@ export function createWorkspaceActions({
       `delivery-generate:${candidate.delivery_date}:${candidate.driver_id}`,
       async (context) => {
         await api.createGeneratedDeliveryRunSheet({
-          dispatch_date: context.dispatchDate,
           delivery_date: candidate.delivery_date,
           driver_id: candidate.driver_id,
         });
@@ -1765,7 +1774,7 @@ export function createWorkspaceActions({
 
     await runOpShopAction("opshop-apply-assignments", async (context) => {
       await api.applyOpShopWorkspaceAssignments({
-        dispatch_date: context.dispatchDate,
+        ...dispatchMetadataForContext(context),
         assignments: changedAssignments,
       });
       if (isOpShopMutationCurrent(context)) {
@@ -1782,7 +1791,7 @@ export function createWorkspaceActions({
   async function unassignOpShopPickup(pickupTaskId) {
     await runOpShopAction(`opshop-unassign:${pickupTaskId}`, async (context) => {
       await api.unassignOpShopWorkspacePickup({
-        dispatch_date: context.dispatchDate,
+        ...dispatchMetadataForContext(context),
         pickup_task_id: pickupTaskId,
       });
       if (isOpShopMutationCurrent(context)) {
@@ -1866,7 +1875,6 @@ export function createWorkspaceActions({
       `opshop-generate:${candidate.pickup_date}:${candidate.driver_id}`,
       async (context) => {
         await api.createGeneratedOpShopPickupCollection({
-          dispatch_date: context.dispatchDate,
           pickup_date: candidate.pickup_date,
           driver_id: candidate.driver_id,
         });
@@ -1926,10 +1934,9 @@ export function createWorkspaceActions({
     if (state.opshopBusyActionKeys?.[actionKey]) {
       return;
     }
-    await runOpShopAction(actionKey, async (context) => {
+    await runOpShopAction(actionKey, async () => {
       await api.exportOpShopPickupCollectionsExcel({
         pickupDate: scopedDate,
-        dispatchDate: context.dispatchDate,
       });
     });
   }
@@ -2138,10 +2145,7 @@ export function createWorkspaceActions({
 
   function clearWorkspaceDraftsForDispatchDateChange() {
     invalidateDeliveryAttachePreview();
-    state.deliveryTripSummaryBoard = null;
-    state.deliveryTripSummaryRunSheets = [];
     state.deliveryAssignmentDrafts = {};
-    clearDeliveryVehicleTransientState();
     state.deliveryOrderDetailId = "";
     state.deliveryOrderDetailReadOnly = false;
     state.deliveryOrderForm = {};
@@ -2156,16 +2160,10 @@ export function createWorkspaceActions({
     state.deliverySpecificationError = "";
     state.deliverySpecificationBusyKey = "";
     state.opshopAssignmentDrafts = {};
-    state.opshopTripSummaryBoard = null;
-    state.opshopTripSummaryCollections = [];
     state.countrysideRouteGroupDrafts = {};
     state.collapsedRegularOpShopPickupDates = {};
     state.deliveryActionError = "";
     state.opshopActionError = "";
-    state.deliveryBusyActionKeys = {};
-    state.opshopBusyActionKeys = {};
-    state.deliveryGenerationConfirmation = null;
-    state.opshopGenerationConfirmation = null;
   }
 
   function clearGenerationConfirmationsForRoute(route) {
@@ -2281,8 +2279,22 @@ export function createWorkspaceActions({
     return {
       route: state.workspaceRoute,
       dispatchDate: state.dispatchDate,
+      deliveryDate: state.deliveryTripSummaryDate,
+      pickupDate: state.opshopTripSummaryDate,
+      deliveryHistoryDate: state.deliverySavedHistoryDate,
+      opshopHistoryDate: state.opshopSavedHistoryDate,
       activeWorkspace: state.activeWorkspace,
     };
+  }
+
+  function dispatchMetadataForContext(context) {
+    if (
+      context.route === "delivery/task-pool"
+      || context.route.startsWith("opshop/task-pool/")
+    ) {
+      return { dispatch_date: context.dispatchDate };
+    }
+    return {};
   }
 
   function nextActionToken() {
@@ -2305,9 +2317,15 @@ export function createWorkspaceActions({
       state.isLoggedIn &&
       context &&
       state.workspaceRoute === context.route &&
-      state.dispatchDate === context.dispatchDate &&
       state.activeWorkspace === context.activeWorkspace &&
-      DELIVERY_ROUTES.has(context.route)
+      DELIVERY_ROUTES.has(context.route) &&
+      (
+        context.route === "delivery/task-pool"
+          ? state.dispatchDate === context.dispatchDate
+          : context.route === "delivery/history"
+            ? state.deliverySavedHistoryDate === context.deliveryHistoryDate
+            : state.deliveryTripSummaryDate === context.deliveryDate
+      )
     );
   }
 
@@ -2325,9 +2343,15 @@ export function createWorkspaceActions({
       state.isLoggedIn &&
       context &&
       state.workspaceRoute === context.route &&
-      state.dispatchDate === context.dispatchDate &&
       state.activeWorkspace === context.activeWorkspace &&
-      OPSHOP_ROUTES.has(context.route)
+      OPSHOP_ROUTES.has(context.route) &&
+      (
+        context.route.startsWith("opshop/task-pool/")
+          ? state.dispatchDate === context.dispatchDate
+          : context.route === "opshop/history"
+            ? state.opshopSavedHistoryDate === context.opshopHistoryDate
+            : state.opshopTripSummaryDate === context.pickupDate
+      )
     );
   }
 

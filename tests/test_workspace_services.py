@@ -9,11 +9,16 @@ from backend.repositories.sqlite_manual_dispatch_repository import (
 from backend.schemas import (
     AssignDriverVehicleRequest,
     AssignTaskRequest,
+    DeliveryWorkspaceAssignOrderRequest,
+    DeliveryWorkspaceUnassignOrderRequest,
+    DeliveryWorkspaceVehicleAssignmentRequest,
     GenerateDeliveryRunSheetRequest,
     GenerateOpShopPickupCollectionRequest,
     OpShopLocation,
     OpShopPickupSchedule,
     OpShopPickupTask,
+    OpShopWorkspaceAssignmentBatchRequest,
+    OpShopWorkspaceUnassignPickupRequest,
     RegisterOperatorAccountRequest,
     SaveGeneratedWorkspaceSnapshotRequest,
 )
@@ -309,6 +314,200 @@ class WorkspaceServicesTest(unittest.TestCase):
         self.assertEqual("SAVED", collection.status)
         self.assertEqual(["ORDER"], self._delivery_task_types(delivery))
         self.assertEqual(["PICKUP-001"], self._pickup_task_ids(collection))
+
+    def test_delivery_service_date_scope_survives_dispatch_context_changes(self):
+        origin_dispatch_date = "2026-05-04"
+        other_dispatch_date = "2026-05-06"
+        self.service.assign_delivery_workspace_order(
+            DeliveryWorkspaceAssignOrderRequest(
+                dispatch_date=origin_dispatch_date,
+                order_id="ORD-001",
+                driver_id="D001",
+                trip_no="trip1",
+            )
+        )
+
+        board = self.service.get_delivery_trip_summary_board(self.dispatch_date)
+        self.assertEqual(self.dispatch_date, board.delivery_date)
+        self.assertIsNone(board.dispatch_date)
+        self.assertEqual(
+            [(origin_dispatch_date, "D001", "trip1")],
+            [
+                (
+                    assignment.dispatch_date,
+                    assignment.driver_id,
+                    assignment.trip_no,
+                )
+                for assignment in board.assignments
+                if assignment.task_id == "ORD-001"
+            ],
+        )
+
+        self.service.assign_delivery_workspace_order(
+            DeliveryWorkspaceAssignOrderRequest(
+                order_id="ORD-001",
+                driver_id="D002",
+                trip_no="trip2",
+            )
+        )
+        assignment = self.repository.find_assignment_for_task("ORDER", "ORD-001")
+        self.assertEqual(origin_dispatch_date, assignment.dispatch_date)
+        self.assertEqual("D002", assignment.driver_id)
+        self.assertEqual("trip2", assignment.trip_no)
+        self.assertEqual(
+            1,
+            len(self.repository.list_assignments_for_task("ORDER", "ORD-001")),
+        )
+
+        self.service.assign_delivery_workspace_vehicle(
+            DeliveryWorkspaceVehicleAssignmentRequest(
+                dispatch_date=origin_dispatch_date,
+                delivery_date=self.dispatch_date,
+                driver_id="D002",
+                vehicle_id="V001",
+            )
+        )
+        board = self.service.get_delivery_trip_summary_board(self.dispatch_date)
+        self.assertEqual(
+            [(origin_dispatch_date, "D002", "V001")],
+            [
+                (
+                    item.dispatch_date,
+                    item.driver_id,
+                    item.vehicle_id,
+                )
+                for item in board.driver_vehicle_assignments
+            ],
+        )
+
+        generated = self.service.create_generated_delivery_run_sheet(
+            GenerateDeliveryRunSheetRequest(
+                delivery_date=self.dispatch_date,
+                driver_id="D002",
+            )
+        )
+        self.assertEqual(["ORDER"], self._delivery_task_types(generated))
+        with self.assertRaisesRegex(ValueError, "already exists"):
+            self.service.create_generated_delivery_run_sheet(
+                GenerateDeliveryRunSheetRequest(
+                    dispatch_date=other_dispatch_date,
+                    delivery_date=self.dispatch_date,
+                    driver_id="D002",
+                )
+            )
+        with self.assertRaisesRegex(ValueError, "already been generated"):
+            self.service.assign_delivery_workspace_order(
+                DeliveryWorkspaceAssignOrderRequest(
+                    dispatch_date=other_dispatch_date,
+                    order_id="ORD-001",
+                    driver_id="D001",
+                    trip_no="trip1",
+                )
+            )
+
+        self.service.cancel_generated_delivery_run_sheet(generated.run_sheet_id)
+        self.service.unassign_delivery_workspace_order(
+            DeliveryWorkspaceUnassignOrderRequest(order_id="ORD-001")
+        )
+        self.assertIsNone(
+            self.repository.find_assignment_for_task("ORDER", "ORD-001")
+        )
+
+    def test_opshop_service_date_scope_survives_dispatch_context_changes(self):
+        origin_dispatch_date = "2026-05-04"
+        other_dispatch_date = "2026-05-06"
+        self._seed_and_assign_pickup("PICKUP-SERVICE-DATE")
+        self.repository.remove_assignments_for_task(
+            "OPSHOP_PICKUP",
+            "PICKUP-SERVICE-DATE",
+        )
+        self.service.apply_opshop_workspace_assignments(
+            OpShopWorkspaceAssignmentBatchRequest(
+                dispatch_date=origin_dispatch_date,
+                assignments=[
+                    {
+                        "pickup_task_id": "PICKUP-SERVICE-DATE",
+                        "driver_id": "D001",
+                    }
+                ],
+            )
+        )
+
+        board = self.service.get_opshop_trip_summary_board(self.dispatch_date)
+        self.assertEqual(self.dispatch_date, board.pickup_date)
+        self.assertIsNone(board.dispatch_date)
+        self.assertEqual(
+            ["D001"],
+            [
+                pickup.driver_id
+                for pickup in board.opshop_pickups
+                if pickup.pickup_task_id == "PICKUP-SERVICE-DATE"
+            ],
+        )
+
+        self.service.apply_opshop_workspace_assignments(
+            OpShopWorkspaceAssignmentBatchRequest(
+                assignments=[
+                    {
+                        "pickup_task_id": "PICKUP-SERVICE-DATE",
+                        "driver_id": "D002",
+                    }
+                ],
+            )
+        )
+        assignment = self.repository.find_assignment_for_task(
+            "OPSHOP_PICKUP",
+            "PICKUP-SERVICE-DATE",
+        )
+        self.assertEqual(origin_dispatch_date, assignment.dispatch_date)
+        self.assertEqual("D002", assignment.driver_id)
+        self.assertEqual(
+            1,
+            len(
+                self.repository.list_assignments_for_task(
+                    "OPSHOP_PICKUP",
+                    "PICKUP-SERVICE-DATE",
+                )
+            ),
+        )
+
+        generated = self.service.create_generated_opshop_pickup_collection(
+            GenerateOpShopPickupCollectionRequest(
+                pickup_date=self.dispatch_date,
+                driver_id="D002",
+            )
+        )
+        self.assertEqual(["PICKUP-SERVICE-DATE"], self._pickup_task_ids(generated))
+        with self.assertRaisesRegex(ValueError, "already exists"):
+            self.service.create_generated_opshop_pickup_collection(
+                GenerateOpShopPickupCollectionRequest(
+                    dispatch_date=other_dispatch_date,
+                    pickup_date=self.dispatch_date,
+                    driver_id="D002",
+                )
+            )
+        with self.assertRaisesRegex(ValueError, "already been generated"):
+            self.service.unassign_opshop_workspace_pickup(
+                OpShopWorkspaceUnassignPickupRequest(
+                    dispatch_date=other_dispatch_date,
+                    pickup_task_id="PICKUP-SERVICE-DATE",
+                )
+            )
+
+        self.service.cancel_generated_opshop_pickup_collection(
+            generated.collection_id
+        )
+        self.service.unassign_opshop_workspace_pickup(
+            OpShopWorkspaceUnassignPickupRequest(
+                pickup_task_id="PICKUP-SERVICE-DATE"
+            )
+        )
+        self.assertIsNone(
+            self.repository.find_assignment_for_task(
+                "OPSHOP_PICKUP",
+                "PICKUP-SERVICE-DATE",
+            )
+        )
 
     def test_new_services_do_not_depend_on_legacy_final_summary_locks(self):
         service_paths = [

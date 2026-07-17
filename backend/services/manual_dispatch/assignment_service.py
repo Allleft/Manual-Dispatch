@@ -129,12 +129,24 @@ class AssignmentService:
 
         self.validator.validate_vehicle_exists(vehicle_id)
 
-        return self.repository.upsert_driver_vehicle_assignment(
-            dispatch_date=dispatch_date,
-            delivery_date=delivery_date,
-            driver_id=driver_id,
-            vehicle_id=vehicle_id,
+        assignment, conflicting_driver_id = (
+            self.repository.upsert_delivery_workspace_vehicle_assignment(
+                dispatch_date,
+                delivery_date,
+                driver_id,
+                vehicle_id,
+            )
         )
+        if conflicting_driver_id:
+            vehicle = self.repository.get_vehicle(vehicle_id)
+            driver = self.repository.get_driver(conflicting_driver_id)
+            vehicle_name = vehicle.rego if vehicle else vehicle_id
+            driver_name = driver.name if driver else conflicting_driver_id
+            raise ValueError(
+                f"Vehicle {vehicle_name} is already assigned to "
+                f"{driver_name} for this delivery date."
+            )
+        return assignment
 
     def clear_driver_vehicle_assignment(self, dispatch_date, driver_id, delivery_date=None):
         dispatch_date = clean_required_text(dispatch_date, "dispatch_date")

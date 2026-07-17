@@ -491,7 +491,7 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
         self.assertEqual("2026-05-05", board.driver_vehicle_assignments[0].delivery_date)
         self.assertEqual("V002", board.driver_vehicle_assignments[0].vehicle_id)
 
-    def test_vehicle_selection_is_scoped_by_dispatch_and_delivery_date(self):
+    def test_vehicle_selection_is_scoped_by_delivery_date(self):
         self.service.assign_vehicle_to_driver(
             AssignDriverVehicleRequest(
                 dispatch_date="2026-05-05",
@@ -544,7 +544,7 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
         self.assertEqual(1, len(board.assignments))
         self.assertFalse(hasattr(board.assignments[0], "vehicle_id"))
 
-    def test_duplicate_vehicle_assignment_across_drivers_is_allowed(self):
+    def test_duplicate_vehicle_assignment_across_drivers_is_rejected(self):
         self.service.assign_vehicle_to_driver(
             AssignDriverVehicleRequest(
                 dispatch_date="2026-05-05",
@@ -552,20 +552,19 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
                 vehicle_id="V001",
             )
         )
-        self.service.assign_vehicle_to_driver(
-            AssignDriverVehicleRequest(
-                dispatch_date="2026-05-05",
-                driver_id="D002",
-                vehicle_id="V001",
+        with self.assertRaisesRegex(ValueError, "already assigned"):
+            self.service.assign_vehicle_to_driver(
+                AssignDriverVehicleRequest(
+                    dispatch_date="2026-05-05",
+                    driver_id="D002",
+                    vehicle_id="V001",
+                )
             )
-        )
 
         board = self.service.get_board("2026-05-05")
-        self.assertEqual(2, len(board.driver_vehicle_assignments))
-        self.assertEqual(
-            ["V001", "V001"],
-            [assignment.vehicle_id for assignment in board.driver_vehicle_assignments],
-        )
+        self.assertEqual(1, len(board.driver_vehicle_assignments))
+        self.assertEqual("D001", board.driver_vehicle_assignments[0].driver_id)
+        self.assertEqual("V001", board.driver_vehicle_assignments[0].vehicle_id)
 
     def test_invalid_trip_no_is_rejected_through_service(self):
         with self.assertRaises(ValueError):

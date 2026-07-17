@@ -21,8 +21,11 @@ class DeliveryRunSheetService:
         self.validator = validator
 
     def create_generated(self, request):
-        dispatch_date = clean_required_iso_date(request.dispatch_date, "dispatch_date")
         delivery_date = clean_required_iso_date(request.delivery_date, "delivery_date")
+        dispatch_date = (
+            clean_optional_iso_date(request.dispatch_date, "dispatch_date")
+            or delivery_date
+        )
         driver_id = clean_required_text(request.driver_id, "driver_id")
         self.validator.validate_driver_exists(driver_id)
 
@@ -36,13 +39,12 @@ class DeliveryRunSheetService:
                 "Delivery Run Sheet already exists for this driver and delivery date."
             )
 
-        trips = self._build_trips(dispatch_date, delivery_date, driver_id)
+        trips = self._build_trips(delivery_date, driver_id)
         if not trips:
             raise ValueError("At least one assigned Delivery Order is required.")
 
         driver = self.repository.get_driver(driver_id)
         vehicle_id, vehicle_rego = self._vehicle_snapshot(
-            dispatch_date,
             delivery_date,
             driver_id,
         )
@@ -147,12 +149,15 @@ class DeliveryRunSheetService:
             f"Only generated Delivery Run Sheets can be {past_tense}."
         )
 
-    def _build_trips(self, dispatch_date, delivery_date, driver_id):
+    def _build_trips(self, delivery_date, driver_id):
         assignments = [
             assignment
-            for assignment in self.repository.list_assignments(dispatch_date)
-            if assignment.task_type == "ORDER"
-            and assignment.driver_id == driver_id
+            for assignment in (
+                self.repository.list_delivery_order_assignments_for_delivery_date(
+                    delivery_date
+                )
+            )
+            if assignment.driver_id == driver_id
             and assignment.trip_no in {"trip1", "trip2"}
         ]
         trips = []
@@ -204,14 +209,16 @@ class DeliveryRunSheetService:
                 trips.append(DeliveryRunSheetTrip(trip_no=trip_no, orders=orders))
         return trips
 
-    def _vehicle_snapshot(self, dispatch_date, delivery_date, driver_id):
+    def _vehicle_snapshot(self, delivery_date, driver_id):
         assignment = next(
             (
                 item
-                for item in self.repository.list_driver_vehicle_assignments(
-                    dispatch_date
+                for item in (
+                    self.repository.list_driver_vehicle_assignments_for_delivery_date(
+                        delivery_date
+                    )
                 )
-                if item.delivery_date == delivery_date and item.driver_id == driver_id
+                if item.driver_id == driver_id
             ),
             None,
         )

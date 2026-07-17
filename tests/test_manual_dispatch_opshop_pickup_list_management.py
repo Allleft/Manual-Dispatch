@@ -1035,6 +1035,7 @@ class OpShopPickupListManagementRouteTest(unittest.TestCase):
             json={
                 "schedule_id": "SCHED-ONCALL",
                 "pickup_date": "2026-05-20",
+                "dispatch_date": "2026-05-18",
                 "assigned_driver_id": "D001",
                 "notes": "Phone request",
             },
@@ -1058,6 +1059,20 @@ class OpShopPickupListManagementRouteTest(unittest.TestCase):
         self.assertEqual([pickup_id], [item["pickup_task_id"] for item in payload["assigned_opshop_pickups"]])
         self.assertEqual("D001", payload["assigned_opshop_pickups"][0]["driver_id"])
         self.assertEqual("trip1", payload["assigned_opshop_pickups"][0]["trip_no"])
+        assignment = self.repository.find_assignment_for_task(
+            "OPSHOP_PICKUP",
+            pickup_id,
+        )
+        self.assertEqual("2026-05-18", assignment.dispatch_date)
+        self.assertEqual(
+            1,
+            len(
+                self.repository.list_assignments_for_task(
+                    "OPSHOP_PICKUP",
+                    pickup_id,
+                )
+            ),
+        )
 
     def test_apply_weekly_assignments_endpoint_returns_updated_board(self):
         create_response = self.client.post(

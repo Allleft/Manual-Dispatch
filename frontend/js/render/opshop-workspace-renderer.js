@@ -115,7 +115,7 @@ function createWorkspacePage(state, onDispatchDateChange) {
   copy.append(kicker, title, description);
   titleGroup.append(icon, copy);
   heading.append(titleGroup);
-  if (state.workspaceRoute !== "opshop/history") {
+  if (state.workspaceRoute.startsWith("opshop/task-pool/")) {
     heading.append(createDateControl(state, onDispatchDateChange));
   }
 
@@ -845,7 +845,6 @@ function createOpShopDriverSummaryCard(
   const pickups = assignedOpShopPickupsForDriver(board, pickupDate, driver.driver_id);
   const collection = findPickupCollectionForDriver(
     collections,
-    board.dispatch_date,
     pickupDate,
     driver.driver_id,
   );
@@ -1042,10 +1041,24 @@ function createCollectionList(collections, state, actions) {
     "Pickup Collections",
     "Review generated and saved OP SHOP Pickup Collection weight sheets by actual Pickup date.",
   ));
+  const pickupDate = state.opshopTripSummaryDate || state.dispatchDate;
+  const field = document.createElement("label");
+  field.className = "workspace-date-control workspace-opshop-pickup-date-control";
+  field.textContent = "Pickup date";
+  const input = document.createElement("input");
+  input.type = "date";
+  input.value = pickupDate;
+  input.disabled = state.isOpShopWorkspaceLoading;
+  input.addEventListener(
+    "change",
+    () => actions.updateOpShopTripSummaryDate(input.value),
+  );
+  field.append(input);
+  intro.append(field);
   wrapper.append(intro);
   if (!groupedCollections.length) {
     wrapper.append(createEmptyState(
-      "No generated or saved Pickup Collections for this workspace date.",
+      "No generated or saved Pickup Collections for this Pickup Date.",
       "history",
     ));
     return wrapper;
@@ -1064,7 +1077,7 @@ function createCollectionDateGroup(pickupDate, collections, state, actions) {
   header.className = "workspace-record-card-top workspace-collection-date-group-header";
   header.append(createSectionHeading(
     `Pickup date: ${pickupDate}`,
-    `Workspace date: ${state.dispatchDate} - ${collections.length} generated/saved collections`,
+    `${collections.length} generated/saved collections for this Pickup Date`,
   ));
   const exportKey = `opshop-export-date:${pickupDate}`;
   const isExporting = isBusy(state, exportKey);
@@ -1347,11 +1360,10 @@ function assignedOpShopPickupsForDriver(board, pickupDate, driverId) {
 }
 
 
-function findPickupCollectionForDriver(collections, dispatchDate, pickupDate, driverId) {
+function findPickupCollectionForDriver(collections, pickupDate, driverId) {
   return (collections || []).find(
     (collection) =>
-      collection.dispatch_date === dispatchDate
-      && collection.pickup_date === pickupDate
+      collection.pickup_date === pickupDate
       && collection.driver_id === driverId
       && ["GENERATED", "SAVED"].includes(collection.status),
   );

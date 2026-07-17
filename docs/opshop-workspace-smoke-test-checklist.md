@@ -164,10 +164,15 @@ From each originating subtype, open `Manage Templates` and verify Back returns t
 ## Trip Summary
 
 - Select the Pickup Date.
+- Record the current Dispatch Date, then assign a pickup whose Pickup Date is different from that Dispatch Date.
+- Change only Dispatch Date and keep Pickup Date unchanged. Confirm the same pickup, driver grouping, and collection eligibility remain visible.
+- Change Pickup Date to another day. Confirm the original pickup disappears; restore the original Pickup Date and confirm it returns.
 - Confirm pickups group by driver and by Regular, Oncall, and Countryside category.
 - Confirm route-group context is visible for Countryside.
 - Confirm no Delivery Orders, pallets, loose bags, vehicle capacity, or Delivery trip rows appear.
 - Confirm Generated/Saved lock messages match current collection state.
+
+Dispatch Date is Task Pool scope and provenance metadata. Pickup Date is the sole Trip Summary, Pickup Collection, lock, Collections page, and daily export scope.
 
 ## Generated Pickup Collection
 
@@ -178,6 +183,7 @@ From each originating subtype, open `Manage Templates` and verify Back returns t
 5. Restart the QA app and confirm it still persists.
 6. Open Pickup Collections and confirm the Generated snapshot rows.
 7. Cancel Generated and confirm editable tasks return.
+8. Generate once more, change only Dispatch Date, and confirm the Generated lock still blocks duplicate generation for the same Pickup Date and driver.
 
 ## Saved Pickup Collection and Export
 
