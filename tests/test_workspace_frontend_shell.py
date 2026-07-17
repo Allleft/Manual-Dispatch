@@ -42,8 +42,21 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.navigation_renderer = self._read(
             "js/render/workspace-navigation-renderer.js"
         )
-        self.delivery_renderer = self._read(
-            "js/render/delivery-workspace-renderer.js"
+        self.delivery_renderer = "\n".join(
+            self._read(path)
+            for path in (
+                "js/render/delivery-workspace-renderer.js",
+                "js/render/delivery/delivery-workspace-page.js",
+                "js/render/delivery/delivery-task-pool-renderer.js",
+                "js/render/delivery/delivery-trip-summary-renderer.js",
+                "js/render/delivery/delivery-history-renderer.js",
+                "js/render/delivery/delivery-run-sheet-renderer.js",
+                "js/render/delivery/delivery-order-modal-renderer.js",
+                "js/render/delivery/delivery-attache-modal-renderer.js",
+                "js/render/delivery/delivery-specification-modal-renderer.js",
+                "js/render/delivery/delivery-generation-modal-renderer.js",
+                "js/render/delivery/delivery-renderer-utils.js",
+            )
         )
         self.delivery_vehicle_utils = self._read(
             "js/utils/delivery-vehicle-utils.js"
