@@ -64,8 +64,21 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.delivery_order_priority_utils = self._read(
             "js/utils/delivery-order-priority-utils.js"
         )
-        self.opshop_renderer = self._read(
-            "js/render/opshop-workspace-renderer.js"
+        self.opshop_renderer = "\n".join(
+            self._read(path)
+            for path in (
+                "js/render/opshop-workspace-renderer.js",
+                "js/render/opshop/opshop-workspace-page.js",
+                "js/render/opshop/opshop-task-pool-renderer.js",
+                "js/render/opshop/opshop-regular-renderer.js",
+                "js/render/opshop/opshop-oncall-renderer.js",
+                "js/render/opshop/opshop-countryside-renderer.js",
+                "js/render/opshop/opshop-template-page-renderer.js",
+                "js/render/opshop/opshop-trip-summary-renderer.js",
+                "js/render/opshop/opshop-history-renderer.js",
+                "js/render/opshop/opshop-collection-renderer.js",
+                "js/render/opshop/opshop-renderer-utils.js",
+            )
         )
         self.opshop_date_group_renderer = self._read(
             "js/render/opshop-date-group-list-renderer.js"
