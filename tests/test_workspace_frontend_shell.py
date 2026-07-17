@@ -14,7 +14,30 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.state = self._read("js/state/app-state.js")
         self.api = self._read("js/api/manual-dispatch-api.js")
         self.auth_actions = self._read("js/actions/auth-actions.js")
-        self.workspace_actions = self._read("js/actions/workspace-actions.js")
+        self.workspace_actions = "\n".join(
+            self._read(path)
+            for path in (
+                "js/actions/workspace-actions.js",
+                "js/actions/workspace/workspace-request-context.js",
+                "js/actions/workspace/workspace-route-loaders.js",
+                "js/actions/workspace/workspace-state-reset.js",
+                "js/actions/workspace/delivery-history-actions.js",
+                "js/actions/workspace/opshop-history-actions.js",
+                "js/actions/workspace/opshop-workspace-actions.js",
+                "js/actions/workspace/opshop-trip-summary-actions.js",
+                "js/actions/workspace/delivery-trip-summary-actions.js",
+                "js/actions/workspace/workspace-busy-actions.js",
+                "js/actions/workspace/delivery-task-pool-actions.js",
+                "js/actions/workspace/delivery-vehicle-queue.js",
+                "js/actions/workspace/delivery-run-sheet-actions.js",
+                "js/actions/workspace/opshop-task-pool-actions.js",
+                "js/actions/workspace/opshop-collection-actions.js",
+                "js/actions/workspace/delivery-workspace-actions.js",
+                "js/actions/workspace/delivery-specification-actions.js",
+                "js/actions/workspace/delivery-attache-actions.js",
+                "js/actions/workspace/workspace-async-guards.js",
+            )
+        )
         self.home_renderer = self._read("js/render/workspace-home-renderer.js")
         self.navigation_renderer = self._read(
             "js/render/workspace-navigation-renderer.js"
@@ -2378,7 +2401,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("function updateOpShopTaskPoolView(view)", self.workspace_actions)
         task_pool_view_action = self.workspace_actions.split(
             "function updateOpShopTaskPoolView", 1
-        )[1].split("function updateOpShopTripSummaryDate", 1)[0]
+        )[1].split("function toggleRegularOpShopDateGroup", 1)[0]
         self.assertIn("navigateWorkspaceRoute(route)", task_pool_view_action)
         self.assertNotIn("loadOpShopRoute", task_pool_view_action)
         self.assertNotIn("window.location", task_pool_view_action)
