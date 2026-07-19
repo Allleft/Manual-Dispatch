@@ -12,15 +12,60 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
     def setUp(self):
         self.app = self._read("app.js")
         self.state = self._read("js/state/app-state.js")
-        self.api = self._read("js/api/manual-dispatch-api.js")
+        self.api = "\n".join(
+            self._read(path)
+            for path in (
+                "js/api/manual-dispatch-api.js",
+                "js/api/manual-dispatch/shared-api.js",
+                "js/api/manual-dispatch/delivery-api.js",
+                "js/api/manual-dispatch/opshop-api.js",
+                "js/api/manual-dispatch/legacy-api.js",
+            )
+        )
         self.auth_actions = self._read("js/actions/auth-actions.js")
-        self.workspace_actions = self._read("js/actions/workspace-actions.js")
+        self.workspace_actions = "\n".join(
+            self._read(path)
+            for path in (
+                "js/actions/workspace-actions.js",
+                "js/actions/workspace/workspace-request-context.js",
+                "js/actions/workspace/workspace-route-loaders.js",
+                "js/actions/workspace/workspace-state-reset.js",
+                "js/actions/workspace/delivery-history-actions.js",
+                "js/actions/workspace/opshop-history-actions.js",
+                "js/actions/workspace/opshop-workspace-actions.js",
+                "js/actions/workspace/opshop-trip-summary-actions.js",
+                "js/actions/workspace/delivery-trip-summary-actions.js",
+                "js/actions/workspace/workspace-busy-actions.js",
+                "js/actions/workspace/delivery-task-pool-actions.js",
+                "js/actions/workspace/delivery-vehicle-queue.js",
+                "js/actions/workspace/delivery-run-sheet-actions.js",
+                "js/actions/workspace/opshop-task-pool-actions.js",
+                "js/actions/workspace/opshop-collection-actions.js",
+                "js/actions/workspace/delivery-workspace-actions.js",
+                "js/actions/workspace/delivery-specification-actions.js",
+                "js/actions/workspace/delivery-attache-actions.js",
+                "js/actions/workspace/workspace-async-guards.js",
+            )
+        )
         self.home_renderer = self._read("js/render/workspace-home-renderer.js")
         self.navigation_renderer = self._read(
             "js/render/workspace-navigation-renderer.js"
         )
-        self.delivery_renderer = self._read(
-            "js/render/delivery-workspace-renderer.js"
+        self.delivery_renderer = "\n".join(
+            self._read(path)
+            for path in (
+                "js/render/delivery-workspace-renderer.js",
+                "js/render/delivery/delivery-workspace-page.js",
+                "js/render/delivery/delivery-task-pool-renderer.js",
+                "js/render/delivery/delivery-trip-summary-renderer.js",
+                "js/render/delivery/delivery-history-renderer.js",
+                "js/render/delivery/delivery-run-sheet-renderer.js",
+                "js/render/delivery/delivery-order-modal-renderer.js",
+                "js/render/delivery/delivery-attache-modal-renderer.js",
+                "js/render/delivery/delivery-specification-modal-renderer.js",
+                "js/render/delivery/delivery-generation-modal-renderer.js",
+                "js/render/delivery/delivery-renderer-utils.js",
+            )
         )
         self.delivery_vehicle_utils = self._read(
             "js/utils/delivery-vehicle-utils.js"
@@ -28,8 +73,21 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.delivery_order_priority_utils = self._read(
             "js/utils/delivery-order-priority-utils.js"
         )
-        self.opshop_renderer = self._read(
-            "js/render/opshop-workspace-renderer.js"
+        self.opshop_renderer = "\n".join(
+            self._read(path)
+            for path in (
+                "js/render/opshop-workspace-renderer.js",
+                "js/render/opshop/opshop-workspace-page.js",
+                "js/render/opshop/opshop-task-pool-renderer.js",
+                "js/render/opshop/opshop-regular-renderer.js",
+                "js/render/opshop/opshop-oncall-renderer.js",
+                "js/render/opshop/opshop-countryside-renderer.js",
+                "js/render/opshop/opshop-template-page-renderer.js",
+                "js/render/opshop/opshop-trip-summary-renderer.js",
+                "js/render/opshop/opshop-history-renderer.js",
+                "js/render/opshop/opshop-collection-renderer.js",
+                "js/render/opshop/opshop-renderer-utils.js",
+            )
         )
         self.opshop_date_group_renderer = self._read(
             "js/render/opshop-date-group-list-renderer.js"
@@ -2378,7 +2436,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("function updateOpShopTaskPoolView(view)", self.workspace_actions)
         task_pool_view_action = self.workspace_actions.split(
             "function updateOpShopTaskPoolView", 1
-        )[1].split("function updateOpShopTripSummaryDate", 1)[0]
+        )[1].split("function toggleRegularOpShopDateGroup", 1)[0]
         self.assertIn("navigateWorkspaceRoute(route)", task_pool_view_action)
         self.assertNotIn("loadOpShopRoute", task_pool_view_action)
         self.assertNotIn("window.location", task_pool_view_action)

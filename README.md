@@ -184,28 +184,29 @@ The migration is additive and idempotent. It does not delete or rewrite legacy F
 
 ```text
 backend/
-  api/manual_dispatch.py                         # HTTP routes
-  repositories/                                  # SQLite and in-memory persistence
-  services/manual_dispatch/
-    delivery_workspace_board_service.py
-    delivery_workspace_mutation_service.py
-    delivery_run_sheet_service.py
-    delivery_run_sheet_lock.py
-    opshop_workspace_board_service.py
-    opshop_workspace_mutation_service.py
-    opshop_pickup_collection_service.py
-    opshop_pickup_collection_lock.py
-    logbook_file_service.py                         # Append-only JSON Lines System Logbook
-    workspace_migration_readiness_service.py
-  services/*_excel_export_service.py             # Snapshot-only workbook exporters
+  api/manual_dispatch.py                         # Stable router/service compatibility facade
+  api/manual_dispatch_routes/                   # Auth, Delivery, OP SHOP, snapshots, exports, Attache, and legacy routes
+  services/manual_dispatch_service.py           # Stable public service facade
+  services/manual_dispatch/application/         # Bounded application orchestration
+  services/manual_dispatch/audit/               # Audit context, Logbook adapter, and domain event recorders
+  services/manual_dispatch/                     # Domain boards, mutations, snapshots, locks, auth, and templates
+  repositories/
+    sqlite_manual_dispatch_repository.py        # Stable SQLite facade
+    in_memory_manual_dispatch_repository.py     # Stable in-memory facade
+    sqlite/                                     # SQLite persistence mixins and row mappers
+    in_memory/                                  # In-memory persistence mixins and seed/base helpers
 
 frontend/
-  app.js                                         # Authenticated workspace hash routing
-  js/actions/workspace-actions.js                # Scoped workspace workflows
-  js/render/delivery-workspace-renderer.js       # Delivery UI
-  js/render/opshop-workspace-renderer.js         # OP SHOP UI
-  js/render/workspace-home-renderer.js           # Home/readiness UI
-  js/render/workspace-navigation-renderer.js     # Header navigation
+  app.js                                        # Authenticated hash routing and composition
+  js/api/manual-dispatch-api.js                 # Stable API re-export barrel
+  js/api/manual-dispatch/                       # Shared, Delivery, OP SHOP, and legacy clients
+  js/actions/workspace-actions.js               # Stable createWorkspaceActions facade
+  js/actions/workspace/                         # Context, guards, loaders, and bounded workspace actions
+  js/render/delivery-workspace-renderer.js      # Stable Delivery renderer facade
+  js/render/delivery/                           # Delivery pages, modals, history, and utilities
+  js/render/opshop-workspace-renderer.js        # Stable OP SHOP renderer facade
+  js/render/opshop/                             # OP SHOP pages, collections, history, and utilities
+  js/state/                                     # Unchanged shared state shape and selectors
 
 tools/
   migrate_legacy_final_summaries_to_workspaces.py
@@ -213,14 +214,15 @@ tools/
   import_oncall_opshop_pickups_to_db.py
   import_countryside_opshop_pickups_to_db.py
   backfill_opshop_source_driver_assignments.py
-  read_logbook.py                                # Read-only System Logbook query CLI
+  read_logbook.py
 
 tests/
-  test_logbook_reader.py                         # Reader and frontend logout static contracts
-  test_workspace_*.py                            # Scoped APIs, locks, snapshots, migration, and frontend shell contracts
+  test_refactor_contract_baseline.py            # Compatibility fingerprints
+  test_logbook_reader.py
+  test_workspace_*.py                           # Scoped workflow and frontend shell contracts
 ```
 
-The workspace renderers do not call the API directly. API calls are centralised in `frontend/js/api/manual-dispatch-api.js`; shared state is in `frontend/js/state/`; workflow behavior belongs in `frontend/js/actions/`; rendering belongs in `frontend/js/render/`.
+Compatibility facades keep established imports and public entry points stable while implementation modules own bounded responsibilities. Render modules do not call `fetch`; network calls stay under `frontend/js/api/`. The top-level app-state shape remains unchanged.
 
 ## Quick Start
 
@@ -432,7 +434,7 @@ Never commit runtime or office data:
 - real customer or OP SHOP workbooks;
 - editor, cache, dependency, and temporary test files.
 
-`AGENTS.md` is intentionally tracked because it is the shared project governance document for architecture, testing, release, and SQLite safety. Personal singular `AGENT.md` scratch notes and one-off refactor handoff artifacts are ignored by `.gitignore` and must not replace `AGENTS.md`.
+`AGENTS.md` is a local-only agent instruction file. It is ignored by `.gitignore`, must not be committed, and must not be re-added merely to make documentation or worktrees look consistent. Shared architecture, testing, release, and SQLite safety guidance belongs in `README.md` and `docs/`. Personal `AGENT.md` scratch notes and one-off refactor handoff artifacts are also ignored.
 
 Before database imports, maintenance tools, NAS updates, or migration apply operations, create and verify a SQLite backup. Keep one application or maintenance process connected to the office SQLite database by default.
 
