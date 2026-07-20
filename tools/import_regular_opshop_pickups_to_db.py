@@ -28,6 +28,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from backend.repositories.sqlite_manual_dispatch_repository import (  # noqa: E402
     SQLiteManualDispatchRepository,
 )
+from backend.db.connection import connect  # noqa: E402
 from backend.schemas import OpShopLocation, OpShopPickupSchedule  # noqa: E402
 from tools.maintenance_logbook import (  # noqa: E402
     add_maintenance_logbook_arguments,
@@ -105,6 +106,18 @@ class PreparedRegularRow:
     resolved_driver_name: str | None
 
 
+@dataclass
+class RegularImportPlan:
+    locations: list[OpShopLocation]
+    schedules: list[OpShopPickupSchedule]
+    imported_schedule_ids: set[str]
+    deactivation_schedule_ids: set[str]
+    locations_inserted: int
+    locations_updated: int
+    schedules_inserted: int
+    schedules_updated: int
+
+
 def import_regular_opshop_pickups_to_db(file_path, db_path=None):
     workbook_path = Path(file_path)
     target_db_path = resolve_db_path(db_path)
@@ -125,44 +138,27 @@ def import_regular_opshop_pickups_to_db(file_path, db_path=None):
         default_driver_mapping_counts=dict(mapping_counts),
         backup_path=str(backup_path) if backup_path else None,
     )
-    imported_location_ids = {}
-    imported_schedule_ids = set()
-
-    with sqlite3.connect(target_db_path) as connection:
-        connection.row_factory = sqlite3.Row
-        for prepared in prepared_rows:
-            if prepared.location_key not in imported_location_ids:
-                existing_location_id = find_location_id_by_key(
-                    connection,
-                    prepared.location_key,
-                )
-                if existing_location_id:
-                    prepared.location.opshop_id = existing_location_id
-                    summary.locations_updated += 1
-                else:
-                    summary.locations_inserted += 1
-                repository.upsert_opshop_location(prepared.location)
-                imported_location_ids[prepared.location_key] = prepared.location.opshop_id
-
-            prepared.location.opshop_id = imported_location_ids[prepared.location_key]
-            prepared.schedule.opshop_id = prepared.location.opshop_id
-            existing_schedule_id = find_schedule_id_by_key(
+    with connect(target_db_path) as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        try:
+            plan = preflight_regular_import(connection, prepared_rows)
+            for location in plan.locations:
+                upsert_opshop_location_in_transaction(connection, location)
+            for schedule in plan.schedules:
+                upsert_opshop_schedule_in_transaction(connection, schedule)
+            summary.schedules_deactivated = deactivate_regular_schedules(
                 connection,
-                schedule_key(prepared.schedule),
-                prepared.location_key,
+                plan.deactivation_schedule_ids,
             )
-            if existing_schedule_id:
-                prepared.schedule.schedule_id = existing_schedule_id
-                summary.schedules_updated += 1
-            else:
-                summary.schedules_inserted += 1
-            repository.upsert_opshop_pickup_schedule(prepared.schedule)
-            imported_schedule_ids.add(prepared.schedule.schedule_id)
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
 
-        summary.schedules_deactivated = deactivate_missing_regular_schedules(
-            connection,
-            imported_schedule_ids,
-        )
+    summary.locations_inserted = plan.locations_inserted
+    summary.locations_updated = plan.locations_updated
+    summary.schedules_inserted = plan.schedules_inserted
+    summary.schedules_updated = plan.schedules_updated
 
     return summary
 
@@ -338,6 +334,70 @@ def prepare_regular_rows(rows, driver_lookup):
     return prepared_rows, skipped_count, unresolved, mapping_counts
 
 
+def preflight_regular_import(connection, prepared_rows):
+    imported_location_ids = {}
+    imported_schedule_ids = set()
+    source_schedule_keys = set()
+    locations = []
+    schedules = []
+    locations_inserted = 0
+    locations_updated = 0
+    schedules_inserted = 0
+    schedules_updated = 0
+
+    for prepared in prepared_rows:
+        if prepared.location_key not in imported_location_ids:
+            existing_location_id = find_location_id_by_key(
+                connection,
+                prepared.location_key,
+            )
+            if existing_location_id:
+                prepared.location.opshop_id = existing_location_id
+                locations_updated += 1
+            else:
+                locations_inserted += 1
+            imported_location_ids[prepared.location_key] = prepared.location.opshop_id
+            locations.append(prepared.location)
+
+        prepared.location.opshop_id = imported_location_ids[prepared.location_key]
+        prepared.schedule.opshop_id = prepared.location.opshop_id
+        source_schedule_key = schedule_key(prepared.schedule)
+        if source_schedule_key in source_schedule_keys:
+            raise ValueError(
+                "Duplicate Regular workbook schedule slot for "
+                f"{prepared.location.name} {prepared.schedule.run_day}"
+            )
+        source_schedule_keys.add(source_schedule_key)
+
+        existing_schedule_id = find_schedule_id_by_key(
+            connection,
+            source_schedule_key,
+            prepared.location_key,
+        )
+        if existing_schedule_id:
+            prepared.schedule.schedule_id = existing_schedule_id
+            schedules_updated += 1
+        else:
+            schedules_inserted += 1
+        imported_schedule_ids.add(prepared.schedule.schedule_id)
+        schedules.append(prepared.schedule)
+
+    deactivation_schedule_ids = find_missing_regular_schedule_ids(
+        connection,
+        imported_schedule_ids,
+    )
+    return RegularImportPlan(
+        locations=locations,
+        schedules=schedules,
+        imported_schedule_ids=imported_schedule_ids,
+        deactivation_schedule_ids=deactivation_schedule_ids,
+        locations_inserted=locations_inserted,
+        locations_updated=locations_updated,
+        schedules_inserted=schedules_inserted,
+        schedules_updated=schedules_updated,
+    )
+
+
 def resolve_driver_name(alias):
     normalized = normalize_key(alias)
     if not normalized:
@@ -346,14 +406,6 @@ def resolve_driver_name(alias):
 
 
 def find_location_id_by_key(connection, dedupe_key):
-    stable_opshop_id = deterministic_id("OPSHOP", dedupe_key)
-    row = connection.execute(
-        "SELECT opshop_id FROM opshop_locations WHERE opshop_id = ?",
-        (stable_opshop_id,),
-    ).fetchone()
-    if row:
-        return row["opshop_id"]
-
     matches = []
     for candidate in connection.execute(
         """
@@ -369,17 +421,23 @@ def find_location_id_by_key(connection, dedupe_key):
         )
         if candidate_key == dedupe_key:
             matches.append(candidate["opshop_id"])
+    if len(matches) > 1:
+        raise ValueError(
+            "Duplicate OP SHOP physical location identity for imported Regular row"
+        )
     return matches[0] if matches else None
 
 
 def find_schedule_id_by_key(connection, key, location_key=None):
     stable_schedule_id = deterministic_id("OPSHOP-SCHEDULE", key)
-    row = connection.execute(
-        "SELECT schedule_id FROM opshop_pickup_schedules WHERE schedule_id = ?",
+    stable_row = connection.execute(
+        """
+        SELECT schedule_id
+        FROM opshop_pickup_schedules
+        WHERE schedule_id = ?
+        """,
         (stable_schedule_id,),
     ).fetchone()
-    if row:
-        return row["schedule_id"]
 
     opshop_id, run_day, run_type, pickup_category = key.split("|", 3)
     rows = connection.execute(
@@ -400,6 +458,10 @@ def find_schedule_id_by_key(connection, key, location_key=None):
         )
     if rows:
         return rows[0]["schedule_id"]
+    if stable_row:
+        raise ValueError(
+            f"OP SHOP schedule identity conflict for {opshop_id} {run_day}"
+        )
 
     if not location_key:
         return None
@@ -436,54 +498,182 @@ def find_schedule_id_by_key(connection, key, location_key=None):
     return physical_matches[0] if physical_matches else None
 
 
-def deactivate_missing_regular_schedules(connection, imported_schedule_ids):
+def upsert_opshop_location_in_transaction(connection, location):
+    connection.execute(
+        """
+        INSERT INTO opshop_locations (
+            opshop_id,
+            name,
+            suburb,
+            street_address,
+            area_region,
+            primary_contact,
+            primary_phone,
+            secondary_contact,
+            secondary_phone,
+            access_type,
+            key_required,
+            trailer_restriction,
+            status_notes,
+            is_active,
+            created_at,
+            updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(opshop_id)
+        DO UPDATE SET
+            name = excluded.name,
+            suburb = excluded.suburb,
+            street_address = excluded.street_address,
+            area_region = excluded.area_region,
+            primary_contact = excluded.primary_contact,
+            primary_phone = excluded.primary_phone,
+            secondary_contact = excluded.secondary_contact,
+            secondary_phone = excluded.secondary_phone,
+            access_type = excluded.access_type,
+            key_required = excluded.key_required,
+            trailer_restriction = excluded.trailer_restriction,
+            status_notes = excluded.status_notes,
+            is_active = excluded.is_active,
+            updated_at = excluded.updated_at
+        """,
+        (
+            location.opshop_id,
+            location.name,
+            location.suburb,
+            location.street_address,
+            location.area_region,
+            location.primary_contact,
+            location.primary_phone,
+            location.secondary_contact,
+            location.secondary_phone,
+            location.access_type,
+            int(location.key_required),
+            location.trailer_restriction,
+            location.status_notes,
+            int(location.is_active),
+            location.created_at,
+            location.updated_at,
+        ),
+    )
+
+
+def upsert_opshop_schedule_in_transaction(connection, schedule):
+    connection.execute(
+        """
+        INSERT INTO opshop_pickup_schedules (
+            schedule_id,
+            opshop_id,
+            run_day,
+            run_type,
+            pickup_category,
+            route_group_id,
+            pickup_frequency,
+            time_window,
+            call_before_arrival,
+            call_timing,
+            status,
+            active_flag,
+            fortnight_group,
+            review_required,
+            review_reason,
+            default_driver_id,
+            default_driver_alias,
+            default_driver_name_snapshot,
+            created_at,
+            updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(schedule_id)
+        DO UPDATE SET
+            opshop_id = excluded.opshop_id,
+            run_day = excluded.run_day,
+            run_type = excluded.run_type,
+            pickup_category = excluded.pickup_category,
+            route_group_id = excluded.route_group_id,
+            pickup_frequency = excluded.pickup_frequency,
+            time_window = excluded.time_window,
+            call_before_arrival = excluded.call_before_arrival,
+            call_timing = excluded.call_timing,
+            status = excluded.status,
+            active_flag = excluded.active_flag,
+            fortnight_group = excluded.fortnight_group,
+            review_required = excluded.review_required,
+            review_reason = excluded.review_reason,
+            default_driver_id = excluded.default_driver_id,
+            default_driver_alias = excluded.default_driver_alias,
+            default_driver_name_snapshot = excluded.default_driver_name_snapshot,
+            updated_at = excluded.updated_at
+        """,
+        (
+            schedule.schedule_id,
+            schedule.opshop_id,
+            schedule.run_day,
+            schedule.run_type,
+            schedule.pickup_category,
+            schedule.route_group_id,
+            schedule.pickup_frequency,
+            schedule.time_window,
+            int(schedule.call_before_arrival),
+            schedule.call_timing,
+            schedule.status,
+            int(schedule.active_flag),
+            schedule.fortnight_group,
+            int(schedule.review_required),
+            schedule.review_reason,
+            schedule.default_driver_id,
+            schedule.default_driver_alias,
+            schedule.default_driver_name_snapshot,
+            schedule.created_at,
+            schedule.updated_at,
+        ),
+    )
+
+
+def find_missing_regular_schedule_ids(connection, imported_schedule_ids):
     """Treat the workbook as the complete active Regular source list.
 
     Only workbook-backed schedules are deactivated. UI-created templates have
     no workbook source marker and must remain under office control.
     """
-    timestamp_value = timestamp()
-    workbook_source_filter = """
-                AND (
-                    review_reason = ?
-                    OR default_driver_alias IS NOT NULL
-                )
-    """
+    parameters = [WORKBOOK_IMPORT_REVIEW_REASON]
+    imported_filter = ""
     if imported_schedule_ids:
         placeholders = ", ".join("?" for _ in imported_schedule_ids)
-        parameters = [
-            "On_Hold",
-            0,
-            timestamp_value,
-            WORKBOOK_IMPORT_REVIEW_REASON,
-            *sorted(imported_schedule_ids),
-        ]
-        cursor = connection.execute(
-            f"""
-            UPDATE opshop_pickup_schedules
-            SET status = ?,
-                active_flag = ?,
-                updated_at = ?
-            WHERE run_type = 'REGULAR'
-                AND active_flag = 1
-                {workbook_source_filter}
-                AND schedule_id NOT IN ({placeholders})
-            """,
-            parameters,
-        )
-    else:
-        cursor = connection.execute(
-            """
-            UPDATE opshop_pickup_schedules
-            SET status = ?,
-                active_flag = ?,
-                updated_at = ?
-            WHERE run_type = 'REGULAR'
-                AND active_flag = 1
-                {workbook_source_filter}
-            """,
-            ("On_Hold", 0, timestamp_value, WORKBOOK_IMPORT_REVIEW_REASON),
-        )
+        imported_filter = f"AND schedule_id NOT IN ({placeholders})"
+        parameters.extend(sorted(imported_schedule_ids))
+    rows = connection.execute(
+        f"""
+        SELECT schedule_id
+        FROM opshop_pickup_schedules
+        WHERE run_type = 'REGULAR'
+            AND active_flag = 1
+            AND (
+                review_reason = ?
+                OR default_driver_alias IS NOT NULL
+            )
+            {imported_filter}
+        ORDER BY schedule_id
+        """,
+        parameters,
+    ).fetchall()
+    return {row["schedule_id"] for row in rows}
+
+
+def deactivate_regular_schedules(connection, schedule_ids):
+    if not schedule_ids:
+        return 0
+    placeholders = ", ".join("?" for _ in schedule_ids)
+    cursor = connection.execute(
+        f"""
+        UPDATE opshop_pickup_schedules
+        SET status = ?,
+            active_flag = ?,
+            updated_at = ?
+        WHERE schedule_id IN ({placeholders})
+            AND run_type = 'REGULAR'
+            AND active_flag = 1
+        """,
+        ("On_Hold", 0, timestamp(), *sorted(schedule_ids)),
+    )
     return cursor.rowcount
 
 

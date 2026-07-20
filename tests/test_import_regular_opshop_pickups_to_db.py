@@ -1,15 +1,24 @@
 ﻿import shutil
+import sqlite3
 import unittest
 import uuid
 from pathlib import Path
+from unittest.mock import patch
 
 from openpyxl import Workbook
 
 from backend.repositories.sqlite_manual_dispatch_repository import SQLiteManualDispatchRepository
-from backend.schemas import CreateDriverRequest, CreateOpShopTemplateRequest, UpdateDriverRequest
+from backend.schemas import (
+    CreateDriverRequest,
+    CreateOpShopTemplateRequest,
+    OpShopLocation,
+    OpShopPickupSchedule,
+    UpdateDriverRequest,
+)
 from backend.services.manual_dispatch_service import ManualDispatchService
 from tools.import_regular_opshop_pickups_to_db import (
     REQUIRED_COLUMNS,
+    deactivate_regular_schedules,
     import_regular_opshop_pickups_to_db,
 )
 
@@ -290,6 +299,159 @@ class ImportRegularOpShopPickupsToDbTest(unittest.TestCase):
 
         self.assertEqual([], self.repository.list_opshop_pickup_schedules())
 
+    def test_late_duplicate_schedule_conflict_rolls_back_all_source_mutations(self):
+        self.repository.upsert_opshop_location(
+            OpShopLocation(
+                opshop_id="OPSHOP-CONFLICT",
+                name="Conflict Shop",
+                suburb="Coburg",
+                street_address="99 Sydney Road",
+                area_region="North",
+                primary_contact="Existing Contact",
+                primary_phone="0400 100 100",
+                secondary_contact=None,
+                secondary_phone=None,
+                access_type="Front door",
+                key_required=False,
+                trailer_restriction=None,
+                status_notes="Existing note",
+                is_active=True,
+                created_at="2026-05-01T00:00:00+00:00",
+                updated_at="2026-05-01T00:00:00+00:00",
+            )
+        )
+        for schedule_id in ("CONFLICT-A", "CONFLICT-B"):
+            self.repository.upsert_opshop_pickup_schedule(
+                OpShopPickupSchedule(
+                    schedule_id=schedule_id,
+                    opshop_id="OPSHOP-CONFLICT",
+                    run_day="WEDNESDAY",
+                    run_type="REGULAR",
+                    pickup_frequency="Weekly",
+                    time_window="09:00-12:00",
+                    call_before_arrival=False,
+                    call_timing=None,
+                    status="Active",
+                    active_flag=True,
+                    fortnight_group=None,
+                    review_required=False,
+                    review_reason="WORKBOOK_IMPORT",
+                    created_at="2026-05-01T00:00:00+00:00",
+                    updated_at="2026-05-01T00:00:00+00:00",
+                    default_driver_alias="John G",
+                )
+            )
+        before = self._logical_source_tables()
+        self._save_workbook(
+            {
+                "MON": [
+                    self._row(
+                        Op_Shop_Name="Earlier New Shop",
+                        Street_Address="7 New Street",
+                        Pickup_Frequency="Weekly",
+                    )
+                ],
+                "WED": [
+                    self._row(
+                        Op_Shop_Name="Conflict Shop",
+                        Street_Address="99 Sydney Road",
+                        Pickup_Frequency="2x Weekly",
+                    )
+                ],
+            }
+        )
+
+        with self.assertRaisesRegex(ValueError, "Duplicate OP SHOP schedule slot"):
+            import_regular_opshop_pickups_to_db(self.workbook_path, self.db_path)
+
+        self.assertEqual(before, self._logical_source_tables())
+        self.assertIsNone(
+            next(
+                (
+                    location
+                    for location in self.repository.list_opshop_locations()
+                    if location.name == "Earlier New Shop"
+                ),
+                None,
+            )
+        )
+
+    def test_exception_after_deactivation_rolls_back_entire_import_transaction(self):
+        self.repository.upsert_opshop_location(
+            OpShopLocation(
+                opshop_id="OPSHOP-MISSING",
+                name="Missing From Workbook",
+                suburb="Coburg",
+                street_address="8 Old Street",
+                area_region="North",
+                primary_contact=None,
+                primary_phone=None,
+                secondary_contact=None,
+                secondary_phone=None,
+                access_type=None,
+                key_required=False,
+                trailer_restriction=None,
+                status_notes=None,
+                is_active=True,
+                created_at="2026-05-01T00:00:00+00:00",
+                updated_at="2026-05-01T00:00:00+00:00",
+            )
+        )
+        self.repository.upsert_opshop_pickup_schedule(
+            OpShopPickupSchedule(
+                schedule_id="SCHEDULE-MISSING",
+                opshop_id="OPSHOP-MISSING",
+                run_day="FRIDAY",
+                run_type="REGULAR",
+                pickup_frequency="Weekly",
+                time_window="09:00-12:00",
+                call_before_arrival=False,
+                call_timing=None,
+                status="Active",
+                active_flag=True,
+                fortnight_group=None,
+                review_required=False,
+                review_reason="WORKBOOK_IMPORT",
+                created_at="2026-05-01T00:00:00+00:00",
+                updated_at="2026-05-01T00:00:00+00:00",
+                default_driver_alias="John G",
+            )
+        )
+        before = self._logical_source_tables()
+        self._save_workbook(
+            {
+                "MON": [
+                    self._row(
+                        Op_Shop_Name="Transactional New Shop",
+                        Street_Address="10 New Street",
+                        Pickup_Frequency="Weekly",
+                    )
+                ]
+            }
+        )
+
+        def fail_after_deactivation(connection, schedule_ids):
+            deactivate_regular_schedules(connection, schedule_ids)
+            raise RuntimeError("forced failure after deactivation")
+
+        with patch(
+            "tools.import_regular_opshop_pickups_to_db.deactivate_regular_schedules",
+            side_effect=fail_after_deactivation,
+        ):
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "forced failure after deactivation",
+            ):
+                import_regular_opshop_pickups_to_db(
+                    self.workbook_path,
+                    self.db_path,
+                )
+
+        self.assertEqual(before, self._logical_source_tables())
+        retained = self.repository.get_opshop_pickup_schedule("SCHEDULE-MISSING")
+        self.assertTrue(retained.active_flag)
+        self.assertEqual("Active", retained.status)
+
     def _save_workbook(self, rows_by_sheet):
         workbook = Workbook()
         workbook.remove(workbook.active)
@@ -299,6 +461,19 @@ class ImportRegularOpShopPickupsToDbTest(unittest.TestCase):
             for row in rows_by_sheet.get(sheet_name, []):
                 worksheet.append([row.get(column, "") for column in REQUIRED_COLUMNS])
         workbook.save(self.workbook_path)
+
+    def _logical_source_tables(self):
+        with sqlite3.connect(self.db_path) as connection:
+            locations = connection.execute(
+                "SELECT * FROM opshop_locations ORDER BY opshop_id"
+            ).fetchall()
+            schedules = connection.execute(
+                "SELECT * FROM opshop_pickup_schedules ORDER BY schedule_id"
+            ).fetchall()
+        return {
+            "opshop_locations": [tuple(row) for row in locations],
+            "opshop_pickup_schedules": [tuple(row) for row in schedules],
+        }
 
     def _row(self, **overrides):
         row = {
