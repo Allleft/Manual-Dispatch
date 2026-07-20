@@ -291,6 +291,7 @@ export function createCollectionWeightSheetPreview(
       pickup,
       state,
       collection.collection_id,
+      !readOnly,
     );
     values.forEach((value, columnIndex) => {
       const cell = document.createElement("td");
@@ -338,12 +339,19 @@ export function collectionWeightSheetRowValues(
   pickup,
   state = {},
   collectionId = "",
+  allowDraft = true,
 ) {
   return [
     formatOptional(pickup.opshop_name_snapshot, ""),
     formatOptional(pickup.suburb_snapshot, ""),
     ...OPSHOP_COLLECTION_ENTRY_FIELDS.map(
-      (field) => getOpShopCollectionEntryValue(state, collectionId, pickup, field),
+      (field) => getOpShopCollectionEntryValue(
+        state,
+        collectionId,
+        pickup,
+        field,
+        allowDraft,
+      ),
     ),
   ];
 }

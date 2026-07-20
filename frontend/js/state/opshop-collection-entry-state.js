@@ -15,9 +15,15 @@ export function hasOwn(object, key) {
   return Object.prototype.hasOwnProperty.call(object || {}, key);
 }
 
-export function getOpShopCollectionEntryValue(state, collectionId, pickup, field) {
+export function getOpShopCollectionEntryValue(
+  state,
+  collectionId,
+  pickup,
+  field,
+  allowDraft = true,
+) {
   const rowDraft = state?.opshopCollectionEntryDrafts?.[collectionId]?.[pickup.row_id];
-  if (hasOwn(rowDraft, field.key)) {
+  if (allowDraft && hasOwn(rowDraft, field.key)) {
     return rowDraft[field.key];
   }
   const persisted = pickup[field.snapshotKey];

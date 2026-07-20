@@ -533,6 +533,34 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertIsNone(by_id[row_ids[0]]["black_bags_snapshot"])
         self.assertIsNone(by_id[row_ids[1]]["shoe_bags_snapshot"])
 
+    def test_opshop_collection_count_rejects_booleans_without_persisting(self):
+        generated = self.client.post(
+            "/api/manual-dispatch/opshop/pickup-collections/generated",
+            json=self._collection_generate_payload(),
+        )
+        self.assertEqual(200, generated.status_code)
+        collection_id = generated.json()["collection_id"]
+        row_id = generated.json()["pickups"][0]["row_id"]
+        endpoint = (
+            f"/api/manual-dispatch/opshop/pickup-collections/{collection_id}/rows"
+        )
+
+        for value in (True, False):
+            with self.subTest(value=value):
+                rejected = self.client.patch(
+                    endpoint,
+                    json={"rows": [{"row_id": row_id, "black_bags": value}]},
+                )
+                self.assertGreaterEqual(rejected.status_code, 400)
+                self.assertLess(rejected.status_code, 500)
+                reloaded = self.client.get(
+                    f"/api/manual-dispatch/opshop/pickup-collections/{collection_id}"
+                )
+                self.assertEqual(200, reloaded.status_code)
+                self.assertIsNone(
+                    reloaded.json()["pickups"][0]["black_bags_snapshot"]
+                )
+
     def test_api_rejects_saved_snapshot_overwrite(self):
         run_sheet_id = self._generate_and_save_delivery()
         collection_id = self._generate_and_save_collection()

@@ -3399,6 +3399,351 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             """
         )
 
+    def test_opshop_save_collection_aborts_when_newer_draft_appears_during_patch(self):
+        self._run_workspace_actions_script(
+            """
+            const pickup = {
+              row_id: "ROW-SAVE",
+              clothing_kg_snapshot: 1,
+              shoes_kg_snapshot: null,
+              time_in_snapshot: null,
+              time_out_snapshot: null,
+              trolleys_out_to_opshops_snapshot: null,
+              trolleys_in_to_mcc_snapshot: null,
+              hard_toys_snapshot: null,
+              soft_toys_snapshot: null,
+              black_bags_snapshot: null,
+              shoe_bags_snapshot: null,
+            };
+            const collection = {
+              collection_id: "COL-SAVE",
+              status: "GENERATED",
+              pickup_date: "2026-05-05",
+              pickups: [pickup],
+            };
+            let resolveFirstPatch;
+            let patchCalls = 0;
+            let saveCalls = 0;
+            let serverCollection = collection;
+            const state = {
+              isLoggedIn: true,
+              workspaceRoute: "opshop/collections",
+              activeWorkspace: "opshop",
+              dispatchDate: "2026-05-05",
+              opshopTripSummaryDate: "2026-05-05",
+              opshopSavedHistoryDate: "2026-05-05",
+              opshopPickupCollections: [collection],
+              opshopCollectionEntryDrafts: {},
+              opshopCollectionEntryDraftVersions: {},
+              opshopBusyActionKeys: {},
+              opshopActionError: "",
+            };
+            const api = {
+              updateOpShopPickupCollectionRows: async (_collectionId, payload) => {
+                patchCalls += 1;
+                const updated = {
+                  ...serverCollection,
+                  status: "GENERATED",
+                  pickups: [{
+                    ...pickup,
+                    clothing_kg_snapshot: payload.rows[0].clothing_kg,
+                  }],
+                };
+                if (patchCalls === 1) {
+                  return new Promise((resolve) => {
+                    resolveFirstPatch = () => {
+                      serverCollection = updated;
+                      resolve(updated);
+                    };
+                  });
+                }
+                serverCollection = updated;
+                return updated;
+              },
+              saveGeneratedOpShopPickupCollection: async () => {
+                saveCalls += 1;
+                serverCollection = { ...serverCollection, status: "SAVED" };
+                return serverCollection;
+              },
+              listOpShopPickupCollectionsByPickupDate: async () => [serverCollection],
+            };
+            const actions = createWorkspaceActions({
+              state,
+              api,
+              renderWorkspace: () => {},
+            });
+
+            actions.updateOpShopCollectionEntryDraft(
+              "COL-SAVE", "ROW-SAVE", "clothing_kg", "2.5",
+            );
+            const firstSave = actions.saveOpShopPickupCollection("COL-SAVE");
+            await Promise.resolve();
+            actions.updateOpShopCollectionEntryDraft(
+              "COL-SAVE", "ROW-SAVE", "clothing_kg", "7.5",
+            );
+            resolveFirstPatch();
+            await firstSave;
+
+            if (saveCalls !== 0) {
+              throw new Error("Save Collection continued after a newer draft appeared");
+            }
+            if (state.opshopPickupCollections[0].status !== "GENERATED") {
+              throw new Error("collection was finalized from stale V1 data");
+            }
+            if (
+              state.opshopPickupCollections[0].pickups[0].clothing_kg_snapshot !== 2.5
+              || state.opshopCollectionEntryDrafts["COL-SAVE"]["ROW-SAVE"].clothing_kg !== "7.5"
+              || state.opshopCollectionEntryDraftVersions["COL-SAVE"] !== 2
+            ) {
+              throw new Error("V1 persistence or dirty V2 state was not preserved");
+            }
+
+            await actions.saveOpShopPickupCollection("COL-SAVE");
+            if (
+              patchCalls !== 2
+              || saveCalls !== 1
+              || state.opshopPickupCollections[0].status !== "SAVED"
+              || state.opshopPickupCollections[0].pickups[0].clothing_kg_snapshot !== 7.5
+              || state.opshopCollectionEntryDrafts["COL-SAVE"]
+              || state.opshopCollectionEntryDraftVersions["COL-SAVE"]
+            ) {
+              throw new Error("explicit retry did not persist V2 before finalizing");
+            }
+            """
+        )
+
+    def test_opshop_single_export_aborts_when_newer_draft_appears_during_patch(self):
+        self._run_workspace_actions_script(
+            """
+            const pickup = {
+              row_id: "ROW-EXPORT",
+              clothing_kg_snapshot: 1,
+              shoes_kg_snapshot: null,
+              time_in_snapshot: null,
+              time_out_snapshot: null,
+              trolleys_out_to_opshops_snapshot: null,
+              trolleys_in_to_mcc_snapshot: null,
+              hard_toys_snapshot: null,
+              soft_toys_snapshot: null,
+              black_bags_snapshot: null,
+              shoe_bags_snapshot: null,
+            };
+            const collection = {
+              collection_id: "COL-EXPORT",
+              status: "GENERATED",
+              pickup_date: "2026-05-05",
+              pickups: [pickup],
+            };
+            const calls = [];
+            let resolveFirstPatch;
+            let patchCalls = 0;
+            const state = {
+              isLoggedIn: true,
+              workspaceRoute: "opshop/collections",
+              activeWorkspace: "opshop",
+              dispatchDate: "2026-05-05",
+              opshopTripSummaryDate: "2026-05-05",
+              opshopSavedHistoryDate: "2026-05-05",
+              opshopPickupCollections: [collection],
+              opshopCollectionEntryDrafts: {},
+              opshopCollectionEntryDraftVersions: {},
+              opshopBusyActionKeys: {},
+              opshopActionError: "",
+            };
+            const actions = createWorkspaceActions({
+              state,
+              renderWorkspace: () => {},
+              api: {
+                updateOpShopPickupCollectionRows: async (_collectionId, payload) => {
+                  patchCalls += 1;
+                  calls.push("patch:" + payload.rows[0].clothing_kg);
+                  const updated = {
+                    ...collection,
+                    pickups: [{
+                      ...pickup,
+                      clothing_kg_snapshot: payload.rows[0].clothing_kg,
+                    }],
+                  };
+                  if (patchCalls === 1) {
+                    return new Promise((resolve) => {
+                      resolveFirstPatch = () => resolve(updated);
+                    });
+                  }
+                  return updated;
+                },
+                exportOpShopPickupCollectionExcel: async () => {
+                  calls.push("export");
+                },
+              },
+            });
+
+            actions.updateOpShopCollectionEntryDraft(
+              "COL-EXPORT", "ROW-EXPORT", "clothing_kg", "2.5",
+            );
+            const firstExport = actions.exportOpShopPickupCollection("COL-EXPORT");
+            await Promise.resolve();
+            actions.updateOpShopCollectionEntryDraft(
+              "COL-EXPORT", "ROW-EXPORT", "clothing_kg", "7.5",
+            );
+            resolveFirstPatch();
+            await firstExport;
+            if (calls.includes("export")) {
+              throw new Error("single export continued after a newer draft appeared");
+            }
+            if (
+              state.opshopCollectionEntryDrafts["COL-EXPORT"]["ROW-EXPORT"].clothing_kg
+              !== "7.5"
+            ) {
+              throw new Error("single export discarded the newer draft");
+            }
+
+            await actions.exportOpShopPickupCollection("COL-EXPORT");
+            if (calls.join(",") !== "patch:2.5,patch:7.5,export") {
+              throw new Error("single export retry did not PATCH V2 before exporting once");
+            }
+            """
+        )
+
+    def test_opshop_daily_export_aborts_when_newer_draft_appears_during_patch(self):
+        self._run_workspace_actions_script(
+            """
+            const makePickup = (rowId) => ({
+              row_id: rowId,
+              clothing_kg_snapshot: 1,
+              shoes_kg_snapshot: null,
+              time_in_snapshot: null,
+              time_out_snapshot: null,
+              trolleys_out_to_opshops_snapshot: null,
+              trolleys_in_to_mcc_snapshot: null,
+              hard_toys_snapshot: null,
+              soft_toys_snapshot: null,
+              black_bags_snapshot: null,
+              shoe_bags_snapshot: null,
+            });
+            const collectionA = {
+              collection_id: "COL-DAILY-A",
+              status: "GENERATED",
+              pickup_date: "2026-05-05",
+              pickups: [makePickup("ROW-DAILY-A")],
+            };
+            const collectionB = {
+              collection_id: "COL-DAILY-B",
+              status: "GENERATED",
+              pickup_date: "2026-05-05",
+              pickups: [makePickup("ROW-DAILY-B")],
+            };
+            const calls = [];
+            let resolveFirstPatch;
+            let firstPatch = true;
+            const state = {
+              isLoggedIn: true,
+              workspaceRoute: "opshop/collections",
+              activeWorkspace: "opshop",
+              dispatchDate: "2026-05-05",
+              opshopTripSummaryDate: "2026-05-05",
+              opshopSavedHistoryDate: "2026-05-05",
+              opshopPickupCollections: [collectionA, collectionB],
+              opshopCollectionEntryDrafts: {},
+              opshopCollectionEntryDraftVersions: {},
+              opshopBusyActionKeys: {},
+              opshopActionError: "",
+            };
+            const actions = createWorkspaceActions({
+              state,
+              renderWorkspace: () => {},
+              api: {
+                updateOpShopPickupCollectionRows: async (collectionId, payload) => {
+                  calls.push("patch:" + collectionId + ":" + payload.rows[0].clothing_kg);
+                  const source = collectionId === "COL-DAILY-A" ? collectionA : collectionB;
+                  const updated = {
+                    ...source,
+                    pickups: [{
+                      ...source.pickups[0],
+                      clothing_kg_snapshot: payload.rows[0].clothing_kg,
+                    }],
+                  };
+                  if (firstPatch) {
+                    firstPatch = false;
+                    return new Promise((resolve) => {
+                      resolveFirstPatch = () => resolve(updated);
+                    });
+                  }
+                  return updated;
+                },
+                exportOpShopPickupCollectionsExcel: async () => {
+                  calls.push("daily");
+                },
+              },
+            });
+
+            actions.updateOpShopCollectionEntryDraft(
+              "COL-DAILY-A", "ROW-DAILY-A", "clothing_kg", "2.5",
+            );
+            actions.updateOpShopCollectionEntryDraft(
+              "COL-DAILY-B", "ROW-DAILY-B", "clothing_kg", "3.5",
+            );
+            const firstExport = actions.exportOpShopPickupCollections("2026-05-05");
+            await Promise.resolve();
+            actions.updateOpShopCollectionEntryDraft(
+              "COL-DAILY-A", "ROW-DAILY-A", "clothing_kg", "7.5",
+            );
+            resolveFirstPatch();
+            await firstExport;
+            if (calls.join(",") !== "patch:COL-DAILY-A:2.5") {
+              throw new Error("daily export did not abort as a whole on newer draft");
+            }
+            if (
+              state.opshopCollectionEntryDrafts["COL-DAILY-A"]["ROW-DAILY-A"].clothing_kg
+              !== "7.5"
+              || !state.opshopCollectionEntryDrafts["COL-DAILY-B"]
+            ) {
+              throw new Error("daily abort did not preserve all pending drafts");
+            }
+
+            await actions.exportOpShopPickupCollections("2026-05-05");
+            if (
+              calls.join(",")
+              !== "patch:COL-DAILY-A:2.5,patch:COL-DAILY-A:7.5,patch:COL-DAILY-B:3.5,daily"
+            ) {
+              throw new Error("daily retry did not stably flush all drafts before one export");
+            }
+            """
+        )
+
+    def test_opshop_saved_and_history_weight_sheets_ignore_stale_drafts(self):
+        self.assertIn(
+            "collection.collection_id,\n      !readOnly,",
+            self.opshop_renderer,
+        )
+        self._run_frontend_module_script(
+            "js/render/opshop/opshop-collection-renderer.js",
+            """
+            const pickup = {
+              row_id: "ROW-READONLY",
+              opshop_name_snapshot: "Read Only Shop",
+              suburb_snapshot: "Coburg",
+              clothing_kg_snapshot: 2.5,
+            };
+            const state = {
+              opshopCollectionEntryDrafts: {
+                "COL-SAVED": { "ROW-READONLY": { clothing_kg: "7.5" } },
+                "COL-HISTORY": { "ROW-READONLY": { clothing_kg: "7.5" } },
+              },
+            };
+            for (const collectionId of ["COL-SAVED", "COL-HISTORY"]) {
+              const values = module.collectionWeightSheetRowValues(
+                pickup,
+                state,
+                collectionId,
+                false,
+              );
+              if (values[2] !== 2.5) {
+                throw new Error(collectionId + " displayed an unpersisted draft");
+              }
+            }
+            """,
+        )
+
     def test_opshop_collection_older_patch_response_preserves_newer_draft(self):
         self._run_workspace_actions_script(
             """
@@ -3576,6 +3921,118 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             await runInvalidationScenario("route");
             await runInvalidationScenario("logout");
           """
+        )
+
+    def test_opshop_save_and_single_export_stop_after_route_switch_or_logout(self):
+        self._run_workspace_actions_script(
+            """
+            async function runInvalidationScenario(actionKind, invalidationKind) {
+              const pickup = {
+                row_id: "ROW-STALE",
+                clothing_kg_snapshot: 1,
+                shoes_kg_snapshot: null,
+                time_in_snapshot: null,
+                time_out_snapshot: null,
+                trolleys_out_to_opshops_snapshot: null,
+                trolleys_in_to_mcc_snapshot: null,
+                hard_toys_snapshot: null,
+                soft_toys_snapshot: null,
+                black_bags_snapshot: null,
+                shoe_bags_snapshot: null,
+              };
+              const collection = {
+                collection_id: "COL-STALE",
+                status: "GENERATED",
+                pickup_date: "2026-05-05",
+                pickups: [pickup],
+              };
+              const originalCollections = [collection];
+              let continuationCalls = 0;
+              let loadCalls = 0;
+              let resolvePatch;
+              const state = {
+                isLoggedIn: true,
+                workspaceRoute: "opshop/collections",
+                activeWorkspace: "opshop",
+                dispatchDate: "2026-05-05",
+                opshopTripSummaryDate: "2026-05-05",
+                opshopSavedHistoryDate: "2026-05-05",
+                opshopPickupCollections: originalCollections,
+                opshopCollectionEntryDrafts: {},
+                opshopCollectionEntryDraftVersions: {},
+                opshopBusyActionKeys: {},
+                opshopActionError: "",
+              };
+              const actions = createWorkspaceActions({
+                state,
+                renderWorkspace: () => {},
+                api: {
+                  updateOpShopPickupCollectionRows: async () => (
+                    new Promise((resolve) => {
+                      resolvePatch = resolve;
+                    })
+                  ),
+                  saveGeneratedOpShopPickupCollection: async () => {
+                    continuationCalls += 1;
+                  },
+                  exportOpShopPickupCollectionExcel: async () => {
+                    continuationCalls += 1;
+                  },
+                  listOpShopPickupCollectionsByPickupDate: async () => {
+                    loadCalls += 1;
+                    return [];
+                  },
+                },
+              });
+              actions.updateOpShopCollectionEntryDraft(
+                "COL-STALE", "ROW-STALE", "clothing_kg", "2.5",
+              );
+              const pending = actionKind === "save"
+                ? actions.saveOpShopPickupCollection("COL-STALE")
+                : actions.exportOpShopPickupCollection("COL-STALE");
+              await Promise.resolve();
+
+              if (invalidationKind === "route") {
+                state.workspaceRoute = "opshop/history";
+              } else {
+                state.isLoggedIn = false;
+                state.workspaceRoute = "home";
+                state.activeWorkspace = "";
+                state.opshopCollectionEntryDrafts = {};
+                state.opshopCollectionEntryDraftVersions = {};
+              }
+              resolvePatch({
+                ...collection,
+                pickups: [{ ...pickup, clothing_kg_snapshot: 2.5 }],
+              });
+              await pending;
+
+              if (continuationCalls !== 0 || loadCalls !== 0) {
+                throw new Error(
+                  actionKind + " continued after " + invalidationKind + " invalidation",
+                );
+              }
+              if (state.opshopPickupCollections !== originalCollections) {
+                throw new Error("stale PATCH response reconciled collection state");
+              }
+              if (
+                invalidationKind === "route"
+                && state.opshopCollectionEntryDrafts["COL-STALE"]["ROW-STALE"].clothing_kg
+                !== "2.5"
+              ) {
+                throw new Error("route invalidation cleared the pending draft");
+              }
+              if (Object.keys(state.opshopBusyActionKeys).length) {
+                throw new Error("stale action left its busy token behind");
+              }
+            }
+
+            for (const actionKind of ["save", "export"]) {
+              for (const invalidationKind of ["route", "logout"]) {
+                await runInvalidationScenario(actionKind, invalidationKind);
+              }
+            }
+            """
         )
 
     def test_trip_summary_date_loads_service_date_scoped_data_without_polluting_task_pool_boards(self):
@@ -4719,6 +5176,23 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             }
             """
         )
+
+    def _run_frontend_module_script(self, relative_path, body):
+        module_uri = (FRONTEND_ROOT / relative_path).as_uri()
+        script = textwrap.dedent(
+            f"""
+            const module = await import({module_uri!r});
+            {body}
+            """
+        )
+        result = subprocess.run(
+            ["node", "--input-type=module", "--eval", script],
+            cwd=PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(0, result.returncode, result.stderr or result.stdout)
 
     def _run_workspace_actions_script(self, body):
         module_uri = (FRONTEND_ROOT / "js/actions/workspace-actions.js").as_uri()

@@ -4,6 +4,13 @@ import {
   hasOpShopCollectionEntryDrafts,
 } from "../../state/opshop-collection-entry-state.js";
 
+const COLLECTION_ENTRY_FLUSH_STATUS = Object.freeze({
+  NO_DRAFT: "NO_DRAFT",
+  FLUSHED_STABLE: "FLUSHED_STABLE",
+  NEWER_DRAFT: "NEWER_DRAFT",
+  STALE_CONTEXT: "STALE_CONTEXT",
+});
+
 
 export function createOpShopCollectionActions(context) {
   const {
@@ -74,31 +81,81 @@ export function createOpShopCollectionActions(context) {
       || collection.status !== "GENERATED"
       || !hasOpShopCollectionEntryDrafts(state, collectionId)
     ) {
-      return collection;
+      return {
+        collection,
+        status: COLLECTION_ENTRY_FLUSH_STATUS.NO_DRAFT,
+      };
     }
+    const submittedDraftVersion =
+      state.opshopCollectionEntryDraftVersions?.[collectionId] || 0;
     const rows = buildOpShopCollectionEntryRows(state, collection);
     if (!rows.length) {
-      return collection;
+      return {
+        collection,
+        status: COLLECTION_ENTRY_FLUSH_STATUS.NEWER_DRAFT,
+        submittedDraftVersion,
+        currentDraftVersion:
+          state.opshopCollectionEntryDraftVersions?.[collectionId] || 0,
+      };
     }
-    const draftVersion = state.opshopCollectionEntryDraftVersions?.[collectionId] || 0;
     const updated = await api.updateOpShopPickupCollectionRows(collectionId, { rows });
     const mutationIsCurrent =
       !mutationContext || isOpShopMutationCurrent(mutationContext);
-    if (mutationIsCurrent) {
-      state.opshopPickupCollections = (state.opshopPickupCollections || []).map(
-        (item) => item.collection_id === collectionId ? updated : item,
-      );
+    if (!mutationIsCurrent) {
+      return {
+        collection: updated,
+        status: COLLECTION_ENTRY_FLUSH_STATUS.STALE_CONTEXT,
+        submittedDraftVersion,
+      };
     }
+    state.opshopPickupCollections = (state.opshopPickupCollections || []).map(
+      (item) => item.collection_id === collectionId ? updated : item,
+    );
+    const currentDraftVersion =
+      state.opshopCollectionEntryDraftVersions?.[collectionId] || 0;
+    if (currentDraftVersion !== submittedDraftVersion) {
+      return {
+        collection: updated,
+        status: COLLECTION_ENTRY_FLUSH_STATUS.NEWER_DRAFT,
+        submittedDraftVersion,
+        currentDraftVersion,
+      };
+    }
+    delete state.opshopCollectionEntryDrafts[collectionId];
+    delete state.opshopCollectionEntryDraftVersions[collectionId];
+    return {
+      collection: updated,
+      status: COLLECTION_ENTRY_FLUSH_STATUS.FLUSHED_STABLE,
+      submittedDraftVersion,
+    };
+  }
+
+  function canContinueAfterCollectionEntryFlush(
+    result,
+    mutationContext,
+    collectionIds,
+    newerDraftMessage,
+  ) {
     if (
-      mutationIsCurrent
-      &&
-      (state.opshopCollectionEntryDraftVersions?.[collectionId] || 0)
-      === draftVersion
+      !isOpShopMutationCurrent(mutationContext)
+      || result.status === COLLECTION_ENTRY_FLUSH_STATUS.STALE_CONTEXT
     ) {
-      delete state.opshopCollectionEntryDrafts[collectionId];
-      delete state.opshopCollectionEntryDraftVersions[collectionId];
+      return false;
     }
-    return updated;
+    const dirtyDraftRemains = collectionIds.some(
+      (collectionId) => hasOpShopCollectionEntryDrafts(state, collectionId),
+    );
+    if (
+      result.status === COLLECTION_ENTRY_FLUSH_STATUS.NEWER_DRAFT
+      || dirtyDraftRemains
+    ) {
+      state.opshopActionError = newerDraftMessage;
+      return false;
+    }
+    return (
+      result.status === COLLECTION_ENTRY_FLUSH_STATUS.NO_DRAFT
+      || result.status === COLLECTION_ENTRY_FLUSH_STATUS.FLUSHED_STABLE
+    );
   }
 
   async function saveOpShopPickupCollectionWeightSheet(collectionId) {
@@ -111,7 +168,14 @@ export function createOpShopCollectionActions(context) {
       return;
     }
     await runOpShopAction(`opshop-entry:${collectionId}`, async (context) => {
-      await flushOpShopCollectionEntryDrafts(collectionId, context);
+      const result = await flushOpShopCollectionEntryDrafts(collectionId, context);
+      if (
+        isOpShopMutationCurrent(context)
+        && result.status === COLLECTION_ENTRY_FLUSH_STATUS.NEWER_DRAFT
+      ) {
+        state.opshopActionError =
+          "Newer Weight Sheet changes remain unsaved. Save again to persist the latest values.";
+      }
     });
   }
 
@@ -174,8 +238,13 @@ export function createOpShopCollectionActions(context) {
       return;
     }
     await runOpShopAction(`opshop-save:${collectionId}`, async (context) => {
-      await flushOpShopCollectionEntryDrafts(collectionId, context);
-      if (!isOpShopMutationCurrent(context)) {
+      const result = await flushOpShopCollectionEntryDrafts(collectionId, context);
+      if (!canContinueAfterCollectionEntryFlush(
+        result,
+        context,
+        [collectionId],
+        "Weight Sheet changed while saving. Review the latest entries and try Save Collection again.",
+      )) {
         return;
       }
       await api.saveGeneratedOpShopPickupCollection(
@@ -211,8 +280,13 @@ export function createOpShopCollectionActions(context) {
       return;
     }
     await runOpShopAction(`opshop-export:${collectionId}`, async (context) => {
-      await flushOpShopCollectionEntryDrafts(collectionId, context);
-      if (!isOpShopMutationCurrent(context)) {
+      const result = await flushOpShopCollectionEntryDrafts(collectionId, context);
+      if (!canContinueAfterCollectionEntryFlush(
+        result,
+        context,
+        [collectionId],
+        "Weight Sheet changed while exporting. Review the latest entries and try Export again.",
+      )) {
         return;
       }
       await api.exportOpShopPickupCollectionExcel(collectionId);
@@ -240,13 +314,33 @@ export function createOpShopCollectionActions(context) {
           collection.status === "GENERATED"
           && hasOpShopCollectionEntryDrafts(state, collection.collection_id)
         ) {
-          await flushOpShopCollectionEntryDrafts(collection.collection_id, context);
-          if (!isOpShopMutationCurrent(context)) {
+          const result = await flushOpShopCollectionEntryDrafts(
+            collection.collection_id,
+            context,
+          );
+          if (!canContinueAfterCollectionEntryFlush(
+            result,
+            context,
+            [collection.collection_id],
+            "A Weight Sheet changed while preparing the Daily Export. Review the latest entries and try again.",
+          )) {
             return;
           }
         }
       }
-      if (!isOpShopMutationCurrent(context)) {
+      const generatedCollectionIds = (state.opshopPickupCollections || [])
+        .filter(
+          (collection) =>
+            collection.pickup_date === scopedDate
+            && collection.status === "GENERATED",
+        )
+        .map((collection) => collection.collection_id);
+      if (!canContinueAfterCollectionEntryFlush(
+        { status: COLLECTION_ENTRY_FLUSH_STATUS.NO_DRAFT },
+        context,
+        generatedCollectionIds,
+        "A Weight Sheet changed while preparing the Daily Export. Review the latest entries and try again.",
+      )) {
         return;
       }
       await api.exportOpShopPickupCollectionsExcel({
