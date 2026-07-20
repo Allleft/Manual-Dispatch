@@ -400,6 +400,139 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         )
         self.assertEqual(400, immutable.status_code)
 
+    def test_opshop_collection_partial_patch_preserves_omitted_fields_and_supports_explicit_clears(self):
+        generated = self.client.post(
+            "/api/manual-dispatch/opshop/pickup-collections/generated",
+            json=self._collection_generate_payload(),
+        )
+        self.assertEqual(200, generated.status_code)
+        collection_id = generated.json()["collection_id"]
+        row_id = generated.json()["pickups"][0]["row_id"]
+        endpoint = (
+            f"/api/manual-dispatch/opshop/pickup-collections/{collection_id}/rows"
+        )
+
+        seeded = self.client.patch(
+            endpoint,
+            json={
+                "rows": [{
+                    "row_id": row_id,
+                    "clothing_kg": 1,
+                    "shoes_kg": 2,
+                    "time_in": "09:00",
+                    "black_bags": 4,
+                }],
+            },
+        )
+        self.assertEqual(200, seeded.status_code)
+
+        partial = self.client.patch(
+            endpoint,
+            json={"rows": [{"row_id": row_id, "clothing_kg": 9.5}]},
+        )
+        self.assertEqual(200, partial.status_code)
+        row = partial.json()["pickups"][0]
+        self.assertEqual(9.5, row["clothing_kg_snapshot"])
+        self.assertEqual(2, row["shoes_kg_snapshot"])
+        self.assertEqual("09:00", row["time_in_snapshot"])
+        self.assertEqual(4, row["black_bags_snapshot"])
+
+        cleared_null = self.client.patch(
+            endpoint,
+            json={"rows": [{"row_id": row_id, "shoes_kg": None}]},
+        )
+        self.assertIsNone(cleared_null.json()["pickups"][0]["shoes_kg_snapshot"])
+        self.assertEqual(
+            "09:00",
+            cleared_null.json()["pickups"][0]["time_in_snapshot"],
+        )
+
+        cleared_blank = self.client.patch(
+            endpoint,
+            json={"rows": [{"row_id": row_id, "time_in": ""}]},
+        )
+        self.assertIsNone(cleared_blank.json()["pickups"][0]["time_in_snapshot"])
+
+        explicit_zero = self.client.patch(
+            endpoint,
+            json={"rows": [{"row_id": row_id, "black_bags": 0}]},
+        )
+        self.assertEqual(0, explicit_zero.json()["pickups"][0]["black_bags_snapshot"])
+
+        multiple = self.client.patch(
+            endpoint,
+            json={
+                "rows": [{
+                    "row_id": row_id,
+                    "time_out": "10:15",
+                    "soft_toys": 3,
+                }],
+            },
+        )
+        self.assertEqual("10:15", multiple.json()["pickups"][0]["time_out_snapshot"])
+        self.assertEqual(3, multiple.json()["pickups"][0]["soft_toys_snapshot"])
+        reloaded = self.client.get(
+            f"/api/manual-dispatch/opshop/pickup-collections/{collection_id}"
+        ).json()["pickups"][0]
+        self.assertEqual(9.5, reloaded["clothing_kg_snapshot"])
+        self.assertEqual(0, reloaded["black_bags_snapshot"])
+        self.assertEqual("10:15", reloaded["time_out_snapshot"])
+
+    def test_opshop_collection_count_bound_is_validated_before_sqlite_binding(self):
+        self._seed_assigned_pickup(
+            task_id="PICKUP-OVERFLOW-2",
+            driver_id="D001",
+            pickup_date=self.dispatch_date,
+            opshop_id="OPSHOP-OVERFLOW-2",
+            schedule_id="SCHEDULE-OVERFLOW-2",
+            opshop_name="Overflow Second Shop",
+            suburb="Richmond",
+        )
+        generated = self.client.post(
+            "/api/manual-dispatch/opshop/pickup-collections/generated",
+            json=self._collection_generate_payload(),
+        )
+        collection_id = generated.json()["collection_id"]
+        row_ids = [row["row_id"] for row in generated.json()["pickups"]]
+        endpoint = (
+            f"/api/manual-dispatch/opshop/pickup-collections/{collection_id}/rows"
+        )
+
+        maximum = self.client.patch(
+            endpoint,
+            json={"rows": [{"row_id": row_ids[0], "hard_toys": 2**63 - 1}]},
+        )
+        self.assertEqual(200, maximum.status_code)
+        self.assertEqual(
+            2**63 - 1,
+            maximum.json()["pickups"][0]["hard_toys_snapshot"],
+        )
+
+        for overflow in (2**63, 10**100):
+            with self.subTest(overflow=overflow):
+                rejected = self.client.patch(
+                    endpoint,
+                    json={"rows": [{"row_id": row_ids[0], "hard_toys": overflow}]},
+                )
+                self.assertEqual(400, rejected.status_code)
+
+        atomic = self.client.patch(
+            endpoint,
+            json={
+                "rows": [
+                    {"row_id": row_ids[0], "black_bags": 7},
+                    {"row_id": row_ids[1], "shoe_bags": 2**63},
+                ],
+            },
+        )
+        self.assertEqual(400, atomic.status_code)
+        reloaded = self.client.get(
+            f"/api/manual-dispatch/opshop/pickup-collections/{collection_id}"
+        ).json()
+        by_id = {row["row_id"]: row for row in reloaded["pickups"]}
+        self.assertIsNone(by_id[row_ids[0]]["black_bags_snapshot"])
+        self.assertIsNone(by_id[row_ids[1]]["shoe_bags_snapshot"])
+
     def test_api_rejects_saved_snapshot_overwrite(self):
         run_sheet_id = self._generate_and_save_delivery()
         collection_id = self._generate_and_save_collection()

@@ -2,6 +2,7 @@ import shutil
 import sqlite3
 import unittest
 import uuid
+from dataclasses import replace
 from pathlib import Path
 
 from backend.db.connection import initialize_database
@@ -18,6 +19,14 @@ from backend.schemas import (
     OpShopPickupCollection,
     OpShopPickupCollectionRowSnapshot,
     ProductDetailLine,
+    UpdateOpShopPickupCollectionRowRequest,
+    UpdateOpShopPickupCollectionRowsRequest,
+)
+from backend.services.manual_dispatch.opshop_pickup_collection_service import (
+    OpShopPickupCollectionService,
+)
+from backend.services.manual_dispatch.application.opshop_application_service import (
+    _collection_entry_change_counts,
 )
 
 
@@ -241,6 +250,83 @@ class WorkspaceSnapshotPersistenceTest(unittest.TestCase):
             "Updated pickup note",
             self.repository.get_opshop_pickup_collection("OPC-001").pickups[0].notes_snapshot,
         )
+
+    def test_partial_collection_entry_updates_have_sqlite_and_in_memory_parity(self):
+        repositories = (
+            self.repository,
+            InMemoryManualDispatchRepository(),
+        )
+        for repository in repositories:
+            with self.subTest(repository=type(repository).__name__):
+                baseline = self._opshop_collection()
+                baseline = replace(
+                    baseline,
+                    status="GENERATED",
+                    saved_at=None,
+                    saved_by_account_name=None,
+                    pickups=[
+                        replace(
+                            baseline.pickups[0],
+                            clothing_kg_snapshot=1,
+                            shoes_kg_snapshot=2,
+                            time_in_snapshot="09:00",
+                            black_bags_snapshot=4,
+                        )
+                    ],
+                )
+                repository.upsert_opshop_pickup_collection(baseline)
+                service = OpShopPickupCollectionService(repository, validator=None)
+
+                partial = service.update_rows(
+                    baseline.collection_id,
+                    UpdateOpShopPickupCollectionRowsRequest(
+                        rows=[
+                            UpdateOpShopPickupCollectionRowRequest(
+                                row_id="OPCR-001",
+                                clothing_kg=9.5,
+                            )
+                        ]
+                    ),
+                ).pickups[0]
+
+                self.assertEqual(9.5, partial.clothing_kg_snapshot)
+                self.assertEqual(2, partial.shoes_kg_snapshot)
+                self.assertEqual("09:00", partial.time_in_snapshot)
+                self.assertEqual(4, partial.black_bags_snapshot)
+                self.assertEqual(
+                    (1, 1),
+                    _collection_entry_change_counts(
+                        baseline,
+                        repository.get_opshop_pickup_collection(
+                            baseline.collection_id
+                        ),
+                        {"OPCR-001"},
+                    ),
+                )
+
+                cleared = service.update_rows(
+                    baseline.collection_id,
+                    UpdateOpShopPickupCollectionRowsRequest(
+                        rows=[
+                            UpdateOpShopPickupCollectionRowRequest(
+                                row_id="OPCR-001",
+                                shoes_kg=None,
+                                time_in="",
+                                black_bags=0,
+                            )
+                        ]
+                    ),
+                ).pickups[0]
+
+                self.assertIsNone(cleared.shoes_kg_snapshot)
+                self.assertIsNone(cleared.time_in_snapshot)
+                self.assertEqual(0, cleared.black_bags_snapshot)
+                self.assertEqual(9.5, cleared.clothing_kg_snapshot)
+                reloaded = repository.get_opshop_pickup_collection(
+                    baseline.collection_id
+                ).pickups[0]
+                self.assertEqual(9.5, reloaded.clothing_kg_snapshot)
+                self.assertEqual(0, reloaded.black_bags_snapshot)
 
     def test_in_memory_repository_exposes_matching_independent_contract(self):
         repository = InMemoryManualDispatchRepository()

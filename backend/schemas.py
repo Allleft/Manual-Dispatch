@@ -1,6 +1,8 @@
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional
 
+from pydantic import BaseModel
+
 
 @dataclass
 class ProductDetailLine:
@@ -743,8 +745,7 @@ class OpShopPickupCollectionRowSnapshot:
     shoe_bags_snapshot: Optional[int] = None
 
 
-@dataclass
-class UpdateOpShopPickupCollectionRowRequest:
+class UpdateOpShopPickupCollectionRowRequest(BaseModel):
     row_id: Optional[str] = None
     clothing_kg: Any = None
     shoes_kg: Any = None

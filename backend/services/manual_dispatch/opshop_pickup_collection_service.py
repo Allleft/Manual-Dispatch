@@ -112,51 +112,17 @@ class OpShopPickupCollectionService:
 
         updated_rows = []
         for row_id, row_update in zip(row_ids, row_updates):
-            updated_rows.append(
-                replace(
-                    rows_by_id[row_id],
-                    clothing_kg_snapshot=_optional_weight(
-                        row_update.clothing_kg,
-                        "clothing_kg",
-                    ),
-                    shoes_kg_snapshot=_optional_weight(
-                        row_update.shoes_kg,
-                        "shoes_kg",
-                    ),
-                    time_in_snapshot=_optional_time(
-                        row_update.time_in,
-                        "time_in",
-                    ),
-                    time_out_snapshot=_optional_time(
-                        row_update.time_out,
-                        "time_out",
-                    ),
-                    trolleys_out_to_opshops_snapshot=_optional_count(
-                        row_update.trolleys_out_to_opshops,
-                        "trolleys_out_to_opshops",
-                    ),
-                    trolleys_in_to_mcc_snapshot=_optional_count(
-                        row_update.trolleys_in_to_mcc,
-                        "trolleys_in_to_mcc",
-                    ),
-                    hard_toys_snapshot=_optional_count(
-                        row_update.hard_toys,
-                        "hard_toys",
-                    ),
-                    soft_toys_snapshot=_optional_count(
-                        row_update.soft_toys,
-                        "soft_toys",
-                    ),
-                    black_bags_snapshot=_optional_count(
-                        row_update.black_bags,
-                        "black_bags",
-                    ),
-                    shoe_bags_snapshot=_optional_count(
-                        row_update.shoe_bags,
-                        "shoe_bags",
-                    ),
+            replacements = {}
+            for field_name in row_update.model_fields_set:
+                field_spec = _COLLECTION_ENTRY_FIELD_SPECS.get(field_name)
+                if not field_spec:
+                    continue
+                snapshot_field, validator = field_spec
+                replacements[snapshot_field] = validator(
+                    getattr(row_update, field_name),
+                    field_name,
                 )
-            )
+            updated_rows.append(replace(rows_by_id[row_id], **replacements))
         return self.repository.update_opshop_pickup_collection_rows(
             collection.collection_id,
             updated_rows,
@@ -279,6 +245,9 @@ class OpShopPickupCollectionService:
 _ENTRY_TIME_PATTERN = re.compile(r"(?:[01]\d|2[0-3]):[0-5]\d")
 
 
+SQLITE_INTEGER_MAX = 2**63 - 1
+
+
 def _optional_weight(value, field_name):
     if value is None or value == "":
         return None
@@ -292,7 +261,12 @@ def _optional_weight(value, field_name):
 def _optional_count(value, field_name):
     if value is None or value == "":
         return None
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int)
+        or value < 0
+        or value > SQLITE_INTEGER_MAX
+    ):
         raise ValueError(f"{field_name} must be a non-negative integer.")
     return value
 
@@ -308,6 +282,23 @@ def _optional_time(value, field_name):
     if not _ENTRY_TIME_PATTERN.fullmatch(cleaned):
         raise ValueError(f"{field_name} must be HH:MM.")
     return cleaned
+
+
+_COLLECTION_ENTRY_FIELD_SPECS = {
+    "clothing_kg": ("clothing_kg_snapshot", _optional_weight),
+    "shoes_kg": ("shoes_kg_snapshot", _optional_weight),
+    "time_in": ("time_in_snapshot", _optional_time),
+    "time_out": ("time_out_snapshot", _optional_time),
+    "trolleys_out_to_opshops": (
+        "trolleys_out_to_opshops_snapshot",
+        _optional_count,
+    ),
+    "trolleys_in_to_mcc": ("trolleys_in_to_mcc_snapshot", _optional_count),
+    "hard_toys": ("hard_toys_snapshot", _optional_count),
+    "soft_toys": ("soft_toys_snapshot", _optional_count),
+    "black_bags": ("black_bags_snapshot", _optional_count),
+    "shoe_bags": ("shoe_bags_snapshot", _optional_count),
+}
 
 
 def _pickup_notes(pickup):
