@@ -82,12 +82,16 @@ export function createOpShopCollectionActions(context) {
     }
     const draftVersion = state.opshopCollectionEntryDraftVersions?.[collectionId] || 0;
     const updated = await api.updateOpShopPickupCollectionRows(collectionId, { rows });
-    if (!mutationContext || isOpShopMutationCurrent(mutationContext)) {
+    const mutationIsCurrent =
+      !mutationContext || isOpShopMutationCurrent(mutationContext);
+    if (mutationIsCurrent) {
       state.opshopPickupCollections = (state.opshopPickupCollections || []).map(
         (item) => item.collection_id === collectionId ? updated : item,
       );
     }
     if (
+      mutationIsCurrent
+      &&
       (state.opshopCollectionEntryDraftVersions?.[collectionId] || 0)
       === draftVersion
     ) {
@@ -171,6 +175,9 @@ export function createOpShopCollectionActions(context) {
     }
     await runOpShopAction(`opshop-save:${collectionId}`, async (context) => {
       await flushOpShopCollectionEntryDrafts(collectionId, context);
+      if (!isOpShopMutationCurrent(context)) {
+        return;
+      }
       await api.saveGeneratedOpShopPickupCollection(
         collectionId,
         saveSnapshotPayload(),
@@ -205,6 +212,9 @@ export function createOpShopCollectionActions(context) {
     }
     await runOpShopAction(`opshop-export:${collectionId}`, async (context) => {
       await flushOpShopCollectionEntryDrafts(collectionId, context);
+      if (!isOpShopMutationCurrent(context)) {
+        return;
+      }
       await api.exportOpShopPickupCollectionExcel(collectionId);
     });
   }
@@ -223,12 +233,21 @@ export function createOpShopCollectionActions(context) {
     }
     await runOpShopAction(actionKey, async (context) => {
       for (const collection of collections) {
+        if (!isOpShopMutationCurrent(context)) {
+          return;
+        }
         if (
           collection.status === "GENERATED"
           && hasOpShopCollectionEntryDrafts(state, collection.collection_id)
         ) {
           await flushOpShopCollectionEntryDrafts(collection.collection_id, context);
+          if (!isOpShopMutationCurrent(context)) {
+            return;
+          }
         }
+      }
+      if (!isOpShopMutationCurrent(context)) {
+        return;
       }
       await api.exportOpShopPickupCollectionsExcel({
         pickupDate: scopedDate,

@@ -3396,6 +3396,185 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             if (state.opshopActionError !== "invalid entry") {
               throw new Error("entry flush failure was not surfaced");
             }
+            """
+        )
+
+    def test_opshop_collection_older_patch_response_preserves_newer_draft(self):
+        self._run_workspace_actions_script(
+            """
+            const pickup = {
+              row_id: "ROW-RACE",
+              clothing_kg_snapshot: 1,
+              shoes_kg_snapshot: null,
+              time_in_snapshot: null,
+              time_out_snapshot: null,
+              trolleys_out_to_opshops_snapshot: null,
+              trolleys_in_to_mcc_snapshot: null,
+              hard_toys_snapshot: null,
+              soft_toys_snapshot: null,
+              black_bags_snapshot: null,
+              shoe_bags_snapshot: null,
+            };
+            const collection = {
+              collection_id: "COL-RACE",
+              status: "GENERATED",
+              pickup_date: "2026-05-05",
+              pickups: [pickup],
+            };
+            let resolvePatch;
+            let sentPayload;
+            const state = {
+              isLoggedIn: true,
+              workspaceRoute: "opshop/collections",
+              activeWorkspace: "opshop",
+              dispatchDate: "2026-05-05",
+              opshopTripSummaryDate: "2026-05-05",
+              opshopSavedHistoryDate: "2026-05-05",
+              opshopPickupCollections: [collection],
+              opshopCollectionEntryDrafts: {},
+              opshopCollectionEntryDraftVersions: {},
+              opshopBusyActionKeys: {},
+              opshopActionError: "",
+            };
+            const actions = createWorkspaceActions({
+              state,
+              renderWorkspace: () => {},
+              api: {
+                updateOpShopPickupCollectionRows: async (collectionId, payload) => {
+                  sentPayload = payload;
+                  return new Promise((resolve) => {
+                    resolvePatch = resolve;
+                  });
+                },
+              },
+            });
+
+            actions.updateOpShopCollectionEntryDraft(
+              "COL-RACE", "ROW-RACE", "clothing_kg", "2.5",
+            );
+            const pending = actions.saveOpShopPickupCollectionWeightSheet("COL-RACE");
+            await Promise.resolve();
+            if (sentPayload.rows[0].clothing_kg !== 2.5) {
+              throw new Error("V1 draft was not sent");
+            }
+            actions.updateOpShopCollectionEntryDraft(
+              "COL-RACE", "ROW-RACE", "clothing_kg", "7.5",
+            );
+            resolvePatch({
+              ...collection,
+              pickups: [{ ...pickup, clothing_kg_snapshot: 2.5 }],
+            });
+            await pending;
+
+            if (
+              state.opshopCollectionEntryDrafts["COL-RACE"]["ROW-RACE"].clothing_kg
+              !== "7.5"
+              || state.opshopCollectionEntryDraftVersions["COL-RACE"] !== 2
+            ) {
+              throw new Error("older PATCH response erased the newer V2 draft");
+            }
+          """
+        )
+
+    def test_opshop_daily_flush_stops_after_route_switch_or_logout(self):
+        self._run_workspace_actions_script(
+            """
+            async function runInvalidationScenario(kind) {
+              const makePickup = (rowId) => ({
+                row_id: rowId,
+                clothing_kg_snapshot: 1,
+                shoes_kg_snapshot: null,
+                time_in_snapshot: null,
+                time_out_snapshot: null,
+                trolleys_out_to_opshops_snapshot: null,
+                trolleys_in_to_mcc_snapshot: null,
+                hard_toys_snapshot: null,
+                soft_toys_snapshot: null,
+                black_bags_snapshot: null,
+                shoe_bags_snapshot: null,
+              });
+              const collectionA = {
+                collection_id: "COL-A",
+                status: "GENERATED",
+                pickup_date: "2026-05-05",
+                pickups: [makePickup("ROW-A")],
+              };
+              const collectionB = {
+                collection_id: "COL-B",
+                status: "GENERATED",
+                pickup_date: "2026-05-05",
+                pickups: [makePickup("ROW-B")],
+              };
+              const calls = [];
+              let resolveFirstPatch;
+              const state = {
+                isLoggedIn: true,
+                workspaceRoute: "opshop/collections",
+                activeWorkspace: "opshop",
+                dispatchDate: "2026-05-05",
+                opshopTripSummaryDate: "2026-05-05",
+                opshopSavedHistoryDate: "2026-05-05",
+                opshopPickupCollections: [collectionA, collectionB],
+                opshopCollectionEntryDrafts: {},
+                opshopCollectionEntryDraftVersions: {},
+                opshopBusyActionKeys: {},
+                opshopActionError: "",
+              };
+              const actions = createWorkspaceActions({
+                state,
+                renderWorkspace: () => {},
+                api: {
+                  updateOpShopPickupCollectionRows: async (collectionId) => {
+                    calls.push("patch:" + collectionId);
+                    if (collectionId === "COL-A") {
+                      return new Promise((resolve) => {
+                        resolveFirstPatch = resolve;
+                      });
+                    }
+                    return collectionB;
+                  },
+                  exportOpShopPickupCollectionsExcel: async () => {
+                    calls.push("export");
+                  },
+                },
+              });
+              actions.updateOpShopCollectionEntryDraft(
+                "COL-A", "ROW-A", "clothing_kg", "2",
+              );
+              actions.updateOpShopCollectionEntryDraft(
+                "COL-B", "ROW-B", "shoes_kg", "3",
+              );
+              const pending = actions.exportOpShopPickupCollections("2026-05-05");
+              await Promise.resolve();
+
+              if (kind === "route") {
+                state.workspaceRoute = "opshop/history";
+              } else {
+                state.isLoggedIn = false;
+                state.workspaceRoute = "home";
+                state.activeWorkspace = "";
+                state.opshopCollectionEntryDrafts = {};
+                state.opshopCollectionEntryDraftVersions = {};
+              }
+              resolveFirstPatch(collectionA);
+              await pending;
+
+              if (calls.join(",") !== "patch:COL-A") {
+                throw new Error(kind + " invalidation allowed stale flush continuation");
+              }
+              if (
+                kind === "route"
+                && (
+                  !state.opshopCollectionEntryDrafts["COL-A"]
+                  || !state.opshopCollectionEntryDrafts["COL-B"]
+                )
+              ) {
+                throw new Error("route-switch stale response cleared pending drafts");
+              }
+            }
+
+            await runInvalidationScenario("route");
+            await runInvalidationScenario("logout");
           """
         )
 
