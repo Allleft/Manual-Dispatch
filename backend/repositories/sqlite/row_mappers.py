@@ -319,6 +319,20 @@ class SQLiteRowMapperMixin:
                 trailer_restriction_snapshot=pickup_row["trailer_restriction_snapshot"],
                 notes_snapshot=pickup_row["notes_snapshot"],
                 status_snapshot=pickup_row["status_snapshot"],
+                clothing_kg_snapshot=pickup_row["clothing_kg_snapshot"],
+                shoes_kg_snapshot=pickup_row["shoes_kg_snapshot"],
+                time_in_snapshot=pickup_row["time_in_snapshot"],
+                time_out_snapshot=pickup_row["time_out_snapshot"],
+                trolleys_out_to_opshops_snapshot=(
+                    pickup_row["trolleys_out_to_opshops_snapshot"]
+                ),
+                trolleys_in_to_mcc_snapshot=(
+                    pickup_row["trolleys_in_to_mcc_snapshot"]
+                ),
+                hard_toys_snapshot=pickup_row["hard_toys_snapshot"],
+                soft_toys_snapshot=pickup_row["soft_toys_snapshot"],
+                black_bags_snapshot=pickup_row["black_bags_snapshot"],
+                shoe_bags_snapshot=pickup_row["shoe_bags_snapshot"],
             )
             for pickup_row in pickup_rows
         ]

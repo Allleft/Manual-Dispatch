@@ -69,6 +69,17 @@ export async function apiCreateGeneratedOpShopPickupCollection(payload) {
   });
 }
 
+export async function apiUpdateOpShopPickupCollectionRows(collectionId, payload) {
+  return requestJson(
+    `/api/manual-dispatch/opshop/pickup-collections/${encodeURIComponent(collectionId)}/rows`,
+    {
+      method: "PATCH",
+      body: payload,
+    },
+  );
+}
+
+
 export async function apiSaveGeneratedOpShopPickupCollection(collectionId, payload) {
   return requestJson(
     `/api/manual-dispatch/opshop/pickup-collections/${encodeURIComponent(collectionId)}/save`,

@@ -1,3 +1,4 @@
+import importlib
 import shutil
 import sqlite3
 import unittest
@@ -17,6 +18,13 @@ from backend.schemas import (
     OpShopPickupTask,
 )
 from backend.services.manual_dispatch_service import ManualDispatchService
+
+try:
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+except (ImportError, ModuleNotFoundError, RuntimeError):
+    FastAPI = None
+    TestClient = None
 
 
 class OpShopPickupGenerationTest(unittest.TestCase):
@@ -128,7 +136,7 @@ class OpShopPickupGenerationTest(unittest.TestCase):
 
         self.assertEqual(["2026-05-19", "2026-05-26"], self._pickup_dates())
 
-    def test_regular_weekly_with_explicit_days_generates_each_day(self):
+    def test_regular_weekly_with_explicit_days_uses_source_row_only(self):
         self._add_schedule(
             "SCHED-001",
             run_day="MONDAY",
@@ -136,14 +144,12 @@ class OpShopPickupGenerationTest(unittest.TestCase):
             frequency="Weekly (Tuesday & Thursday)",
         )
 
-        self._generate()
+        result = self._generate()
 
-        self.assertEqual(
-            ["2026-05-19", "2026-05-21", "2026-05-26", "2026-05-28"],
-            self._pickup_dates(),
-        )
+        self.assertEqual(["2026-05-25", "2026-06-01"], self._pickup_dates())
+        self.assertGreaterEqual(result.warnings["FREQUENCY_SOURCE_CONFLICT"], 1)
 
-    def test_regular_twice_weekly_with_explicit_days_generates_each_day(self):
+    def test_regular_twice_weekly_with_explicit_days_uses_source_row_only(self):
         self._add_schedule(
             "SCHED-001",
             run_day="MONDAY",
@@ -151,40 +157,39 @@ class OpShopPickupGenerationTest(unittest.TestCase):
             frequency="Twice weekly (Wed & Fri)",
         )
 
-        self._generate()
-
-        self.assertEqual(
-            ["2026-05-20", "2026-05-22", "2026-05-27", "2026-05-29"],
-            self._pickup_dates(),
-        )
-
-    def test_regular_fortnightly_groups_generate_correct_weeks(self):
-        self._add_schedule(
-            "SCHED-A",
-            run_day="MONDAY",
-            run_type="REGULAR",
-            frequency="Fortnightly",
-            fortnight_group="A",
-        )
-        self._add_schedule(
-            "SCHED-B",
-            run_day="MONDAY",
-            run_type="REGULAR",
-            frequency="Fortnightly",
-            fortnight_group="B",
-        )
-
-        self._generate()
+        result = self._generate()
 
         self.assertEqual(["2026-05-25", "2026-06-01"], self._pickup_dates())
+        self.assertGreaterEqual(result.warnings["FREQUENCY_SOURCE_CONFLICT"], 1)
 
-    def test_regular_monthly_does_not_generate(self):
-        self._add_schedule("SCHED-001", run_day="THURSDAY", run_type="REGULAR", frequency="Monthly")
+    def test_regular_fortnightly_uses_shared_anchor_without_group(self):
+        self._add_schedule(
+            "SCHED-REGULAR",
+            run_day="MONDAY",
+            run_type="REGULAR",
+            frequency="Fortnight",
+            fortnight_group=None,
+        )
 
         result = self._generate()
 
-        self.assertEqual(0, result.tasks_created)
-        self.assertEqual(1, result.skip_reasons["MONTHLY_NOT_AUTO_GENERATED"])
+        self.assertEqual(1, result.tasks_created)
+        self.assertEqual(["2026-06-01"], self._pickup_dates())
+        self.assertNotIn("FORTNIGHT_GROUP_MISSING", result.skip_reasons)
+
+    def test_regular_monthly_generates_matching_ordinal(self):
+        self._add_schedule(
+            "SCHED-001",
+            run_day="THURSDAY",
+            run_type="REGULAR",
+            frequency="Monthly (1st Thursday)",
+        )
+
+        result = self._generate(start_date="2026-05-31", days=14)
+
+        self.assertEqual(1, result.tasks_created)
+        self.assertEqual(["2026-06-04"], self._pickup_dates())
+        self.assertNotIn("MONTHLY_NOT_AUTO_GENERATED", result.skip_reasons)
 
     def test_on_call_schedules_never_auto_generate(self):
         self._add_schedule("SCHED-001", run_day="MONDAY", run_type="ON_CALL", frequency="Weekly")
@@ -453,6 +458,132 @@ class OpShopPickupGenerationTest(unittest.TestCase):
             notes=None,
             created_at="2026-05-19T00:00:00+00:00",
             updated_at="2026-05-19T00:00:00+00:00",
+        )
+
+
+@unittest.skipIf(FastAPI is None or TestClient is None, "FastAPI TestClient unavailable")
+class LegacyRegularPickupGenerationApiTest(unittest.TestCase):
+    def setUp(self):
+        self.repository = InMemoryManualDispatchRepository()
+        self.repository.upsert_opshop_location(
+            OpShopPickupGenerationTest._location(self)
+        )
+        self.service = ManualDispatchService(self.repository)
+        self.api_module = importlib.import_module("backend.api.manual_dispatch")
+        self.original_service = self.api_module.service
+        self.api_module.service = self.service
+        app = FastAPI()
+        app.include_router(self.api_module.router)
+        self.client = TestClient(app)
+
+    def tearDown(self):
+        self.api_module.service = self.original_service
+
+    def test_real_workbook_multi_weekly_rows_generate_two_slots_and_rerun_is_idempotent(self):
+        self._add_regular("OUR-VILLAGE-MON", "MONDAY", "2x Weekly")
+        self._add_regular("OUR-VILLAGE-WED", "WEDNESDAY", "2x Weekly")
+
+        first = self._post("2026-05-17")
+        second = self._post("2026-05-17")
+
+        self.assertEqual(200, first.status_code)
+        self.assertEqual(2, first.json()["tasks_created"])
+        self.assertEqual(0, second.json()["tasks_created"])
+        self.assertEqual(2, second.json()["tasks_existing"])
+        self.assertEqual(["2026-05-18", "2026-05-20"], self._pickup_dates())
+
+    def test_explicit_twice_weekly_rows_do_not_cross_expand(self):
+        self._add_regular(
+            "PAKENHAM-MON",
+            "MONDAY",
+            "Twice weekly (Monday & Thursday)",
+        )
+        self._add_regular(
+            "PAKENHAM-THU",
+            "THURSDAY",
+            "Twice weekly (Monday & Thursday)",
+        )
+
+        response = self._post("2026-05-17")
+
+        self.assertEqual(200, response.status_code)
+        self.assertEqual(2, response.json()["tasks_created"])
+        self.assertEqual(["2026-05-18", "2026-05-21"], self._pickup_dates())
+
+    def test_fortnight_uses_shared_anchor_without_group(self):
+        self._add_regular("FORTNIGHT-WED", "WEDNESDAY", "Fortnight")
+
+        active = self._post("2026-05-17")
+        inactive = self._post("2026-05-24")
+        next_active = self._post("2026-05-31")
+
+        self.assertEqual(1, active.json()["tasks_created"])
+        self.assertEqual(0, inactive.json()["tasks_created"])
+        self.assertEqual(1, next_active.json()["tasks_created"])
+        self.assertEqual(["2026-05-20", "2026-06-03"], self._pickup_dates())
+        self.assertNotIn("FORTNIGHT_GROUP_MISSING", active.json()["skip_reasons"])
+
+    def test_monthly_generates_only_matching_ordinal_weekday(self):
+        self._add_regular(
+            "MONTHLY-THU",
+            "THURSDAY",
+            "Monthly (1st Thursday)",
+        )
+
+        response = self._post("2026-05-31", days=14)
+
+        self.assertEqual(1, response.json()["tasks_created"])
+        self.assertEqual(["2026-06-04"], self._pickup_dates())
+        self.assertNotIn("MONTHLY_NOT_AUTO_GENERATED", response.json()["skip_reasons"])
+
+    def test_blank_and_unknown_regular_frequency_do_not_default_to_weekly(self):
+        self._add_regular("BLANK-MON", "MONDAY", "")
+        self._add_regular("UNKNOWN-TUE", "TUESDAY", "Whenever needed")
+
+        response = self._post("2026-05-17")
+
+        self.assertEqual(0, response.json()["tasks_created"])
+        self.assertEqual([], self._pickup_dates())
+        self.assertEqual(1, response.json()["skip_reasons"]["MISSING_PICKUP_FREQUENCY"])
+        self.assertEqual(1, response.json()["skip_reasons"]["UNKNOWN_FREQUENCY"])
+
+    def test_standard_explicit_weekday_compatibility_is_unchanged(self):
+        self.repository.upsert_opshop_pickup_schedule(
+            OpShopPickupGenerationTest._schedule(
+                self,
+                "STANDARD-WED-FRI",
+                run_day="MONDAY",
+                run_type="STANDARD",
+                frequency="2 X WEEKLY (WED/FRI)",
+            )
+        )
+
+        response = self._post("2026-05-17")
+
+        self.assertEqual(2, response.json()["tasks_created"])
+        self.assertEqual(["2026-05-20", "2026-05-22"], self._pickup_dates())
+
+    def _add_regular(self, schedule_id, run_day, frequency):
+        self.repository.upsert_opshop_pickup_schedule(
+            OpShopPickupGenerationTest._schedule(
+                self,
+                schedule_id,
+                run_day=run_day,
+                run_type="REGULAR",
+                frequency=frequency,
+            )
+        )
+
+    def _post(self, start_date, days=7):
+        return self.client.post(
+            "/api/manual-dispatch/opshop-pickups/generate",
+            json={"start_date": start_date, "days": days},
+        )
+
+    def _pickup_dates(self):
+        return sorted(
+            task.pickup_date
+            for task in self.repository.list_opshop_pickup_tasks()
         )
 
 

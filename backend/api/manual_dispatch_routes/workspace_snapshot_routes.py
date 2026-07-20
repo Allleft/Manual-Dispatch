@@ -7,6 +7,7 @@ from backend.schemas import (
     GenerateDeliveryRunSheetRequest,
     GenerateOpShopPickupCollectionRequest,
     SaveGeneratedWorkspaceSnapshotRequest,
+    UpdateOpShopPickupCollectionRowsRequest,
     to_dict,
 )
 from backend.services.manual_dispatch_service import ManualDispatchService
@@ -140,6 +141,27 @@ def create_workspace_snapshot_router(
         service = get_service()
         try:
             return to_dict(service.get_opshop_pickup_collection(collection_id))
+        except ValueError as error:
+            raise to_http_exception(error) from error
+
+    @router.patch("/opshop/pickup-collections/{collection_id}/rows")
+    def update_opshop_pickup_collection_rows(
+        collection_id: str,
+        request: UpdateOpShopPickupCollectionRowsRequest,
+        http_request: Request = None,
+    ):
+        service = get_service()
+        try:
+            return with_logbook_actor(
+                service,
+                http_request,
+                lambda: to_dict(
+                    service.update_opshop_pickup_collection_rows(
+                        collection_id,
+                        request,
+                    )
+                ),
+            )
         except ValueError as error:
             raise to_http_exception(error) from error
 

@@ -22,6 +22,9 @@ from backend.services.manual_dispatch.opshop_pickup_collection_lock import (
     ensure_opshop_pickup_collection_key_mutable,
     ensure_opshop_pickup_not_reserved,
 )
+from backend.services.manual_dispatch.opshop_regular_frequency import (
+    parse_regular_pickup_frequency,
+)
 
 
 OPSHOP_FORTNIGHT_ANCHOR_DATE = date(2026, 5, 18)
@@ -98,8 +101,8 @@ class OpShopPickupService:
         window_start, window_end = self.regular_pickup_week_window(dispatch_date)
         schedules = self.repository.list_opshop_pickup_schedules()
         skip_reasons = {}
-        created_tasks = []
-        tasks_existing = 0
+        warnings = {}
+        regular_schedules = []
 
         for schedule in schedules:
             if not _is_active_schedule(schedule):
@@ -115,26 +118,20 @@ class OpShopPickupService:
                 _increment(skip_reasons, "NON_NORMAL_CATEGORY_NOT_IN_WEEKLY_LIST")
                 continue
             if schedule.run_day not in WEEKDAY_BY_NAME:
-                _increment(skip_reasons, "UNKNOWN_RUN_DAY")
+                _increment(
+                    skip_reasons,
+                    "MISSING_RUN_DAY" if not schedule.run_day else "UNKNOWN_RUN_DAY",
+                )
                 continue
+            regular_schedules.append(schedule)
 
-            for target_date in _date_range(window_start, window_end):
-                if _weekday_name(target_date) != schedule.run_day:
-                    continue
-                pickup_date = target_date.isoformat()
-                existing = self.repository.find_opshop_pickup_task_by_schedule_and_date(
-                    schedule.schedule_id,
-                    pickup_date,
-                )
-                if existing:
-                    tasks_existing += 1
-                    _increment(skip_reasons, "EXISTING_TASK")
-                    continue
-                task = self._build_generated_task(schedule, pickup_date)
-                created = self.repository.insert_opshop_pickup_task(task)
-                created_tasks.append(
-                    self._apply_template_default_assignment(created, schedule)
-                )
+        created_tasks, tasks_existing = self._generate_regular_schedule_tasks(
+            regular_schedules,
+            window_start,
+            window_end,
+            skip_reasons,
+            warnings,
+        )
 
         return EnsureOpShopPickupTasksResult(
             window_start=window_start.isoformat(),
@@ -145,9 +142,101 @@ class OpShopPickupService:
             tasks_existing=tasks_existing,
             schedules_skipped=sum(skip_reasons.values()),
             skip_reasons=skip_reasons,
-            warnings={},
+            warnings=warnings,
             created_tasks=created_tasks,
         )
+
+    def _generate_regular_schedule_tasks(
+        self,
+        schedules,
+        window_start,
+        window_end,
+        skip_reasons,
+        warnings,
+    ):
+        created_tasks = []
+        tasks_existing = 0
+        schedules_by_opshop = {}
+        for schedule in schedules:
+            schedules_by_opshop.setdefault(schedule.opshop_id, []).append(schedule)
+
+        for opshop_schedules in schedules_by_opshop.values():
+            schedules_by_day = {}
+            for schedule in sorted(
+                opshop_schedules,
+                key=lambda item: (item.run_day or "", item.schedule_id),
+            ):
+                schedules_by_day.setdefault(schedule.run_day, []).append(schedule)
+
+            distinct_weekdays = tuple(
+                day for day in WEEKDAY_BY_NAME if day in schedules_by_day
+            )
+            rules = {
+                schedule.schedule_id: parse_regular_pickup_frequency(
+                    schedule.pickup_frequency
+                )
+                for schedule in opshop_schedules
+            }
+            if any(
+                rule.frequency_type == "TWICE_WEEKLY"
+                for rule in rules.values()
+            ):
+                _validate_multi_weekly_group(
+                    opshop_schedules,
+                    distinct_weekdays,
+                    rules,
+                    warnings,
+                )
+
+            for run_day, slot_schedules in schedules_by_day.items():
+                if len(slot_schedules) > 1:
+                    _increment(warnings, "DUPLICATE_ACTIVE_SCHEDULE_SLOT")
+                    skip_reasons["DUPLICATE_ACTIVE_SCHEDULE_SLOT"] = (
+                        skip_reasons.get("DUPLICATE_ACTIVE_SCHEDULE_SLOT", 0)
+                        + len(slot_schedules)
+                        - 1
+                    )
+                schedule = slot_schedules[0]
+                rule = rules[schedule.schedule_id]
+                if not rule.raw_text:
+                    _increment(skip_reasons, "MISSING_PICKUP_FREQUENCY")
+                    _increment(warnings, "MISSING_PICKUP_FREQUENCY")
+                    continue
+                if rule.frequency_type == "UNKNOWN":
+                    _increment(skip_reasons, "UNKNOWN_FREQUENCY")
+                    _increment(warnings, "UNKNOWN_PICKUP_FREQUENCY")
+                    continue
+                if rule.explicit_weekdays and run_day not in rule.explicit_weekdays:
+                    _increment(warnings, "FREQUENCY_SOURCE_CONFLICT")
+
+                for target_date in _date_range(window_start, window_end):
+                    if not _is_regular_schedule_due_on_date(
+                        schedule,
+                        target_date,
+                        rule,
+                    ):
+                        continue
+                    pickup_date = target_date.isoformat()
+                    existing_tasks = [
+                        self.repository.find_opshop_pickup_task_by_schedule_and_date(
+                            candidate.schedule_id,
+                            pickup_date,
+                        )
+                        for candidate in slot_schedules
+                    ]
+                    existing_tasks = [task for task in existing_tasks if task]
+                    if existing_tasks:
+                        tasks_existing += 1
+                        _increment(skip_reasons, "EXISTING_TASK")
+                        if len(existing_tasks) > 1:
+                            _increment(warnings, "DUPLICATE_EXISTING_TASK_SLOT")
+                        continue
+                    task = self._build_generated_task(schedule, pickup_date)
+                    created = self.repository.insert_opshop_pickup_task(task)
+                    created_tasks.append(
+                        self._apply_template_default_assignment(created, schedule)
+                    )
+        return created_tasks, tasks_existing
 
     def list_opshop_pickup_schedule_candidates(self, run_type="scheduled"):
         normalized = (run_type or "scheduled").strip().lower()
@@ -777,6 +866,7 @@ class OpShopPickupService:
         warnings = {}
         created_tasks = []
         tasks_existing = 0
+        regular_schedules = []
 
         for schedule in schedules:
             if not _is_active_schedule(schedule):
@@ -790,6 +880,19 @@ class OpShopPickupService:
                 continue
             if schedule.run_type not in {"STANDARD", "REGULAR"}:
                 _increment(skip_reasons, "UNKNOWN_RUN_TYPE")
+                continue
+
+            if schedule.run_type == "REGULAR":
+                if getattr(schedule, "pickup_category", "NORMAL") != "NORMAL":
+                    _increment(skip_reasons, "NON_NORMAL_CATEGORY_NOT_IN_WEEKLY_LIST")
+                    continue
+                if schedule.run_day not in WEEKDAY_BY_NAME:
+                    _increment(
+                        skip_reasons,
+                        "MISSING_RUN_DAY" if not schedule.run_day else "UNKNOWN_RUN_DAY",
+                    )
+                    continue
+                regular_schedules.append(schedule)
                 continue
 
             frequency = classify_pickup_frequency(schedule.pickup_frequency)
@@ -840,6 +943,16 @@ class OpShopPickupService:
                 created_tasks.append(
                     self._apply_template_default_assignment(created, schedule)
                 )
+
+        regular_created, regular_existing = self._generate_regular_schedule_tasks(
+            regular_schedules,
+            window_start,
+            window_end,
+            skip_reasons,
+            warnings,
+        )
+        created_tasks.extend(regular_created)
+        tasks_existing += regular_existing
 
         return EnsureOpShopPickupTasksResult(
             window_start=window_start.isoformat(),
@@ -938,6 +1051,45 @@ def extract_weekdays_from_frequency(text):
             weekdays.append(weekday)
     return weekdays
 
+
+
+def _validate_multi_weekly_group(schedules, distinct_weekdays, rules, warnings):
+    if len(distinct_weekdays) < 2:
+        _increment(warnings, "MISSING_SECOND_WEEKLY_SLOT")
+    elif len(distinct_weekdays) > 2:
+        _increment(warnings, "FREQUENCY_SOURCE_CONFLICT")
+
+    expected_weekdays = set(distinct_weekdays)
+    for schedule in schedules:
+        rule = rules[schedule.schedule_id]
+        if rule.frequency_type != "TWICE_WEEKLY":
+            _increment(warnings, "FREQUENCY_SOURCE_CONFLICT")
+            continue
+        if rule.explicit_weekdays and set(rule.explicit_weekdays) != expected_weekdays:
+            _increment(warnings, "FREQUENCY_SOURCE_CONFLICT")
+
+
+def _matches_regular_frequency(target_date, rule):
+    if rule.frequency_type in {"WEEKLY", "TWICE_WEEKLY"}:
+        return True
+    if rule.frequency_type == "FORTNIGHTLY":
+        weeks_from_anchor = (
+            target_date - OPSHOP_FORTNIGHT_ANCHOR_DATE
+        ).days // 7
+        return weeks_from_anchor % 2 == 0
+    if rule.frequency_type == "MONTHLY":
+        return (
+            rule.monthly_ordinal is not None
+            and (target_date.day - 1) // 7 + 1 == rule.monthly_ordinal
+        )
+    return False
+
+
+def _is_regular_schedule_due_on_date(schedule, target_date, rule):
+    return (
+        _weekday_name(target_date) == schedule.run_day
+        and _matches_regular_frequency(target_date, rule)
+    )
 
 def _parse_iso_date(value, field_name):
     if not value:

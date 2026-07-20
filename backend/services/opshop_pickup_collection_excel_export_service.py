@@ -159,20 +159,22 @@ def _write_pickup_row(worksheet, row_index, pickup, border):
     values = [
         pickup.opshop_name_snapshot or "",
         pickup.suburb_snapshot or "",
-        "KG",
-        "KG",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
+        pickup.clothing_kg_snapshot,
+        pickup.shoes_kg_snapshot,
+        pickup.time_in_snapshot,
+        pickup.time_out_snapshot,
+        pickup.trolleys_out_to_opshops_snapshot,
+        pickup.trolleys_in_to_mcc_snapshot,
+        pickup.hard_toys_snapshot,
+        pickup.soft_toys_snapshot,
+        pickup.black_bags_snapshot,
+        pickup.shoe_bags_snapshot,
     ]
     for column_index, value in enumerate(values, start=1):
         cell = worksheet.cell(row=row_index, column=column_index, value=value)
         cell.border = border
+        if column_index in {3, 4}:
+            cell.number_format = '0.## "KG"'
         cell.alignment = Alignment(
             horizontal="center" if column_index >= 3 else "left",
             vertical="center",
@@ -183,9 +185,10 @@ def _write_pickup_row(worksheet, row_index, pickup, border):
 
 def _write_empty_pickup_row(worksheet, row_index, border):
     for column_index in range(1, len(COLLECTION_HEADERS) + 1):
-        value = "KG" if column_index in {3, 4} else ""
-        cell = worksheet.cell(row=row_index, column=column_index, value=value)
+        cell = worksheet.cell(row=row_index, column=column_index, value=None)
         cell.border = border
+        if column_index in {3, 4}:
+            cell.number_format = '0.## "KG"'
         cell.alignment = Alignment(horizontal="center" if column_index >= 3 else "left", vertical="center")
     worksheet.row_dimensions[row_index].height = 25.5
 
