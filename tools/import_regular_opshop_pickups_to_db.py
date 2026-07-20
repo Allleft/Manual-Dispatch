@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import os
+import re
 import sqlite3
 import sys
 from collections import Counter
@@ -124,13 +125,13 @@ def import_regular_opshop_pickups_to_db(file_path, db_path=None):
         default_driver_mapping_counts=dict(mapping_counts),
         backup_path=str(backup_path) if backup_path else None,
     )
-    imported_locations = set()
+    imported_location_ids = {}
     imported_schedule_ids = set()
 
     with sqlite3.connect(target_db_path) as connection:
         connection.row_factory = sqlite3.Row
         for prepared in prepared_rows:
-            if prepared.location_key not in imported_locations:
+            if prepared.location_key not in imported_location_ids:
                 existing_location_id = find_location_id_by_key(
                     connection,
                     prepared.location_key,
@@ -141,12 +142,14 @@ def import_regular_opshop_pickups_to_db(file_path, db_path=None):
                 else:
                     summary.locations_inserted += 1
                 repository.upsert_opshop_location(prepared.location)
-                imported_locations.add(prepared.location_key)
+                imported_location_ids[prepared.location_key] = prepared.location.opshop_id
 
+            prepared.location.opshop_id = imported_location_ids[prepared.location_key]
             prepared.schedule.opshop_id = prepared.location.opshop_id
             existing_schedule_id = find_schedule_id_by_key(
                 connection,
                 schedule_key(prepared.schedule),
+                prepared.location_key,
             )
             if existing_schedule_id:
                 prepared.schedule.schedule_id = existing_schedule_id
@@ -270,9 +273,7 @@ def prepare_regular_rows(rows, driver_lookup):
 
         location_key = location_dedupe_key(row)
         opshop_id = deterministic_id("OPSHOP", location_key)
-        pickup_frequency = normalize_regular_pickup_frequency(
-            row.get("Pickup_Frequency"),
-        )
+        pickup_frequency = clean_text(row.get("Pickup_Frequency"))
         schedule = OpShopPickupSchedule(
             schedule_id=deterministic_id(
                 "OPSHOP-SCHEDULE",
@@ -281,8 +282,7 @@ def prepare_regular_rows(rows, driver_lookup):
                         opshop_id,
                         row["__run_day"],
                         "REGULAR",
-                        normalize_key(pickup_frequency),
-                        normalize_key(row.get("Time_Window")),
+                        "NORMAL",
                     ]
                 ),
             ),
@@ -345,21 +345,6 @@ def resolve_driver_name(alias):
     return DRIVER_ALIAS_TO_NAME.get(normalized, alias)
 
 
-def normalize_regular_pickup_frequency(value):
-    """The Regular workbook sheet, not frequency text, controls pickup weekday."""
-    cleaned = clean_text(value)
-    normalized = normalize_key(cleaned)
-    compact = normalized.replace(" ", "")
-    if (
-        "2xweekly" in compact
-        or "2_x_weekly" in compact
-        or "twice weekly" in normalized
-        or "two times weekly" in normalized
-    ):
-        return "Weekly"
-    return cleaned
-
-
 def find_location_id_by_key(connection, dedupe_key):
     stable_opshop_id = deterministic_id("OPSHOP", dedupe_key)
     row = connection.execute(
@@ -369,21 +354,25 @@ def find_location_id_by_key(connection, dedupe_key):
     if row:
         return row["opshop_id"]
 
-    normalized_name, normalized_suburb, normalized_address = dedupe_key.split("|", 2)
-    row = connection.execute(
+    matches = []
+    for candidate in connection.execute(
         """
-        SELECT opshop_id
+        SELECT opshop_id, name, suburb, street_address
         FROM opshop_locations
-        WHERE lower(trim(name)) = ?
-            AND lower(trim(COALESCE(suburb, ''))) = ?
-            AND lower(trim(COALESCE(street_address, ''))) = ?
-        """,
-        (normalized_name, normalized_suburb, normalized_address),
-    ).fetchone()
-    return row["opshop_id"] if row else None
+        ORDER BY opshop_id
+        """
+    ).fetchall():
+        candidate_key = location_key_from_values(
+            candidate["name"],
+            candidate["suburb"],
+            candidate["street_address"],
+        )
+        if candidate_key == dedupe_key:
+            matches.append(candidate["opshop_id"])
+    return matches[0] if matches else None
 
 
-def find_schedule_id_by_key(connection, key):
+def find_schedule_id_by_key(connection, key, location_key=None):
     stable_schedule_id = deterministic_id("OPSHOP-SCHEDULE", key)
     row = connection.execute(
         "SELECT schedule_id FROM opshop_pickup_schedules WHERE schedule_id = ?",
@@ -392,20 +381,59 @@ def find_schedule_id_by_key(connection, key):
     if row:
         return row["schedule_id"]
 
-    opshop_id, run_day, run_type, pickup_frequency, time_window = key.split("|", 4)
-    row = connection.execute(
+    opshop_id, run_day, run_type, pickup_category = key.split("|", 3)
+    rows = connection.execute(
         """
         SELECT schedule_id
         FROM opshop_pickup_schedules
         WHERE opshop_id = ?
             AND COALESCE(run_day, '') = ?
             AND run_type = ?
-            AND lower(trim(COALESCE(pickup_frequency, ''))) = ?
-            AND lower(trim(COALESCE(time_window, ''))) = ?
+            AND COALESCE(pickup_category, 'NORMAL') = ?
+        ORDER BY schedule_id
         """,
-        (opshop_id, run_day, run_type, pickup_frequency, time_window),
-    ).fetchone()
-    return row["schedule_id"] if row else None
+        (opshop_id, run_day, run_type, pickup_category),
+    ).fetchall()
+    if len(rows) > 1:
+        raise ValueError(
+            f"Duplicate OP SHOP schedule slot for {opshop_id} {run_day}"
+        )
+    if rows:
+        return rows[0]["schedule_id"]
+
+    if not location_key:
+        return None
+    physical_matches = []
+    candidates = connection.execute(
+        """
+        SELECT
+            schedule.schedule_id,
+            location.name,
+            location.suburb,
+            location.street_address
+        FROM opshop_pickup_schedules AS schedule
+        JOIN opshop_locations AS location
+            ON location.opshop_id = schedule.opshop_id
+        WHERE COALESCE(schedule.run_day, '') = ?
+            AND schedule.run_type = ?
+            AND COALESCE(schedule.pickup_category, 'NORMAL') = ?
+        ORDER BY schedule.schedule_id
+        """,
+        (run_day, run_type, pickup_category),
+    ).fetchall()
+    for candidate in candidates:
+        candidate_key = location_key_from_values(
+            candidate["name"],
+            candidate["suburb"],
+            candidate["street_address"],
+        )
+        if candidate_key == location_key:
+            physical_matches.append(candidate["schedule_id"])
+    if len(physical_matches) > 1:
+        raise ValueError(
+            f"Duplicate OP SHOP schedule slot for physical location {run_day}"
+        )
+    return physical_matches[0] if physical_matches else None
 
 
 def deactivate_missing_regular_schedules(connection, imported_schedule_ids):
@@ -465,19 +493,50 @@ def schedule_key(schedule):
             schedule.opshop_id,
             schedule.run_day or "",
             schedule.run_type,
-            normalize_key(schedule.pickup_frequency),
-            normalize_key(schedule.time_window),
+            getattr(schedule, "pickup_category", "NORMAL") or "NORMAL",
         ]
     )
 
 
 def location_dedupe_key(row):
+    return location_key_from_values(
+        row.get("Op_Shop_Name"),
+        row.get("Suburb"),
+        row.get("Street_Address"),
+    )
+
+
+def location_key_from_values(name, suburb, street_address):
     return "|".join(
         [
-            normalize_key(row.get("Op_Shop_Name")),
-            normalize_key(row.get("Suburb")),
-            normalize_key(row.get("Street_Address")),
+            normalize_source_component(name),
+            normalize_source_component(suburb),
+            normalize_source_address(street_address),
         ]
+    )
+
+
+def normalize_source_component(value):
+    return " ".join(
+        re.sub(r"[^a-z0-9]+", " ", str(value or "").lower()).split()
+    )
+
+
+def normalize_source_address(value):
+    replacements = {
+        "road": "rd",
+        "street": "st",
+        "avenue": "ave",
+        "highway": "hwy",
+        "parade": "pde",
+        "drive": "dr",
+        "court": "ct",
+        "place": "pl",
+        "lane": "ln",
+    }
+    return " ".join(
+        replacements.get(token, token)
+        for token in normalize_source_component(value).split()
     )
 
 

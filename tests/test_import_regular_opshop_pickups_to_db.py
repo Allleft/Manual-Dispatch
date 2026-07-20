@@ -121,7 +121,7 @@ class ImportRegularOpShopPickupsToDbTest(unittest.TestCase):
                 self.assertEqual(1, len(schedules))
                 self.assertEqual("REGULAR", schedules[0].run_type)
                 self.assertEqual("THURSDAY", schedules[0].run_day)
-                self.assertEqual("Weekly", schedules[0].pickup_frequency)
+                self.assertEqual(frequency, schedules[0].pickup_frequency)
 
     def test_multi_weekly_frequency_variants_update_same_regular_schedule_key(self):
         self._save_workbook(
@@ -130,11 +130,19 @@ class ImportRegularOpShopPickupsToDbTest(unittest.TestCase):
                     self._row(
                         Op_Shop_Name="Northside Op Shop",
                         Pickup_Frequency="2x Weekly",
+                        Time_Window="9-12",
                     )
                 ],
             }
         )
         first_summary = import_regular_opshop_pickups_to_db(self.workbook_path, self.db_path)
+        original_schedule = self.repository.list_opshop_pickup_schedules()[0]
+        self.service.opshop_pickup_service.ensure_regular_opshop_pickup_tasks_for_week("2026-05-18")
+        original_task = self.repository.list_opshop_pickup_tasks()[0]
+        original_assignment = self.repository.find_assignment_for_task(
+            "OPSHOP_PICKUP",
+            original_task.pickup_task_id,
+        )
 
         self._save_workbook(
             {
@@ -142,16 +150,72 @@ class ImportRegularOpShopPickupsToDbTest(unittest.TestCase):
                     self._row(
                         Op_Shop_Name="Northside Op Shop",
                         Pickup_Frequency="Twice weekly",
+                        Time_Window="10-1",
                     )
                 ],
             }
         )
         second_summary = import_regular_opshop_pickups_to_db(self.workbook_path, self.db_path)
+        updated_schedule = self.repository.list_opshop_pickup_schedules()[0]
+        retained_task = self.repository.get_opshop_pickup_task(
+            original_task.pickup_task_id
+        )
+        retained_assignment = self.repository.find_assignment_for_task(
+            "OPSHOP_PICKUP",
+            original_task.pickup_task_id,
+        )
 
         self.assertEqual(1, first_summary.schedules_inserted)
         self.assertEqual(1, second_summary.schedules_updated)
         self.assertEqual(0, second_summary.schedules_inserted)
+        self.assertEqual(original_schedule.schedule_id, updated_schedule.schedule_id)
+        self.assertEqual("Twice weekly", updated_schedule.pickup_frequency)
+        self.assertEqual("10-1", updated_schedule.time_window)
+        self.assertEqual(original_schedule.schedule_id, retained_task.schedule_id)
+        self.assertEqual(original_assignment.assignment_id, retained_assignment.assignment_id)
+        self.assertEqual("D001", retained_assignment.driver_id)
         self.assertEqual(1, len(self.repository.list_opshop_pickup_schedules()))
+
+    def test_real_workbook_address_variants_share_physical_opshop_and_slots(self):
+        self._save_workbook(
+            {
+                "MON": [
+                    self._row(
+                        Op_Shop_Name="OUR VILLAGE NETWORK (St Kilda mums)",
+                        Suburb="CLAYTON",
+                        Street_Address="14 Winterton Road",
+                        Pickup_Frequency="2x Weekly",
+                    )
+                ],
+                "WED": [
+                    self._row(
+                        Op_Shop_Name="OUR VILLAGE NETWORK (St Kilda mums)",
+                        Suburb="CLAYTON",
+                        Street_Address="14 WINTERTON RD",
+                        Pickup_Frequency="2x Weekly",
+                    )
+                ],
+            }
+        )
+
+        summary = import_regular_opshop_pickups_to_db(
+            self.workbook_path,
+            self.db_path,
+        )
+        schedules = sorted(
+            self.repository.list_opshop_pickup_schedules(),
+            key=lambda schedule: schedule.run_day,
+        )
+
+        self.assertEqual(1, summary.locations_inserted)
+        self.assertEqual(2, summary.schedules_inserted)
+        self.assertEqual(1, len(self.repository.list_opshop_locations()))
+        self.assertEqual(["MONDAY", "WEDNESDAY"], [item.run_day for item in schedules])
+        self.assertEqual(1, len({item.opshop_id for item in schedules}))
+        self.assertEqual(
+            ["2x Weekly", "2x Weekly"],
+            [item.pickup_frequency for item in schedules],
+        )
 
     def test_rerun_updates_existing_rows_without_duplicates_and_deactivates_missing_regular(self):
         self._save_workbook(
