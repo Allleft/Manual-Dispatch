@@ -198,6 +198,19 @@ class WorkspaceSnapshotPersistenceTest(unittest.TestCase):
             }
         self.assertIn("call_before_arrival_snapshot", columns)
         self.assertIn("call_timing_snapshot", columns)
+        for column_name in (
+            "clothing_kg_snapshot",
+            "shoes_kg_snapshot",
+            "time_in_snapshot",
+            "time_out_snapshot",
+            "trolleys_out_to_opshops_snapshot",
+            "trolleys_in_to_mcc_snapshot",
+            "hard_toys_snapshot",
+            "soft_toys_snapshot",
+            "black_bags_snapshot",
+            "shoe_bags_snapshot",
+        ):
+            self.assertIn(column_name, columns)
 
     def test_upsert_replaces_snapshot_children_without_duplicates(self):
         run_sheet = self._delivery_run_sheet()

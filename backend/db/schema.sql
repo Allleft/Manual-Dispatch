@@ -364,6 +364,16 @@ CREATE TABLE IF NOT EXISTS opshop_pickup_collection_rows (
     trailer_restriction_snapshot TEXT,
     notes_snapshot TEXT,
     status_snapshot TEXT,
+    clothing_kg_snapshot REAL,
+    shoes_kg_snapshot REAL,
+    time_in_snapshot TEXT,
+    time_out_snapshot TEXT,
+    trolleys_out_to_opshops_snapshot INTEGER,
+    trolleys_in_to_mcc_snapshot INTEGER,
+    hard_toys_snapshot INTEGER,
+    soft_toys_snapshot INTEGER,
+    black_bags_snapshot INTEGER,
+    shoe_bags_snapshot INTEGER,
     UNIQUE(collection_id, row_no),
     FOREIGN KEY(collection_id) REFERENCES opshop_pickup_collections(collection_id)
         ON DELETE CASCADE

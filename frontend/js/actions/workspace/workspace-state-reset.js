@@ -44,6 +44,8 @@ export function createWorkspaceStateReset(context) {
     state.deliverySpecificationError = "";
     state.deliverySpecificationBusyKey = "";
     state.opshopAssignmentDrafts = {};
+    state.opshopCollectionEntryDrafts = {};
+    state.opshopCollectionEntryDraftVersions = {};
     state.countrysideRouteGroupDrafts = {};
     state.collapsedRegularOpShopPickupDates = {};
     state.deliveryActionError = "";

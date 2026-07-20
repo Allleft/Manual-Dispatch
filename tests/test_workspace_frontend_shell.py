@@ -23,6 +23,9 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             )
         )
         self.auth_actions = self._read("js/actions/auth-actions.js")
+        self.opshop_entry_state = self._read(
+            "js/state/opshop-collection-entry-state.js"
+        )
         self.workspace_actions = "\n".join(
             self._read(path)
             for path in (
@@ -3123,7 +3126,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("historyMode", collection_card_block)
         self.assertIn("collection.status === \"SAVED\"", collection_card_block)
         self.assertIn(
-            "card.append(top, meta, createCollectionWeightSheetPreview(collection), actionsRow)",
+            "card.append(top, meta, weightSheet, actionsRow)",
             collection_card_block,
         )
 
@@ -3159,14 +3162,241 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         )[1].split("function readyPickupCollectionCandidates", 1)[0]
         self.assertIn("pickup.opshop_name_snapshot", row_values_block)
         self.assertIn("pickup.suburb_snapshot", row_values_block)
-        self.assertIn('formatOptional(pickup.suburb_snapshot, ""),\n    "",\n    "",', row_values_block)
-        self.assertIn("collectionWeightSheetRowValues(pickup)", self.opshop_renderer)
+        self.assertIn("OPSHOP_COLLECTION_ENTRY_FIELDS.map", row_values_block)
+        self.assertIn("getOpShopCollectionEntryValue", row_values_block)
+        self.assertIn("collectionWeightSheetRowValues(", self.opshop_renderer)
+        self.assertIn("input.type = field.type", self.opshop_renderer)
+        self.assertIn('input.min = "0"', self.opshop_renderer)
+        self.assertIn("input.step = field.step", self.opshop_renderer)
+        self.assertIn('"Save Weight Sheet"', collection_card_block)
+        self.assertIn("opshopCollectionEntryDrafts", self.state)
+        self.assertIn(
+            "Object.prototype.hasOwnProperty.call",
+            self.opshop_entry_state,
+        )
+        self.assertNotIn("value ||", self.opshop_entry_state)
         self.assertIn("workspace-opshop-weight-sheet-table-wrap", self.styles)
         self.assertIn(".workspace-pickup-collection-paper-list", self.styles)
         self.assertIn("min-width: 980px", self.styles)
         self.assertIn(
             'route === "opshop/trip-summary"',
             self.workspace_actions,
+        )
+
+    def test_opshop_collection_entry_actions_flush_drafts_before_save_and_exports(self):
+        self._run_workspace_actions_script(
+            """
+            const makePickup = (rowId) => ({
+              row_id: rowId,
+              opshop_name_snapshot: rowId,
+              suburb_snapshot: "Coburg",
+              clothing_kg_snapshot: 5,
+              shoes_kg_snapshot: 2.5,
+              time_in_snapshot: null,
+              time_out_snapshot: null,
+              trolleys_out_to_opshops_snapshot: 1,
+              trolleys_in_to_mcc_snapshot: 2,
+              hard_toys_snapshot: 3,
+              soft_toys_snapshot: 4,
+              black_bags_snapshot: 5,
+              shoe_bags_snapshot: 6,
+            });
+            const makeCollection = (id, rowId) => ({
+              collection_id: id,
+              status: "GENERATED",
+              pickup_date: "2026-05-05",
+              pickups: [makePickup(rowId)],
+            });
+            const collectionA = makeCollection("COL-A", "ROW-A");
+            const collectionB = makeCollection("COL-B", "ROW-B");
+            const calls = [];
+            let failCollectionId = "";
+            const api = {
+              updateOpShopPickupCollectionRows: async (collectionId, payload) => {
+                calls.push(["patch", collectionId, payload]);
+                if (collectionId === failCollectionId) {
+                  throw new Error("entry failure");
+                }
+                const source = state.opshopPickupCollections.find(
+                  (collection) => collection.collection_id === collectionId,
+                );
+                const rowPayload = payload.rows[0];
+                return {
+                  ...source,
+                  pickups: source.pickups.map((pickup) => pickup.row_id === rowPayload.row_id
+                    ? {
+                      ...pickup,
+                      clothing_kg_snapshot: rowPayload.clothing_kg === "" ? null : rowPayload.clothing_kg,
+                      shoes_kg_snapshot: rowPayload.shoes_kg === "" ? null : rowPayload.shoes_kg,
+                      time_in_snapshot: rowPayload.time_in || null,
+                      time_out_snapshot: rowPayload.time_out || null,
+                      trolleys_out_to_opshops_snapshot: rowPayload.trolleys_out_to_opshops === "" ? null : rowPayload.trolleys_out_to_opshops,
+                      trolleys_in_to_mcc_snapshot: rowPayload.trolleys_in_to_mcc === "" ? null : rowPayload.trolleys_in_to_mcc,
+                      hard_toys_snapshot: rowPayload.hard_toys === "" ? null : rowPayload.hard_toys,
+                      soft_toys_snapshot: rowPayload.soft_toys === "" ? null : rowPayload.soft_toys,
+                      black_bags_snapshot: rowPayload.black_bags === "" ? null : rowPayload.black_bags,
+                      shoe_bags_snapshot: rowPayload.shoe_bags === "" ? null : rowPayload.shoe_bags,
+                    }
+                    : pickup),
+                };
+              },
+              saveGeneratedOpShopPickupCollection: async (collectionId) => {
+                calls.push(["save", collectionId]);
+                return {};
+              },
+              exportOpShopPickupCollectionExcel: async (collectionId) => {
+                calls.push(["single", collectionId]);
+              },
+              exportOpShopPickupCollectionsExcel: async ({ pickupDate }) => {
+                calls.push(["daily", pickupDate]);
+              },
+              listOpShopPickupCollectionsByPickupDate: async () => (
+                state.opshopPickupCollections
+              ),
+            };
+            const state = {
+              isLoggedIn: true,
+              workspaceRoute: "opshop/collections",
+              activeWorkspace: "opshop",
+              dispatchDate: "2026-05-05",
+              opshopTripSummaryDate: "2026-05-05",
+              opshopSavedHistoryDate: "2026-05-05",
+              opshopPickupCollections: [collectionA, collectionB],
+              opshopCollectionEntryDrafts: {},
+              opshopCollectionEntryDraftVersions: {},
+              opshopBusyActionKeys: {},
+              opshopActionError: "",
+              isOpShopWorkspaceLoading: false,
+              opshopWorkspaceError: "",
+              accountName: "Operator",
+              accountId: "7",
+            };
+            const actions = createWorkspaceActions({
+              state,
+              api,
+              renderWorkspace: () => {},
+              confirmAction: () => true,
+            });
+
+            actions.updateOpShopCollectionEntryDraft("COL-A", "ROW-A", "clothing_kg", "");
+            actions.updateOpShopCollectionEntryDraft("COL-A", "ROW-A", "hard_toys", "0");
+            actions.updateOpShopCollectionEntryDraft("COL-A", "ROW-A", "time_in", "09:15");
+            await actions.saveOpShopPickupCollectionWeightSheet("COL-A");
+            const firstPatch = calls[0];
+            if (
+              firstPatch[0] !== "patch"
+              || firstPatch[2].rows[0].clothing_kg !== ""
+              || firstPatch[2].rows[0].hard_toys !== 0
+              || firstPatch[2].rows[0].shoes_kg !== 2.5
+            ) {
+              throw new Error("explicit blank, zero, or persisted row values were lost");
+            }
+            if (
+              state.opshopCollectionEntryDrafts["COL-A"]
+              || state.opshopPickupCollections[0].pickups[0].hard_toys_snapshot !== 0
+            ) {
+              throw new Error("successful weight entry save did not reconcile state");
+            }
+
+            actions.updateOpShopCollectionEntryDraft("COL-A", "ROW-A", "shoes_kg", "4.5");
+            await actions.exportOpShopPickupCollection("COL-A");
+            if (calls.at(-2)[0] !== "patch" || calls.at(-1)[0] !== "single") {
+              throw new Error("single export did not flush entries first");
+            }
+
+            actions.updateOpShopCollectionEntryDraft("COL-A", "ROW-A", "black_bags", "7");
+            actions.updateOpShopCollectionEntryDraft("COL-B", "ROW-B", "shoe_bags", "8");
+            await actions.exportOpShopPickupCollections("2026-05-05");
+            const dailyTail = calls.slice(-3).map((item) => item[0] + ":" + item[1]).join(",");
+            if (dailyTail !== "patch:COL-A,patch:COL-B,daily:2026-05-05") {
+              throw new Error("daily export did not flush generated collections sequentially");
+            }
+
+            actions.updateOpShopCollectionEntryDraft("COL-A", "ROW-A", "soft_toys", "9");
+            await actions.saveOpShopPickupCollection("COL-A");
+            const saveTail = calls.slice(-2).map((item) => item[0]).join(",");
+            if (saveTail !== "patch,save") {
+              throw new Error("Save Collection did not flush entries before promotion");
+            }
+
+            state.opshopPickupCollections = [];
+            state.opshopSavedHistoryCollections = [{
+              collection_id: "COL-HISTORY",
+              status: "SAVED",
+              pickup_date: "2026-05-05",
+              pickups: [],
+            }];
+            await actions.exportOpShopPickupCollection("COL-HISTORY");
+            if (calls.at(-1)[0] !== "single" || calls.at(-1)[1] !== "COL-HISTORY") {
+              throw new Error("Saved History collection was no longer exportable");
+            }
+          """
+        )
+
+    def test_opshop_collection_entry_failure_retains_draft_and_blocks_daily_export(self):
+        self._run_workspace_actions_script(
+            """
+            const collection = {
+              collection_id: "COL-FAIL",
+              status: "GENERATED",
+              pickup_date: "2026-05-05",
+              pickups: [{
+                row_id: "ROW-FAIL",
+                clothing_kg_snapshot: 1,
+                shoes_kg_snapshot: null,
+                time_in_snapshot: null,
+                time_out_snapshot: null,
+                trolleys_out_to_opshops_snapshot: null,
+                trolleys_in_to_mcc_snapshot: null,
+                hard_toys_snapshot: null,
+                soft_toys_snapshot: null,
+                black_bags_snapshot: null,
+                shoe_bags_snapshot: null,
+              }],
+            };
+            let exportCalls = 0;
+            const state = {
+              isLoggedIn: true,
+              workspaceRoute: "opshop/collections",
+              activeWorkspace: "opshop",
+              dispatchDate: "2026-05-05",
+              opshopTripSummaryDate: "2026-05-05",
+              opshopSavedHistoryDate: "2026-05-05",
+              opshopPickupCollections: [collection],
+              opshopCollectionEntryDrafts: {},
+              opshopCollectionEntryDraftVersions: {},
+              opshopBusyActionKeys: {},
+              opshopActionError: "",
+            };
+            const actions = createWorkspaceActions({
+              state,
+              renderWorkspace: () => {},
+              api: {
+                updateOpShopPickupCollectionRows: async () => {
+                  throw new Error("invalid entry");
+                },
+                exportOpShopPickupCollectionsExcel: async () => {
+                  exportCalls += 1;
+                },
+              },
+            });
+            actions.updateOpShopCollectionEntryDraft(
+              "COL-FAIL", "ROW-FAIL", "clothing_kg", "3.25",
+            );
+            await actions.exportOpShopPickupCollections("2026-05-05");
+            if (exportCalls !== 0) {
+              throw new Error("daily export continued after entry flush failure");
+            }
+            if (
+              state.opshopCollectionEntryDrafts["COL-FAIL"]["ROW-FAIL"].clothing_kg
+              !== "3.25"
+            ) {
+              throw new Error("failed entry flush discarded the user's draft");
+            }
+            if (state.opshopActionError !== "invalid entry") {
+              throw new Error("entry flush failure was not surfaced");
+            }
+          """
         )
 
     def test_trip_summary_date_loads_service_date_scoped_data_without_polluting_task_pool_boards(self):

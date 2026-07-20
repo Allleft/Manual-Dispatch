@@ -658,8 +658,22 @@ class SQLiteSnapshotRepositoryMixin:
                         key_required_snapshot,
                         trailer_restriction_snapshot,
                         notes_snapshot,
-                        status_snapshot
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        status_snapshot,
+                        clothing_kg_snapshot,
+                        shoes_kg_snapshot,
+                        time_in_snapshot,
+                        time_out_snapshot,
+                        trolleys_out_to_opshops_snapshot,
+                        trolleys_in_to_mcc_snapshot,
+                        hard_toys_snapshot,
+                        soft_toys_snapshot,
+                        black_bags_snapshot,
+                        shoe_bags_snapshot
+                    ) VALUES (
+                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                    )
                     """,
                     (
                         pickup.row_id,
@@ -688,10 +702,98 @@ class SQLiteSnapshotRepositoryMixin:
                         pickup.trailer_restriction_snapshot,
                         pickup.notes_snapshot,
                         pickup.status_snapshot,
+                        pickup.clothing_kg_snapshot,
+                        pickup.shoes_kg_snapshot,
+                        pickup.time_in_snapshot,
+                        pickup.time_out_snapshot,
+                        pickup.trolleys_out_to_opshops_snapshot,
+                        pickup.trolleys_in_to_mcc_snapshot,
+                        pickup.hard_toys_snapshot,
+                        pickup.soft_toys_snapshot,
+                        pickup.black_bags_snapshot,
+                        pickup.shoe_bags_snapshot,
                     ),
                 )
             connection.commit()
         return self.get_opshop_pickup_collection(collection.collection_id)
+
+    def update_opshop_pickup_collection_rows(
+        self,
+        collection_id,
+        updated_rows,
+    ):
+        row_ids = [row.row_id for row in updated_rows]
+        if len(row_ids) != len(set(row_ids)):
+            raise ValueError("Duplicate OP SHOP Pickup Collection row update.")
+        with connect(self.db_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            collection = connection.execute(
+                """
+                SELECT status
+                FROM opshop_pickup_collections
+                WHERE collection_id = ?
+                """,
+                (collection_id,),
+            ).fetchone()
+            if not collection:
+                connection.rollback()
+                raise ValueError(
+                    f"OP SHOP Pickup Collection does not exist: {collection_id}"
+                )
+            if collection["status"] != "GENERATED":
+                connection.rollback()
+                raise ValueError(
+                    "Only generated OP SHOP Pickup Collections can be updated."
+                )
+            if row_ids:
+                placeholders = ", ".join("?" for _ in row_ids)
+                matches = connection.execute(
+                    f"""
+                    SELECT row_id
+                    FROM opshop_pickup_collection_rows
+                    WHERE collection_id = ?
+                        AND row_id IN ({placeholders})
+                    """,
+                    (collection_id, *row_ids),
+                ).fetchall()
+                if len(matches) != len(row_ids):
+                    connection.rollback()
+                    raise ValueError(
+                        "OP SHOP Pickup Collection row does not belong to this collection."
+                    )
+            for row in updated_rows:
+                connection.execute(
+                    """
+                    UPDATE opshop_pickup_collection_rows
+                    SET clothing_kg_snapshot = ?,
+                        shoes_kg_snapshot = ?,
+                        time_in_snapshot = ?,
+                        time_out_snapshot = ?,
+                        trolleys_out_to_opshops_snapshot = ?,
+                        trolleys_in_to_mcc_snapshot = ?,
+                        hard_toys_snapshot = ?,
+                        soft_toys_snapshot = ?,
+                        black_bags_snapshot = ?,
+                        shoe_bags_snapshot = ?
+                    WHERE collection_id = ? AND row_id = ?
+                    """,
+                    (
+                        row.clothing_kg_snapshot,
+                        row.shoes_kg_snapshot,
+                        row.time_in_snapshot,
+                        row.time_out_snapshot,
+                        row.trolleys_out_to_opshops_snapshot,
+                        row.trolleys_in_to_mcc_snapshot,
+                        row.hard_toys_snapshot,
+                        row.soft_toys_snapshot,
+                        row.black_bags_snapshot,
+                        row.shoe_bags_snapshot,
+                        collection_id,
+                        row.row_id,
+                    ),
+                )
+            connection.commit()
+        return self.get_opshop_pickup_collection(collection_id)
 
     def promote_generated_opshop_pickup_collection_to_saved(
         self,

@@ -1,5 +1,5 @@
 from dataclasses import asdict, dataclass, field
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 
 @dataclass
@@ -731,6 +731,36 @@ class OpShopPickupCollectionRowSnapshot:
     status_snapshot: Optional[str]
     call_before_arrival_snapshot: bool = False
     call_timing_snapshot: Optional[str] = None
+    clothing_kg_snapshot: Optional[float] = None
+    shoes_kg_snapshot: Optional[float] = None
+    time_in_snapshot: Optional[str] = None
+    time_out_snapshot: Optional[str] = None
+    trolleys_out_to_opshops_snapshot: Optional[int] = None
+    trolleys_in_to_mcc_snapshot: Optional[int] = None
+    hard_toys_snapshot: Optional[int] = None
+    soft_toys_snapshot: Optional[int] = None
+    black_bags_snapshot: Optional[int] = None
+    shoe_bags_snapshot: Optional[int] = None
+
+
+@dataclass
+class UpdateOpShopPickupCollectionRowRequest:
+    row_id: Optional[str] = None
+    clothing_kg: Any = None
+    shoes_kg: Any = None
+    time_in: Any = None
+    time_out: Any = None
+    trolleys_out_to_opshops: Any = None
+    trolleys_in_to_mcc: Any = None
+    hard_toys: Any = None
+    soft_toys: Any = None
+    black_bags: Any = None
+    shoe_bags: Any = None
+
+
+@dataclass
+class UpdateOpShopPickupCollectionRowsRequest:
+    rows: List[UpdateOpShopPickupCollectionRowRequest] = field(default_factory=list)
 
 
 @dataclass

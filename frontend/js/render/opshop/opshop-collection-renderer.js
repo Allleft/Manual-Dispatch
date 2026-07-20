@@ -1,4 +1,9 @@
 import { formatOptional } from "../../utils/format-utils.js";
+import {
+  OPSHOP_COLLECTION_ENTRY_FIELDS,
+  getOpShopCollectionEntryValue,
+  hasOpShopCollectionEntryDrafts,
+} from "../../state/opshop-collection-entry-state.js";
 
 import {
   compareText,
@@ -61,11 +66,19 @@ export function createCollectionDateGroup(pickupDate, collections, state, action
   ));
   const exportKey = `opshop-export-date:${pickupDate}`;
   const isExporting = isBusy(state, exportKey);
+  const hasCollectionMutation = collections.some(
+    (collection) => [
+      `opshop-entry:${collection.collection_id}`,
+      `opshop-save:${collection.collection_id}`,
+      `opshop-cancel:${collection.collection_id}`,
+      `opshop-export:${collection.collection_id}`,
+    ].some((key) => isBusy(state, key)),
+  );
   const exportButton = createActionButton(
     isExporting ? "Preparing Daily Export..." : "Export Daily Collections",
     () => actions.exportOpShopPickupCollections(pickupDate),
     {
-      disabled: isExporting || !collections.length,
+      disabled: isExporting || hasCollectionMutation || !collections.length,
       primary: true,
     },
   );
@@ -119,20 +132,40 @@ export function createCollectionCard(
 
   const actionsRow = document.createElement("div");
   actionsRow.className = "workspace-action-row workspace-collection-actions";
+  const collectionBusy = [
+    `opshop-entry:${collection.collection_id}`,
+    `opshop-save:${collection.collection_id}`,
+    `opshop-cancel:${collection.collection_id}`,
+    `opshop-export:${collection.collection_id}`,
+    `opshop-export-date:${collection.pickup_date}`,
+  ].some((key) => isBusy(state, key));
+  let weightSheetSaveButton = null;
   if (!historyMode && collection.status === "GENERATED") {
+    const entryBusy = isBusy(state, `opshop-entry:${collection.collection_id}`);
+    weightSheetSaveButton = createActionButton(
+      entryBusy ? "Saving Weight Sheet..." : "Save Weight Sheet",
+      () => actions.saveOpShopPickupCollectionWeightSheet(collection.collection_id),
+      {
+        disabled: collectionBusy
+          || !hasOpShopCollectionEntryDrafts(state, collection.collection_id),
+        primary: true,
+      },
+    );
+    weightSheetSaveButton.dataset.opshopWeightSheetSave = collection.collection_id;
     actionsRow.append(
+      weightSheetSaveButton,
       createActionButton(
         "Save Collection",
         () => actions.saveOpShopPickupCollection(collection.collection_id),
         {
-          disabled: isBusy(state, `opshop-save:${collection.collection_id}`),
+          disabled: collectionBusy,
           primary: true,
         },
       ),
       createActionButton(
         "Cancel Generated",
         () => actions.cancelOpShopPickupCollection(collection.collection_id),
-        { disabled: isBusy(state, `opshop-cancel:${collection.collection_id}`) },
+        { disabled: collectionBusy },
       ),
     );
   }
@@ -146,15 +179,30 @@ export function createCollectionCard(
         isExporting ? "Exporting..." : "Export Excel",
         () => actions.exportOpShopPickupCollection(collection.collection_id),
         {
-          disabled: isExporting,
+          disabled: collectionBusy,
           primary: historyMode || collection.status === "SAVED",
         },
       ),
     );
   }
-  card.append(top, meta, createCollectionWeightSheetPreview(collection), actionsRow);
+  const weightSheet = createCollectionWeightSheetPreview(
+    collection,
+    state,
+    actions,
+    {
+      readOnly: historyMode || collection.status !== "GENERATED",
+      disabled: collectionBusy,
+      onDraftChange: () => {
+        if (weightSheetSaveButton) {
+          weightSheetSaveButton.disabled = false;
+        }
+      },
+    },
+  );
+  card.append(top, meta, weightSheet, actionsRow);
   return card;
 }
+
 
 export function groupCollectionsByPickupDate(collections) {
   const groups = new Map();
@@ -195,7 +243,12 @@ const OPSHOP_COLLECTION_WEIGHT_COLUMNS = [
   "SHOE BAGS",
 ];
 
-export function createCollectionWeightSheetPreview(collection) {
+export function createCollectionWeightSheetPreview(
+  collection,
+  state,
+  actions,
+  { readOnly = false, disabled = false, onDraftChange = () => {} } = {},
+) {
   const paper = document.createElement("section");
   paper.className = "workspace-opshop-weight-sheet";
   const title = document.createElement("h4");
@@ -234,9 +287,43 @@ export function createCollectionWeightSheetPreview(collection) {
   const body = document.createElement("tbody");
   (collection.pickups || []).forEach((pickup) => {
     const row = document.createElement("tr");
-    collectionWeightSheetRowValues(pickup).forEach((value) => {
+    const values = collectionWeightSheetRowValues(
+      pickup,
+      state,
+      collection.collection_id,
+    );
+    values.forEach((value, columnIndex) => {
       const cell = document.createElement("td");
-      cell.textContent = value;
+      const field = OPSHOP_COLLECTION_ENTRY_FIELDS[columnIndex - 2];
+      if (!field || readOnly) {
+        cell.textContent = value;
+      } else {
+        const input = document.createElement("input");
+        input.className = "workspace-opshop-weight-sheet-input";
+        input.type = field.type;
+        input.value = String(value);
+        input.disabled = disabled;
+        input.setAttribute(
+          "aria-label",
+          `${OPSHOP_COLLECTION_WEIGHT_COLUMNS[columnIndex]} for ${pickup.opshop_name_snapshot || "OP SHOP"}`,
+        );
+        if (field.type === "number") {
+          input.min = "0";
+          input.step = field.step;
+          input.inputMode = "decimal";
+        }
+        input.addEventListener("input", () => {
+          if (actions.updateOpShopCollectionEntryDraft(
+            collection.collection_id,
+            pickup.row_id,
+            field.key,
+            input.value,
+          )) {
+            onDraftChange();
+          }
+        });
+        cell.append(input);
+      }
       row.append(cell);
     });
     body.append(row);
@@ -247,22 +334,20 @@ export function createCollectionWeightSheetPreview(collection) {
   return paper;
 }
 
-export function collectionWeightSheetRowValues(pickup) {
+export function collectionWeightSheetRowValues(
+  pickup,
+  state = {},
+  collectionId = "",
+) {
   return [
     formatOptional(pickup.opshop_name_snapshot, ""),
     formatOptional(pickup.suburb_snapshot, ""),
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
+    ...OPSHOP_COLLECTION_ENTRY_FIELDS.map(
+      (field) => getOpShopCollectionEntryValue(state, collectionId, pickup, field),
+    ),
   ];
 }
+
 
 export function formatDailyCollectionDate(value) {
   const [year, month, day] = String(value || "").split("-");

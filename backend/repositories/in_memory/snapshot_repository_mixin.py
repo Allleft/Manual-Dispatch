@@ -349,6 +349,41 @@ class InMemorySnapshotRepositoryMixin:
         self.opshop_pickup_collections.append(collection)
         return collection
 
+    def update_opshop_pickup_collection_rows(
+        self,
+        collection_id,
+        updated_rows,
+    ):
+        collection = self.get_opshop_pickup_collection(collection_id)
+        if not collection:
+            raise ValueError(
+                f"OP SHOP Pickup Collection does not exist: {collection_id}"
+            )
+        if collection.status != "GENERATED":
+            raise ValueError(
+                "Only generated OP SHOP Pickup Collections can be updated."
+            )
+        updates_by_id = {row.row_id: row for row in updated_rows}
+        if len(updates_by_id) != len(updated_rows):
+            raise ValueError("Duplicate OP SHOP Pickup Collection row update.")
+        collection_row_ids = {row.row_id for row in collection.pickups}
+        if not set(updates_by_id).issubset(collection_row_ids):
+            raise ValueError(
+                "OP SHOP Pickup Collection row does not belong to this collection."
+            )
+        updated = replace(
+            collection,
+            pickups=[
+                updates_by_id.get(row.row_id, row)
+                for row in collection.pickups
+            ],
+        )
+        self.opshop_pickup_collections = [
+            updated if item.collection_id == collection_id else item
+            for item in self.opshop_pickup_collections
+        ]
+        return updated
+
     def promote_generated_opshop_pickup_collection_to_saved(
         self,
         collection_id,

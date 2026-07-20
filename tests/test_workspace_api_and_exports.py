@@ -116,6 +116,10 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
                 "/api/manual-dispatch/opshop/pickup-collections/{collection_id}",
             ),
             (
+                "PATCH",
+                "/api/manual-dispatch/opshop/pickup-collections/{collection_id}/rows",
+            ),
+            (
                 "POST",
                 "/api/manual-dispatch/opshop/pickup-collections/{collection_id}/save",
             ),
@@ -180,7 +184,9 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         )
         self.assertEqual({"cancelled": True}, cancelled_collection.json())
 
-        saved_collection_id = self._generate_and_save_collection()
+        saved_collection_id = self._generate_and_save_collection(
+            self._weight_sheet_entry_payload()
+        )
         collection_export = self.client.get(
             f"/api/manual-dispatch/opshop/pickup-collections/{saved_collection_id}/export-excel"
         )
@@ -213,6 +219,186 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             "OPSHOP_Pickup_Collection_2026-05-06_John.xlsx",
             generated_export.headers["content-disposition"],
         )
+
+
+    def test_opshop_collection_weight_sheet_patch_is_typed_atomic_and_generated_only(self):
+        self._seed_assigned_pickup(
+            task_id="PICKUP-WORKSPACE-2",
+            driver_id="D001",
+            pickup_date=self.dispatch_date,
+            opshop_id="OPSHOP-WORKSPACE-2",
+            schedule_id="SCHEDULE-WORKSPACE-2",
+            opshop_name="Southside Op Shop",
+            suburb="Richmond",
+        )
+        generated = self.client.post(
+            "/api/manual-dispatch/opshop/pickup-collections/generated",
+            json=self._collection_generate_payload(),
+        )
+        self.assertEqual(200, generated.status_code)
+        collection_id = generated.json()["collection_id"]
+        rows = generated.json()["pickups"]
+        self.assertEqual(2, len(rows))
+
+        first_payload = {
+            "row_id": rows[0]["row_id"],
+            "clothing_kg": 12.25,
+            "shoes_kg": 3,
+            "time_in": "09:05",
+            "time_out": "09:45",
+            "trolleys_out_to_opshops": 0,
+            "trolleys_in_to_mcc": 2,
+            "hard_toys": 4,
+            "soft_toys": 5,
+            "black_bags": 6,
+            "shoe_bags": 7,
+        }
+        second_payload = {
+            "row_id": rows[1]["row_id"],
+            "clothing_kg": None,
+            "shoes_kg": 0,
+            "time_in": "",
+            "time_out": None,
+            "trolleys_out_to_opshops": 1,
+            "trolleys_in_to_mcc": 0,
+            "hard_toys": 0,
+            "soft_toys": 0,
+            "black_bags": 0,
+            "shoe_bags": 0,
+        }
+        updated = self.client.patch(
+            f"/api/manual-dispatch/opshop/pickup-collections/{collection_id}/rows",
+            json={"rows": [first_payload, second_payload]},
+        )
+        self.assertEqual(200, updated.status_code)
+        by_id = {
+            row["row_id"]: row
+            for row in updated.json()["pickups"]
+        }
+        first = by_id[first_payload["row_id"]]
+        self.assertEqual(12.25, first["clothing_kg_snapshot"])
+        self.assertEqual(3.0, first["shoes_kg_snapshot"])
+        self.assertEqual("09:05", first["time_in_snapshot"])
+        self.assertEqual("09:45", first["time_out_snapshot"])
+        self.assertEqual(0, first["trolleys_out_to_opshops_snapshot"])
+        self.assertEqual(2, first["trolleys_in_to_mcc_snapshot"])
+        self.assertEqual(4, first["hard_toys_snapshot"])
+        self.assertEqual(5, first["soft_toys_snapshot"])
+        self.assertEqual(6, first["black_bags_snapshot"])
+        self.assertEqual(7, first["shoe_bags_snapshot"])
+        second = by_id[second_payload["row_id"]]
+        self.assertIsNone(second["clothing_kg_snapshot"])
+        self.assertIsNone(second["time_in_snapshot"])
+        self.assertEqual(0, second["shoes_kg_snapshot"])
+
+        invalid_atomic = self.client.patch(
+            f"/api/manual-dispatch/opshop/pickup-collections/{collection_id}/rows",
+            json={
+                "rows": [
+                    {**first_payload, "clothing_kg": 99},
+                    {**second_payload, "hard_toys": 1.5},
+                ]
+            },
+        )
+        self.assertEqual(400, invalid_atomic.status_code)
+        unchanged = self.client.get(
+            f"/api/manual-dispatch/opshop/pickup-collections/{collection_id}"
+        ).json()
+        unchanged_by_id = {
+            row["row_id"]: row
+            for row in unchanged["pickups"]
+        }
+        self.assertEqual(
+            12.25,
+            unchanged_by_id[first_payload["row_id"]]["clothing_kg_snapshot"],
+        )
+
+        invalid_rows = (
+            [{**first_payload, "clothing_kg": -1}],
+            [{**first_payload, "clothing_kg": "1.5"}],
+            [{**first_payload, "time_in": "24:00"}],
+            [first_payload, first_payload],
+            [{**first_payload, "row_id": "UNKNOWN-ROW"}],
+        )
+        for invalid in invalid_rows:
+            with self.subTest(invalid=invalid):
+                response = self.client.patch(
+                    f"/api/manual-dispatch/opshop/pickup-collections/{collection_id}/rows",
+                    json={"rows": invalid},
+                )
+                self.assertEqual(400, response.status_code)
+
+        self._seed_assigned_pickup(
+            task_id="PICKUP-OTHER-COLLECTION",
+            driver_id="D002",
+            pickup_date=self.dispatch_date,
+            opshop_id="OPSHOP-OTHER-COLLECTION",
+            schedule_id="SCHEDULE-OTHER-COLLECTION",
+            opshop_name="Other Driver Op Shop",
+            suburb="Preston",
+        )
+        other = self.client.post(
+            "/api/manual-dispatch/opshop/pickup-collections/generated",
+            json=self._collection_generate_payload("D002"),
+        )
+        self.assertEqual(200, other.status_code)
+        other_row_id = other.json()["pickups"][0]["row_id"]
+        wrong_collection = self.client.patch(
+            f"/api/manual-dispatch/opshop/pickup-collections/{collection_id}/rows",
+            json={"rows": [{**first_payload, "row_id": other_row_id}]},
+        )
+        self.assertEqual(400, wrong_collection.status_code)
+
+        cleared = self.client.patch(
+            f"/api/manual-dispatch/opshop/pickup-collections/{collection_id}/rows",
+            json={
+                "rows": [
+                    {
+                        "row_id": first_payload["row_id"],
+                        "clothing_kg": "",
+                        "shoes_kg": "",
+                        "time_in": " ",
+                        "time_out": "",
+                        "trolleys_out_to_opshops": "",
+                        "trolleys_in_to_mcc": "",
+                        "hard_toys": "",
+                        "soft_toys": "",
+                        "black_bags": "",
+                        "shoe_bags": "",
+                    }
+                ]
+            },
+        )
+        self.assertEqual(200, cleared.status_code)
+        cleared_row = next(
+            row
+            for row in cleared.json()["pickups"]
+            if row["row_id"] == first_payload["row_id"]
+        )
+        for field_name in (
+            "clothing_kg_snapshot",
+            "shoes_kg_snapshot",
+            "time_in_snapshot",
+            "time_out_snapshot",
+            "trolleys_out_to_opshops_snapshot",
+            "trolleys_in_to_mcc_snapshot",
+            "hard_toys_snapshot",
+            "soft_toys_snapshot",
+            "black_bags_snapshot",
+            "shoe_bags_snapshot",
+        ):
+            self.assertIsNone(cleared_row[field_name])
+
+        saved = self.client.post(
+            f"/api/manual-dispatch/opshop/pickup-collections/{collection_id}/save",
+            json=self._save_payload(),
+        )
+        self.assertEqual(200, saved.status_code)
+        immutable = self.client.patch(
+            f"/api/manual-dispatch/opshop/pickup-collections/{collection_id}/rows",
+            json={"rows": [first_payload]},
+        )
+        self.assertEqual(400, immutable.status_code)
 
     def test_api_rejects_saved_snapshot_overwrite(self):
         run_sheet_id = self._generate_and_save_delivery()
@@ -272,7 +458,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertIn("PLEASE RECORD WEIGHT OF BAGS FOR EACH OP SHOP ", collection_values)
         self.assertIn("CLOTHING KG", collection_values)
         self.assertIn("SHOES KG", collection_values)
-        self.assertIn("KG", collection_values)
+        self.assertNotIn("KG", collection_values)
         self.assertNotIn("Call Before Arrival", collection_values)
         self.assertNotIn("30 minutes", collection_values)
         self.assertNotIn("Trip 1", collection_values)
@@ -280,7 +466,9 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertNotIn("Demo Customer A", collection_values)
 
     def test_opshop_collection_export_uses_daily_weight_sheet_layout(self):
-        collection_id = self._generate_and_save_collection()
+        collection_id = self._generate_and_save_collection(
+            self._weight_sheet_entry_payload()
+        )
         response = self.client.get(
             f"/api/manual-dispatch/opshop/pickup-collections/{collection_id}/export-excel"
         )
@@ -319,14 +507,25 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         )
         self.assertEqual("Northside Op Shop", worksheet["A12"].value)
         self.assertEqual("Coburg", worksheet["B12"].value)
-        self.assertEqual("KG", worksheet["C12"].value)
-        self.assertEqual("KG", worksheet["D12"].value)
-        self.assertIsNone(worksheet["E12"].value)
+        self.assertEqual(12.5, worksheet["C12"].value)
+        self.assertEqual(3.25, worksheet["D12"].value)
+        self.assertEqual('0.## "KG"', worksheet["C12"].number_format)
+        self.assertEqual('0.## "KG"', worksheet["D12"].number_format)
+        self.assertEqual("09:15", worksheet["E12"].value)
+        self.assertEqual("09:45", worksheet["F12"].value)
+        self.assertEqual([2, 1, 4, 5, 6, 0], [
+            worksheet.cell(row=12, column=column).value
+            for column in range(7, 13)
+        ])
+        self.assertIsNone(worksheet["C13"].value)
+        self.assertEqual('0.## "KG"', worksheet["C13"].number_format)
         self.assertGreater(worksheet.column_dimensions["A"].width, 28)
         self.assertIn("$A$1:$L$22", worksheet.print_area)
 
     def test_opshop_daily_collection_export_uses_one_sheet_per_driver(self):
-        saved_collection_id = self._generate_and_save_collection()
+        saved_collection_id = self._generate_and_save_collection(
+            self._weight_sheet_entry_payload()
+        )
         self._seed_assigned_pickup(
             task_id="PICKUP-TONY",
             driver_id="D002",
@@ -402,8 +601,13 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             self.assertEqual("DAILY OP SHOP COLLECTIONS - WEIGHT SHEET", worksheet["A1"].value)
             self.assertIn("PICK UP DATE: 05/05/2026", worksheet["A5"].value)
             self.assertEqual("PLEASE RECORD WEIGHT OF BAGS FOR EACH OP SHOP ", worksheet["A8"].value)
-            self.assertEqual("KG", worksheet["C12"].value)
-            self.assertEqual("KG", worksheet["D12"].value)
+        self.assertEqual(12.5, workbook["John"]["C12"].value)
+        self.assertEqual(3.25, workbook["John"]["D12"].value)
+        self.assertEqual("09:15", workbook["John"]["E12"].value)
+        self.assertEqual(0, workbook["John"]["L12"].value)
+        self.assertEqual('0.## "KG"', workbook["John"]["C12"].number_format)
+        self.assertIsNone(workbook["Tony"]["C12"].value)
+        self.assertEqual('0.## "KG"', workbook["Tony"]["C12"].number_format)
 
         statuses = {
             collection.collection_id: collection.status
@@ -921,12 +1125,25 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertEqual(200, saved.status_code)
         return run_sheet_id
 
-    def _generate_and_save_collection(self):
+    def _generate_and_save_collection(self, row_values=None):
         generated = self.client.post(
             "/api/manual-dispatch/opshop/pickup-collections/generated",
             json=self._collection_generate_payload(),
         )
-        collection_id = generated.json()["collection_id"]
+        self.assertEqual(200, generated.status_code)
+        generated_payload = generated.json()
+        collection_id = generated_payload["collection_id"]
+        if row_values is not None:
+            updated = self.client.patch(
+                f"/api/manual-dispatch/opshop/pickup-collections/{collection_id}/rows",
+                json={
+                    "rows": [{
+                        "row_id": generated_payload["pickups"][0]["row_id"],
+                        **row_values,
+                    }],
+                },
+            )
+            self.assertEqual(200, updated.status_code)
         saved = self.client.post(
             f"/api/manual-dispatch/opshop/pickup-collections/{collection_id}/save",
             json=self._save_payload(),
@@ -946,6 +1163,21 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             "dispatch_date": self.dispatch_date,
             "pickup_date": pickup_date or self.dispatch_date,
             "driver_id": driver_id,
+        }
+
+    @staticmethod
+    def _weight_sheet_entry_payload():
+        return {
+            "clothing_kg": 12.5,
+            "shoes_kg": 3.25,
+            "time_in": "09:15",
+            "time_out": "09:45",
+            "trolleys_out_to_opshops": 2,
+            "trolleys_in_to_mcc": 1,
+            "hard_toys": 4,
+            "soft_toys": 5,
+            "black_bags": 6,
+            "shoe_bags": 0,
         }
 
     def _save_payload(self):

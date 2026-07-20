@@ -1,6 +1,37 @@
 from . import FacadeApplicationService
 
 
+_COLLECTION_ENTRY_SNAPSHOT_FIELDS = (
+    "clothing_kg_snapshot",
+    "shoes_kg_snapshot",
+    "time_in_snapshot",
+    "time_out_snapshot",
+    "trolleys_out_to_opshops_snapshot",
+    "trolleys_in_to_mcc_snapshot",
+    "hard_toys_snapshot",
+    "soft_toys_snapshot",
+    "black_bags_snapshot",
+    "shoe_bags_snapshot",
+)
+
+
+def _collection_entry_change_counts(before, after, requested_row_ids):
+    before_by_id = {row.row_id: row for row in before.pickups} if before else {}
+    changed_rows = 0
+    changed_fields = 0
+    for row in after.pickups:
+        if row.row_id not in requested_row_ids or row.row_id not in before_by_id:
+            continue
+        field_changes = sum(
+            getattr(before_by_id[row.row_id], field_name) != getattr(row, field_name)
+            for field_name in _COLLECTION_ENTRY_SNAPSHOT_FIELDS
+        )
+        if field_changes:
+            changed_rows += 1
+            changed_fields += field_changes
+    return changed_rows, changed_fields
+
+
 class OpShopApplicationService(FacadeApplicationService):
     """Own opshop application orchestration."""
 
@@ -174,6 +205,41 @@ class OpShopApplicationService(FacadeApplicationService):
 
     def get_opshop_pickup_collection(self, collection_id):
         return self.opshop_pickup_collection_service.get(collection_id)
+
+    def update_opshop_pickup_collection_rows(self, collection_id, request):
+        self._ensure_workspace_ready("opshop")
+        before = self.repository.get_opshop_pickup_collection(collection_id)
+        try:
+            collection = self.opshop_pickup_collection_service.update_rows(
+                collection_id,
+                request,
+            )
+        except Exception as error:
+            self._record_failed_logbook(
+                workspace="OPSHOP",
+                action="PICKUP_COLLECTION_WEIGHT_SHEET_UPDATED",
+                entity_type="OPSHOP_PICKUP_COLLECTION",
+                entity_id=collection_id,
+                summary=(
+                    f"OP SHOP Pickup Collection {collection_id} weight sheet update failed."
+                ),
+                dispatch_date=before.dispatch_date if before else None,
+                pickup_date=before.pickup_date if before else None,
+                driver=before.driver_name_snapshot if before else None,
+                metadata={"failure_reason": str(error)},
+            )
+            raise
+        changed_rows, changed_fields = _collection_entry_change_counts(
+            before,
+            collection,
+            {row.row_id for row in request.rows or []},
+        )
+        self._facade.opshop_event_recorder.record_collection_weight_sheet_updated(
+            collection,
+            changed_rows,
+            changed_fields,
+        )
+        return collection
 
     def save_generated_opshop_pickup_collection(self, collection_id, request):
         self._ensure_workspace_ready("opshop")

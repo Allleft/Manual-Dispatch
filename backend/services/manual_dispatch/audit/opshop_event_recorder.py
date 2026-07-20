@@ -91,6 +91,33 @@ class OpShopEventRecorder(FacadeAuditRecorder):
                 counts["ON_CALL"] += 1
         return counts
 
+    def record_collection_weight_sheet_updated(
+        self,
+        collection,
+        changed_row_count,
+        changed_field_count,
+    ):
+        self._record_logbook(
+            result="SUCCESS",
+            workspace="OPSHOP",
+            action="PICKUP_COLLECTION_WEIGHT_SHEET_UPDATED",
+            entity_type="OPSHOP_PICKUP_COLLECTION",
+            entity_id=collection.collection_id,
+            summary=(
+                "OP SHOP Pickup Collection weight sheet entries were updated for "
+                f"{collection.driver_name_snapshot} on {collection.pickup_date}."
+            ),
+            dispatch_date=collection.dispatch_date,
+            pickup_date=collection.pickup_date,
+            driver=collection.driver_name_snapshot,
+            collection_id=collection.collection_id,
+            metadata={
+                "collection_id": collection.collection_id,
+                "changed_row_count": changed_row_count,
+                "changed_field_count": changed_field_count,
+            },
+        )
+
     def record_opshop_pickup_collection_export(self, collection, filename):
         counts = self._opshop_collection_counts(collection)
         self._record_logbook(

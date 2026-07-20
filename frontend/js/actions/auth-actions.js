@@ -93,6 +93,8 @@ export function createAuthActions({
     state.deliveryVehiclePendingKeys = {};
     state.deliverySavedHistoryRunSheets = [];
     state.opshopSavedHistoryCollections = [];
+    state.opshopCollectionEntryDrafts = {};
+    state.opshopCollectionEntryDraftVersions = {};
     state.isDeliveryWorkspaceLoading = false;
     state.deliveryWorkspaceError = "";
     state.isOpShopWorkspaceLoading = false;

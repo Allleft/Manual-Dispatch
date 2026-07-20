@@ -206,6 +206,12 @@ class ManualDispatchService:
     def get_opshop_pickup_collection(self, collection_id):
         return self.opshop_application_service.get_opshop_pickup_collection(collection_id)
 
+    def update_opshop_pickup_collection_rows(self, collection_id, request):
+        return self.opshop_application_service.update_opshop_pickup_collection_rows(
+            collection_id,
+            request,
+        )
+
     def save_generated_opshop_pickup_collection(self, collection_id, request):
         return self.opshop_application_service.save_generated_opshop_pickup_collection(collection_id, request)
 

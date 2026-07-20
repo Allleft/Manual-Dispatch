@@ -211,6 +211,42 @@ class LogbookStage2BEventsTest(unittest.TestCase):
             daily_entry["metadata"],
         )
 
+
+    def test_collection_weight_sheet_update_event_excludes_operational_values(self):
+        collection = self._collection()
+        self.service.opshop_event_recorder.record_collection_weight_sheet_updated(
+            collection,
+            changed_row_count=2,
+            changed_field_count=5,
+        )
+
+        entry = self._only_entry("PICKUP_COLLECTION_WEIGHT_SHEET_UPDATED")
+        self.assertEqual("SUCCESS", entry["result"])
+        self.assertEqual("OPSHOP", entry["workspace"])
+        self.assertEqual("COL-1", entry["collection_id"])
+        self.assertEqual(
+            {
+                "collection_id": "COL-1",
+                "changed_row_count": 2,
+                "changed_field_count": 5,
+            },
+            entry["metadata"],
+        )
+        serialized = json.dumps(entry["metadata"])
+        for forbidden in ("12.25", "09:05", "black_bags", "clothing_kg"):
+            self.assertNotIn(forbidden, serialized)
+
+        with patch.object(
+            self.service.logbook,
+            "record",
+            side_effect=RuntimeError("logbook unavailable"),
+        ):
+            self.service.opshop_event_recorder.record_collection_weight_sheet_updated(
+                collection,
+                changed_row_count=1,
+                changed_field_count=1,
+            )
+
     def test_attache_commit_records_batch_results_and_keeps_order_events(self):
         success_row = self._attache_row(
             "ROW-1",

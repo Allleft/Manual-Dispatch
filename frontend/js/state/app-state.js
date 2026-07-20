@@ -24,6 +24,8 @@ export const state = {
   deliveryTripSummaryDate: DEFAULT_DISPATCH_DATE,
   opshopBoard: null,
   opshopPickupCollections: [],
+  opshopCollectionEntryDrafts: {},
+  opshopCollectionEntryDraftVersions: {},
   opshopSavedHistoryDate: DEFAULT_DISPATCH_DATE,
   opshopSavedHistoryCollections: [],
   opshopTripSummaryBoard: null,

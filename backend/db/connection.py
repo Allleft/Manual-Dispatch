@@ -168,6 +168,66 @@ def _ensure_manual_dispatch_columns(connection):
         "call_timing_snapshot",
         "TEXT",
     )
+    _ensure_column(
+        connection,
+        "opshop_pickup_collection_rows",
+        "clothing_kg_snapshot",
+        "REAL",
+    )
+    _ensure_column(
+        connection,
+        "opshop_pickup_collection_rows",
+        "shoes_kg_snapshot",
+        "REAL",
+    )
+    _ensure_column(
+        connection,
+        "opshop_pickup_collection_rows",
+        "time_in_snapshot",
+        "TEXT",
+    )
+    _ensure_column(
+        connection,
+        "opshop_pickup_collection_rows",
+        "time_out_snapshot",
+        "TEXT",
+    )
+    _ensure_column(
+        connection,
+        "opshop_pickup_collection_rows",
+        "trolleys_out_to_opshops_snapshot",
+        "INTEGER",
+    )
+    _ensure_column(
+        connection,
+        "opshop_pickup_collection_rows",
+        "trolleys_in_to_mcc_snapshot",
+        "INTEGER",
+    )
+    _ensure_column(
+        connection,
+        "opshop_pickup_collection_rows",
+        "hard_toys_snapshot",
+        "INTEGER",
+    )
+    _ensure_column(
+        connection,
+        "opshop_pickup_collection_rows",
+        "soft_toys_snapshot",
+        "INTEGER",
+    )
+    _ensure_column(
+        connection,
+        "opshop_pickup_collection_rows",
+        "black_bags_snapshot",
+        "INTEGER",
+    )
+    _ensure_column(
+        connection,
+        "opshop_pickup_collection_rows",
+        "shoe_bags_snapshot",
+        "INTEGER",
+    )
     _ensure_column(connection, "opshop_pickup_schedules", "default_driver_id", "TEXT")
     _ensure_column(connection, "opshop_pickup_schedules", "default_driver_alias", "TEXT")
     _ensure_column(
