@@ -68,6 +68,30 @@ class H1FrontendAuthBoundaryTest(unittest.TestCase):
               storage.getItem("manualDispatchAccountName") === null
               && storage.getItem("manualDispatchAccountId") === null;
 
+            let emptyCacheFetchCalls = 0;
+            let resolveEmptyCacheFetch;
+            globalThis.fetch = () => {{
+              emptyCacheFetchCalls += 1;
+              return new Promise((resolve) => {{ resolveEmptyCacheFetch = resolve; }});
+            }};
+            const emptyCacheState = makeState();
+            const emptyCacheActions = createAuthActions({{
+              state: emptyCacheState,
+              renderAuthGate() {{}},
+              renderBoard() {{}},
+            }});
+            const emptyCacheRestore = emptyCacheActions.restoreAccountSession();
+            const loadingWithoutCache = emptyCacheState.isAuthLoading;
+            await emptyCacheActions.handleLogin({{ preventDefault() {{}} }});
+            const concurrentLoginBlocked = emptyCacheFetchCalls === 1;
+            resolveEmptyCacheFetch({{
+              ok: false,
+              status: 401,
+              statusText: "Unauthorized",
+              async json() {{ return {{ detail: "Authentication required" }}; }},
+            }});
+            await emptyCacheRestore;
+
             globalThis.fetch = async () => ({{
               ok: true,
               status: 200,
@@ -105,6 +129,8 @@ class H1FrontendAuthBoundaryTest(unittest.TestCase):
               deniedLoggedIn: deniedState.isLoggedIn,
               deniedStorageCleared,
               deniedRenders,
+              loadingWithoutCache,
+              concurrentLoginBlocked,
               restoredLoggedIn: restoredState.isLoggedIn,
               restoredName: restoredState.accountName,
               authenticatedCalls,
@@ -126,6 +152,8 @@ class H1FrontendAuthBoundaryTest(unittest.TestCase):
         self.assertFalse(result["deniedLoggedIn"])
         self.assertTrue(result["deniedStorageCleared"])
         self.assertGreater(result["deniedRenders"], 0)
+        self.assertTrue(result["loadingWithoutCache"])
+        self.assertTrue(result["concurrentLoginBlocked"])
         self.assertTrue(result["restoredLoggedIn"])
         self.assertEqual("Server Operator", result["restoredName"])
         self.assertEqual(1, result["authenticatedCalls"])

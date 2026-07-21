@@ -26,11 +26,8 @@ export function createAuthActions({
   onAuthenticated = () => {},
 }) {
   async function restoreAccountSession() {
-    const storage = getSafeSessionStorage();
-    const cachedAccountName = storage?.getItem(AUTH_ACCOUNT_NAME_SESSION_KEY) || "";
-    const cachedAccountId = storage?.getItem(AUTH_ACCOUNT_ID_SESSION_KEY) || "";
     const sessionVersion = state.authSessionVersion;
-    state.isAuthLoading = Boolean(cachedAccountName || cachedAccountId);
+    state.isAuthLoading = true;
     renderAuthGate();
     try {
       const identity = await apiGetAccountSession();
