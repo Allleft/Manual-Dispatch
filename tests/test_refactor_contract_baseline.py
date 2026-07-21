@@ -57,9 +57,9 @@ class RefactorContractBaselineTest(unittest.TestCase):
             if getattr(route, "path", None)
         )
 
-        self.assertEqual(93, len(routes))
+        self.assertEqual(94, len(routes))
         self.assertEqual(
-            "eb80ef20128c6f891220520f00bc7fff9ff5808ddd3656321724fd2e493df38d",
+            "ba78fbfaec1be553f8d33d7a06a2bfe8ef65eb8481d8a659dfc122eaa4485355",
             self._contract_digest(routes),
         )
 
@@ -187,9 +187,9 @@ class RefactorContractBaselineTest(unittest.TestCase):
         contract = json.loads(completed.stdout)
 
         self.assertEqual(["function", "function"], contract["rendererTypes"])
-        self.assertEqual(97, len(contract["apiExportNames"]))
+        self.assertEqual(99, len(contract["apiExportNames"]))
         self.assertEqual(
-            "12ebe7c4617bbf26be2e49825bcea03dfaebd0a39314cfd994165f58286f2f0c",
+            "d2f4b1cf7a4105b29dd6136afaa7b72ad67795a5002cd1cd2a65366a510b897d",
             self._contract_digest(contract["apiExportNames"]),
         )
         self.assertEqual(80, len(contract["actionNames"]))
@@ -197,9 +197,9 @@ class RefactorContractBaselineTest(unittest.TestCase):
             "1d1ac64b33805a33afb51edad8c4433af7a81c407464bc4391e82127441facd6",
             self._contract_digest(contract["actionNames"]),
         )
-        self.assertEqual(185, len(contract["stateFields"]))
+        self.assertEqual(186, len(contract["stateFields"]))
         self.assertEqual(
-            "d46d2887dfc5b9e3cee1cc044764d4b6cc2ffc9a5808fbfdc8d1202e547b241f",
+            "8eefb11018c154012ced1f01c0c119313d3e12f36c0f9dc8a0b0377d51894971",
             self._contract_digest(contract["stateFields"]),
         )
 

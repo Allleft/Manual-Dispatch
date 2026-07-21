@@ -24,6 +24,7 @@ from backend.schemas import (
     RegisterOperatorAccountRequest,
 )
 from backend.services.manual_dispatch_service import ManualDispatchService
+from tests.manual_dispatch_api_test_helpers import authenticate_test_client
 from backend.services.delivery_run_sheet_excel_export_service import (
     build_delivery_run_sheets_excel,
     delivery_run_sheet_product_display,
@@ -67,6 +68,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         app = FastAPI()
         app.include_router(self.api_module.router)
         self.client = TestClient(app)
+        authenticate_test_client(self.client, self.service, self.account)
 
     def tearDown(self):
         self.api_module.service = self.original_service
@@ -220,6 +222,41 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             generated_export.headers["content-disposition"],
         )
 
+
+    def test_snapshot_saves_ignore_spoofed_client_actor(self):
+        delivery = self.client.post(
+            "/api/manual-dispatch/delivery/run-sheets/generated",
+            json=self._delivery_generate_payload(),
+        )
+        collection = self.client.post(
+            "/api/manual-dispatch/opshop/pickup-collections/generated",
+            json=self._collection_generate_payload(),
+        )
+        spoofed_actor = {
+            "saved_by_account_name": "Spoofed Operator",
+            "saved_by_account_id": -999,
+        }
+
+        saved_delivery = self.client.post(
+            f"/api/manual-dispatch/delivery/run-sheets/{delivery.json()['run_sheet_id']}/save",
+            json=spoofed_actor,
+        )
+        saved_collection = self.client.post(
+            f"/api/manual-dispatch/opshop/pickup-collections/{collection.json()['collection_id']}/save",
+            json=spoofed_actor,
+        )
+
+        self.assertEqual(200, saved_delivery.status_code)
+        self.assertEqual(200, saved_collection.status_code)
+        for response in (saved_delivery, saved_collection):
+            self.assertEqual(
+                self.account.account_name,
+                response.json()["saved_by_account_name"],
+            )
+            self.assertEqual(
+                self.account.account_id,
+                response.json()["saved_by_account_id"],
+            )
 
     def test_opshop_collection_weight_sheet_patch_is_typed_atomic_and_generated_only(self):
         self._seed_assigned_pickup(

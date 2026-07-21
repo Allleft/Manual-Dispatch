@@ -25,6 +25,7 @@ from backend.schemas import (
     UpdateOrderRequest,
 )
 from backend.services.manual_dispatch_service import ManualDispatchService
+from tests.manual_dispatch_api_test_helpers import authenticate_test_client
 
 try:
     from fastapi import FastAPI
@@ -966,6 +967,11 @@ class ManualDispatchFinalSummaryRouteTest(unittest.TestCase):
         app = FastAPI()
         app.include_router(self.api_module.router)
         self.client = TestClient(app)
+        authenticate_test_client(
+            self.client,
+            self.service,
+            getattr(self, "account", None),
+        )
         self.dispatch_date = "2026-05-05"
 
     def tearDown(self):
@@ -1004,19 +1010,20 @@ class ManualDispatchFinalSummaryRouteTest(unittest.TestCase):
         self.assertEqual("Mandy", history_response.json()[0]["saved_by_account_name"])
         self.assertNotIn("ORD-001", [order.order_id for order in board.orders])
 
-    def test_final_summary_api_rejects_missing_saved_by_account_name(self):
+    def test_final_summary_api_ignores_spoofed_saved_by_and_uses_session(self):
         self._assign_order("ORD-001", "D001", "trip1")
         payload = self._summary_payload()
-        payload.pop("saved_by_account_name")
-        payload.pop("saved_by_account_id")
+        payload["saved_by_account_name"] = "Spoofed Operator"
+        payload["saved_by_account_id"] = -999
 
         response = self.client.post(
             "/api/manual-dispatch/final-summaries",
             json=payload,
         )
 
-        self.assertEqual(400, response.status_code)
-        self.assertIn("saved_by_account_name is required", response.json()["detail"])
+        self.assertEqual(200, response.status_code)
+        self.assertEqual("Mandy", response.json()["saved_by_account_name"])
+        self.assertEqual(self.account.account_id, response.json()["saved_by_account_id"])
 
     def test_final_summary_api_rejects_duplicate_driver_date_summary(self):
         self._assign_order("ORD-001", "D001", "trip1")

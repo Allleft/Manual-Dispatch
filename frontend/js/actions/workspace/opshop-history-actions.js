@@ -15,11 +15,13 @@ export function createOpShopHistoryActions(context) {
     historyDate = state.opshopSavedHistoryDate,
     requestVersion = ++context.opshopWorkspaceRequestVersion,
   ) {
+    const authSessionVersion = state.authSessionVersion;
     const requestedHistoryDate =
       historyDate || state.opshopSavedHistoryDate || state.dispatchDate;
     state.opshopSavedHistoryDate = requestedHistoryDate;
     const isCurrent = () =>
       state.isLoggedIn &&
+      state.authSessionVersion === authSessionVersion &&
       state.workspaceRoute === "opshop/history" &&
       route === "opshop/history" &&
       state.opshopSavedHistoryDate === requestedHistoryDate &&

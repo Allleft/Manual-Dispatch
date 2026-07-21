@@ -18,6 +18,7 @@ from backend.schemas import (
 from backend.services.manual_dispatch_service import ManualDispatchService
 from .common import (
     assign_driver_vehicle_request_from_payload,
+    authenticated_operator_from_request,
     save_final_trip_summary_request_from_payload,
     to_http_exception,
     with_logbook_actor,
@@ -114,68 +115,106 @@ def create_legacy_router(
             raise to_http_exception(error) from error
 
     @router.post("/drivers")
-    def create_driver(request: CreateDriverRequest):
+    def create_driver(request: CreateDriverRequest, http_request: Request = None):
         service = get_service()
         try:
-            return to_dict(service.create_driver(request))
+            return with_logbook_actor(
+                service, http_request, lambda: to_dict(service.create_driver(request))
+            )
         except ValueError as error:
             raise to_http_exception(error) from error
 
     @router.patch("/drivers/{driver_id}")
-    def update_driver(driver_id: str, request: UpdateDriverRequest):
+    def update_driver(
+        driver_id: str, request: UpdateDriverRequest, http_request: Request = None
+    ):
         service = get_service()
         try:
-            return to_dict(service.update_driver(driver_id, request))
+            return with_logbook_actor(
+                service,
+                http_request,
+                lambda: to_dict(service.update_driver(driver_id, request)),
+            )
         except ValueError as error:
             raise to_http_exception(error) from error
 
     @router.delete("/drivers/{driver_id}")
-    def delete_driver(driver_id: str):
+    def delete_driver(driver_id: str, http_request: Request = None):
         service = get_service()
         try:
-            return to_dict(service.delete_driver(driver_id))
+            return with_logbook_actor(
+                service,
+                http_request,
+                lambda: to_dict(service.delete_driver(driver_id)),
+            )
         except ValueError as error:
             raise to_http_exception(error) from error
 
     @router.post("/vehicles")
-    def create_vehicle(request: CreateVehicleRequest):
+    def create_vehicle(request: CreateVehicleRequest, http_request: Request = None):
         service = get_service()
         try:
-            return to_dict(service.create_vehicle(request))
+            return with_logbook_actor(
+                service, http_request, lambda: to_dict(service.create_vehicle(request))
+            )
         except ValueError as error:
             raise to_http_exception(error) from error
 
     @router.patch("/vehicles/{vehicle_id}")
-    def update_vehicle(vehicle_id: str, request: UpdateVehicleRequest):
+    def update_vehicle(
+        vehicle_id: str, request: UpdateVehicleRequest, http_request: Request = None
+    ):
         service = get_service()
         try:
-            return to_dict(service.update_vehicle(vehicle_id, request))
+            return with_logbook_actor(
+                service,
+                http_request,
+                lambda: to_dict(service.update_vehicle(vehicle_id, request)),
+            )
         except ValueError as error:
             raise to_http_exception(error) from error
 
     @router.delete("/vehicles/{vehicle_id}")
-    def delete_vehicle(vehicle_id: str):
+    def delete_vehicle(vehicle_id: str, http_request: Request = None):
         service = get_service()
         try:
-            return to_dict(service.delete_vehicle(vehicle_id))
+            return with_logbook_actor(
+                service,
+                http_request,
+                lambda: to_dict(service.delete_vehicle(vehicle_id)),
+            )
         except ValueError as error:
             raise to_http_exception(error) from error
 
     @router.post("/final-summaries")
-    def save_final_trip_summary(payload: dict = Body(...)):
+    def save_final_trip_summary(
+        http_request: Request = None, payload: dict = Body(...)
+    ):
         service = get_service()
-        request = save_final_trip_summary_request_from_payload(payload)
+        identity = authenticated_operator_from_request(http_request)
+        request = save_final_trip_summary_request_from_payload(payload, identity)
         try:
-            return to_dict(service.save_final_trip_summary(request))
+            return with_logbook_actor(
+                service,
+                http_request,
+                lambda: to_dict(service.save_final_trip_summary(request)),
+            )
         except ValueError as error:
             raise to_http_exception(error) from error
 
     @router.post("/final-summaries/generated")
-    def create_generated_final_trip_summary(payload: dict = Body(...)):
+    def create_generated_final_trip_summary(
+        http_request: Request = None, payload: dict = Body(...)
+    ):
         service = get_service()
-        request = save_final_trip_summary_request_from_payload(payload)
+        identity = authenticated_operator_from_request(http_request)
+        request = save_final_trip_summary_request_from_payload(payload, identity)
         try:
-            return to_dict(service.create_generated_final_trip_summary(request))
+            return with_logbook_actor(
+                service,
+                http_request,
+                lambda: to_dict(service.create_generated_final_trip_summary(request)),
+            )
         except ValueError as error:
             raise to_http_exception(error) from error
 
@@ -199,25 +238,41 @@ def create_legacy_router(
         return service.list_final_summary_dates()
 
     @router.post("/final-summaries/{summary_id}/save")
-    def save_generated_final_trip_summary(summary_id: str, payload: dict = Body(...)):
+    def save_generated_final_trip_summary(
+        summary_id: str,
+        http_request: Request = None,
+        payload: dict = Body(...),
+    ):
         service = get_service()
-        payload = payload or {}
+        identity = authenticated_operator_from_request(http_request)
         try:
-            return to_dict(
-                service.save_generated_final_trip_summary(
-                    summary_id,
-                    payload.get("saved_by_account_name"),
-                    payload.get("saved_by_account_id"),
-                )
+            return with_logbook_actor(
+                service,
+                http_request,
+                lambda: to_dict(
+                    service.save_generated_final_trip_summary(
+                        summary_id,
+                        identity.account_name,
+                        identity.account_id,
+                    )
+                ),
             )
         except ValueError as error:
             raise to_http_exception(error) from error
 
     @router.post("/final-summaries/{summary_id}/cancel-generated")
-    def cancel_generated_final_trip_summary(summary_id: str):
+    def cancel_generated_final_trip_summary(
+        summary_id: str, http_request: Request = None
+    ):
         service = get_service()
         try:
-            return {"cancelled": service.cancel_generated_final_trip_summary(summary_id)}
+            return with_logbook_actor(
+                service,
+                http_request,
+                lambda: {
+                    "cancelled": service.cancel_generated_final_trip_summary(summary_id)
+                },
+            )
         except ValueError as error:
             raise to_http_exception(error) from error
 

@@ -12,6 +12,7 @@ from backend.schemas import (
 )
 from backend.services.manual_dispatch_service import ManualDispatchService
 from .common import (
+    authenticated_operator_from_request,
     to_http_exception,
     with_logbook_actor,
 )
@@ -77,6 +78,11 @@ def create_workspace_snapshot_router(
         http_request: Request = None,
     ):
         service = get_service()
+        identity = authenticated_operator_from_request(http_request)
+        request = SaveGeneratedWorkspaceSnapshotRequest(
+            saved_by_account_name=identity.account_name,
+            saved_by_account_id=identity.account_id,
+        )
         try:
             return with_logbook_actor(
                 service,
@@ -172,6 +178,11 @@ def create_workspace_snapshot_router(
         http_request: Request = None,
     ):
         service = get_service()
+        identity = authenticated_operator_from_request(http_request)
+        request = SaveGeneratedWorkspaceSnapshotRequest(
+            saved_by_account_name=identity.account_name,
+            saved_by_account_id=identity.account_id,
+        )
         try:
             return with_logbook_actor(
                 service,

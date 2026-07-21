@@ -2,6 +2,25 @@ const API_BASE_URL =
   window.MANUAL_DISPATCH_API_BASE_URL ||
   (window.location.protocol === "file:" ? "http://127.0.0.1:8000" : "");
 
+let unauthorizedHandler = null;
+let unauthorizedNotificationPending = false;
+
+export function setUnauthorizedHandler(handler) {
+  unauthorizedHandler = typeof handler === "function" ? handler : null;
+}
+
+async function notifyUnauthorized(response) {
+  if (response.status !== 401 || !unauthorizedHandler || unauthorizedNotificationPending) {
+    return;
+  }
+  unauthorizedNotificationPending = true;
+  try {
+    await unauthorizedHandler();
+  } finally {
+    unauthorizedNotificationPending = false;
+  }
+}
+
 export function getApiUrl(path, query = {}) {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
   const baseUrl = API_BASE_URL ? API_BASE_URL.replace(/\/$/, "") : window.location.origin;
@@ -57,6 +76,7 @@ export async function requestJson(path, options = {}) {
   });
 
   if (!response.ok) {
+    await notifyUnauthorized(response);
     let message = `Request failed with status ${response.status}`;
     let detail = null;
     try {
@@ -79,6 +99,7 @@ export async function requestFormData(path, formData, options = {}) {
   });
 
   if (!response.ok) {
+    await notifyUnauthorized(response);
     let message = `Request failed with status ${response.status}`;
     let detail = null;
     try {
@@ -116,6 +137,7 @@ function getFilenameFromContentDisposition(headerValue, fallbackFilename) {
 export async function requestBlobDownload(path, fallbackFilename) {
   const response = await fetch(getApiUrl(path));
   if (!response.ok) {
+    await notifyUnauthorized(response);
     let message = `Request failed with status ${response.status}`;
     let detail = null;
     try {
@@ -164,6 +186,20 @@ export async function apiLoginAccount(payload) {
     method: "POST",
     body: payload,
   });
+}
+
+export async function requestResponse(path, options = {}) {
+  const response = await fetch(getApiUrl(path, options.query), {
+    method: options.method || "GET",
+    headers: options.headers,
+    body: options.body,
+  });
+  await notifyUnauthorized(response);
+  return response;
+}
+
+export async function apiGetAccountSession() {
+  return requestJson("/api/manual-dispatch/auth/session");
 }
 
 export async function apiLogoutAccount() {

@@ -1,6 +1,7 @@
 from collections.abc import Callable
 from fastapi import (
     APIRouter,
+    Depends,
     HTTPException,
 )
 from fastapi.responses import Response
@@ -24,6 +25,7 @@ from .common import (
 def create_auth_router(
     get_service: Callable[[], ManualDispatchService],
     router: APIRouter = None,
+    require_operator: Callable = None,
 ) -> APIRouter:
     router = router or APIRouter()
 
@@ -33,7 +35,7 @@ def create_auth_router(
         response: Response,
     ):
         service = get_service()
-        if not is_env_flag_enabled(ALLOW_REGISTRATION_ENV, default=True):
+        if not is_env_flag_enabled(ALLOW_REGISTRATION_ENV, default=False):
             raise HTTPException(status_code=403, detail=REGISTRATION_DISABLED_MESSAGE)
 
         try:
@@ -57,10 +59,16 @@ def create_auth_router(
             raise to_http_exception(error) from error
 
     @router.post("/auth/logout")
-    def logout_operator_account(response: Response):
-        service = get_service()
+    def logout_operator_account(
+        response: Response,
+        identity=Depends(require_operator),
+    ):
         response.delete_cookie(OPERATOR_COOKIE_NAME, path="/")
         return {"logged_out": True}
+
+    @router.get("/auth/session")
+    def get_operator_session(identity=Depends(require_operator)):
+        return to_dict(identity)
 
     @router.post("/auth/reset-password")
     def reset_operator_password(request: ResetOperatorPasswordRequest):

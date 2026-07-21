@@ -2,6 +2,7 @@ import shutil
 import unittest
 import uuid
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from backend.api import manual_dispatch as manual_dispatch_api
@@ -11,6 +12,7 @@ from backend.repositories.sqlite_manual_dispatch_repository import (
 from backend.schemas import (
     CommitAttacheInvoicePdfImportRequest,
     CommitAttacheInvoicePdfImportRow,
+    RegisterOperatorAccountRequest,
 )
 from backend.services.manual_dispatch_service import ManualDispatchService
 
@@ -24,6 +26,13 @@ class ManualDispatchAttacheInvoiceImportTest(unittest.TestCase):
         self.db_path = self.temp_dir / "manual_dispatch.sqlite3"
         self.repository = SQLiteManualDispatchRepository(self.db_path)
         self.service = ManualDispatchService(self.repository)
+        self.identity = self.service.register_operator_account(
+            RegisterOperatorAccountRequest(
+                account_name="Attaché Import Tester",
+                password="secret123",
+                confirm_password="secret123",
+            )
+        )
 
     def tearDown(self):
         shutil.rmtree(self.temp_dir, ignore_errors=True)
@@ -61,7 +70,12 @@ class ManualDispatchAttacheInvoiceImportTest(unittest.TestCase):
         )
 
         with patch.object(manual_dispatch_api, "service", self.service):
-            response = manual_dispatch_api.commit_attache_invoice_pdf_import(request)
+            response = manual_dispatch_api.commit_attache_invoice_pdf_import(
+                request,
+                SimpleNamespace(
+                    state=SimpleNamespace(operator_identity=self.identity),
+                ),
+            )
 
         self.assertEqual(1, response["imported_count"])
         self.assertEqual(0, response["skipped_count"])

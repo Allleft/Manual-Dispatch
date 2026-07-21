@@ -1,8 +1,10 @@
 import {
+  apiGetAccountSession,
   apiLoginAccount,
   apiLogoutAccount,
   apiRegisterAccount,
   apiResetPassword,
+  setUnauthorizedHandler,
 } from "../api/manual-dispatch-api.js";
 import {
   AUTH_ACCOUNT_ID_SESSION_KEY,
@@ -23,21 +25,29 @@ export function createAuthActions({
   renderBoard,
   onAuthenticated = () => {},
 }) {
-  function restoreAccountSession() {
+  async function restoreAccountSession() {
     const storage = getSafeSessionStorage();
-    if (!storage) {
-      return;
+    const cachedAccountName = storage?.getItem(AUTH_ACCOUNT_NAME_SESSION_KEY) || "";
+    const cachedAccountId = storage?.getItem(AUTH_ACCOUNT_ID_SESSION_KEY) || "";
+    const sessionVersion = state.authSessionVersion;
+    state.isAuthLoading = Boolean(cachedAccountName || cachedAccountId);
+    renderAuthGate();
+    try {
+      const identity = await apiGetAccountSession();
+      if (state.authSessionVersion !== sessionVersion) {
+        return;
+      }
+      applyLoggedInAccount(identity);
+      onAuthenticated();
+    } catch (error) {
+      if (error.status !== 401 && state.authSessionVersion === sessionVersion) {
+        invalidateAccountSession({ render: false });
+        state.loginError = "Unable to verify the current session. Please log in again.";
+      }
+    } finally {
+      state.isAuthLoading = false;
+      renderBoard();
     }
-
-    const accountName = storage.getItem(AUTH_ACCOUNT_NAME_SESSION_KEY) || "";
-    const accountId = storage.getItem(AUTH_ACCOUNT_ID_SESSION_KEY) || "";
-    if (!accountName) {
-      return;
-    }
-
-    state.accountName = accountName;
-    state.accountId = accountId;
-    state.isLoggedIn = true;
   }
 
   function saveAccountSession(identity) {
@@ -61,6 +71,7 @@ export function createAuthActions({
   }
 
   function applyLoggedInAccount(identity) {
+    state.authSessionVersion += 1;
     state.accountName = identity.account_name || "";
     state.accountId = identity.account_id ? String(identity.account_id) : "";
     state.isLoggedIn = Boolean(state.accountName);
@@ -71,14 +82,39 @@ export function createAuthActions({
     saveAccountSession(identity);
   }
 
-  function logoutAccount() {
-    const logoutRequest = apiLogoutAccount().catch((error) => {
-      console.error(
-        "Backend logout failed; the local session was cleared but the operator cookie may remain.",
-        error,
-      );
-    });
+  function clearAuthenticatedTransientState() {
+    state.deliveryBoard = null;
+    state.deliveryRunSheets = [];
+    state.deliverySavedHistoryRunSheets = [];
+    state.deliveryTripSummaryBoard = null;
+    state.deliveryTripSummaryRunSheets = [];
+    state.opshopBoard = null;
+    state.opshopPickupCollections = [];
+    state.opshopSavedHistoryCollections = [];
+    state.opshopTripSummaryBoard = null;
+    state.opshopTripSummaryCollections = [];
+    state.sharedSpecifications = { drivers: [], vehicles: [] };
+    state.deliveryVehicleDrafts = {};
+    state.deliveryVehicleClaims = {};
+    state.deliveryVehicleErrors = {};
+    state.deliveryVehiclePendingKeys = {};
+    state.deliveryBusyActionKeys = {};
+    state.deliveryActionError = "";
+    state.opshopCollectionEntryDrafts = {};
+    state.opshopCollectionEntryDraftVersions = {};
+    state.opshopBusyActionKeys = {};
+    state.opshopActionError = "";
+    state.isDeliveryWorkspaceLoading = false;
+    state.deliveryWorkspaceError = "";
+    state.isOpShopWorkspaceLoading = false;
+    state.opshopWorkspaceError = "";
+    state.activeWorkspace = "";
+    state.deliveryGenerationConfirmation = null;
+    state.opshopGenerationConfirmation = null;
+  }
 
+  function invalidateAccountSession({ render = true } = {}) {
+    state.authSessionVersion += 1;
     state.accountName = "";
     state.accountId = "";
     state.isLoggedIn = false;
@@ -87,20 +123,22 @@ export function createAuthActions({
     state.registerError = "";
     state.resetError = "";
     state.authSuccessMessage = "";
-    state.deliveryVehicleDrafts = {};
-    state.deliveryVehicleClaims = {};
-    state.deliveryVehicleErrors = {};
-    state.deliveryVehiclePendingKeys = {};
-    state.deliverySavedHistoryRunSheets = [];
-    state.opshopSavedHistoryCollections = [];
-    state.opshopCollectionEntryDrafts = {};
-    state.opshopCollectionEntryDraftVersions = {};
-    state.isDeliveryWorkspaceLoading = false;
-    state.deliveryWorkspaceError = "";
-    state.isOpShopWorkspaceLoading = false;
-    state.opshopWorkspaceError = "";
+    clearAuthenticatedTransientState();
     clearAccountSession();
-    renderBoard();
+    if (render) {
+      renderBoard();
+    }
+  }
+
+  function logoutAccount() {
+    const logoutRequest = apiLogoutAccount().catch((error) => {
+      console.error(
+        "Backend logout failed; the local session was cleared but the operator cookie may remain.",
+        error,
+      );
+    });
+
+    invalidateAccountSession();
 
     return logoutRequest;
   }
@@ -122,8 +160,12 @@ export function createAuthActions({
     state.authSuccessMessage = "";
     renderAuthGate();
 
+    const sessionVersion = state.authSessionVersion;
     try {
       const identity = await apiLoginAccount({ account_name: accountName, password });
+      if (state.authSessionVersion !== sessionVersion) {
+        return;
+      }
       applyLoggedInAccount(identity);
       onAuthenticated();
     } catch (error) {
@@ -234,11 +276,14 @@ export function createAuthActions({
     renderAuthGate();
   }
 
+  setUnauthorizedHandler(() => invalidateAccountSession());
+
   return {
     handleLogin,
     handleRegister,
     handleResetPassword,
     logoutAccount,
+    invalidateAccountSession,
     restoreAccountSession,
     switchAuthMode,
   };

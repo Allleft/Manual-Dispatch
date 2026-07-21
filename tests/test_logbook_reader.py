@@ -340,18 +340,19 @@ class FrontendLogoutStaticContractTest(unittest.TestCase):
         logout_action = auth_source.split("function logoutAccount()", 1)[1].split(
             "async function handleLogin", 1
         )[0]
+        invalidation_action = auth_source.split(
+            "function invalidateAccountSession", 1
+        )[1].split("function logoutAccount", 1)[0]
         self.assertIn("apiLogoutAccount()", logout_action)
-        self.assertIn("clearAccountSession();", logout_action)
-        self.assertIn("state.accountName = \"\";", logout_action)
-        self.assertIn("state.accountId = \"\";", logout_action)
-        self.assertIn("state.isLoggedIn = false;", logout_action)
-        self.assertIn('state.authMode = "login";', logout_action)
-        self.assertIn("state.deliveryVehicleDrafts = {};", logout_action)
-        self.assertIn("state.deliveryVehicleClaims = {};", logout_action)
-        self.assertIn("state.deliveryVehicleErrors = {};", logout_action)
-        self.assertIn("state.deliveryVehiclePendingKeys = {};", logout_action)
+        self.assertIn("invalidateAccountSession();", logout_action)
+        self.assertIn("clearAccountSession();", invalidation_action)
+        self.assertIn("state.accountName = \"\";", invalidation_action)
+        self.assertIn("state.accountId = \"\";", invalidation_action)
+        self.assertIn("state.isLoggedIn = false;", invalidation_action)
+        self.assertIn('state.authMode = "login";', invalidation_action)
+        self.assertIn("clearAuthenticatedTransientState();", invalidation_action)
         self.assertIn("operator cookie may remain", logout_action)
-        self.assertEqual(1, logout_action.count("renderBoard();"))
+        self.assertEqual(1, invalidation_action.count("renderBoard();"))
         self.assertIn("void authActions.logoutAccount();", app_source)
 
 
