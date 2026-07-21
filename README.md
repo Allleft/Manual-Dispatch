@@ -236,6 +236,7 @@ python -m pip install -r requirements-dev.txt
 
 # Optional: use a safe local test database instead of the runtime database.
 $env:MANUAL_DISPATCH_DB_PATH="data\manual_dispatch_test.sqlite3"
+$env:MANUAL_DISPATCH_AUTH_COOKIE_SECRET="replace-with-a-strong-random-local-secret"
 
 python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
 ```
@@ -244,6 +245,16 @@ Open:
 
 - Frontend: `http://127.0.0.1:8000/frontend/`
 - Health check: `http://127.0.0.1:8000/health`
+
+The frontend and API are served from the same FastAPI origin; cross-origin API
+requests are not enabled. Operational Manual Dispatch endpoints require the
+signed HttpOnly operator cookie. Registration defaults to disabled and can be
+temporarily enabled with `MANUAL_DISPATCH_ALLOW_REGISTRATION=true` for account
+setup. Set `MANUAL_DISPATCH_AUTH_COOKIE_SECRET` explicitly for every deployed
+instance. Set `MANUAL_DISPATCH_AUTH_COOKIE_SECURE=true` only when the browser
+reaches the app over HTTPS; local plain-HTTP development must leave it `false`.
+Generate a deployment secret with `python -c "import secrets; print(secrets.token_urlsafe(48))"`
+and keep it in the local deployment environment, never in Git.
 
 For the office-trial configuration:
 
