@@ -15,11 +15,13 @@ export function createDeliveryTripSummaryActions(context) {
     route = state.workspaceRoute,
     deliveryDate = state.deliveryTripSummaryDate || state.dispatchDate,
     requestVersion = ++context.deliveryWorkspaceRequestVersion,
+    authSessionVersion = state.authSessionVersion,
   ) {
     const scopedDeliveryDate =
       deliveryDate || state.deliveryTripSummaryDate || state.dispatchDate;
     const isCurrent = () =>
       state.isLoggedIn &&
+      state.authSessionVersion === authSessionVersion &&
       state.workspaceRoute === route &&
       state.deliveryTripSummaryDate === scopedDeliveryDate &&
       requestVersion === context.deliveryWorkspaceRequestVersion;

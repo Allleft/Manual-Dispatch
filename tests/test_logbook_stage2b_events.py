@@ -12,6 +12,7 @@ from backend.repositories.sqlite_manual_dispatch_repository import (
     SQLiteManualDispatchRepository,
 )
 from backend.services.manual_dispatch_service import ManualDispatchService
+from tests.manual_dispatch_api_test_helpers import authenticate_test_client
 
 try:
     from fastapi import FastAPI
@@ -52,15 +53,11 @@ class LogbookStage2BEventsTest(unittest.TestCase):
         app = FastAPI()
         app.include_router(self.api_module.router)
         self.client = TestClient(app)
-        response = self.client.post(
-            "/api/manual-dispatch/auth/register",
-            json={
-                "account_name": "Stage 2B Operator",
-                "password": "secret123",
-                "confirm_password": "secret123",
-            },
+        authenticate_test_client(
+            self.client,
+            self.service,
+            account_name="Stage 2B Operator",
         )
-        self.assertEqual(200, response.status_code)
 
     def tearDown(self):
         self.api_module.service = self.original_service

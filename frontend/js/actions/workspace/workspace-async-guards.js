@@ -28,6 +28,7 @@ export function createWorkspaceAsyncGuards(context) {
       deliveryHistoryDate: state.deliverySavedHistoryDate,
       opshopHistoryDate: state.opshopSavedHistoryDate,
       activeWorkspace: state.activeWorkspace,
+      authSessionVersion: state.authSessionVersion,
     };
   }
 
@@ -50,6 +51,7 @@ export function createWorkspaceAsyncGuards(context) {
     return (
       state.isLoggedIn &&
       context &&
+      state.authSessionVersion === context.authSessionVersion &&
       state.workspaceRoute === context.route &&
       state.activeWorkspace === context.activeWorkspace &&
       DELIVERY_ROUTES.has(context.route) &&
@@ -67,6 +69,7 @@ export function createWorkspaceAsyncGuards(context) {
     return (
       state.isLoggedIn &&
       context &&
+      state.authSessionVersion === context.authSessionVersion &&
       state.workspaceRoute === context.route &&
       state.activeWorkspace === context.activeWorkspace &&
       OPSHOP_ROUTES.has(context.route) &&

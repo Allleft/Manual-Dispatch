@@ -77,7 +77,8 @@ Do not split the frontend onto cPanel while pointing API calls to the NAS. The a
 
 ## Docker Compose Deployment
 
-Copy `.env.nas.example` to `.env` on the NAS and set a strong reset code:
+Copy `.env.nas.example` to `.env` on the NAS and set strong, independent reset
+and authentication-cookie secrets:
 
 ```sh
 cp .env.nas.example .env
@@ -89,6 +90,8 @@ Required NAS defaults:
 MANUAL_DISPATCH_DB_PATH=/app/data/manual_dispatch.sqlite3
 MANUAL_DISPATCH_HOST=0.0.0.0
 MANUAL_DISPATCH_PORT=8130
+MANUAL_DISPATCH_AUTH_COOKIE_SECRET=<strong-random-secret>
+MANUAL_DISPATCH_AUTH_COOKIE_SECURE=false
 MANUAL_DISPATCH_ALLOW_REGISTRATION=false
 MANUAL_DISPATCH_SEED_DEMO_DATA=false
 ```
@@ -118,6 +121,9 @@ For first account setup:
 5. Restart the app again.
 
 Password reset still works when `MANUAL_DISPATCH_ADMIN_RESET_CODE` is configured.
+The cookie secret is required by Docker Compose and must remain stable across
+restarts. Set `MANUAL_DISPATCH_AUTH_COOKIE_SECURE=true` when the NAS is exposed
+to browsers through an HTTPS reverse proxy; keep it `false` for direct HTTP.
 
 ## Backup Notes
 

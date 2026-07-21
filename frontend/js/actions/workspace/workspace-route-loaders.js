@@ -45,9 +45,11 @@ export function createWorkspaceRouteLoaders(context) {
 
   async function loadMigrationStatus() {
     const route = state.workspaceRoute;
+    const authSessionVersion = state.authSessionVersion;
     const requestVersion = ++context.migrationStatusRequestVersion;
     const isCurrent = () =>
       state.isLoggedIn &&
+      state.authSessionVersion === authSessionVersion &&
       state.workspaceRoute === route &&
       route === "home" &&
       requestVersion === context.migrationStatusRequestVersion;
@@ -133,9 +135,11 @@ export function createWorkspaceRouteLoaders(context) {
       return;
     }
     const dispatchDate = state.dispatchDate;
+    const authSessionVersion = state.authSessionVersion;
     const requestVersion = ++context.deliveryWorkspaceRequestVersion;
     const isCurrent = () =>
       state.isLoggedIn &&
+      state.authSessionVersion === authSessionVersion &&
       state.workspaceRoute === route &&
       state.dispatchDate === dispatchDate &&
       requestVersion === context.deliveryWorkspaceRequestVersion;
@@ -156,7 +160,12 @@ export function createWorkspaceRouteLoaders(context) {
         }
       } else if (route === "delivery/trip-summary") {
         const deliveryDate = state.deliveryTripSummaryDate || dispatchDate;
-        await loadDeliveryTripSummaryData(route, deliveryDate, requestVersion);
+        await loadDeliveryTripSummaryData(
+          route,
+          deliveryDate,
+          requestVersion,
+          authSessionVersion,
+        );
         return;
       } else if (route === "delivery/run-sheet") {
         const deliveryDate = state.deliveryTripSummaryDate || dispatchDate;
@@ -166,6 +175,7 @@ export function createWorkspaceRouteLoaders(context) {
         );
         if (
           state.isLoggedIn
+          && state.authSessionVersion === authSessionVersion
           && state.workspaceRoute === route
           && state.deliveryTripSummaryDate === deliveryDate
           && requestVersion === context.deliveryWorkspaceRequestVersion
@@ -195,9 +205,11 @@ export function createWorkspaceRouteLoaders(context) {
       return;
     }
     const dispatchDate = state.dispatchDate;
+    const authSessionVersion = state.authSessionVersion;
     const requestVersion = ++context.opshopWorkspaceRequestVersion;
     const isCurrent = () =>
       state.isLoggedIn &&
+      state.authSessionVersion === authSessionVersion &&
       state.workspaceRoute === route &&
       state.dispatchDate === dispatchDate &&
       requestVersion === context.opshopWorkspaceRequestVersion;
@@ -209,7 +221,12 @@ export function createWorkspaceRouteLoaders(context) {
     try {
       if (route === "opshop/trip-summary") {
         const pickupDate = state.opshopTripSummaryDate || dispatchDate;
-        await loadOpShopTripSummaryData(route, pickupDate, requestVersion);
+        await loadOpShopTripSummaryData(
+          route,
+          pickupDate,
+          requestVersion,
+          authSessionVersion,
+        );
         return;
       } else if (route === "opshop/collections") {
         const pickupDate = state.opshopTripSummaryDate || dispatchDate;
@@ -219,6 +236,7 @@ export function createWorkspaceRouteLoaders(context) {
         );
         if (
           state.isLoggedIn
+          && state.authSessionVersion === authSessionVersion
           && state.workspaceRoute === route
           && state.opshopTripSummaryDate === pickupDate
           && requestVersion === context.opshopWorkspaceRequestVersion

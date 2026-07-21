@@ -85,6 +85,7 @@ export const state = {
   accountName: "",
   accountId: "",
   isLoggedIn: false,
+  authSessionVersion: 0,
   authMode: "login",
   loginError: "",
   registerError: "",

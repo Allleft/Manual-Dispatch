@@ -32,6 +32,7 @@ from backend.schemas import (
     Vehicle,
 )
 from backend.services.manual_dispatch_service import ManualDispatchService
+from tests.manual_dispatch_api_test_helpers import authenticate_test_client
 
 try:
     from fastapi import FastAPI
@@ -77,6 +78,11 @@ class WorkspaceScopedMutationsTest(unittest.TestCase):
         app = FastAPI()
         app.include_router(self.api_module.router)
         self.client = TestClient(app)
+        authenticate_test_client(
+            self.client,
+            self.service,
+            getattr(self, "account", None),
+        )
 
     def tearDown(self):
         self.api_module.service = self.original_service

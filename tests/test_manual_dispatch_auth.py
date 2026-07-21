@@ -2,6 +2,7 @@ import importlib
 import os
 import shutil
 import sqlite3
+import time
 import unittest
 import uuid
 from pathlib import Path
@@ -15,6 +16,7 @@ from backend.schemas import (
     ResetOperatorPasswordRequest,
 )
 from backend.services.manual_dispatch_service import ManualDispatchService
+from backend.api.manual_dispatch_routes import common as auth_common
 
 try:
     from fastapi import FastAPI
@@ -55,6 +57,20 @@ class ManualDispatchAuthTest(unittest.TestCase):
         self.assertGreater(identity.account_id, 0)
         self.assertFalse(hasattr(identity, "password_hash"))
         self.assertFalse(hasattr(identity, "password_salt"))
+
+    def test_missing_cookie_secret_has_no_known_deterministic_fallback(self):
+        previous_secret = os.environ.pop("MANUAL_DISPATCH_AUTH_COOKIE_SECRET", None)
+        try:
+            fallback = auth_common.operator_cookie_secret()
+        finally:
+            if previous_secret is not None:
+                os.environ["MANUAL_DISPATCH_AUTH_COOKIE_SECRET"] = previous_secret
+
+        self.assertEqual(32, len(fallback))
+        self.assertNotEqual(
+            b"manual-dispatch-local-operator-cookie",
+            fallback,
+        )
 
     def test_rejects_duplicate_account_name(self):
         self._register("Mandy")
@@ -275,7 +291,17 @@ class ManualDispatchAuthRouteTest(unittest.TestCase):
         self.previous_allow_registration = os.environ.get(
             "MANUAL_DISPATCH_ALLOW_REGISTRATION"
         )
-        os.environ.pop("MANUAL_DISPATCH_ALLOW_REGISTRATION", None)
+        self.previous_cookie_secret = os.environ.get(
+            "MANUAL_DISPATCH_AUTH_COOKIE_SECRET"
+        )
+        self.previous_cookie_secure = os.environ.get(
+            "MANUAL_DISPATCH_AUTH_COOKIE_SECURE"
+        )
+        os.environ["MANUAL_DISPATCH_ALLOW_REGISTRATION"] = "true"
+        os.environ["MANUAL_DISPATCH_AUTH_COOKIE_SECRET"] = (
+            "manual-dispatch-auth-route-test-secret-20260721"
+        )
+        os.environ["MANUAL_DISPATCH_AUTH_COOKIE_SECURE"] = "false"
         self.api_module = importlib.import_module("backend.api.manual_dispatch")
         self.original_service = self.api_module.service
         self.api_module.service = self.service
@@ -300,6 +326,18 @@ class ManualDispatchAuthRouteTest(unittest.TestCase):
             os.environ[
                 "MANUAL_DISPATCH_ALLOW_REGISTRATION"
             ] = self.previous_allow_registration
+        if self.previous_cookie_secret is None:
+            os.environ.pop("MANUAL_DISPATCH_AUTH_COOKIE_SECRET", None)
+        else:
+            os.environ[
+                "MANUAL_DISPATCH_AUTH_COOKIE_SECRET"
+            ] = self.previous_cookie_secret
+        if self.previous_cookie_secure is None:
+            os.environ.pop("MANUAL_DISPATCH_AUTH_COOKIE_SECURE", None)
+        else:
+            os.environ[
+                "MANUAL_DISPATCH_AUTH_COOKIE_SECURE"
+            ] = self.previous_cookie_secure
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_register_and_login_routes_return_identity_only(self):
@@ -344,15 +382,16 @@ class ManualDispatchAuthRouteTest(unittest.TestCase):
         self.assertIn("Max-Age=0", set_cookie)
         self.assertIn("Path=/", set_cookie)
 
-    def test_logout_route_is_idempotent_without_cookie(self):
+    def test_logout_route_requires_valid_cookie(self):
         cookie_name = self.api_module.OPERATOR_COOKIE_NAME
         self.assertNotIn(cookie_name, self.client.cookies)
 
         first_response = self.client.post("/api/manual-dispatch/auth/logout")
         second_response = self.client.post("/api/manual-dispatch/auth/logout")
 
-        self.assertEqual({"logged_out": True}, first_response.json())
-        self.assertEqual({"logged_out": True}, second_response.json())
+        self.assertEqual(401, first_response.status_code)
+        self.assertEqual(401, second_response.status_code)
+        self.assertEqual("Authentication required", first_response.json()["detail"])
         self.assertNotIn(cookie_name, self.client.cookies)
 
     def test_register_route_can_be_disabled_by_environment(self):
@@ -372,6 +411,97 @@ class ManualDispatchAuthRouteTest(unittest.TestCase):
             "Registration is disabled. Please contact an administrator.",
             response.json()["detail"],
         )
+
+    def test_register_route_is_disabled_when_environment_is_absent(self):
+        os.environ.pop("MANUAL_DISPATCH_ALLOW_REGISTRATION", None)
+
+        response = self.client.post(
+            "/api/manual-dispatch/auth/register",
+            json={
+                "account_name": "Mandy",
+                "password": "secret123",
+                "confirm_password": "secret123",
+            },
+        )
+
+        self.assertEqual(403, response.status_code)
+
+    def test_session_route_restores_valid_identity_and_rejects_missing_cookie(self):
+        self._register_and_login_route()
+
+        valid = self.client.get("/api/manual-dispatch/auth/session")
+        self.client.cookies.clear()
+        missing = self.client.get("/api/manual-dispatch/auth/session")
+
+        self.assertEqual(200, valid.status_code)
+        self.assertEqual("Mandy", valid.json()["account_name"])
+        self.assertEqual(401, missing.status_code)
+
+    def test_protected_read_write_patch_and_export_reject_missing_cookie(self):
+        requests = (
+            self.client.get("/api/manual-dispatch/shared/specifications"),
+            self.client.post("/api/manual-dispatch/delivery/orders", json={}),
+            self.client.patch("/api/manual-dispatch/delivery/orders/ORD-1", json={}),
+            self.client.get("/api/manual-dispatch/export-excel"),
+            self.client.get("/api/manual-dispatch/board", params={"dispatch_date": "2026-07-21"}),
+        )
+
+        self.assertTrue(all(response.status_code == 401 for response in requests))
+
+    def test_forged_and_expired_cookies_are_rejected(self):
+        self._register_and_login_route()
+        cookie_name = self.api_module.OPERATOR_COOKIE_NAME
+        valid_cookie = self.client.cookies.get(cookie_name)
+        self.client.cookies.set(cookie_name, f"{valid_cookie}forged")
+        forged = self.client.get("/api/manual-dispatch/auth/session")
+
+        account = self.repository.get_operator_account_by_name("Mandy")
+        issued_at = int(time.time()) - auth_common.OPERATOR_COOKIE_MAX_AGE_SECONDS - 1
+        payload = auth_common._encode_operator_cookie_payload(account, issued_at)
+        expired_cookie = f"{payload}.{auth_common.operator_cookie_signature(account, payload)}"
+        self.client.cookies.set(cookie_name, expired_cookie)
+        expired = self.client.get("/api/manual-dispatch/auth/session")
+
+        self.assertEqual(401, forged.status_code)
+        self.assertEqual(401, expired.status_code)
+
+    def test_password_reset_invalidates_existing_cookie(self):
+        os.environ["MANUAL_DISPATCH_ADMIN_RESET_CODE"] = "test-reset-code"
+        self._register_and_login_route()
+        cookie_name = self.api_module.OPERATOR_COOKIE_NAME
+        old_cookie = self.client.cookies.get(cookie_name)
+
+        reset = self.client.post(
+            "/api/manual-dispatch/auth/reset-password",
+            json={
+                "account_name": "Mandy",
+                "admin_reset_code": "test-reset-code",
+                "new_password": "newsecret123",
+                "confirm_password": "newsecret123",
+            },
+        )
+        self.client.cookies.set(cookie_name, old_cookie)
+
+        self.assertEqual(200, reset.status_code)
+        self.assertEqual(401, self.client.get("/api/manual-dispatch/auth/session").status_code)
+
+    def test_secure_cookie_attribute_is_environment_controlled(self):
+        os.environ["MANUAL_DISPATCH_AUTH_COOKIE_SECURE"] = "true"
+
+        response = self.client.post(
+            "/api/manual-dispatch/auth/register",
+            json={
+                "account_name": "Mandy",
+                "password": "secret123",
+                "confirm_password": "secret123",
+            },
+        )
+
+        set_cookie = response.headers.get("set-cookie", "")
+        self.assertIn("HttpOnly", set_cookie)
+        self.assertIn("SameSite=lax", set_cookie)
+        self.assertIn("Secure", set_cookie)
+        self.assertIn("Max-Age=43200", set_cookie)
 
     def test_login_route_rejects_wrong_password(self):
         self.client.post(
@@ -445,6 +575,22 @@ class ManualDispatchAuthRouteTest(unittest.TestCase):
             "Unable to reset password. Please check your details or contact an administrator.",
             response.json()["detail"],
         )
+
+    def _register_and_login_route(self):
+        register = self.client.post(
+            "/api/manual-dispatch/auth/register",
+            json={
+                "account_name": "Mandy",
+                "password": "secret123",
+                "confirm_password": "secret123",
+            },
+        )
+        self.assertEqual(200, register.status_code)
+        login = self.client.post(
+            "/api/manual-dispatch/auth/login",
+            json={"account_name": "Mandy", "password": "secret123"},
+        )
+        self.assertEqual(200, login.status_code)
 
 
 if __name__ == "__main__":

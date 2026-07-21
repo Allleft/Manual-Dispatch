@@ -14,11 +14,13 @@ export function createDeliveryHistoryActions(context) {
     historyDate = state.deliverySavedHistoryDate,
     requestVersion = ++context.deliveryWorkspaceRequestVersion,
   ) {
+    const authSessionVersion = state.authSessionVersion;
     const requestedHistoryDate =
       historyDate || state.deliverySavedHistoryDate || state.dispatchDate;
     state.deliverySavedHistoryDate = requestedHistoryDate;
     const isCurrent = () =>
       state.isLoggedIn &&
+      state.authSessionVersion === authSessionVersion &&
       state.workspaceRoute === "delivery/history" &&
       route === "delivery/history" &&
       state.deliverySavedHistoryDate === requestedHistoryDate &&

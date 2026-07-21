@@ -25,6 +25,7 @@ from backend.schemas import (
 )
 from backend.services.final_summary_excel_export_service import build_final_summary_excel
 from backend.services.manual_dispatch_service import ManualDispatchService
+from tests.manual_dispatch_api_test_helpers import authenticate_test_client
 from backend.services.opshop_pickup_excel_export_service import (
     COUNTRYSIDE_SECTION_TITLE,
     ONCALL_SECTION_TITLE,
@@ -444,6 +445,11 @@ class OpShopPickupRunSheetExportRouteTest(unittest.TestCase):
         app = FastAPI()
         app.include_router(self.api_module.router)
         self.client = TestClient(app)
+        authenticate_test_client(
+            self.client,
+            self.service,
+            getattr(self, "account", None),
+        )
 
     def tearDown(self):
         self.api_module.service = self.original_service

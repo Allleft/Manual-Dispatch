@@ -35,6 +35,7 @@ from backend.repositories.sqlite_manual_dispatch_repository import (
 )
 from backend.services.manual_dispatch.logbook_file_service import LogbookFileService
 from backend.services.manual_dispatch_service import ManualDispatchService
+from tests.manual_dispatch_api_test_helpers import authenticate_test_client
 
 
 class LogbookFileServiceTest(unittest.TestCase):
@@ -503,15 +504,11 @@ class ManualDispatchLogbookApiActorTest(unittest.TestCase):
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_authenticated_operator_cookie_sets_logbook_actor_for_mutation_route(self):
-        register_response = self.client.post(
-            "/api/manual-dispatch/auth/register",
-            json={
-                "account_name": "Office Operator",
-                "password": "secret123",
-                "confirm_password": "secret123",
-            },
+        authenticate_test_client(
+            self.client,
+            self.service,
+            account_name="Office Operator",
         )
-        self.assertEqual(200, register_response.status_code)
 
         create_response = self._create_order("LOG-001")
 
@@ -520,32 +517,28 @@ class ManualDispatchLogbookApiActorTest(unittest.TestCase):
         self.assertEqual("Office Operator", created_entry["actor"])
         self.assertNotEqual("Unknown", created_entry["actor"])
 
-    def test_logout_clears_operator_actor_for_later_mutation(self):
-        self.client.post(
-            "/api/manual-dispatch/auth/register",
-            json={
-                "account_name": "Office Operator",
-                "password": "secret123",
-                "confirm_password": "secret123",
-            },
+    def test_logout_blocks_later_mutation_without_actor(self):
+        authenticate_test_client(
+            self.client,
+            self.service,
+            account_name="Office Operator",
         )
-        login_response = self.client.post(
-            "/api/manual-dispatch/auth/login",
-            json={"account_name": "Office Operator", "password": "secret123"},
-        )
-        self.assertEqual(200, login_response.status_code)
 
         cookie_name = self.api_module.OPERATOR_COOKIE_NAME
         cookie_value = self.client.cookies.get(cookie_name)
-        self.assertRegex(cookie_value, r"^\d+:[0-9a-f]{64}$")
+        self.assertRegex(cookie_value, r"^[A-Za-z0-9_-]+\.[0-9a-f]{64}$")
 
         logout_response = self.client.post("/api/manual-dispatch/auth/logout")
         self.assertEqual({"logged_out": True}, logout_response.json())
         self.assertNotIn(cookie_name, self.client.cookies)
 
         create_response = self._create_order("LOG-002")
-        self.assertEqual(200, create_response.status_code)
-        self.assertEqual("Unknown", self._latest_entry("ORDER_CREATED")["actor"])
+        self.assertEqual(401, create_response.status_code)
+        files = list(self.logbook_dir.glob("manual_dispatch_logbook_*.txt"))
+        entries = self._entries() if files else []
+        self.assertFalse(
+            [entry for entry in entries if entry["action"] == "ORDER_CREATED"]
+        )
 
     def _create_order(self, invoice_number):
         return self.client.post(

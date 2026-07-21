@@ -13,11 +13,13 @@ export function createOpShopTripSummaryActions(context) {
     route = state.workspaceRoute,
     pickupDate = state.opshopTripSummaryDate || state.dispatchDate,
     requestVersion = ++context.opshopWorkspaceRequestVersion,
+    authSessionVersion = state.authSessionVersion,
   ) {
     const scopedPickupDate =
       pickupDate || state.opshopTripSummaryDate || state.dispatchDate;
     const isCurrent = () =>
       state.isLoggedIn &&
+      state.authSessionVersion === authSessionVersion &&
       state.workspaceRoute === route &&
       state.opshopTripSummaryDate === scopedPickupDate &&
       requestVersion === context.opshopWorkspaceRequestVersion;

@@ -17,6 +17,26 @@ def read_manual_dispatch_api_source():
 
 
 class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
+    def test_all_shared_request_shapes_use_the_global_401_handler(self):
+        shared_api = (
+            API_ROOT / "manual-dispatch" / "shared-api.js"
+        ).read_text(encoding="utf-8")
+        auth_actions = (
+            FRONTEND_ROOT / "js" / "actions" / "auth-actions.js"
+        ).read_text(encoding="utf-8")
+
+        self.assertGreaterEqual(
+            shared_api.count("await notifyUnauthorized(response);"),
+            4,
+        )
+        self.assertIn("export function setUnauthorizedHandler", shared_api)
+        self.assertIn("export async function apiGetAccountSession", shared_api)
+        self.assertIn(
+            "setUnauthorizedHandler(() => invalidateAccountSession())",
+            auth_actions,
+        )
+        self.assertIn("const identity = await apiGetAccountSession()", auth_actions)
+
     def test_frontend_entry_script_remains_app_module(self):
         index_html = (FRONTEND_ROOT / "index.html").read_text(encoding="utf-8")
 

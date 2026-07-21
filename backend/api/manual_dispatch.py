@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, Request
 
 from backend.repositories.sqlite_manual_dispatch_repository import (
     SQLiteManualDispatchRepository,
@@ -32,6 +32,7 @@ from .manual_dispatch_routes.common import (
     is_env_flag_enabled as _is_env_flag_enabled,
     operator_cookie_secret as _operator_cookie_secret,
     operator_cookie_signature as _operator_cookie_signature,
+    require_authenticated_operator,
     reject_scoped_fields as _reject_scoped_fields,
     safe_filename_part as _safe_filename_part,
     save_final_trip_summary_request_from_payload as _save_final_trip_summary_request_from_payload,
@@ -68,23 +69,35 @@ def _set_operator_cookie(response, identity):
     return set_operator_cookie(service, response, identity)
 
 
+def _require_authenticated_operator(http_request: Request):
+    return require_authenticated_operator(service, http_request)
+
+
 def _get_compatibility_dependency(name):
     return globals()[name]
 
 
+protected_router = APIRouter(
+    prefix="/api/manual-dispatch",
+    dependencies=[Depends(_require_authenticated_operator)],
+)
+
 # Static export paths must precede parameterized snapshot routes.
-create_export_router(_get_service, _get_compatibility_dependency, router)
+create_export_router(_get_service, _get_compatibility_dependency, protected_router)
+create_auth_router(_get_service, router, _require_authenticated_operator)
 for route_factory in (
-    create_auth_router,
     create_attache_router,
     create_delivery_router,
     create_opshop_router,
     create_workspace_snapshot_router,
     create_legacy_router,
 ):
-    route_factory(_get_service, router)
+    route_factory(_get_service, protected_router)
+router.routes.extend(protected_router.routes)
 
 
 # Endpoint names were historically module attributes and remain importable.
 for route in router.routes:
-    globals().setdefault(route.endpoint.__name__, route.endpoint)
+    endpoint = getattr(route, "endpoint", None)
+    if endpoint is not None:
+        globals().setdefault(endpoint.__name__, endpoint)

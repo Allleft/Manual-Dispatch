@@ -1,4 +1,9 @@
-import { getApiUrl, requestFormData, requestJson } from "./shared-api.js";
+import {
+  getApiUrl,
+  requestFormData,
+  requestJson,
+  requestResponse,
+} from "./shared-api.js";
 
 
 export async function apiGetBoard(dispatchDate) {
@@ -92,10 +97,8 @@ export async function apiCancelGeneratedFinalSummary(summaryId) {
 }
 
 export async function apiExportFinalSummaryExcel(summaryId) {
-  return fetch(
-    getApiUrl(
-      `/api/manual-dispatch/final-summaries/${encodeURIComponent(summaryId)}/export-excel`,
-    ),
+  return requestResponse(
+    `/api/manual-dispatch/final-summaries/${encodeURIComponent(summaryId)}/export-excel`,
   );
 }
 
@@ -161,5 +164,7 @@ export function getFinalSummaryExcelExportUrl(dispatchDate, deliveryDate) {
 }
 
 export function apiExportFinalSummariesExcel(dispatchDate, deliveryDate) {
-  return fetch(getFinalSummaryExcelExportUrl(dispatchDate, deliveryDate));
+  return requestResponse("/api/manual-dispatch/final-summaries/export-excel", {
+    query: { dispatch_date: dispatchDate, delivery_date: deliveryDate },
+  });
 }

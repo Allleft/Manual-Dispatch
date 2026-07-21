@@ -1,4 +1,9 @@
-import { getApiUrl, requestBlobDownload, requestJson } from "./shared-api.js";
+import {
+  getApiUrl,
+  requestBlobDownload,
+  requestJson,
+  requestResponse,
+} from "./shared-api.js";
 
 
 export async function apiGetOpShopWorkspaceBoard(dispatchDate) {
@@ -290,5 +295,7 @@ export function getOpShopPickupRunSheetExcelExportUrl(dispatchDate) {
 }
 
 export function apiExportOpShopPickupRunSheetExcel(dispatchDate) {
-  return fetch(getOpShopPickupRunSheetExcelExportUrl(dispatchDate));
+  return requestResponse("/api/manual-dispatch/opshop-pickups/export-excel", {
+    query: { dispatch_date: dispatchDate },
+  });
 }

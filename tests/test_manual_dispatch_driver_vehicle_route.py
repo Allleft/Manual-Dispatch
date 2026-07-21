@@ -10,6 +10,7 @@ from backend.repositories.sqlite_manual_dispatch_repository import (
 )
 from backend.schemas import AssignTaskRequest
 from backend.services.manual_dispatch_service import ManualDispatchService
+from tests.manual_dispatch_api_test_helpers import authenticate_test_client
 
 try:
     from fastapi import FastAPI
@@ -39,6 +40,7 @@ class ManualDispatchDriverVehicleRouteTest(unittest.TestCase):
         app = FastAPI()
         app.include_router(self.api_module.router)
         self.client = TestClient(app)
+        authenticate_test_client(self.client, self.service)
         self.dispatch_date = "2026-05-05"
 
     def tearDown(self):

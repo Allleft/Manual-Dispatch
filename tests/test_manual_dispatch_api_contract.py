@@ -35,6 +35,7 @@ class ManualDispatchApiContractTest(unittest.TestCase):
             ("POST", "/api/manual-dispatch/auth/register"),
             ("POST", "/api/manual-dispatch/auth/login"),
             ("POST", "/api/manual-dispatch/auth/logout"),
+            ("GET", "/api/manual-dispatch/auth/session"),
             ("POST", "/api/manual-dispatch/auth/reset-password"),
             ("POST", "/api/manual-dispatch/assign"),
             ("POST", "/api/manual-dispatch/unassign"),
@@ -71,6 +72,42 @@ class ManualDispatchApiContractTest(unittest.TestCase):
             f"Actual router routes: {sorted(router_routes)}",
         )
 
+    def test_manual_dispatch_auth_boundary_is_default_deny(self):
+        manual_dispatch_router = load_manual_dispatch_router()
+        routes = [
+            route
+            for route in manual_dispatch_router.routes
+            if getattr(route, "methods", None)
+        ]
+        public_routes = {
+            (method, route.path)
+            for route in routes
+            if not route.dependant.dependencies
+            for method in route.methods
+        }
+
+        self.assertEqual(94, len(routes))
+        self.assertEqual(
+            {
+                ("POST", "/api/manual-dispatch/auth/login"),
+                ("POST", "/api/manual-dispatch/auth/register"),
+                ("POST", "/api/manual-dispatch/auth/reset-password"),
+            },
+            public_routes,
+        )
+        protected_routes = [route for route in routes if route.dependant.dependencies]
+        self.assertEqual(91, len(protected_routes))
+        for route in protected_routes:
+            dependency_names = {
+                getattr(dependency.call, "__name__", "")
+                for dependency in route.dependant.dependencies
+            }
+            self.assertIn(
+                "_require_authenticated_operator",
+                dependency_names,
+                f"Route is missing the canonical auth dependency: {route.path}",
+            )
+
     def test_backend_main_includes_manual_dispatch_router(self):
         main_py = (PROJECT_ROOT / "backend" / "main.py").read_text(encoding="utf-8")
 
@@ -89,3 +126,11 @@ class ManualDispatchApiContractTest(unittest.TestCase):
         }
 
         self.assertIn(("GET", "/health"), actual_routes)
+
+    def test_backend_uses_same_origin_policy_without_cors_middleware(self):
+        fresh_app = load_fresh_main_app()
+        middleware_names = {
+            middleware.cls.__name__ for middleware in fresh_app.user_middleware
+        }
+
+        self.assertNotIn("CORSMiddleware", middleware_names)
