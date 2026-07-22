@@ -1,8 +1,10 @@
 from io import BytesIO
+from contextlib import closing, contextmanager
 import shutil
 import sqlite3
 import unittest
 import uuid
+from unittest.mock import patch
 from pathlib import Path
 
 from openpyxl import load_workbook
@@ -22,7 +24,8 @@ class ManualDispatchCancelOrderTest(unittest.TestCase):
         self.temp_dir = temp_parent / f"cancel-order-test-{uuid.uuid4().hex}"
         self.temp_dir.mkdir()
         self.db_path = self.temp_dir / "manual_dispatch.sqlite3"
-        self.repository = SQLiteManualDispatchRepository(self.db_path)
+        with patch.dict("os.environ", {"MANUAL_DISPATCH_SEED_DEMO_DATA": "true"}):
+            self.repository = SQLiteManualDispatchRepository(self.db_path)
         self.service = ManualDispatchService(self.repository)
         self.dispatch_date = "2026-05-05"
 
@@ -67,7 +70,7 @@ class ManualDispatchCancelOrderTest(unittest.TestCase):
 
     def test_cancelled_order_is_excluded_from_excel_export(self):
         self._assign_order("ORD-001", "D001", "trip1")
-        with sqlite3.connect(self.db_path) as connection:
+        with _closing_sqlite_connection(self.db_path) as connection:
             connection.execute(
                 "UPDATE manual_orders SET status = 'CANCELLED' WHERE order_id = ?",
                 ("ORD-001",),
@@ -89,7 +92,7 @@ class ManualDispatchCancelOrderTest(unittest.TestCase):
         legacy_order = next(order for order in board.orders if order.order_id == "ORD-OLD")
         self.assertEqual("ACTIVE", legacy_order.status)
 
-        with sqlite3.connect(legacy_path) as connection:
+        with _closing_sqlite_connection(legacy_path) as connection:
             columns = {
                 row[1]
                 for row in connection.execute("PRAGMA table_info(manual_orders)").fetchall()
@@ -124,7 +127,7 @@ class ManualDispatchCancelOrderTest(unittest.TestCase):
         return list(worksheet.iter_rows(values_only=True))
 
     def _create_legacy_database_without_status(self, db_path):
-        with sqlite3.connect(db_path) as connection:
+        with _closing_sqlite_connection(db_path) as connection:
             connection.executescript(
                 """
                 CREATE TABLE manual_orders (
@@ -178,6 +181,13 @@ class ManualDispatchCancelOrderTest(unittest.TestCase):
                 """
             )
             connection.commit()
+
+
+@contextmanager
+def _closing_sqlite_connection(db_path):
+    with closing(sqlite3.connect(db_path)) as connection:
+        with connection:
+            yield connection
 
 
 if __name__ == "__main__":

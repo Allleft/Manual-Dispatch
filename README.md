@@ -227,6 +227,7 @@ Compatibility facades keep established imports and public entry points stable wh
 ## Quick Start
 
 Examples below use Windows PowerShell from the repository root.
+Python 3.12 is the supported production runtime and matches CI and Docker.
 
 ```powershell
 python -m venv .venv
@@ -236,7 +237,10 @@ python -m pip install -r requirements-dev.txt
 
 # Optional: use a safe local test database instead of the runtime database.
 $env:MANUAL_DISPATCH_DB_PATH="data\manual_dispatch_test.sqlite3"
+$env:MANUAL_DISPATCH_LOGBOOK_DIR="data\manual_dispatch_test_logbook"
 $env:MANUAL_DISPATCH_AUTH_COOKIE_SECRET="replace-with-a-strong-random-local-secret"
+$env:MANUAL_DISPATCH_ALLOW_REGISTRATION="false"
+$env:MANUAL_DISPATCH_SEED_DEMO_DATA="false"
 
 python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
 ```
@@ -255,6 +259,20 @@ instance. Set `MANUAL_DISPATCH_AUTH_COOKIE_SECURE=true` only when the browser
 reaches the app over HTTPS; local plain-HTTP development must leave it `false`.
 Generate a deployment secret with `python -c "import secrets; print(secrets.token_urlsafe(48))"`
 and keep it in the local deployment environment, never in Git.
+
+Every production deployment must explicitly configure these values:
+
+- `MANUAL_DISPATCH_AUTH_COOKIE_SECRET`: a strong, stable secret supplied outside Git.
+- `MANUAL_DISPATCH_ALLOW_REGISTRATION=false` after initial account setup.
+- `MANUAL_DISPATCH_SEED_DEMO_DATA=false`; missing also defaults to no demo seed.
+- `MANUAL_DISPATCH_ENABLE_LEGACY_MUTATIONS=false`; temporarily enable only for an audited compatibility operation.
+- `MANUAL_DISPATCH_ENABLE_API_DOCS=false`; explicitly enable only in a trusted diagnostic environment.
+- `MANUAL_DISPATCH_DB_PATH`: an explicit path on persistent storage.
+- `MANUAL_DISPATCH_LOGBOOK_DIR`: an explicit directory on persistent storage.
+
+The Docker Compose deployment binds `/app/data` to `./data`, so both the configured
+database and Logbook directory survive container replacement. Do not run the image
+for production without an equivalent persistent volume.
 
 For the office-trial configuration:
 

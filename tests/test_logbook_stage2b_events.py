@@ -38,11 +38,13 @@ class LogbookStage2BEventsTest(unittest.TestCase):
                 "MANUAL_DISPATCH_LOGBOOK_DIR",
                 "MANUAL_DISPATCH_SEED_DEMO_DATA",
                 "MANUAL_DISPATCH_ALLOW_REGISTRATION",
+                "MANUAL_DISPATCH_ENABLE_LEGACY_MUTATIONS",
             )
         }
         os.environ["MANUAL_DISPATCH_DB_PATH"] = str(self.db_path)
         os.environ["MANUAL_DISPATCH_LOGBOOK_DIR"] = str(self.logbook_dir)
         os.environ["MANUAL_DISPATCH_SEED_DEMO_DATA"] = "0"
+        os.environ["MANUAL_DISPATCH_ENABLE_LEGACY_MUTATIONS"] = "true"
         os.environ.pop("MANUAL_DISPATCH_ALLOW_REGISTRATION", None)
 
         self.repository = SQLiteManualDispatchRepository(self.db_path)

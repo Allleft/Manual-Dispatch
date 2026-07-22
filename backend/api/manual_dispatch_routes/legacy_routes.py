@@ -2,6 +2,7 @@ from collections.abc import Callable
 from fastapi import (
     APIRouter,
     Body,
+    Depends,
     Request,
 )
 from backend.schemas import (
@@ -19,10 +20,14 @@ from backend.services.manual_dispatch_service import ManualDispatchService
 from .common import (
     assign_driver_vehicle_request_from_payload,
     authenticated_operator_from_request,
+    require_legacy_mutations_enabled,
     save_final_trip_summary_request_from_payload,
     to_http_exception,
     with_logbook_actor,
 )
+
+
+LEGACY_MUTATION_DEPENDENCIES = [Depends(require_legacy_mutations_enabled)]
 
 
 def create_legacy_router(
@@ -34,14 +39,17 @@ def create_legacy_router(
     @router.get("/board")
     def get_board(dispatch_date: str):
         service = get_service()
-        return to_dict(service.get_board(dispatch_date))
+        try:
+            return to_dict(service.get_board(dispatch_date))
+        except ValueError as error:
+            raise to_http_exception(error) from error
 
     @router.get("/specifications")
     def get_specifications():
         service = get_service()
         return to_dict(service.get_specifications())
 
-    @router.post("/assign")
+    @router.post("/assign", dependencies=LEGACY_MUTATION_DEPENDENCIES)
     def assign_task(request: AssignTaskRequest, http_request: Request = None):
         service = get_service()
         try:
@@ -53,7 +61,7 @@ def create_legacy_router(
         except ValueError as error:
             raise to_http_exception(error) from error
 
-    @router.post("/unassign")
+    @router.post("/unassign", dependencies=LEGACY_MUTATION_DEPENDENCIES)
     def unassign_task(request: UnassignTaskRequest, http_request: Request = None):
         service = get_service()
         try:
@@ -65,7 +73,7 @@ def create_legacy_router(
         except ValueError as error:
             raise to_http_exception(error) from error
 
-    @router.post("/driver-vehicle")
+    @router.post("/driver-vehicle", dependencies=LEGACY_MUTATION_DEPENDENCIES)
     def assign_driver_vehicle(http_request: Request = None, payload: dict = Body(...)):
         service = get_service()
         request = assign_driver_vehicle_request_from_payload(payload)
@@ -78,7 +86,7 @@ def create_legacy_router(
         except ValueError as error:
             raise to_http_exception(error) from error
 
-    @router.post("/orders")
+    @router.post("/orders", dependencies=LEGACY_MUTATION_DEPENDENCIES)
     def create_order(request: CreateOrderRequest, http_request: Request = None):
         service = get_service()
         try:
@@ -90,7 +98,10 @@ def create_legacy_router(
         except ValueError as error:
             raise to_http_exception(error) from error
 
-    @router.patch("/orders/{order_id}")
+    @router.patch(
+        "/orders/{order_id}",
+        dependencies=LEGACY_MUTATION_DEPENDENCIES,
+    )
     def update_order(order_id: str, request: UpdateOrderRequest, http_request: Request = None):
         service = get_service()
         try:
@@ -102,7 +113,10 @@ def create_legacy_router(
         except ValueError as error:
             raise to_http_exception(error) from error
 
-    @router.post("/orders/{order_id}/cancel")
+    @router.post(
+        "/orders/{order_id}/cancel",
+        dependencies=LEGACY_MUTATION_DEPENDENCIES,
+    )
     def cancel_order(order_id: str, http_request: Request = None):
         service = get_service()
         try:
@@ -114,7 +128,7 @@ def create_legacy_router(
         except ValueError as error:
             raise to_http_exception(error) from error
 
-    @router.post("/drivers")
+    @router.post("/drivers", dependencies=LEGACY_MUTATION_DEPENDENCIES)
     def create_driver(request: CreateDriverRequest, http_request: Request = None):
         service = get_service()
         try:
@@ -124,7 +138,10 @@ def create_legacy_router(
         except ValueError as error:
             raise to_http_exception(error) from error
 
-    @router.patch("/drivers/{driver_id}")
+    @router.patch(
+        "/drivers/{driver_id}",
+        dependencies=LEGACY_MUTATION_DEPENDENCIES,
+    )
     def update_driver(
         driver_id: str, request: UpdateDriverRequest, http_request: Request = None
     ):
@@ -138,7 +155,10 @@ def create_legacy_router(
         except ValueError as error:
             raise to_http_exception(error) from error
 
-    @router.delete("/drivers/{driver_id}")
+    @router.delete(
+        "/drivers/{driver_id}",
+        dependencies=LEGACY_MUTATION_DEPENDENCIES,
+    )
     def delete_driver(driver_id: str, http_request: Request = None):
         service = get_service()
         try:
@@ -150,7 +170,7 @@ def create_legacy_router(
         except ValueError as error:
             raise to_http_exception(error) from error
 
-    @router.post("/vehicles")
+    @router.post("/vehicles", dependencies=LEGACY_MUTATION_DEPENDENCIES)
     def create_vehicle(request: CreateVehicleRequest, http_request: Request = None):
         service = get_service()
         try:
@@ -160,7 +180,10 @@ def create_legacy_router(
         except ValueError as error:
             raise to_http_exception(error) from error
 
-    @router.patch("/vehicles/{vehicle_id}")
+    @router.patch(
+        "/vehicles/{vehicle_id}",
+        dependencies=LEGACY_MUTATION_DEPENDENCIES,
+    )
     def update_vehicle(
         vehicle_id: str, request: UpdateVehicleRequest, http_request: Request = None
     ):
@@ -174,7 +197,10 @@ def create_legacy_router(
         except ValueError as error:
             raise to_http_exception(error) from error
 
-    @router.delete("/vehicles/{vehicle_id}")
+    @router.delete(
+        "/vehicles/{vehicle_id}",
+        dependencies=LEGACY_MUTATION_DEPENDENCIES,
+    )
     def delete_vehicle(vehicle_id: str, http_request: Request = None):
         service = get_service()
         try:
@@ -186,7 +212,7 @@ def create_legacy_router(
         except ValueError as error:
             raise to_http_exception(error) from error
 
-    @router.post("/final-summaries")
+    @router.post("/final-summaries", dependencies=LEGACY_MUTATION_DEPENDENCIES)
     def save_final_trip_summary(
         http_request: Request = None, payload: dict = Body(...)
     ):
@@ -202,7 +228,10 @@ def create_legacy_router(
         except ValueError as error:
             raise to_http_exception(error) from error
 
-    @router.post("/final-summaries/generated")
+    @router.post(
+        "/final-summaries/generated",
+        dependencies=LEGACY_MUTATION_DEPENDENCIES,
+    )
     def create_generated_final_trip_summary(
         http_request: Request = None, payload: dict = Body(...)
     ):
@@ -237,7 +266,10 @@ def create_legacy_router(
         service = get_service()
         return service.list_final_summary_dates()
 
-    @router.post("/final-summaries/{summary_id}/save")
+    @router.post(
+        "/final-summaries/{summary_id}/save",
+        dependencies=LEGACY_MUTATION_DEPENDENCIES,
+    )
     def save_generated_final_trip_summary(
         summary_id: str,
         http_request: Request = None,
@@ -260,7 +292,10 @@ def create_legacy_router(
         except ValueError as error:
             raise to_http_exception(error) from error
 
-    @router.post("/final-summaries/{summary_id}/cancel-generated")
+    @router.post(
+        "/final-summaries/{summary_id}/cancel-generated",
+        dependencies=LEGACY_MUTATION_DEPENDENCIES,
+    )
     def cancel_generated_final_trip_summary(
         summary_id: str, http_request: Request = None
     ):

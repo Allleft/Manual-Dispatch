@@ -35,21 +35,46 @@ class SpecificationService:
         if not existing or existing.is_deleted:
             raise ValueError(f"Driver does not exist: {driver_id}")
 
-        is_available = bool_or_default(request.is_available, True)
+        fields = request.model_fields_set
+        is_available = _patch_bool(
+            request,
+            fields,
+            "is_available",
+            existing.is_available,
+        )
         if not is_available and existing.is_available:
             self.validator.ensure_driver_can_be_made_unavailable(driver_id)
 
         driver = Driver(
             driver_id=existing.driver_id,
-            name=clean_required_text(request.name, "name"),
-            start_time=clean_optional_text(request.start_time),
-            end_time=clean_optional_text(request.end_time),
+            name=(
+                clean_required_text(request.name, "name")
+                if "name" in fields
+                else existing.name
+            ),
+            start_time=_patch_text(request, fields, "start_time", existing.start_time),
+            end_time=_patch_text(request, fields, "end_time", existing.end_time),
             is_available=is_available,
-            preferred_zone=clean_optional_text(request.preferred_zone),
-            pallet_only=bool_or_default(request.pallet_only, False),
-            license_no=clean_optional_text(request.license_no),
-            email=clean_optional_text(request.email),
-            phone_number=clean_optional_text(request.phone_number),
+            preferred_zone=_patch_text(
+                request,
+                fields,
+                "preferred_zone",
+                existing.preferred_zone,
+            ),
+            pallet_only=_patch_bool(
+                request,
+                fields,
+                "pallet_only",
+                existing.pallet_only,
+            ),
+            license_no=_patch_text(request, fields, "license_no", existing.license_no),
+            email=_patch_text(request, fields, "email", existing.email),
+            phone_number=_patch_text(
+                request,
+                fields,
+                "phone_number",
+                existing.phone_number,
+            ),
             is_deleted=False,
         )
         return self.repository.update_driver(driver)
@@ -101,27 +126,48 @@ class SpecificationService:
         if not existing or existing.is_deleted:
             raise ValueError(f"Vehicle does not exist: {vehicle_id}")
 
-        is_available = bool_or_default(request.is_available, True)
+        fields = request.model_fields_set
+        is_available = _patch_bool(
+            request,
+            fields,
+            "is_available",
+            existing.is_available,
+        )
         if not is_available and existing.is_available:
             self.validator.ensure_vehicle_can_be_made_unavailable(vehicle_id)
 
         vehicle = Vehicle(
             vehicle_id=existing.vehicle_id,
-            rego=clean_required_text(request.rego, "rego"),
-            type=clean_optional_text(request.type) or "",
+            rego=(
+                clean_required_text(request.rego, "rego")
+                if "rego" in fields
+                else existing.rego
+            ),
+            type=_patch_text(request, fields, "type", existing.type) or "",
             is_available=is_available,
-            pallet_capacity=quantity_or_default(
-                request.pallet_capacity,
+            pallet_capacity=_patch_quantity(
+                request,
+                fields,
                 "pallet_capacity",
+                existing.pallet_capacity,
             ),
-            tub_capacity=quantity_or_default(request.tub_capacity, "tub_capacity"),
-            trolley_capacity=quantity_or_default(
-                request.trolley_capacity,
+            tub_capacity=_patch_quantity(
+                request,
+                fields,
+                "tub_capacity",
+                existing.tub_capacity,
+            ),
+            trolley_capacity=_patch_quantity(
+                request,
+                fields,
                 "trolley_capacity",
+                existing.trolley_capacity,
             ),
-            stillage_capacity=quantity_or_default(
-                request.stillage_capacity,
+            stillage_capacity=_patch_quantity(
+                request,
+                fields,
                 "stillage_capacity",
+                existing.stillage_capacity,
             ),
             is_deleted=False,
         )
@@ -141,3 +187,27 @@ class SpecificationService:
             )
         self.repository.delete_vehicle(vehicle_id)
         return self.board_service.get_specifications()
+
+
+def _patch_text(request, fields, field_name, existing_value):
+    if field_name not in fields:
+        return existing_value
+    return clean_optional_text(getattr(request, field_name))
+
+
+def _patch_bool(request, fields, field_name, existing_value):
+    if field_name not in fields:
+        return existing_value
+    value = getattr(request, field_name)
+    if value is None:
+        raise ValueError(f"{field_name} cannot be null")
+    return bool_or_default(value, existing_value)
+
+
+def _patch_quantity(request, fields, field_name, existing_value):
+    if field_name not in fields:
+        return existing_value
+    value = getattr(request, field_name)
+    if value is None:
+        raise ValueError(f"{field_name} cannot be null")
+    return quantity_or_default(value, field_name)

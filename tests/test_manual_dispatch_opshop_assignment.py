@@ -1,6 +1,7 @@
 import unittest
 import shutil
 import uuid
+from unittest.mock import patch
 from pathlib import Path
 
 from backend.repositories.in_memory_manual_dispatch_repository import (
@@ -394,7 +395,8 @@ class SQLiteManualDispatchOpShopAssignmentTest(unittest.TestCase):
         self.temp_dir = temp_parent / f"opshop-assignment-test-{uuid.uuid4().hex}"
         self.temp_dir.mkdir()
         self.db_path = self.temp_dir / "manual_dispatch.sqlite3"
-        self.repository = SQLiteManualDispatchRepository(self.db_path)
+        with patch.dict("os.environ", {"MANUAL_DISPATCH_SEED_DEMO_DATA": "true"}):
+            self.repository = SQLiteManualDispatchRepository(self.db_path)
         self.repository.upsert_opshop_location(self._location())
         self.repository.upsert_opshop_pickup_schedule(ManualDispatchOpShopAssignmentTest()._schedule())
         self.repository.upsert_opshop_pickup_task(self._task("TASK-001"))

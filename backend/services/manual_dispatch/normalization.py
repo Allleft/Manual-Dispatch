@@ -6,6 +6,7 @@ from backend.schemas import ProductDetailLine
 
 ISO_DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 VALID_PRODUCT_DETAIL_UNITS = {"PALLETS", "BAGS", "CARTONS"}
+SQLITE_INTEGER_MAX = 2**63 - 1
 
 
 def clean_optional_text(value):
@@ -43,12 +44,18 @@ def clean_optional_iso_date(value, field_name):
 def quantity_or_default(value, field_name):
     if value in (None, ""):
         return 0
+    if isinstance(value, bool):
+        raise ValueError(f"{field_name} must be a whole number")
     try:
         quantity = int(value)
-    except (TypeError, ValueError) as error:
+    except (TypeError, ValueError, OverflowError) as error:
         raise ValueError(f"{field_name} must be a whole number") from error
+    if not isinstance(value, str) and quantity != value:
+        raise ValueError(f"{field_name} must be a whole number")
     if quantity < 0:
         raise ValueError(f"{field_name} cannot be negative")
+    if quantity > SQLITE_INTEGER_MAX:
+        raise ValueError(f"{field_name} cannot exceed {SQLITE_INTEGER_MAX}")
     return quantity
 
 

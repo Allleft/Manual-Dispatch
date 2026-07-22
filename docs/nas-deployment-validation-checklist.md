@@ -10,6 +10,12 @@ Use this checklist before office users rely on the NAS deployment.
 - Only one app instance is running.
 - Persistent `./data:/app/data` volume is mounted.
 - Persistent `./backups:/app/backups` volume is mounted.
+- Runtime Python is 3.12, matching CI and Docker.
+- `MANUAL_DISPATCH_DB_PATH=/app/data/manual_dispatch.sqlite3` is explicit.
+- `MANUAL_DISPATCH_LOGBOOK_DIR=/app/data/logbook` is explicit and uses the persistent data volume.
+- `MANUAL_DISPATCH_AUTH_COOKIE_SECRET` is a strong, stable secret stored outside Git.
+- `MANUAL_DISPATCH_ALLOW_REGISTRATION=false` after account setup.
+- `MANUAL_DISPATCH_SEED_DEMO_DATA=false`.
 
 ## Health and Access Checks
 

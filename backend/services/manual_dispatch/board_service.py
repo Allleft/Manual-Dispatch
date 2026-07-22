@@ -3,6 +3,7 @@ from backend.services.manual_dispatch.final_summary_lock import (
     is_driver_delivery_date_finalized,
 )
 from backend.services.manual_dispatch.opshop_pickup_service import OpShopPickupService
+from backend.services.manual_dispatch.normalization import clean_required_iso_date
 from backend.services.manual_dispatch.suburb_distance_service import (
     get_estimated_distance_km,
 )
@@ -16,6 +17,7 @@ class BoardService:
         )
 
     def get_board(self, dispatch_date):
+        dispatch_date = clean_required_iso_date(dispatch_date, "dispatch_date")
         scheduled_generation = self.opshop_pickup_service.ensure_regular_opshop_pickup_tasks_for_week(
             dispatch_date
         )

@@ -16,7 +16,7 @@ class OrderService:
 
     def create_order(self, request):
         suburb = clean_required_text(request.suburb, "suburb")
-        delivery_date = clean_required_text(
+        delivery_date = clean_required_iso_date(
             request.delivery_date,
             "delivery_date",
         )
@@ -62,22 +62,30 @@ class OrderService:
         if not existing:
             raise ValueError(f"Order does not exist: {order_id}")
 
-        suburb = clean_required_text(request.suburb, "suburb")
-        delivery_date = clean_required_iso_date(
-            request.delivery_date if request.delivery_date is not None else existing.delivery_date,
-            "delivery_date",
+        fields = _provided_fields(request)
+        suburb = (
+            clean_required_text(request.suburb, "suburb")
+            if "suburb" in fields
+            else existing.suburb
         )
-        pallet_quantity = quantity_or_default(
-            request.pallet_quantity,
-            "pallet_quantity",
+        delivery_date = (
+            clean_required_iso_date(request.delivery_date, "delivery_date")
+            if "delivery_date" in fields
+            else existing.delivery_date
         )
-        loose_bags_quantity = quantity_or_default(
-            request.loose_bags_quantity,
-            "loose_bags_quantity",
+        pallet_quantity = (
+            _patch_quantity(request.pallet_quantity, "pallet_quantity")
+            if "pallet_quantity" in fields
+            else existing.pallet_quantity
+        )
+        loose_bags_quantity = (
+            _patch_quantity(request.loose_bags_quantity, "loose_bags_quantity")
+            if "loose_bags_quantity" in fields
+            else existing.loose_bags_quantity
         )
         load_unit = load_unit_for_quantities(pallet_quantity, loose_bags_quantity)
         product_lines_payload = request.product_lines
-        if product_lines_payload is None:
+        if "product_lines" not in fields:
             product_lines_payload = [
                 {
                     "product_name": line.product_name,
@@ -93,22 +101,27 @@ class OrderService:
 
         order = Order(
             order_id=existing.order_id,
-            invoice_number=clean_optional_text(request.invoice_number),
-            order_no=clean_optional_text(request.order_no),
-            company_name=clean_optional_text(request.company_name) or "",
-            phone=clean_optional_text(request.phone),
-            delivery_address=clean_optional_text(request.delivery_address) or "",
+            invoice_number=_optional_patch_text(request, fields, "invoice_number", existing.invoice_number),
+            order_no=_optional_patch_text(request, fields, "order_no", existing.order_no),
+            company_name=_optional_patch_text(request, fields, "company_name", existing.company_name) or "",
+            phone=_optional_patch_text(request, fields, "phone", existing.phone),
+            delivery_address=_optional_patch_text(request, fields, "delivery_address", existing.delivery_address) or "",
             suburb=suburb,
-            postcode=clean_optional_text(request.postcode) or "",
+            postcode=_optional_patch_text(request, fields, "postcode", existing.postcode) or "",
             delivery_date=delivery_date,
-            zone=clean_optional_text(request.zone) or "",
-            urgency=clean_optional_text(request.urgency) or "Normal",
-            preferred_driver_id=clean_optional_text(request.preferred_driver_id),
+            zone=_optional_patch_text(request, fields, "zone", existing.zone) or "",
+            urgency=_optional_patch_text(request, fields, "urgency", existing.urgency) or "Normal",
+            preferred_driver_id=_optional_patch_text(
+                request,
+                fields,
+                "preferred_driver_id",
+                existing.preferred_driver_id,
+            ),
             pallet_quantity=pallet_quantity,
             loose_bags_quantity=loose_bags_quantity,
-            start_time=clean_optional_text(request.start_time),
-            end_time=clean_optional_text(request.end_time),
-            note=clean_optional_text(request.note),
+            start_time=_optional_patch_text(request, fields, "start_time", existing.start_time),
+            end_time=_optional_patch_text(request, fields, "end_time", existing.end_time),
+            note=_optional_patch_text(request, fields, "note", existing.note),
             status=existing.status,
             product_lines=product_lines,
         )
@@ -126,3 +139,22 @@ class OrderService:
             raise ValueError("Order must be unassigned before cancellation")
 
         return self.repository.cancel_order(order_id)
+
+
+def _optional_patch_text(request, fields, field_name, existing_value):
+    if field_name not in fields:
+        return existing_value
+    return clean_optional_text(getattr(request, field_name))
+
+
+def _provided_fields(request):
+    model_fields_set = getattr(request, "model_fields_set", None)
+    if model_fields_set is not None:
+        return model_fields_set
+    return vars(request).keys()
+
+
+def _patch_quantity(value, field_name):
+    if value is None:
+        raise ValueError(f"{field_name} cannot be null")
+    return quantity_or_default(value, field_name)

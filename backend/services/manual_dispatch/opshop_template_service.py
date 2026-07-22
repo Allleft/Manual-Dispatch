@@ -12,6 +12,7 @@ from backend.services.manual_dispatch.normalization import (
     bool_or_default,
     clean_optional_text,
     clean_required_text,
+    quantity_or_default,
 )
 
 
@@ -39,6 +40,9 @@ class OpShopTemplateService:
         name = clean_required_text(getattr(request, "route_group_name", None), "route_group_name")
         existing = self.repository.find_countryside_route_group_by_name(name)
         now = _timestamp()
+        display_order = getattr(request, "display_order", None)
+        if display_order is None:
+            display_order = existing.display_order if existing else 0
         route_group = OpShopCountrysideRouteGroup(
             route_group_id=existing.route_group_id
             if existing
@@ -46,7 +50,7 @@ class OpShopTemplateService:
             route_group_name=name,
             status="Active",
             active_flag=True,
-            display_order=int(getattr(request, "display_order", None) or (existing.display_order if existing else 0)),
+            display_order=quantity_or_default(display_order, "display_order"),
             source_marker=clean_optional_text(
                 getattr(request, "source_marker", None)
                 if getattr(request, "source_marker", None) is not None
@@ -61,24 +65,40 @@ class OpShopTemplateService:
         existing = self.repository.get_countryside_route_group(route_group_id)
         if not existing:
             raise ValueError(f"Countryside route group does not exist: {route_group_id}")
-        name = clean_optional_text(getattr(request, "route_group_name", None)) or existing.route_group_name
-        status = clean_optional_text(getattr(request, "status", None)) or existing.status
+        fields = request.model_fields_set
+        name = (
+            clean_required_text(request.route_group_name, "route_group_name")
+            if "route_group_name" in fields
+            else existing.route_group_name
+        )
+        status = (
+            clean_required_text(request.status, "status")
+            if "status" in fields
+            else existing.status
+        )
         if status not in {"Active", "On_Hold"}:
             raise ValueError("route group status must be Active or On_Hold")
-        active_flag = getattr(request, "active_flag", None)
+        active_flag = existing.active_flag
+        if "active_flag" in fields:
+            if request.active_flag is None:
+                raise ValueError("active_flag cannot be null")
+            active_flag = request.active_flag
+        display_order = existing.display_order
+        if "display_order" in fields:
+            if request.display_order is None:
+                raise ValueError("display_order cannot be null")
+            display_order = quantity_or_default(request.display_order, "display_order")
         route_group = OpShopCountrysideRouteGroup(
             route_group_id=existing.route_group_id,
             route_group_name=name,
             status=status,
-            active_flag=bool(existing.active_flag if active_flag is None else active_flag),
-            display_order=int(
-                existing.display_order
-                if getattr(request, "display_order", None) is None
-                else getattr(request, "display_order")
+            active_flag=bool(active_flag),
+            display_order=display_order,
+            source_marker=(
+                clean_optional_text(request.source_marker)
+                if "source_marker" in fields
+                else existing.source_marker
             ),
-            source_marker=clean_optional_text(getattr(request, "source_marker", None))
-            if getattr(request, "source_marker", None) is not None
-            else existing.source_marker,
             created_at=existing.created_at,
             updated_at=_timestamp(),
         )
@@ -281,9 +301,22 @@ class OpShopTemplateService:
         return self._get_template(schedule.schedule_id)
 
     def _values_from_request(self, request, existing_schedule=None, existing_location=None):
+        fields = getattr(request, "model_fields_set", set())
+
         def from_request(field, existing_value=None):
             value = getattr(request, field, None)
-            return existing_value if value is None and existing_schedule else value
+            return existing_value if existing_schedule and field not in fields else value
+
+        if existing_schedule:
+            for field in (
+                "run_type",
+                "name",
+                "pickup_category",
+                "call_before_arrival",
+                "key_required",
+            ):
+                if field in fields and getattr(request, field) is None:
+                    raise ValueError(f"{field} cannot be null")
 
         run_type = _normalize_run_type(
             from_request("run_type", existing_schedule.run_type if existing_schedule else None)

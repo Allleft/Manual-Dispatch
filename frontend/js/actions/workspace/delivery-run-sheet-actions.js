@@ -49,6 +49,7 @@ export function createDeliveryRunSheetActions(context) {
       `delivery-generate:${candidate.delivery_date}:${candidate.driver_id}`,
       async (context) => {
         await api.createGeneratedDeliveryRunSheet({
+          dispatch_date: candidate.dispatch_date,
           delivery_date: candidate.delivery_date,
           driver_id: candidate.driver_id,
         });

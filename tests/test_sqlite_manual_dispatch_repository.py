@@ -25,8 +25,16 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
         self.temp_dir = temp_parent / f"sqlite-test-{uuid.uuid4().hex}"
         self.temp_dir.mkdir()
         self.db_path = self.temp_dir / "manual_dispatch.sqlite3"
-        self.repository = SQLiteManualDispatchRepository(self.db_path)
-        self.service = ManualDispatchService(self.repository)
+        previous_seed_flag = os.environ.get("MANUAL_DISPATCH_SEED_DEMO_DATA")
+        os.environ["MANUAL_DISPATCH_SEED_DEMO_DATA"] = "true"
+        try:
+            self.repository = SQLiteManualDispatchRepository(self.db_path)
+            self.service = ManualDispatchService(self.repository)
+        finally:
+            if previous_seed_flag is None:
+                os.environ.pop("MANUAL_DISPATCH_SEED_DEMO_DATA", None)
+            else:
+                os.environ["MANUAL_DISPATCH_SEED_DEMO_DATA"] = previous_seed_flag
 
     def tearDown(self):
         shutil.rmtree(self.temp_dir, ignore_errors=True)
@@ -225,6 +233,15 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
         self.assertEqual(5000, busy_timeout)
         self.assertEqual(1, foreign_keys)
 
+    def test_connection_context_closes_owned_connection(self):
+        connection = connect(self.db_path)
+
+        with connection:
+            connection.execute("SELECT 1").fetchone()
+
+        with self.assertRaises(sqlite3.ProgrammingError):
+            connection.execute("SELECT 1").fetchone()
+
     def test_seed_data_loads_orders_drivers_and_vehicles(self):
         board = self.service.get_board("2026-05-05")
 
@@ -247,6 +264,20 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
             [vehicle.rego for vehicle in board.vehicles],
         )
 
+    def test_seed_data_is_disabled_when_environment_is_absent(self):
+        previous_value = os.environ.pop("MANUAL_DISPATCH_SEED_DEMO_DATA", None)
+        try:
+            db_path = self.temp_dir / "manual_dispatch_default_no_seed.sqlite3"
+            service = ManualDispatchService(SQLiteManualDispatchRepository(db_path))
+            board = service.get_board("2026-05-05")
+        finally:
+            if previous_value is not None:
+                os.environ["MANUAL_DISPATCH_SEED_DEMO_DATA"] = previous_value
+
+        self.assertEqual([], board.orders)
+        self.assertEqual([], board.drivers)
+        self.assertEqual([], board.vehicles)
+
     def test_seed_data_can_be_disabled_by_environment(self):
         previous_value = os.environ.get("MANUAL_DISPATCH_SEED_DEMO_DATA")
         os.environ["MANUAL_DISPATCH_SEED_DEMO_DATA"] = "false"
@@ -263,6 +294,65 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
         self.assertEqual([], board.orders)
         self.assertEqual([], board.drivers)
         self.assertEqual([], board.vehicles)
+
+    def test_explicit_seed_does_not_overwrite_existing_business_data(self):
+        db_path = self.temp_dir / "manual_dispatch_existing_data.sqlite3"
+        previous_value = os.environ.get("MANUAL_DISPATCH_SEED_DEMO_DATA")
+        try:
+            os.environ["MANUAL_DISPATCH_SEED_DEMO_DATA"] = "false"
+            initialize_database(db_path)
+            with sqlite3.connect(db_path) as connection:
+                connection.execute(
+                    """
+                    INSERT INTO manual_orders (
+                        order_id,
+                        invoice_number,
+                        company_name,
+                        suburb,
+                        delivery_date,
+                        pallet_quantity,
+                        loose_bags_quantity
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        "ORD-001",
+                        "PRODUCTION-001",
+                        "Existing Production Customer",
+                        "Geelong",
+                        "2026-05-05",
+                        9,
+                        4,
+                    ),
+                )
+
+            os.environ["MANUAL_DISPATCH_SEED_DEMO_DATA"] = "true"
+            initialize_database(db_path)
+        finally:
+            if previous_value is None:
+                os.environ.pop("MANUAL_DISPATCH_SEED_DEMO_DATA", None)
+            else:
+                os.environ["MANUAL_DISPATCH_SEED_DEMO_DATA"] = previous_value
+
+        with sqlite3.connect(db_path) as connection:
+            row = connection.execute(
+                """
+                SELECT invoice_number, company_name, suburb,
+                       pallet_quantity, loose_bags_quantity
+                FROM manual_orders
+                WHERE order_id = 'ORD-001'
+                """
+            ).fetchone()
+
+        self.assertEqual(
+            (
+                "PRODUCTION-001",
+                "Existing Production Customer",
+                "Geelong",
+                9,
+                4,
+            ),
+            row,
+        )
 
     def test_board_keeps_task_pool_orders_global_across_delivery_dates(self):
         created = self.service.create_order(

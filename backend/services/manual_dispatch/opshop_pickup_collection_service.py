@@ -12,6 +12,7 @@ from backend.schemas import (
     OpShopPickupCollectionRowSnapshot,
 )
 from backend.services.manual_dispatch.normalization import (
+    SQLITE_INTEGER_MAX,
     clean_optional_iso_date,
     clean_optional_text,
     clean_required_iso_date,
@@ -244,9 +245,6 @@ class OpShopPickupCollectionService:
 
 
 _ENTRY_TIME_PATTERN = re.compile(r"(?:[01]\d|2[0-3]):[0-5]\d")
-
-
-SQLITE_INTEGER_MAX = 2**63 - 1
 
 
 def _optional_weight(value, field_name):

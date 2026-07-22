@@ -3,6 +3,7 @@ import os
 import shutil
 import unittest
 import uuid
+from unittest.mock import patch
 from pathlib import Path
 
 from backend.repositories.sqlite_manual_dispatch_repository import (
@@ -29,9 +30,14 @@ class ManualDispatchDriverVehicleRouteTest(unittest.TestCase):
         self.temp_dir.mkdir()
         self.db_path = self.temp_dir / "manual_dispatch.sqlite3"
         self.previous_db_path = os.environ.get("MANUAL_DISPATCH_DB_PATH")
+        self.previous_legacy_mutations = os.environ.get(
+            "MANUAL_DISPATCH_ENABLE_LEGACY_MUTATIONS"
+        )
         os.environ["MANUAL_DISPATCH_DB_PATH"] = str(self.db_path)
+        os.environ["MANUAL_DISPATCH_ENABLE_LEGACY_MUTATIONS"] = "true"
 
-        self.repository = SQLiteManualDispatchRepository(self.db_path)
+        with patch.dict("os.environ", {"MANUAL_DISPATCH_SEED_DEMO_DATA": "true"}):
+            self.repository = SQLiteManualDispatchRepository(self.db_path)
         self.service = ManualDispatchService(self.repository)
         self.api_module = importlib.import_module("backend.api.manual_dispatch")
         self.original_service = self.api_module.service
@@ -49,6 +55,12 @@ class ManualDispatchDriverVehicleRouteTest(unittest.TestCase):
             os.environ.pop("MANUAL_DISPATCH_DB_PATH", None)
         else:
             os.environ["MANUAL_DISPATCH_DB_PATH"] = self.previous_db_path
+        if self.previous_legacy_mutations is None:
+            os.environ.pop("MANUAL_DISPATCH_ENABLE_LEGACY_MUTATIONS", None)
+        else:
+            os.environ["MANUAL_DISPATCH_ENABLE_LEGACY_MUTATIONS"] = (
+                self.previous_legacy_mutations
+            )
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_post_driver_vehicle_with_real_vehicle_returns_200(self):

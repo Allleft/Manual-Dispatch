@@ -5,10 +5,12 @@ on:
     branches:
       - main
       - feature/opshop-pickup
+      - feature/separate-delivery-and-opshop-workspaces
   pull_request:
     branches:
       - main
       - feature/opshop-pickup
+      - feature/separate-delivery-and-opshop-workspaces
   workflow_dispatch:
 
 jobs:
@@ -18,7 +20,11 @@ jobs:
     timeout-minutes: 20
 
     env:
-      MANUAL_DISPATCH_DB_PATH: data/manual_dispatch_ci.sqlite3
+      MANUAL_DISPATCH_DB_PATH: tmp/manual_dispatch_ci.sqlite3
+      MANUAL_DISPATCH_LOGBOOK_DIR: tmp/manual_dispatch_ci_logbook
+      MANUAL_DISPATCH_AUTH_COOKIE_SECRET: final-hardening-ci-validation-secret
+      MANUAL_DISPATCH_ALLOW_REGISTRATION: "false"
+      MANUAL_DISPATCH_SEED_DEMO_DATA: "false"
 
     steps:
       - name: Checkout repository
@@ -27,14 +33,13 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
           cache: pip
 
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
-          python -m pip install httpx
+          python -m pip install -r requirements-dev.txt
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -62,7 +67,11 @@ jobs:
     timeout-minutes: 20
 
     env:
-      MANUAL_DISPATCH_DB_PATH: data/manual_dispatch_ci.sqlite3
+      MANUAL_DISPATCH_DB_PATH: tmp/manual_dispatch_ci.sqlite3
+      MANUAL_DISPATCH_LOGBOOK_DIR: tmp/manual_dispatch_ci_logbook
+      MANUAL_DISPATCH_AUTH_COOKIE_SECRET: final-hardening-ci-validation-secret
+      MANUAL_DISPATCH_ALLOW_REGISTRATION: "false"
+      MANUAL_DISPATCH_SEED_DEMO_DATA: "false"
 
     steps:
       - name: Checkout repository
@@ -71,15 +80,14 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
           cache: pip
 
       - name: Install Python dependencies
         shell: pwsh
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
-          python -m pip install httpx
+          python -m pip install -r requirements-dev.txt
 
       - name: Set up Node.js
         uses: actions/setup-node@v4

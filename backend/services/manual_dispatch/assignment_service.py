@@ -9,6 +9,7 @@ from backend.services.manual_dispatch.final_summary_lock import (
     is_driver_delivery_date_finalized,
 )
 from backend.services.manual_dispatch.normalization import (
+    clean_required_iso_date,
     clean_optional_text,
     clean_required_text,
 )
@@ -23,6 +24,10 @@ class AssignmentService:
 
     @immediate_transactional
     def assign_task(self, request):
+        request.dispatch_date = clean_required_iso_date(
+            request.dispatch_date,
+            "dispatch_date",
+        )
         self.validator.validate_task_type(request.task_type)
         self.validator.validate_task_exists(request.task_type, request.task_id)
         self.validator.validate_driver_exists(request.driver_id)
@@ -70,6 +75,10 @@ class AssignmentService:
 
     @immediate_transactional
     def unassign_task(self, request):
+        request.dispatch_date = clean_required_iso_date(
+            request.dispatch_date,
+            "dispatch_date",
+        )
         self.validator.validate_task_type(request.task_type)
         if request.task_type == "ORDER":
             ensure_order_not_reserved(
@@ -109,8 +118,8 @@ class AssignmentService:
 
     @immediate_transactional
     def assign_vehicle_to_driver(self, request):
-        dispatch_date = clean_required_text(request.dispatch_date, "dispatch_date")
-        delivery_date = clean_required_text(
+        dispatch_date = clean_required_iso_date(request.dispatch_date, "dispatch_date")
+        delivery_date = clean_required_iso_date(
             getattr(request, "delivery_date", None) or dispatch_date,
             "delivery_date",
         )
@@ -155,8 +164,11 @@ class AssignmentService:
 
     @immediate_transactional
     def clear_driver_vehicle_assignment(self, dispatch_date, driver_id, delivery_date=None):
-        dispatch_date = clean_required_text(dispatch_date, "dispatch_date")
-        delivery_date = clean_required_text(delivery_date or dispatch_date, "delivery_date")
+        dispatch_date = clean_required_iso_date(dispatch_date, "dispatch_date")
+        delivery_date = clean_required_iso_date(
+            delivery_date or dispatch_date,
+            "delivery_date",
+        )
         driver_id = clean_required_text(driver_id, "driver_id")
         self.validator.validate_driver_exists(driver_id)
         ensure_driver_delivery_date_not_finalized(

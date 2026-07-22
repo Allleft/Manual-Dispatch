@@ -20,6 +20,10 @@ from backend.services.manual_dispatch.workspace_migration_readiness_service impo
 
 ALLOW_REGISTRATION_ENV = "MANUAL_DISPATCH_ALLOW_REGISTRATION"
 
+ENABLE_LEGACY_MUTATIONS_ENV = "MANUAL_DISPATCH_ENABLE_LEGACY_MUTATIONS"
+
+LEGACY_MUTATIONS_DISABLED_MESSAGE = "Legacy mutation endpoint is disabled."
+
 REGISTRATION_DISABLED_MESSAGE = "Registration is disabled. Please contact an administrator."
 
 OPERATOR_COOKIE_NAME = "manual_dispatch_operator"
@@ -248,3 +252,8 @@ def is_env_flag_enabled(name, default=False):
     if normalized in {"0", "false", "no", "off"}:
         return False
     return default
+
+
+def require_legacy_mutations_enabled():
+    if not is_env_flag_enabled(ENABLE_LEGACY_MUTATIONS_ENV, default=False):
+        raise HTTPException(status_code=404, detail=LEGACY_MUTATIONS_DISABLED_MESSAGE)

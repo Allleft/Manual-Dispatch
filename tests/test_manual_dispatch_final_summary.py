@@ -4,6 +4,7 @@ import shutil
 import sqlite3
 import unittest
 import uuid
+from unittest.mock import patch
 from io import BytesIO
 from pathlib import Path
 
@@ -42,7 +43,8 @@ class ManualDispatchFinalSummaryTest(unittest.TestCase):
         self.temp_dir = temp_parent / f"final-summary-test-{uuid.uuid4().hex}"
         self.temp_dir.mkdir()
         self.db_path = self.temp_dir / "manual_dispatch.sqlite3"
-        self.repository = SQLiteManualDispatchRepository(self.db_path)
+        with patch.dict("os.environ", {"MANUAL_DISPATCH_SEED_DEMO_DATA": "true"}):
+            self.repository = SQLiteManualDispatchRepository(self.db_path)
         self.service = ManualDispatchService(self.repository)
         self.dispatch_date = "2026-05-05"
         self.account = self.service.register_operator_account(
@@ -949,9 +951,14 @@ class ManualDispatchFinalSummaryRouteTest(unittest.TestCase):
         self.temp_dir.mkdir()
         self.db_path = self.temp_dir / "manual_dispatch.sqlite3"
         self.previous_db_path = os.environ.get("MANUAL_DISPATCH_DB_PATH")
+        self.previous_legacy_mutations = os.environ.get(
+            "MANUAL_DISPATCH_ENABLE_LEGACY_MUTATIONS"
+        )
         os.environ["MANUAL_DISPATCH_DB_PATH"] = str(self.db_path)
+        os.environ["MANUAL_DISPATCH_ENABLE_LEGACY_MUTATIONS"] = "true"
 
-        self.repository = SQLiteManualDispatchRepository(self.db_path)
+        with patch.dict("os.environ", {"MANUAL_DISPATCH_SEED_DEMO_DATA": "true"}):
+            self.repository = SQLiteManualDispatchRepository(self.db_path)
         self.service = ManualDispatchService(self.repository)
         self.account = self.service.register_operator_account(
             RegisterOperatorAccountRequest(
@@ -980,6 +987,12 @@ class ManualDispatchFinalSummaryRouteTest(unittest.TestCase):
             os.environ.pop("MANUAL_DISPATCH_DB_PATH", None)
         else:
             os.environ["MANUAL_DISPATCH_DB_PATH"] = self.previous_db_path
+        if self.previous_legacy_mutations is None:
+            os.environ.pop("MANUAL_DISPATCH_ENABLE_LEGACY_MUTATIONS", None)
+        else:
+            os.environ["MANUAL_DISPATCH_ENABLE_LEGACY_MUTATIONS"] = (
+                self.previous_legacy_mutations
+            )
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_final_summary_api_saves_and_lists_history(self):
