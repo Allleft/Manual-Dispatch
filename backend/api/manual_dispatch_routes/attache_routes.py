@@ -2,6 +2,7 @@ from collections.abc import Callable
 from typing import List
 from fastapi import (
     APIRouter,
+    Depends,
     File,
     HTTPException,
     Request,
@@ -20,6 +21,7 @@ from backend.services.manual_dispatch.attache_invoice_pdf_parser import (
     with_duplicate_warning,
 )
 from .common import (
+    require_legacy_mutations_enabled,
     to_http_exception,
     with_logbook_actor,
 )
@@ -200,7 +202,10 @@ def create_attache_router(
         service = get_service()
         return to_dict(await _preview_attache_invoice_pdf_import(files))
 
-    @router.post("/orders/import-attache-pdf-commit")
+    @router.post(
+        "/orders/import-attache-pdf-commit",
+        dependencies=[Depends(require_legacy_mutations_enabled)],
+    )
     def commit_attache_invoice_pdf_import(
         request: CommitAttacheInvoicePdfImportRequest,
         http_request: Request = None,

@@ -57,8 +57,12 @@ class WorkspaceSafetyHardeningTest(unittest.TestCase):
         self.logbook_dir = self.temp_dir / "logbook"
         self.previous_db_path = os.environ.get("MANUAL_DISPATCH_DB_PATH")
         self.previous_seed_flag = os.environ.get("MANUAL_DISPATCH_SEED_DEMO_DATA")
+        self.previous_legacy_mutations = os.environ.get(
+            "MANUAL_DISPATCH_ENABLE_LEGACY_MUTATIONS"
+        )
         os.environ["MANUAL_DISPATCH_DB_PATH"] = str(self.db_path)
         os.environ["MANUAL_DISPATCH_SEED_DEMO_DATA"] = "0"
+        os.environ["MANUAL_DISPATCH_ENABLE_LEGACY_MUTATIONS"] = "true"
 
         self.repository = SQLiteManualDispatchRepository(self.db_path)
         self.service = ManualDispatchService(
@@ -87,6 +91,10 @@ class WorkspaceSafetyHardeningTest(unittest.TestCase):
         self._restore_environment(
             "MANUAL_DISPATCH_SEED_DEMO_DATA",
             self.previous_seed_flag,
+        )
+        self._restore_environment(
+            "MANUAL_DISPATCH_ENABLE_LEGACY_MUTATIONS",
+            self.previous_legacy_mutations,
         )
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
