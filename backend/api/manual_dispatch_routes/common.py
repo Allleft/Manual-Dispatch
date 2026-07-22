@@ -6,7 +6,10 @@ import secrets
 import time
 import warnings
 from hashlib import sha256
+
 from fastapi import HTTPException, Request
+
+from backend.errors import StateChangedConflictError
 from backend.schemas import (
     AssignDriverVehicleRequest,
     OperatorAccountIdentity,
@@ -202,7 +205,10 @@ def _decode_operator_cookie_payload(payload_text):
 
 def to_http_exception(error):
     message = str(error)
-    if isinstance(error, WorkspaceMigrationRequiredError):
+    if isinstance(
+        error,
+        (WorkspaceMigrationRequiredError, StateChangedConflictError),
+    ):
         status_code = 409
     else:
         status_code = 404 if "does not exist" in message else 400

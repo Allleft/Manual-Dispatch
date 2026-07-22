@@ -1,3 +1,6 @@
+from backend.errors import StateChangedConflictError
+
+
 OPSHOP_PICKUP_COLLECTION_SAVED_LOCK_MESSAGE = (
     "OP SHOP Pickup Collection has already been saved for this driver and pickup date."
 )
@@ -32,7 +35,7 @@ def ensure_opshop_pickup_collection_not_finalized(
         driver_id,
         pickup_date,
     ):
-        raise ValueError(OPSHOP_PICKUP_COLLECTION_SAVED_LOCK_MESSAGE)
+        raise StateChangedConflictError(OPSHOP_PICKUP_COLLECTION_SAVED_LOCK_MESSAGE)
 
 
 def ensure_opshop_pickup_collection_key_mutable(
@@ -62,6 +65,6 @@ def _raise_for_collection(collection):
     if not collection:
         return
     if collection.status == "SAVED":
-        raise ValueError(OPSHOP_PICKUP_COLLECTION_SAVED_LOCK_MESSAGE)
+        raise StateChangedConflictError(OPSHOP_PICKUP_COLLECTION_SAVED_LOCK_MESSAGE)
     if collection.status == "GENERATED":
-        raise ValueError(OPSHOP_PICKUP_COLLECTION_GENERATED_LOCK_MESSAGE)
+        raise StateChangedConflictError(OPSHOP_PICKUP_COLLECTION_GENERATED_LOCK_MESSAGE)

@@ -1,6 +1,8 @@
 import os
 import re
 import sqlite3
+from contextlib import contextmanager
+from contextvars import ContextVar
 from pathlib import Path
 
 
@@ -8,6 +10,40 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_DB_PATH = PROJECT_ROOT / "data" / "manual_dispatch.sqlite3"
 SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 SEED_DEMO_DATA_ENV = "MANUAL_DISPATCH_SEED_DEMO_DATA"
+_ACTIVE_CONNECTIONS = ContextVar(
+    "manual_dispatch_active_sqlite_connections",
+    default={},
+)
+
+
+class _BorrowedConnection:
+    """Keep nested repository helpers inside an owning transaction."""
+
+    def __init__(self, connection):
+        self._connection = connection
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        return False
+
+    def __getattr__(self, name):
+        return getattr(self._connection, name)
+
+    def execute(self, sql, parameters=()):
+        if str(sql).strip().upper().startswith("BEGIN"):
+            return self
+        return self._connection.execute(sql, parameters)
+
+    def commit(self):
+        return None
+
+    def close(self):
+        return None
+
+    def rollback(self):
+        return self._connection.rollback()
 
 
 def get_database_path(db_path=None):
@@ -25,12 +61,39 @@ def connect(db_path=None):
     database_path = get_database_path(db_path)
     database_path.parent.mkdir(parents=True, exist_ok=True)
 
+    active_connection = _ACTIVE_CONNECTIONS.get().get(_connection_key(database_path))
+    if active_connection is not None:
+        return _BorrowedConnection(active_connection)
+
     connection = sqlite3.connect(database_path, timeout=5.0)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
     connection.execute("PRAGMA journal_mode = WAL")
     connection.execute("PRAGMA busy_timeout = 5000")
     return connection
+
+
+def has_active_connection(db_path=None):
+    database_path = get_database_path(db_path)
+    return _connection_key(database_path) in _ACTIVE_CONNECTIONS.get()
+
+
+@contextmanager
+def borrow_connection(db_path, connection):
+    key = _connection_key(get_database_path(db_path))
+    active_connections = dict(_ACTIVE_CONNECTIONS.get())
+    if key in active_connections:
+        raise RuntimeError(f"SQLite connection is already active for {key}")
+    active_connections[key] = connection
+    token = _ACTIVE_CONNECTIONS.set(active_connections)
+    try:
+        yield
+    finally:
+        _ACTIVE_CONNECTIONS.reset(token)
+
+
+def _connection_key(database_path):
+    return str(Path(database_path).resolve()).casefold()
 
 
 def initialize_database(db_path=None):

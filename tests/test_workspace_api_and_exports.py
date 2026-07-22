@@ -621,8 +621,8 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
 
         self.assertEqual(400, duplicate_delivery_save.status_code)
         self.assertEqual(400, duplicate_collection_save.status_code)
-        self.assertEqual(400, regenerate_delivery.status_code)
-        self.assertEqual(400, regenerate_collection.status_code)
+        self.assertEqual(409, regenerate_delivery.status_code)
+        self.assertEqual(409, regenerate_collection.status_code)
 
     def test_exports_use_saved_snapshots_and_keep_domains_separate(self):
         run_sheet_id = self._generate_and_save_delivery()

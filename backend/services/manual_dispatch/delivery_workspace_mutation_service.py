@@ -1,3 +1,4 @@
+from backend.errors import StateChangedConflictError
 from backend.services.manual_dispatch.delivery_run_sheet_lock import (
     ensure_delivery_run_sheet_key_mutable,
     ensure_order_not_reserved,
@@ -7,6 +8,7 @@ from backend.services.manual_dispatch.normalization import (
     clean_required_iso_date,
     clean_required_text,
 )
+from backend.services.manual_dispatch.transaction import immediate_transactional
 
 
 class DeliveryWorkspaceMutationService:
@@ -15,6 +17,7 @@ class DeliveryWorkspaceMutationService:
         self.validator = validator
         self.board_service = board_service
 
+    @immediate_transactional
     def assign_order(self, request):
         order = self._active_order(request.order_id)
         request_dispatch_date = clean_optional_iso_date(
@@ -58,6 +61,7 @@ class DeliveryWorkspaceMutationService:
             order.delivery_date,
         )
 
+    @immediate_transactional
     def unassign_order(self, request):
         order = self._active_order(request.order_id)
         request_dispatch_date = clean_optional_iso_date(
@@ -87,6 +91,7 @@ class DeliveryWorkspaceMutationService:
             order.delivery_date,
         )
 
+    @immediate_transactional
     def assign_vehicle(self, request):
         delivery_date = clean_required_iso_date(request.delivery_date, "delivery_date")
         request_dispatch_date = clean_optional_iso_date(
@@ -117,7 +122,7 @@ class DeliveryWorkspaceMutationService:
             driver = self.repository.get_driver(conflicting_driver_id)
             vehicle_name = vehicle.rego if vehicle else vehicle_id
             driver_name = driver.name if driver else conflicting_driver_id
-            raise ValueError(
+            raise StateChangedConflictError(
                 f"Vehicle {vehicle_name} is already assigned to "
                 f"{driver_name} for this delivery date."
             )
@@ -127,6 +132,7 @@ class DeliveryWorkspaceMutationService:
             delivery_date,
         )
 
+    @immediate_transactional
     def clear_vehicle(self, request):
         delivery_date = clean_required_iso_date(request.delivery_date, "delivery_date")
         request_dispatch_date = clean_optional_iso_date(

@@ -1,3 +1,4 @@
+from backend.errors import StateChangedConflictError
 from backend.schemas import ManualDriverVehicleClearResponse
 from backend.services.manual_dispatch.delivery_run_sheet_lock import (
     ensure_order_not_assigned_elsewhere,
@@ -11,6 +12,7 @@ from backend.services.manual_dispatch.normalization import (
     clean_optional_text,
     clean_required_text,
 )
+from backend.services.manual_dispatch.transaction import immediate_transactional
 
 
 class AssignmentService:
@@ -19,6 +21,7 @@ class AssignmentService:
         self.validator = validator
         self.board_service = board_service
 
+    @immediate_transactional
     def assign_task(self, request):
         self.validator.validate_task_type(request.task_type)
         self.validator.validate_task_exists(request.task_type, request.task_id)
@@ -65,6 +68,7 @@ class AssignmentService:
             )
         return assignment
 
+    @immediate_transactional
     def unassign_task(self, request):
         self.validator.validate_task_type(request.task_type)
         if request.task_type == "ORDER":
@@ -103,6 +107,7 @@ class AssignmentService:
             )
         return self.board_service.get_board(request.dispatch_date)
 
+    @immediate_transactional
     def assign_vehicle_to_driver(self, request):
         dispatch_date = clean_required_text(request.dispatch_date, "dispatch_date")
         delivery_date = clean_required_text(
@@ -142,12 +147,13 @@ class AssignmentService:
             driver = self.repository.get_driver(conflicting_driver_id)
             vehicle_name = vehicle.rego if vehicle else vehicle_id
             driver_name = driver.name if driver else conflicting_driver_id
-            raise ValueError(
+            raise StateChangedConflictError(
                 f"Vehicle {vehicle_name} is already assigned to "
                 f"{driver_name} for this delivery date."
             )
         return assignment
 
+    @immediate_transactional
     def clear_driver_vehicle_assignment(self, dispatch_date, driver_id, delivery_date=None):
         dispatch_date = clean_required_text(dispatch_date, "dispatch_date")
         delivery_date = clean_required_text(delivery_date or dispatch_date, "delivery_date")

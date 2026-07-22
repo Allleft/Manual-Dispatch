@@ -13,6 +13,7 @@ from backend.services.manual_dispatch.opshop_pickup_collection_lock import (
     ensure_opshop_pickup_collection_key_mutable,
     ensure_opshop_pickup_not_reserved,
 )
+from backend.services.manual_dispatch.transaction import immediate_transactional
 
 
 class OpShopWorkspaceMutationService:
@@ -21,6 +22,7 @@ class OpShopWorkspaceMutationService:
         self.validator = validator
         self.board_service = board_service
 
+    @immediate_transactional
     def apply_assignments(self, request):
         request_dispatch_date = clean_optional_iso_date(
             request.dispatch_date,
@@ -66,6 +68,7 @@ class OpShopWorkspaceMutationService:
             changes,
         )
 
+    @immediate_transactional
     def unassign_pickup(self, request):
         request_dispatch_date = clean_optional_iso_date(
             request.dispatch_date,
@@ -91,6 +94,7 @@ class OpShopWorkspaceMutationService:
             [task],
         )
 
+    @immediate_transactional
     def assign_countryside_route_group(self, route_group_id, request):
         route_group_id = clean_required_text(route_group_id, "route_group_id")
         route_group = self.repository.get_countryside_route_group(route_group_id)

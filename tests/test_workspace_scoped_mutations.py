@@ -243,7 +243,7 @@ class WorkspaceScopedMutationsTest(unittest.TestCase):
                 "vehicle_id": "VEHICLE-1",
             },
         )
-        self.assertEqual(400, duplicate.status_code, duplicate.text)
+        self.assertEqual(409, duplicate.status_code, duplicate.text)
         self.assertEqual(
             "Vehicle TEST01 is already assigned to Driver 1 for this delivery date.",
             duplicate.json()["detail"],
