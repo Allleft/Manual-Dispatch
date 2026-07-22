@@ -2048,7 +2048,8 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
               throw new Error("opening Delivery confirmation called Generate API");
             }
             await actions.confirmGenerateDeliveryRunSheet();
-            if (generatedPayloads[0].delivery_date !== "2026-06-22" ||
+            if (generatedPayloads[0].dispatch_date !== "2026-06-24" ||
+                generatedPayloads[0].delivery_date !== "2026-06-22" ||
                 generatedPayloads[0].driver_id !== "D001") {
               throw new Error("Generate Run Sheet payload was not scoped correctly");
             }
