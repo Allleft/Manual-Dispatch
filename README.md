@@ -266,6 +266,7 @@ Every production deployment must explicitly configure these values:
 - `MANUAL_DISPATCH_ALLOW_REGISTRATION=false` after initial account setup.
 - `MANUAL_DISPATCH_SEED_DEMO_DATA=false`; missing also defaults to no demo seed.
 - `MANUAL_DISPATCH_ENABLE_LEGACY_MUTATIONS=false`; temporarily enable only for an audited compatibility operation.
+- `MANUAL_DISPATCH_ENABLE_API_DOCS=false`; explicitly enable only in a trusted diagnostic environment.
 - `MANUAL_DISPATCH_DB_PATH`: an explicit path on persistent storage.
 - `MANUAL_DISPATCH_LOGBOOK_DIR`: an explicit directory on persistent storage.
 
