@@ -1,5 +1,8 @@
+import sqlite3
 from datetime import datetime, timezone
 from uuid import uuid4
+
+from backend.errors import StateChangedConflictError
 
 from backend.schemas import (
     DeliveryRunSheet,
@@ -13,6 +16,7 @@ from backend.services.manual_dispatch.normalization import (
     clean_required_iso_date,
     clean_required_text,
 )
+from backend.services.manual_dispatch.transaction import immediate_transactional
 
 
 class DeliveryRunSheetService:
@@ -20,6 +24,7 @@ class DeliveryRunSheetService:
         self.repository = repository
         self.validator = validator
 
+    @immediate_transactional
     def create_generated(self, request):
         delivery_date = clean_required_iso_date(request.delivery_date, "delivery_date")
         dispatch_date = (
@@ -35,7 +40,7 @@ class DeliveryRunSheetService:
             driver_id,
         )
         if existing:
-            raise ValueError(
+            raise StateChangedConflictError(
                 "Delivery Run Sheet already exists for this driver and delivery date."
             )
 
@@ -71,16 +76,12 @@ class DeliveryRunSheetService:
         )
         try:
             return self.repository.upsert_delivery_run_sheet(run_sheet)
-        except Exception as error:
-            if self.repository.get_delivery_run_sheet_for_driver(
-                dispatch_date,
-                delivery_date,
-                driver_id,
-            ):
-                raise ValueError(
-                    "Delivery Run Sheet already exists for this driver and delivery date."
-                ) from error
-            raise
+        except sqlite3.IntegrityError as error:
+            if not _is_delivery_run_sheet_key_conflict(error):
+                raise
+            raise StateChangedConflictError(
+                "Delivery Run Sheet already exists for this driver and delivery date."
+            ) from error
 
     def list(self, dispatch_date=None, delivery_date=None, status=None):
         return self.repository.list_delivery_run_sheets(
@@ -230,3 +231,10 @@ class DeliveryRunSheetService:
 
 def _timestamp():
     return datetime.now(timezone.utc).isoformat()
+
+
+def _is_delivery_run_sheet_key_conflict(error):
+    return (
+        "UNIQUE constraint failed: delivery_run_sheets.dispatch_date, "
+        "delivery_run_sheets.delivery_date, delivery_run_sheets.driver_id"
+    ) in str(error)

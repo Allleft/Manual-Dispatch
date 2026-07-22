@@ -1100,7 +1100,10 @@ class _RaceDeliveryRepository:
 
     def upsert_delivery_run_sheet(self, run_sheet):
         self.created = run_sheet
-        raise RuntimeError("simulated unique constraint race")
+        raise sqlite3.IntegrityError(
+            "UNIQUE constraint failed: delivery_run_sheets.dispatch_date, "
+            "delivery_run_sheets.delivery_date, delivery_run_sheets.driver_id"
+        )
 
 
 class _RaceOpShopRepository:
@@ -1116,7 +1119,10 @@ class _RaceOpShopRepository:
 
     def upsert_opshop_pickup_collection(self, collection):
         self.created = collection
-        raise RuntimeError("simulated unique constraint race")
+        raise sqlite3.IntegrityError(
+            "UNIQUE constraint failed: opshop_pickup_collections.dispatch_date, "
+            "opshop_pickup_collections.pickup_date, opshop_pickup_collections.driver_id"
+        )
 
 
 if __name__ == "__main__":

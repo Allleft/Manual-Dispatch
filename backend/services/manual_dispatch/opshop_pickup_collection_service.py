@@ -1,8 +1,11 @@
 from dataclasses import replace
+import sqlite3
 from datetime import datetime, timezone
 import math
 import re
 from uuid import uuid4
+
+from backend.errors import StateChangedConflictError
 
 from backend.schemas import (
     OpShopPickupCollection,
@@ -14,6 +17,7 @@ from backend.services.manual_dispatch.normalization import (
     clean_required_iso_date,
     clean_required_text,
 )
+from backend.services.manual_dispatch.transaction import immediate_transactional
 
 
 class OpShopPickupCollectionService:
@@ -21,6 +25,7 @@ class OpShopPickupCollectionService:
         self.repository = repository
         self.validator = validator
 
+    @immediate_transactional
     def create_generated(self, request):
         pickup_date = clean_required_iso_date(request.pickup_date, "pickup_date")
         dispatch_date = (
@@ -36,7 +41,7 @@ class OpShopPickupCollectionService:
             driver_id,
         )
         if existing:
-            raise ValueError(
+            raise StateChangedConflictError(
                 "OP SHOP Pickup Collection already exists for this driver and pickup date."
             )
 
@@ -61,16 +66,12 @@ class OpShopPickupCollectionService:
         )
         try:
             return self.repository.upsert_opshop_pickup_collection(collection)
-        except Exception as error:
-            if self.repository.get_opshop_pickup_collection_for_driver(
-                dispatch_date,
-                pickup_date,
-                driver_id,
-            ):
-                raise ValueError(
-                    "OP SHOP Pickup Collection already exists for this driver and pickup date."
-                ) from error
-            raise
+        except sqlite3.IntegrityError as error:
+            if not _is_opshop_pickup_collection_key_conflict(error):
+                raise
+            raise StateChangedConflictError(
+                "OP SHOP Pickup Collection already exists for this driver and pickup date."
+            ) from error
 
     def list(self, dispatch_date=None, pickup_date=None, status=None):
         return self.repository.list_opshop_pickup_collections(
@@ -312,3 +313,10 @@ def _pickup_notes(pickup):
 
 def _timestamp():
     return datetime.now(timezone.utc).isoformat()
+
+
+def _is_opshop_pickup_collection_key_conflict(error):
+    return (
+        "UNIQUE constraint failed: opshop_pickup_collections.dispatch_date, "
+        "opshop_pickup_collections.pickup_date, opshop_pickup_collections.driver_id"
+    ) in str(error)

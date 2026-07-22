@@ -25,6 +25,7 @@ from backend.services.manual_dispatch.opshop_pickup_collection_lock import (
 from backend.services.manual_dispatch.opshop_regular_frequency import (
     parse_regular_pickup_frequency,
 )
+from backend.services.manual_dispatch.transaction import immediate_transactional
 
 
 OPSHOP_FORTNIGHT_ANCHOR_DATE = date(2026, 5, 18)
@@ -433,6 +434,7 @@ class OpShopPickupService:
         )
         return self.repository.upsert_opshop_pickup_task(cancelled)
 
+    @immediate_transactional
     def apply_weekly_assignments(self, request):
         request = request or ApplyWeeklyOpShopPickupAssignmentsRequest(dispatch_date="")
         dispatch = _parse_iso_date(request.dispatch_date, "dispatch_date")
@@ -493,6 +495,7 @@ class OpShopPickupService:
                 "trip1",
             )
 
+    @immediate_transactional
     def apply_oncall_assignments(self, request):
         request = request or ApplyOncallOpShopPickupAssignmentsRequest(dispatch_date="")
         dispatch = _parse_iso_date(request.dispatch_date, "dispatch_date")
@@ -552,6 +555,7 @@ class OpShopPickupService:
                 "trip1",
             )
 
+    @immediate_transactional
     def apply_countryside_assignments(self, request):
         request = request or ApplyCountrysideOpShopPickupAssignmentsRequest(dispatch_date="")
         dispatch = _parse_iso_date(request.dispatch_date, "dispatch_date")
@@ -634,6 +638,7 @@ class OpShopPickupService:
             task.pickup_date,
         )
 
+    @immediate_transactional
     def assign_countryside_route_group_pickups(self, route_group_id, request):
         request = request or AssignCountrysideRouteGroupRequest(
             dispatch_date="",

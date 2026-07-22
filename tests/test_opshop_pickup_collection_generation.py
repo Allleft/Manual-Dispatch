@@ -145,7 +145,7 @@ class OpShopPickupCollectionGenerationTest(unittest.TestCase):
         )
 
         duplicate = self._post_generate("D001")
-        self.assertEqual(400, duplicate.status_code)
+        self.assertEqual(409, duplicate.status_code)
         cancelled = self.client.post(
             "/api/manual-dispatch/opshop/pickup-collections/"
             f"{generated_body['collection_id']}/cancel-generated"
@@ -165,7 +165,7 @@ class OpShopPickupCollectionGenerationTest(unittest.TestCase):
         )
         self.assertEqual(200, saved.status_code)
         self.assertEqual("SAVED", saved.json()["status"])
-        self.assertEqual(400, self._post_generate("D001").status_code)
+        self.assertEqual(409, self._post_generate("D001").status_code)
 
     def test_missing_assignment_is_not_rendered_as_assigned_or_collectable(self):
         self._seed_pickup(
