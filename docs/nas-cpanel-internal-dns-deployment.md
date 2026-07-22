@@ -88,6 +88,7 @@ Required NAS defaults:
 
 ```text
 MANUAL_DISPATCH_DB_PATH=/app/data/manual_dispatch.sqlite3
+MANUAL_DISPATCH_LOGBOOK_DIR=/app/data/logbook
 MANUAL_DISPATCH_HOST=0.0.0.0
 MANUAL_DISPATCH_PORT=8130
 MANUAL_DISPATCH_AUTH_COOKIE_SECRET=<strong-random-secret>

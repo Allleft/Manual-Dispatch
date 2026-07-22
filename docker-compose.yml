@@ -7,6 +7,7 @@ services:
       - "8130:8130"
     environment:
       MANUAL_DISPATCH_DB_PATH: /app/data/manual_dispatch.sqlite3
+      MANUAL_DISPATCH_LOGBOOK_DIR: /app/data/logbook
       MANUAL_DISPATCH_HOST: 0.0.0.0
       MANUAL_DISPATCH_PORT: 8130
       MANUAL_DISPATCH_ADMIN_RESET_CODE: ${MANUAL_DISPATCH_ADMIN_RESET_CODE}
