@@ -335,9 +335,28 @@ class CreateOpShopTemplateRequest:
     route_group_id: Optional[str] = None
 
 
-@dataclass
-class UpdateOpShopTemplateRequest(CreateOpShopTemplateRequest):
-    pass
+class UpdateOpShopTemplateRequest(BaseModel):
+    run_type: Optional[str] = None
+    run_day: Optional[str] = None
+    name: Optional[str] = None
+    suburb: Optional[str] = None
+    street_address: Optional[str] = None
+    area_region: Optional[str] = None
+    primary_contact: Optional[str] = None
+    primary_phone: Optional[str] = None
+    secondary_contact: Optional[str] = None
+    secondary_phone: Optional[str] = None
+    pickup_frequency: Optional[str] = None
+    time_window: Optional[str] = None
+    call_before_arrival: Optional[bool] = None
+    call_timing: Optional[str] = None
+    access_type: Optional[str] = None
+    key_required: Optional[bool] = None
+    trailer_restriction: Optional[str] = None
+    status_notes: Optional[str] = None
+    default_driver_id: Optional[str] = None
+    pickup_category: Optional[str] = None
+    route_group_id: Optional[str] = None
 
 
 @dataclass
@@ -347,8 +366,7 @@ class CreateOpShopCountrysideRouteGroupRequest:
     source_marker: Optional[str] = None
 
 
-@dataclass
-class UpdateOpShopCountrysideRouteGroupRequest:
+class UpdateOpShopCountrysideRouteGroupRequest(BaseModel):
     route_group_name: Optional[str] = None
     display_order: Optional[int] = None
     status: Optional[str] = None
@@ -391,8 +409,7 @@ class CreateOpShopPickupTaskRequest:
     dispatch_date: Optional[str] = None
 
 
-@dataclass
-class UpdateOpShopPickupTaskRequest:
+class UpdateOpShopPickupTaskRequest(BaseModel):
     pickup_date: Optional[str] = None
     notes: Optional[str] = None
     dispatch_date: Optional[str] = None
@@ -858,8 +875,7 @@ class CreateOrderRequest:
     product_lines: Optional[List[dict]] = None
 
 
-@dataclass
-class UpdateOrderRequest:
+class UpdateOrderRequest(BaseModel):
     invoice_number: Optional[str] = None
     order_no: Optional[str] = None
     company_name: Optional[str] = None
@@ -871,8 +887,8 @@ class UpdateOrderRequest:
     zone: Optional[str] = None
     urgency: Optional[str] = None
     preferred_driver_id: Optional[str] = None
-    pallet_quantity: Optional[int] = 0
-    loose_bags_quantity: Optional[int] = 0
+    pallet_quantity: Optional[int] = None
+    loose_bags_quantity: Optional[int] = None
     start_time: Optional[str] = None
     end_time: Optional[str] = None
     note: Optional[str] = None
@@ -957,16 +973,15 @@ class CreateDriverRequest:
     preferred_zone: Optional[str] = None
 
 
-@dataclass
-class UpdateDriverRequest:
+class UpdateDriverRequest(BaseModel):
     name: Optional[str] = None
     license_no: Optional[str] = None
     email: Optional[str] = None
     phone_number: Optional[str] = None
     start_time: Optional[str] = None
     end_time: Optional[str] = None
-    is_available: Optional[bool] = True
-    pallet_only: Optional[bool] = False
+    is_available: Optional[bool] = None
+    pallet_only: Optional[bool] = None
     preferred_zone: Optional[str] = None
 
 
@@ -981,15 +996,14 @@ class CreateVehicleRequest:
     stillage_capacity: Optional[int] = 0
 
 
-@dataclass
-class UpdateVehicleRequest:
+class UpdateVehicleRequest(BaseModel):
     rego: Optional[str] = None
     type: Optional[str] = None
-    is_available: Optional[bool] = True
-    pallet_capacity: Optional[int] = 0
-    tub_capacity: Optional[int] = 0
-    trolley_capacity: Optional[int] = 0
-    stillage_capacity: Optional[int] = 0
+    is_available: Optional[bool] = None
+    pallet_capacity: Optional[int] = None
+    tub_capacity: Optional[int] = None
+    trolley_capacity: Optional[int] = None
+    stillage_capacity: Optional[int] = None
 
 
 @dataclass

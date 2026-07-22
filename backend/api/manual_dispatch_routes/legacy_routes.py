@@ -34,7 +34,10 @@ def create_legacy_router(
     @router.get("/board")
     def get_board(dispatch_date: str):
         service = get_service()
-        return to_dict(service.get_board(dispatch_date))
+        try:
+            return to_dict(service.get_board(dispatch_date))
+        except ValueError as error:
+            raise to_http_exception(error) from error
 
     @router.get("/specifications")
     def get_specifications():

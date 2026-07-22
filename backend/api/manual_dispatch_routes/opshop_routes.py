@@ -23,6 +23,7 @@ from backend.schemas import (
     to_dict,
 )
 from backend.services.manual_dispatch_service import ManualDispatchService
+from backend.services.manual_dispatch.normalization import clean_optional_iso_date
 from .common import (
     reject_scoped_fields,
     to_http_exception,
@@ -49,6 +50,7 @@ def create_opshop_router(
         service = get_service()
         try:
             # dispatch_date remains an optional legacy query parameter only.
+            clean_optional_iso_date(dispatch_date, "dispatch_date")
             return to_dict(service.get_opshop_trip_summary_board(pickup_date))
         except ValueError as error:
             raise to_http_exception(error) from error

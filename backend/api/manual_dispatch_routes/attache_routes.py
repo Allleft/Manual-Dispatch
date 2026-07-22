@@ -1,9 +1,9 @@
 from collections.abc import Callable
-from hashlib import sha1
 from typing import List
 from fastapi import (
     APIRouter,
     File,
+    HTTPException,
     Request,
     UploadFile,
 )
@@ -25,6 +25,16 @@ from .common import (
 )
 
 
+MAX_ATTACHE_PDF_FILES = 20
+MAX_ATTACHE_IMPORT_ROWS = 20
+MAX_ATTACHE_PDF_FILE_BYTES = 10 * 1024 * 1024
+SUPPORTED_ATTACHE_PDF_CONTENT_TYPES = {
+    "application/pdf",
+    "application/x-pdf",
+    "application/octet-stream",
+}
+
+
 def create_attache_router(
     get_service: Callable[[], ManualDispatchService],
     router: APIRouter = None,
@@ -32,6 +42,11 @@ def create_attache_router(
     router = router or APIRouter()
 
     def _commit_attache_invoice_pdf_import(request, create_order, record_batch=None):
+        if len(request.rows or []) > MAX_ATTACHE_IMPORT_ROWS:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Attaché PDF import accepts at most {MAX_ATTACHE_IMPORT_ROWS} rows per batch.",
+            )
         created_orders = []
         skipped_rows = []
         existing_invoice_numbers = _existing_invoice_numbers()
@@ -97,39 +112,63 @@ def create_attache_router(
         }
 
     async def _preview_attache_invoice_pdf_import(files):
+        if not files:
+            raise HTTPException(status_code=400, detail="At least one PDF file is required.")
+        if len(files) > MAX_ATTACHE_PDF_FILES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Attaché PDF import accepts at most {MAX_ATTACHE_PDF_FILES} files per batch.",
+            )
+
         rows = []
         existing_invoice_numbers = _existing_invoice_numbers()
 
         for uploaded_file in files:
             filename = uploaded_file.filename or "invoice.pdf"
             try:
+                _validate_attache_upload_type(uploaded_file, filename)
+                payload = await uploaded_file.read(MAX_ATTACHE_PDF_FILE_BYTES + 1)
+                if len(payload) > MAX_ATTACHE_PDF_FILE_BYTES:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=(
+                            f"Attaché PDF file exceeds the {MAX_ATTACHE_PDF_FILE_BYTES} byte limit: "
+                            f"{filename}"
+                        ),
+                    )
+                if not payload:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Attaché PDF file is empty: {filename}",
+                    )
+                if b"%PDF-" not in payload[:1024]:
+                    raise ValueError("PDF header is missing")
                 parsed = parse_attache_invoice_pdf_bytes(
-                    await uploaded_file.read(),
+                    payload,
                     source_filename=filename,
                 )
                 if parsed.invoice_number and parsed.invoice_number in existing_invoice_numbers:
                     parsed = with_duplicate_warning(parsed)
                 rows.append(parsed)
             except ValueError as error:
-                rows.append(
-                    _failed_attache_preview_row(
-                        filename,
-                        str(error),
-                    )
-                )
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid Attaché PDF file {filename}: {error}",
+                ) from error
+            finally:
+                await uploaded_file.close()
 
         return AttacheInvoicePdfPreviewResponse(rows=rows)
 
-    def _failed_attache_preview_row(source_filename, message):
-        from backend.schemas import AttacheInvoicePdfPreviewItem
-
-        return AttacheInvoicePdfPreviewItem(
-            row_id=f"ATTACHE-FAILED-{sha1(source_filename.encode('utf-8')).hexdigest()[:12]}",
-            source_filename=source_filename,
-            warnings=[message],
-            importable=False,
-            selected=False,
-        )
+    def _validate_attache_upload_type(uploaded_file, filename):
+        content_type = (uploaded_file.content_type or "").split(";", 1)[0].strip().lower()
+        if not filename.lower().endswith(".pdf") or (
+            content_type and content_type not in SUPPORTED_ATTACHE_PDF_CONTENT_TYPES
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported Attaché upload type; PDF files are required: {filename}",
+            )
 
     @router.post("/delivery/orders/import-attache-pdf-preview")
     async def preview_delivery_attache_invoice_pdf_import(files: List[UploadFile] = File(...)):

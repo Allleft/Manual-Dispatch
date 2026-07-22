@@ -363,8 +363,9 @@ class OpShopPickupService:
             _assignment_dispatch_date_for_request(request, task),
         )
 
+        fields = request.model_fields_set
         next_pickup_date = task.pickup_date
-        if request.pickup_date:
+        if "pickup_date" in fields:
             next_pickup_date = _parse_iso_date(request.pickup_date, "pickup_date").isoformat()
 
         if next_pickup_date != task.pickup_date:
@@ -399,7 +400,11 @@ class OpShopPickupService:
             task,
             pickup_date=next_pickup_date,
             dispatch_date=next_pickup_date,
-            notes=request.notes,
+            notes=(
+                (_clean_text(request.notes) or None)
+                if "notes" in fields
+                else task.notes
+            ),
             updated_at=_timestamp(),
         )
         saved = self.repository.upsert_opshop_pickup_task(updated)

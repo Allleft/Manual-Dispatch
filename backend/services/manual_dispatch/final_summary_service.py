@@ -1,6 +1,8 @@
 from backend.services.manual_dispatch.normalization import (
     bool_or_default,
+    clean_optional_iso_date,
     clean_optional_text,
+    clean_required_iso_date,
     clean_required_text,
     load_unit_for_quantities,
     normalize_product_detail_lines,
@@ -18,8 +20,8 @@ class FinalSummaryService:
         self.validator = validator
 
     def save_final_trip_summary(self, request):
-        dispatch_date = clean_required_text(request.dispatch_date, "dispatch_date")
-        delivery_date = clean_required_text(
+        dispatch_date = clean_required_iso_date(request.dispatch_date, "dispatch_date")
+        delivery_date = clean_required_iso_date(
             getattr(request, "delivery_date", None) or dispatch_date,
             "delivery_date",
         )
@@ -73,8 +75,8 @@ class FinalSummaryService:
         return self.repository.save_final_trip_summary(summary, rows, opshop_rows)
 
     def create_generated_final_trip_summary(self, request):
-        dispatch_date = clean_required_text(request.dispatch_date, "dispatch_date")
-        delivery_date = clean_required_text(
+        dispatch_date = clean_required_iso_date(request.dispatch_date, "dispatch_date")
+        delivery_date = clean_required_iso_date(
             getattr(request, "delivery_date", None) or dispatch_date,
             "delivery_date",
         )
@@ -151,13 +153,13 @@ class FinalSummaryService:
         return self.repository.cancel_generated_final_trip_summary(summary_id)
 
     def list_final_trip_summaries(self, dispatch_date, delivery_date=None):
-        dispatch_date = clean_required_text(dispatch_date, "dispatch_date")
-        delivery_date = clean_optional_text(delivery_date)
+        dispatch_date = clean_required_iso_date(dispatch_date, "dispatch_date")
+        delivery_date = clean_optional_iso_date(delivery_date, "delivery_date")
         return self.repository.list_final_trip_summaries(dispatch_date, delivery_date)
 
     def list_generated_final_trip_summaries(self, dispatch_date, delivery_date=None):
-        dispatch_date = clean_required_text(dispatch_date, "dispatch_date")
-        delivery_date = clean_optional_text(delivery_date)
+        dispatch_date = clean_required_iso_date(dispatch_date, "dispatch_date")
+        delivery_date = clean_optional_iso_date(delivery_date, "delivery_date")
         return self.repository.list_generated_final_trip_summaries(
             dispatch_date,
             delivery_date,
