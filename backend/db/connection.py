@@ -5,6 +5,8 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
 
+from backend.db.invariants import create_invariant_indexes
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_DB_PATH = PROJECT_ROOT / "data" / "manual_dispatch.sqlite3"
@@ -121,13 +123,23 @@ def _connection_key(database_path):
 
 def initialize_database(db_path=None):
     with connect(db_path) as connection:
+        is_fresh_database = not _table_exists(connection, "manual_orders")
         schema = SCHEMA_PATH.read_text(encoding="utf-8")
         schema_statements, seed_statements = _split_schema_and_seed(schema)
         connection.executescript(schema_statements)
         _ensure_manual_dispatch_columns(connection)
+        if is_fresh_database:
+            create_invariant_indexes(connection)
         if _is_env_flag_enabled(SEED_DEMO_DATA_ENV, default=False):
             connection.executescript(seed_statements)
         connection.commit()
+
+
+def _table_exists(connection, table_name):
+    return connection.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+        (table_name,),
+    ).fetchone() is not None
 
 
 def _split_schema_and_seed(schema):
