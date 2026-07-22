@@ -5,6 +5,7 @@ import shutil
 import sqlite3
 import unittest
 import uuid
+from unittest.mock import patch
 from pathlib import Path
 
 from openpyxl import load_workbook
@@ -40,7 +41,8 @@ class ManualDispatchFinalSummaryExportTest(unittest.TestCase):
         self.temp_dir = temp_parent / f"final-summary-export-test-{uuid.uuid4().hex}"
         self.temp_dir.mkdir()
         self.db_path = self.temp_dir / "manual_dispatch.sqlite3"
-        self.repository = SQLiteManualDispatchRepository(self.db_path)
+        with patch.dict("os.environ", {"MANUAL_DISPATCH_SEED_DEMO_DATA": "true"}):
+            self.repository = SQLiteManualDispatchRepository(self.db_path)
         self.service = ManualDispatchService(self.repository)
         self.dispatch_date = "2026-05-05"
         self.account = self.service.register_operator_account(
@@ -425,7 +427,8 @@ class ManualDispatchFinalSummaryExportRouteTest(unittest.TestCase):
         self.previous_db_path = os.environ.get("MANUAL_DISPATCH_DB_PATH")
         os.environ["MANUAL_DISPATCH_DB_PATH"] = str(self.db_path)
 
-        self.repository = SQLiteManualDispatchRepository(self.db_path)
+        with patch.dict("os.environ", {"MANUAL_DISPATCH_SEED_DEMO_DATA": "true"}):
+            self.repository = SQLiteManualDispatchRepository(self.db_path)
         self.service = ManualDispatchService(self.repository)
         self.account = self.service.register_operator_account(
             RegisterOperatorAccountRequest(

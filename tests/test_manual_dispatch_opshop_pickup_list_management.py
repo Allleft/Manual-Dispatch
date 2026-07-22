@@ -3,6 +3,7 @@ import os
 import shutil
 import unittest
 import uuid
+from unittest.mock import patch
 from pathlib import Path
 
 from backend.repositories.in_memory_manual_dispatch_repository import (
@@ -919,7 +920,8 @@ class OpShopPickupListManagementRouteTest(unittest.TestCase):
         self.previous_db_path = os.environ.get("MANUAL_DISPATCH_DB_PATH")
         os.environ["MANUAL_DISPATCH_DB_PATH"] = str(self.db_path)
 
-        self.repository = SQLiteManualDispatchRepository(self.db_path)
+        with patch.dict("os.environ", {"MANUAL_DISPATCH_SEED_DEMO_DATA": "true"}):
+            self.repository = SQLiteManualDispatchRepository(self.db_path)
         self.repository.upsert_opshop_location(OpShopPickupListManagementTest()._location())
         self.repository.upsert_opshop_pickup_schedule(
             OpShopPickupListManagementTest()._schedule("SCHED-STANDARD")

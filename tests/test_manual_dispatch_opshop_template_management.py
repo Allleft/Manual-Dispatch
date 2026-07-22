@@ -3,6 +3,7 @@ import os
 import shutil
 import unittest
 import uuid
+from unittest.mock import patch
 from pathlib import Path
 
 from backend.repositories.in_memory_manual_dispatch_repository import (
@@ -180,7 +181,8 @@ class OpShopTemplateManagementRouteTest(unittest.TestCase):
         self.db_path = self.temp_dir / "manual_dispatch.sqlite3"
         self.previous_db_path = os.environ.get("MANUAL_DISPATCH_DB_PATH")
         os.environ["MANUAL_DISPATCH_DB_PATH"] = str(self.db_path)
-        self.repository = SQLiteManualDispatchRepository(self.db_path)
+        with patch.dict("os.environ", {"MANUAL_DISPATCH_SEED_DEMO_DATA": "true"}):
+            self.repository = SQLiteManualDispatchRepository(self.db_path)
         self.service = ManualDispatchService(self.repository)
         self.api_module = importlib.import_module("backend.api.manual_dispatch")
         self.original_service = self.api_module.service

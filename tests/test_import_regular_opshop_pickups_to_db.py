@@ -29,7 +29,8 @@ class ImportRegularOpShopPickupsToDbTest(unittest.TestCase):
         self.temp_dir.mkdir(parents=True)
         self.workbook_path = self.temp_dir / "Opshop reuglar pickup.xlsx"
         self.db_path = self.temp_dir / "manual_dispatch.sqlite3"
-        self.repository = SQLiteManualDispatchRepository(self.db_path)
+        with patch.dict("os.environ", {"MANUAL_DISPATCH_SEED_DEMO_DATA": "true"}):
+            self.repository = SQLiteManualDispatchRepository(self.db_path)
         self.service = ManualDispatchService(self.repository)
         self.service.update_driver("D001", UpdateDriverRequest(name="John Georgiadis"))
         self.service.update_driver("D002", UpdateDriverRequest(name="Gavin Fynn"))

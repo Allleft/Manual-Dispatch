@@ -46,6 +46,29 @@ class _BorrowedConnection:
         return self._connection.rollback()
 
 
+class _ManagedConnection:
+    """Close an owned SQLite connection when its context exits."""
+
+    def __init__(self, connection):
+        self._connection = connection
+
+    def __enter__(self):
+        self._connection.__enter__()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        try:
+            return self._connection.__exit__(exc_type, exc_value, traceback)
+        finally:
+            self._connection.close()
+
+    def __getattr__(self, name):
+        return getattr(self._connection, name)
+
+    def close(self):
+        return self._connection.close()
+
+
 def get_database_path(db_path=None):
     if db_path:
         return Path(db_path)
@@ -70,7 +93,7 @@ def connect(db_path=None):
     connection.execute("PRAGMA foreign_keys = ON")
     connection.execute("PRAGMA journal_mode = WAL")
     connection.execute("PRAGMA busy_timeout = 5000")
-    return connection
+    return _ManagedConnection(connection)
 
 
 def has_active_connection(db_path=None):
@@ -102,7 +125,7 @@ def initialize_database(db_path=None):
         schema_statements, seed_statements = _split_schema_and_seed(schema)
         connection.executescript(schema_statements)
         _ensure_manual_dispatch_columns(connection)
-        if _is_env_flag_enabled(SEED_DEMO_DATA_ENV, default=True):
+        if _is_env_flag_enabled(SEED_DEMO_DATA_ENV, default=False):
             connection.executescript(seed_statements)
         connection.commit()
 

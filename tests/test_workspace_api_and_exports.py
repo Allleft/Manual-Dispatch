@@ -4,6 +4,7 @@ import shutil
 import sqlite3
 import unittest
 import uuid
+from unittest.mock import patch
 from dataclasses import replace
 from io import BytesIO
 from pathlib import Path
@@ -49,7 +50,8 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.previous_db_path = os.environ.get("MANUAL_DISPATCH_DB_PATH")
         os.environ["MANUAL_DISPATCH_DB_PATH"] = str(self.db_path)
 
-        self.repository = SQLiteManualDispatchRepository(self.db_path)
+        with patch.dict("os.environ", {"MANUAL_DISPATCH_SEED_DEMO_DATA": "true"}):
+            self.repository = SQLiteManualDispatchRepository(self.db_path)
         self.service = ManualDispatchService(self.repository)
         self.account = self.service.register_operator_account(
             RegisterOperatorAccountRequest(
