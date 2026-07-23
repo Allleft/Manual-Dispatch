@@ -1,6 +1,9 @@
 import { createIcon } from "../../utils/icon-utils.js";
 
-import { formatOptional } from "../../utils/format-utils.js";
+import {
+  formatOptional,
+  formatProductDetailLine,
+} from "../../utils/format-utils.js";
 
 import {
   isDeliveryOrderUrgent,
@@ -177,6 +180,12 @@ export function createOrderCard(order, board, state, actions) {
   const info = document.createElement("div");
   info.className = "workspace-order-card-info";
   info.append(top, chips);
+  const products = document.createElement("p");
+  products.className = "workspace-order-products-preview";
+  products.textContent = "Products: " + ((order.product_lines || [])
+    .map((line, index) => formatProductDetailLine(line, index + 1))
+    .join("; ") || "No product lines");
+  info.append(products);
   if (order.note) {
     const note = document.createElement("p");
     note.className = "workspace-order-note-preview";
@@ -260,7 +269,10 @@ export function deliveryOrderSearchText(order) {
     order.suburb,
     order.postcode,
     order.note,
-    ...(order.product_lines || []).map((line) => line.product_name),
+    ...(order.product_lines || []).flatMap((line) => [
+      line.product_code,
+      line.product_name,
+    ]),
   ].filter(Boolean).join(" "));
 }
 

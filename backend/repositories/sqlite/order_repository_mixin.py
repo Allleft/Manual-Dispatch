@@ -49,11 +49,12 @@ class SQLiteOrderRepositoryMixin:
                     preferred_driver_id,
                     pallet_quantity,
                     loose_bags_quantity,
+                    carton_quantity,
                     start_time,
                     end_time,
                     note,
                     status
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     order.order_id,
@@ -70,6 +71,7 @@ class SQLiteOrderRepositoryMixin:
                     order.preferred_driver_id,
                     order.pallet_quantity,
                     order.loose_bags_quantity,
+                    order.carton_quantity,
                     order.start_time,
                     order.end_time,
                     order.note,
@@ -99,6 +101,7 @@ class SQLiteOrderRepositoryMixin:
                     preferred_driver_id = ?,
                     pallet_quantity = ?,
                     loose_bags_quantity = ?,
+                    carton_quantity = ?,
                     start_time = ?,
                     end_time = ?,
                     note = ?
@@ -118,6 +121,7 @@ class SQLiteOrderRepositoryMixin:
                     order.preferred_driver_id,
                     order.pallet_quantity,
                     order.loose_bags_quantity,
+                    order.carton_quantity,
                     order.start_time,
                     order.end_time,
                     order.note,
@@ -156,8 +160,11 @@ class SQLiteOrderRepositoryMixin:
                     line_no,
                     product_name,
                     quantity,
-                    unit
-                ) VALUES (?, ?, ?, ?, ?)
+                    unit,
+                    product_code,
+                    package_quantity,
+                    package_unit
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     order_id,
@@ -165,6 +172,9 @@ class SQLiteOrderRepositoryMixin:
                     line.product_name,
                     line.quantity,
                     line.unit,
+                    line.product_code,
+                    line.package_quantity,
+                    line.package_unit,
                 ),
             )
 
@@ -172,7 +182,13 @@ class SQLiteOrderRepositoryMixin:
         with connect(self.db_path) as connection:
             rows = connection.execute(
                 """
-                SELECT product_name, quantity, unit
+                SELECT
+                    product_name,
+                    quantity,
+                    unit,
+                    product_code,
+                    package_quantity,
+                    package_unit
                 FROM order_product_lines
                 WHERE order_id = ?
                 ORDER BY line_no
@@ -184,6 +200,9 @@ class SQLiteOrderRepositoryMixin:
                 product_name=row["product_name"],
                 quantity=row["quantity"],
                 unit=row["unit"],
+                product_code=row["product_code"],
+                package_quantity=row["package_quantity"],
+                package_unit=row["package_unit"],
             )
             for row in rows
         ]

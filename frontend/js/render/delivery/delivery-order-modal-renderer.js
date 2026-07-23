@@ -208,6 +208,8 @@ export function createDeliveryOrderForm(state, actions, formMode) {
         actions.updateDeliveryOrderForm("pallet_quantity", value), { type: "number" }),
       createBoundInput("Loose Bags Quantity", formState.loose_bags_quantity, (value) =>
         actions.updateDeliveryOrderForm("loose_bags_quantity", value), { type: "number" }),
+      createBoundInput("Carton Quantity", formState.carton_quantity, (value) =>
+        actions.updateDeliveryOrderForm("carton_quantity", value), { type: "number" }),
       createProductLineEditor(formState.product_lines || [], actions),
     ]),
     createFormSection("Notes", [
@@ -244,15 +246,20 @@ export function createProductLineEditor(lines, actions) {
     const row = document.createElement("div");
     row.className = "workspace-product-line-row";
     row.append(
+      createBoundInput("Product Code", line.product_code || "", (value) =>
+        actions.updateDeliveryOrderProductLine(index, "product_code", value)),
       createBoundInput("Product Name", line.product_name || "", (value) =>
         actions.updateDeliveryOrderProductLine(index, "product_name", value)),
-      createBoundInput("Quantity", line.quantity ?? 0, (value) =>
+      createBoundInput("Actual Quantity", line.quantity ?? 0, (value) =>
         actions.updateDeliveryOrderProductLine(index, "quantity", value), { type: "number" }),
-      createBoundSelect("Unit", line.unit || "PALLETS", [
-        { value: "PALLETS", label: "PALLETS" },
-        { value: "BAGS", label: "BAGS" },
-        { value: "CARTONS", label: "CARTONS" },
-      ], (value) => actions.updateDeliveryOrderProductLine(index, "unit", value)),
+      createBoundInput("Actual Unit", line.unit || "KG", (value) =>
+        actions.updateDeliveryOrderProductLine(index, "unit", value)),
+      createBoundInput("Packaging Quantity", line.package_quantity ?? "", (value) =>
+        actions.updateDeliveryOrderProductLine(index, "package_quantity", value), {
+        type: "number",
+      }),
+      createBoundInput("Packaging Unit", line.package_unit || "", (value) =>
+        actions.updateDeliveryOrderProductLine(index, "package_unit", value)),
       createActionButton("Remove", () => actions.removeDeliveryOrderProductLine(index)),
     );
     list.append(row);

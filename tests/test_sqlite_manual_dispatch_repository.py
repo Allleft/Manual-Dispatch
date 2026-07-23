@@ -55,7 +55,7 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
         self.assertIn("manual_driver_vehicle_assignments", tables)
         self.assertIn("order_product_lines", tables)
 
-    def test_fresh_product_line_schema_allows_cartons(self):
+    def test_fresh_product_line_schema_allows_extended_unrestricted_units(self):
         with sqlite3.connect(self.db_path) as connection:
             table_sql = connection.execute(
                 """
@@ -65,9 +65,13 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
                 """
             ).fetchone()[0]
 
-        self.assertIn("'CARTONS'", table_sql)
+        normalized_sql = " ".join(table_sql.upper().split())
+        self.assertNotIn("CHECK(UNIT IN", normalized_sql)
+        self.assertIn("PRODUCT_CODE", normalized_sql)
+        self.assertIn("PACKAGE_QUANTITY", normalized_sql)
+        self.assertIn("PACKAGE_UNIT", normalized_sql)
 
-    def test_existing_product_lines_are_preserved_when_cartons_are_migrated(self):
+    def test_existing_product_lines_are_preserved_when_unit_check_is_removed(self):
         legacy_path = self.temp_dir / "legacy_product_lines.sqlite3"
         with sqlite3.connect(legacy_path) as connection:
             connection.executescript(
@@ -190,27 +194,41 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
             connection.execute(
                 """
                 INSERT INTO order_product_lines (
-                    order_id, line_no, product_name, quantity, unit
-                ) VALUES (?, ?, ?, ?, ?)
+                    order_id,
+                    line_no,
+                    product_code,
+                    product_name,
+                    quantity,
+                    unit,
+                    package_quantity,
+                    package_unit
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     "ORD-LEGACY-CARTON",
                     3,
-                    "New Carton Product",
-                    2,
-                    "CARTONS",
+                    "RWIND",
+                    "New Kilogram Product",
+                    450,
+                    "KG",
+                    45,
+                    "BAG10",
                 ),
             )
             foreign_key_issues = connection.execute("PRAGMA foreign_key_check").fetchall()
-            carton_audit_rows = connection.execute(
+            kilogram_audit_rows = connection.execute(
                 """
                 SELECT unit
                 FROM product_line_audit
-                WHERE unit = 'CARTONS'
+                WHERE unit = 'KG'
                 """
             ).fetchall()
 
-        self.assertIn("'CARTONS'", table_sql)
+        normalized_sql = " ".join(table_sql.upper().split())
+        self.assertNotIn("CHECK(UNIT IN", normalized_sql)
+        self.assertIn("PRODUCT_CODE", normalized_sql)
+        self.assertIn("PACKAGE_QUANTITY", normalized_sql)
+        self.assertIn("PACKAGE_UNIT", normalized_sql)
         self.assertEqual(
             [
                 (7, 1, "Existing Pallet Product", 1, "PALLETS"),
@@ -220,7 +238,7 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
         )
         self.assertIn("idx_legacy_product_unit", indexes)
         self.assertIn("trg_legacy_product_insert", triggers)
-        self.assertEqual([("CARTONS",)], carton_audit_rows)
+        self.assertEqual([("KG",)], kilogram_audit_rows)
         self.assertEqual([], foreign_key_issues)
 
     def test_connection_uses_wal_and_busy_timeout_for_office_deployment(self):

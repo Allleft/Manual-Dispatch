@@ -81,6 +81,7 @@ def create_attache_router(
                         preferred_driver_id=row.preferred_driver_id,
                         pallet_quantity=row.pallet_quantity,
                         loose_bags_quantity=row.loose_bags_quantity,
+                        carton_quantity=row.carton_quantity,
                         start_time=row.start_time,
                         end_time=row.end_time,
                         note=row.note,

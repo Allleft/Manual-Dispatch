@@ -66,6 +66,7 @@ class DeliveryRunSheetService:
             total_loose_bags=sum(
                 order.loose_bags_quantity_snapshot for order in orders
             ),
+            total_cartons=sum(order.carton_quantity_snapshot for order in orders),
             status="GENERATED",
             generated_at=_timestamp(),
             saved_at=None,
@@ -191,12 +192,16 @@ class DeliveryRunSheetService:
                         product_snapshot=None,
                         pallet_quantity_snapshot=order.pallet_quantity,
                         loose_bags_quantity_snapshot=order.loose_bags_quantity,
+                        carton_quantity_snapshot=order.carton_quantity,
                         note_snapshot=order.note,
                         product_lines_snapshot=[
                             ProductDetailLine(
                                 product_name=line.product_name,
                                 quantity=line.quantity,
                                 unit=line.unit,
+                                product_code=line.product_code,
+                                package_quantity=line.package_quantity,
+                                package_unit=line.package_unit,
                             )
                             for line in order.product_lines
                         ],

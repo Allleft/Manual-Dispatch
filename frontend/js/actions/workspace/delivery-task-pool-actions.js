@@ -105,7 +105,14 @@ export function createDeliveryTaskPoolActions(context) {
       ...(state.deliveryOrderForm || {}),
       product_lines: [
         ...((state.deliveryOrderForm || {}).product_lines || []),
-        { product_name: "", quantity: 0, unit: "PALLETS" },
+        {
+          product_code: "",
+          product_name: "",
+          quantity: 0,
+          unit: "KG",
+          package_quantity: "",
+          package_unit: "",
+        },
       ],
     };
     renderWorkspace();
@@ -114,8 +121,17 @@ export function createDeliveryTaskPoolActions(context) {
   function updateDeliveryOrderProductLine(index, field, value) {
     const lines = [...((state.deliveryOrderForm || {}).product_lines || [])];
     lines[index] = {
-      ...(lines[index] || { product_name: "", quantity: 0, unit: "PALLETS" }),
-      [field]: field === "quantity" ? Number(value || 0) : value,
+      ...(lines[index] || {
+        product_code: "",
+        product_name: "",
+        quantity: 0,
+        unit: "KG",
+        package_quantity: "",
+        package_unit: "",
+      }),
+      [field]: ["quantity", "package_quantity"].includes(field)
+        ? (value === "" ? "" : Number(value))
+        : value,
     };
     state.deliveryOrderForm = {
       ...(state.deliveryOrderForm || {}),
@@ -352,11 +368,15 @@ export function createDeliveryTaskPoolActions(context) {
       preferred_driver_id: order.preferred_driver_id || "",
       pallet_quantity: String(order.pallet_quantity ?? 0),
       loose_bags_quantity: String(order.loose_bags_quantity ?? 0),
+      carton_quantity: String(order.carton_quantity ?? 0),
       note: order.note || "",
       product_lines: (order.product_lines || []).map((line) => ({
+        product_code: line.product_code || "",
         product_name: line.product_name || "",
         quantity: Number(line.quantity || 0),
-        unit: line.unit || "PALLETS",
+        unit: line.unit || "KG",
+        package_quantity: line.package_quantity ?? "",
+        package_unit: line.package_unit || "",
       })),
     };
   }
@@ -382,11 +402,19 @@ export function createDeliveryTaskPoolActions(context) {
       preferred_driver_id: form.preferred_driver_id || null,
       pallet_quantity: Number(form.pallet_quantity || 0),
       loose_bags_quantity: Number(form.loose_bags_quantity || 0),
+      carton_quantity: Number(form.carton_quantity || 0),
       note: form.note || null,
       product_lines: (form.product_lines || []).map((line) => ({
+        product_code: line.product_code || null,
         product_name: line.product_name || "",
         quantity: Number(line.quantity || 0),
-        unit: line.unit || "PALLETS",
+        unit: line.unit || "KG",
+        package_quantity: line.package_quantity === ""
+          || line.package_quantity === null
+          || line.package_quantity === undefined
+          ? null
+          : Number(line.package_quantity),
+        package_unit: line.package_unit || null,
       })),
     };
   }

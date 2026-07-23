@@ -1,4 +1,7 @@
-import { formatOptional } from "../../utils/format-utils.js";
+import {
+  formatOptional,
+  formatProductDetailLine,
+} from "../../utils/format-utils.js";
 
 import {
   formatDeliveryVehicleConflictMessage,
@@ -105,6 +108,7 @@ export function createDriverTripSummaryCard(driver, board, deliveryDate, state, 
   facts.className = "workspace-fact-grid";
   appendFact(facts, "Pallet total", totals.pallets);
   appendFact(facts, "Loose-bag total", totals.bags);
+  appendFact(facts, "Carton total", totals.cartons);
   appendFact(facts, "Trip 1 orders", driverOrders.filter((item) => item.assignment.trip_no !== "trip2").length);
   appendFact(facts, "Trip 2 orders", driverOrders.filter((item) => item.assignment.trip_no === "trip2").length);
   card.append(facts, createDriverVehicleControl(driver, board, deliveryDate, isLocked, state, actions));
@@ -262,7 +266,11 @@ export function createAssignedOrderRow(order, assignment, driver, isLocked, stat
   heading.textContent = formatOptional(order.company_name);
   const meta = document.createElement("p");
   meta.textContent = `${formatOptional(order.invoice_number, order.order_id)} - ${formatOptional(order.suburb)} - ${formatLoad(order)}`;
-  title.append(heading, meta);
+  const products = document.createElement("p");
+  products.textContent = "Products: " + ((order.product_lines || [])
+    .map((line, index) => formatProductDetailLine(line, index + 1))
+    .join("; ") || "No product lines");
+  title.append(heading, meta, products);
   const actionsRow = document.createElement("div");
   actionsRow.className = "workspace-action-row";
   const targetTrip = assignment.trip_no === "trip2" ? "trip1" : "trip2";

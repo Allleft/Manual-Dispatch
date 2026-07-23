@@ -8,6 +8,11 @@ export function getLooseBagsQuantity(order) {
   return Number.isFinite(looseBags) ? looseBags : 0;
 }
 
+export function getCartonQuantity(order) {
+  const cartons = Number(order.carton_quantity || 0);
+  return Number.isFinite(cartons) ? cartons : 0;
+}
+
 export function getOrderLoadUnit(order) {
   if (getDisplayPalletQuantity(order) > 0) {
     return "PALLETS";
@@ -15,35 +20,56 @@ export function getOrderLoadUnit(order) {
   if (getLooseBagsQuantity(order) > 0) {
     return "BAGS";
   }
+  if (getCartonQuantity(order) > 0) {
+    return "CARTONS";
+  }
   return "";
 }
 
 export function formatPluralLoadUnit(unit, quantity) {
   const normalized = String(unit || "").toUpperCase();
-  const singular =
-    normalized === "BAGS" ? "Bag" : normalized === "CARTONS" ? "Carton" : "Pallet";
-  return Number(quantity) === 1 ? singular : `${singular}s`;
+  const labels = {
+    BAG: ["Bag", "Bags"],
+    BAGS: ["Bag", "Bags"],
+    CARTON: ["Carton", "Cartons"],
+    CARTONS: ["Carton", "Cartons"],
+    PALLET: ["Pallet", "Pallets"],
+    PALLETS: ["Pallet", "Pallets"],
+  };
+  const [singular, plural] = labels[normalized] || [normalized, normalized];
+  return Number(quantity) === 1 ? singular : plural;
 }
 
 export function formatOrderLoadQuantity(order) {
   const pallets = getDisplayPalletQuantity(order);
-  if (pallets > 0) {
-    return `${pallets} ${formatPluralLoadUnit("PALLETS", pallets)}`;
-  }
-
   const looseBags = getLooseBagsQuantity(order);
-  if (looseBags > 0) {
-    return `${looseBags} ${formatPluralLoadUnit("BAGS", looseBags)}`;
-  }
-
-  return "-";
+  const cartons = getCartonQuantity(order);
+  return [
+    pallets + " " + formatPluralLoadUnit("PALLETS", pallets),
+    looseBags + " " + formatPluralLoadUnit("BAGS", looseBags),
+    cartons + " " + formatPluralLoadUnit("CARTONS", cartons),
+  ].join(" / ");
 }
 
 export function formatProductDetailLine(line, index) {
-  return `${index}. ${line.product_name || ""}    ${Number(line.quantity || 0)} ${formatPluralLoadUnit(
-    line.unit,
-    Number(line.quantity || 0),
-  )}`;
+  const prefix = index === undefined || index === null ? "" : index + ". ";
+  const productCode = String(line.product_code || "").trim();
+  const productName = String(line.product_name || "").trim();
+  const identity = [
+    productCode ? "[" + productCode + "]" : "",
+    productName,
+  ].filter(Boolean).join(" ") || "Unnamed product";
+  const quantity = Number(line.quantity || 0);
+  const unit = String(line.unit || "").trim().toUpperCase();
+  const packageQuantity = line.package_quantity;
+  const packageUnit = String(line.package_unit || "").trim().toUpperCase();
+  const packageText = packageQuantity !== null
+    && packageQuantity !== undefined
+    && packageQuantity !== ""
+    && packageUnit
+    ? " | Packaging: " + Number(packageQuantity) + " " + packageUnit
+    : "";
+  return (prefix + identity + " - " + quantity + " " + unit + packageText).trim();
 }
 
 export function formatOptional(value, fallback = "-") {

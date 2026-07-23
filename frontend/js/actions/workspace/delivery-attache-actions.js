@@ -157,8 +157,17 @@ export function createDeliveryAttacheActions(context) {
         }
         const productLines = [...(row.product_lines || [])];
         productLines[lineIndex] = {
-          ...(productLines[lineIndex] || { product_name: "", quantity: 0, unit: "PALLETS" }),
-          [field]: field === "quantity" ? Number(value || 0) : value,
+          ...(productLines[lineIndex] || {
+            product_code: "",
+            product_name: "",
+            quantity: 0,
+            unit: "KG",
+            package_quantity: "",
+            package_unit: "",
+          }),
+          [field]: ["quantity", "package_quantity"].includes(field)
+            ? (value === "" ? "" : Number(value))
+            : value,
         };
         return { ...row, product_lines: productLines };
       }),
@@ -177,7 +186,14 @@ export function createDeliveryAttacheActions(context) {
           ...row,
           product_lines: [
             ...(row.product_lines || []),
-            { product_name: "", quantity: 0, unit: "PALLETS" },
+            {
+              product_code: "",
+              product_name: "",
+              quantity: 0,
+              unit: "KG",
+              package_quantity: "",
+              package_unit: "",
+            },
           ],
         };
       }),

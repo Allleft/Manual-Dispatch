@@ -68,6 +68,7 @@ class FinalSummaryService:
             "total_loose_bags": sum(
                 row["loose_bags_quantity_snapshot"] for row in rows
             ),
+            "total_cartons": sum(row["carton_quantity_snapshot"] for row in rows),
             "generated_at": clean_optional_text(request.generated_at),
             "saved_by_account_name": saved_by_account.account_name,
             "saved_by_account_id": saved_by_account.account_id,
@@ -118,6 +119,7 @@ class FinalSummaryService:
             "total_loose_bags": sum(
                 row["loose_bags_quantity_snapshot"] for row in rows
             ),
+            "total_cartons": sum(row["carton_quantity_snapshot"] for row in rows),
             "generated_at": clean_optional_text(request.generated_at),
             "saved_by_account_name": clean_optional_text(
                 request.saved_by_account_name
@@ -238,6 +240,12 @@ class FinalSummaryService:
                     else order_snapshot.get("loose_bags_quantity"),
                     "loose_bags_quantity_snapshot",
                 )
+                carton_quantity_snapshot = quantity_or_default(
+                    order_snapshot.get("carton_quantity_snapshot")
+                    if "carton_quantity_snapshot" in order_snapshot
+                    else order_snapshot.get("carton_quantity"),
+                    "carton_quantity_snapshot",
+                )
                 load_unit = load_unit_for_quantities(
                     pallet_quantity_snapshot,
                     loose_bags_quantity_snapshot,
@@ -253,6 +261,9 @@ class FinalSummaryService:
                             "product_name": line.product_name,
                             "quantity": line.quantity,
                             "unit": line.unit,
+                            "product_code": line.product_code,
+                            "package_quantity": line.package_quantity,
+                            "package_unit": line.package_unit,
                         }
                         for line in task.product_lines
                     ]
@@ -317,11 +328,15 @@ class FinalSummaryService:
                                 "product_name": line.product_name,
                                 "quantity": line.quantity,
                                 "unit": line.unit,
+                                "product_code": line.product_code,
+                                "package_quantity": line.package_quantity,
+                                "package_unit": line.package_unit,
                             }
                             for line in product_lines_snapshot
                         ],
                         "pallet_quantity_snapshot": pallet_quantity_snapshot,
                         "loose_bags_quantity_snapshot": loose_bags_quantity_snapshot,
+                        "carton_quantity_snapshot": carton_quantity_snapshot,
                         "note_snapshot": clean_optional_text(
                             order_snapshot.get("note_snapshot")
                             or order_snapshot.get("note")

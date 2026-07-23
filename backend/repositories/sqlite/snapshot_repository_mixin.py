@@ -347,13 +347,14 @@ class SQLiteSnapshotRepositoryMixin:
                     vehicle_rego_snapshot,
                     total_pallets,
                     total_loose_bags,
+                    total_cartons,
                     status,
                     generated_at,
                     saved_at,
                     saved_by_account_name,
                     saved_by_account_id,
                     legacy_summary_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(run_sheet_id) DO UPDATE SET
                     dispatch_date = excluded.dispatch_date,
                     delivery_date = excluded.delivery_date,
@@ -363,6 +364,7 @@ class SQLiteSnapshotRepositoryMixin:
                     vehicle_rego_snapshot = excluded.vehicle_rego_snapshot,
                     total_pallets = excluded.total_pallets,
                     total_loose_bags = excluded.total_loose_bags,
+                    total_cartons = excluded.total_cartons,
                     status = excluded.status,
                     generated_at = excluded.generated_at,
                     saved_at = excluded.saved_at,
@@ -380,6 +382,7 @@ class SQLiteSnapshotRepositoryMixin:
                     run_sheet.vehicle_rego_snapshot,
                     run_sheet.total_pallets,
                     run_sheet.total_loose_bags,
+                    run_sheet.total_cartons,
                     run_sheet.status,
                     run_sheet.generated_at,
                     run_sheet.saved_at,
@@ -414,8 +417,9 @@ class SQLiteSnapshotRepositoryMixin:
                             estimated_distance_km_from_warehouse_snapshot,
                             pallet_quantity_snapshot,
                             loose_bags_quantity_snapshot,
+                            carton_quantity_snapshot,
                             note_snapshot
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             order.row_id,
@@ -435,6 +439,7 @@ class SQLiteSnapshotRepositoryMixin:
                             order.estimated_distance_km_from_warehouse_snapshot,
                             order.pallet_quantity_snapshot,
                             order.loose_bags_quantity_snapshot,
+                            order.carton_quantity_snapshot,
                             order.note_snapshot,
                         ),
                     )
@@ -915,12 +920,13 @@ class SQLiteSnapshotRepositoryMixin:
                     vehicle_rego_snapshot,
                     total_pallets,
                     total_loose_bags,
+                    total_cartons,
                     status,
                     generated_at,
                     saved_at,
                     saved_by_account_name,
                     saved_by_account_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     summary_id,
@@ -932,6 +938,7 @@ class SQLiteSnapshotRepositoryMixin:
                     summary.get("vehicle_rego_snapshot"),
                     summary["total_pallets"],
                     summary["total_loose_bags"],
+                    summary.get("total_cartons", 0),
                     "SAVED",
                     summary.get("generated_at") or timestamp,
                     timestamp,
@@ -962,8 +969,9 @@ class SQLiteSnapshotRepositoryMixin:
                         estimated_distance_km_from_warehouse_snapshot,
                         pallet_quantity_snapshot,
                         loose_bags_quantity_snapshot,
+                        carton_quantity_snapshot,
                         note_snapshot
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         row_id,
@@ -983,6 +991,7 @@ class SQLiteSnapshotRepositoryMixin:
                         row.get("estimated_distance_km_from_warehouse_snapshot"),
                         row["pallet_quantity_snapshot"],
                         row["loose_bags_quantity_snapshot"],
+                        row.get("carton_quantity_snapshot", 0),
                         row.get("note_snapshot"),
                     ),
                 )
@@ -1309,12 +1318,13 @@ class SQLiteSnapshotRepositoryMixin:
                 vehicle_rego_snapshot,
                 total_pallets,
                 total_loose_bags,
+                total_cartons,
                 status,
                 generated_at,
                 saved_at,
                 saved_by_account_name,
                 saved_by_account_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 summary_id,
@@ -1326,6 +1336,7 @@ class SQLiteSnapshotRepositoryMixin:
                 summary.get("vehicle_rego_snapshot"),
                 summary["total_pallets"],
                 summary["total_loose_bags"],
+                summary.get("total_cartons", 0),
                 status,
                 summary.get("generated_at") or timestamp,
                 saved_at,
@@ -1356,8 +1367,9 @@ class SQLiteSnapshotRepositoryMixin:
                     estimated_distance_km_from_warehouse_snapshot,
                     pallet_quantity_snapshot,
                     loose_bags_quantity_snapshot,
+                    carton_quantity_snapshot,
                     note_snapshot
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     row_id,
@@ -1377,6 +1389,7 @@ class SQLiteSnapshotRepositoryMixin:
                     row.get("estimated_distance_km_from_warehouse_snapshot"),
                     row["pallet_quantity_snapshot"],
                     row["loose_bags_quantity_snapshot"],
+                    row.get("carton_quantity_snapshot", 0),
                     row.get("note_snapshot"),
                 ),
             )

@@ -79,7 +79,10 @@ Delivery Orders support manual add, edit, and soft-cancel operations. Delivery T
 - Staff can correct parsed delivery fields before confirmation.
 - Existing invoice-number duplicates are surfaced and are not selected for import by default.
 - Confirmed rows use the standard Delivery Order creation path and appear in the Delivery Task Pool.
-- Imported product lines use delivery product fields only; invoice accounting totals, GST, and payment information are not imported as delivery items.
+- Product lines store product code, name, actual quantity/unit, and optional packaging quantity/unit. Units are not limited to Pallets, Bags, or Cartons.
+- Pallets, Loose Bags, and Cartons are independent order-level transport fields; they are never inferred from product quantities or units.
+- Imported product lines use delivery product fields only. DEL/FREIGHT and other charge rows, accounting totals, GST, and payment information are not imported as delivery items.
+- Generated and Saved Delivery Run Sheets capture immutable address, note, product, packaging, and transport snapshots. Run Sheet pages, history, and Excel exports read those snapshots rather than mutable live Orders.
 - Importing invoices does not change OP SHOP tasks, Pickup Collections, or OP SHOP locks.
 
 ### Delivery Run Sheet Locking

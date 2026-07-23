@@ -9,6 +9,9 @@ class ProductDetailLine:
     product_name: str
     quantity: int
     unit: str
+    product_code: Optional[str] = None
+    package_quantity: Optional[int] = None
+    package_unit: Optional[str] = None
 
 
 @dataclass
@@ -30,6 +33,7 @@ class Order:
     start_time: Optional[str]
     end_time: Optional[str]
     note: Optional[str]
+    carton_quantity: int = 0
     status: str = "ACTIVE"
     product_lines: List[ProductDetailLine] = field(default_factory=list)
     estimated_distance_km_from_warehouse: Optional[float] = None
@@ -602,6 +606,7 @@ class FinalTripSummaryOrderSnapshot:
     loose_bags_quantity_snapshot: int
     note_snapshot: Optional[str]
     order_no_snapshot: Optional[str] = None
+    carton_quantity_snapshot: int = 0
     product_lines_snapshot: List[ProductDetailLine] = field(default_factory=list)
     estimated_distance_km_from_warehouse_snapshot: Optional[float] = None
 
@@ -657,6 +662,7 @@ class FinalTripSummary:
     saved_by_account_id: Optional[int]
     trips: List[FinalTripSummaryTrip]
     opshop_pickups: List[FinalTripSummaryOpShopPickupSnapshot] = field(default_factory=list)
+    total_cartons: int = 0
 
 
 @dataclass
@@ -671,6 +677,7 @@ class SaveFinalTripSummaryRequest:
     generated_at: Optional[str]
     trips: List[dict]
     opshop_pickups: List[dict] = field(default_factory=list)
+    total_cartons: int = 0
     delivery_date: Optional[str] = None
     saved_by_account_name: Optional[str] = None
     saved_by_account_id: Optional[int] = None
@@ -693,6 +700,7 @@ class DeliveryRunSheetOrderSnapshot:
     pallet_quantity_snapshot: int
     loose_bags_quantity_snapshot: int
     note_snapshot: Optional[str]
+    carton_quantity_snapshot: int = 0
     product_lines_snapshot: List[ProductDetailLine] = field(default_factory=list)
     estimated_distance_km_from_warehouse_snapshot: Optional[float] = None
 
@@ -721,6 +729,7 @@ class DeliveryRunSheet:
     saved_by_account_id: Optional[int]
     legacy_summary_id: Optional[str]
     trips: List[DeliveryRunSheetTrip] = field(default_factory=list)
+    total_cartons: int = 0
 
 
 @dataclass
@@ -869,6 +878,7 @@ class CreateOrderRequest:
     preferred_driver_id: Optional[str] = None
     pallet_quantity: Optional[int] = 0
     loose_bags_quantity: Optional[int] = 0
+    carton_quantity: Optional[int] = 0
     start_time: Optional[str] = None
     end_time: Optional[str] = None
     note: Optional[str] = None
@@ -889,6 +899,7 @@ class UpdateOrderRequest(BaseModel):
     preferred_driver_id: Optional[str] = None
     pallet_quantity: Optional[int] = None
     loose_bags_quantity: Optional[int] = None
+    carton_quantity: Optional[int] = None
     start_time: Optional[str] = None
     end_time: Optional[str] = None
     note: Optional[str] = None
@@ -914,6 +925,7 @@ class AttacheInvoicePdfPreviewItem:
     preferred_driver_id: Optional[str] = None
     pallet_quantity: int = 0
     loose_bags_quantity: int = 0
+    carton_quantity: int = 0
     start_time: Optional[str] = None
     end_time: Optional[str] = None
     note: Optional[str] = None
@@ -949,6 +961,7 @@ class CommitAttacheInvoicePdfImportRow:
     preferred_driver_id: Optional[str] = None
     pallet_quantity: Optional[int] = 0
     loose_bags_quantity: Optional[int] = 0
+    carton_quantity: Optional[int] = 0
     start_time: Optional[str] = None
     end_time: Optional[str] = None
     note: Optional[str] = None

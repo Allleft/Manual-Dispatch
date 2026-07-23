@@ -557,12 +557,20 @@ class InMemorySnapshotRepositoryMixin:
                         product_snapshot=row.get("product_snapshot"),
                         pallet_quantity_snapshot=row["pallet_quantity_snapshot"],
                         loose_bags_quantity_snapshot=row["loose_bags_quantity_snapshot"],
+                        carton_quantity_snapshot=row.get("carton_quantity_snapshot", 0),
                         note_snapshot=row.get("note_snapshot"),
                         product_lines_snapshot=[
                             ProductDetailLine(
                                 product_name=line.get("product_name") or "",
                                 quantity=int(line.get("quantity") or 0),
                                 unit=line.get("unit") or "",
+                                product_code=line.get("product_code"),
+                                package_quantity=(
+                                    int(line["package_quantity"])
+                                    if line.get("package_quantity") is not None
+                                    else None
+                                ),
+                                package_unit=line.get("package_unit"),
                             )
                             for line in (row.get("product_lines_snapshot") or [])
                         ],
@@ -614,6 +622,7 @@ class InMemorySnapshotRepositoryMixin:
             vehicle_rego_snapshot=summary.get("vehicle_rego_snapshot"),
             total_pallets=summary["total_pallets"],
             total_loose_bags=summary["total_loose_bags"],
+            total_cartons=summary.get("total_cartons", 0),
             status=status,
             generated_at=summary.get("generated_at") or saved_at,
             saved_at=saved_at,

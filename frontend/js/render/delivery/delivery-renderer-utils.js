@@ -2,7 +2,8 @@ import { createIcon } from "../../utils/icon-utils.js";
 
 import {
   formatOptional,
-  formatPluralLoadUnit,
+  formatOrderLoadQuantity,
+  formatProductDetailLine,
 } from "../../utils/format-utils.js";
 
 export function ordersForDeliveryDate(board, deliveryDate) {
@@ -56,8 +57,9 @@ export function orderTotals(items) {
     (totals, item) => ({
       pallets: totals.pallets + Number(item.order?.pallet_quantity || 0),
       bags: totals.bags + Number(item.order?.loose_bags_quantity || 0),
+      cartons: totals.cartons + Number(item.order?.carton_quantity || 0),
     }),
-    { pallets: 0, bags: 0 },
+    { pallets: 0, bags: 0, cartons: 0 },
   );
 }
 
@@ -286,6 +288,7 @@ export function createLoadSummary(order) {
   facts.className = "workspace-fact-grid";
   appendFact(facts, "Pallet quantity", order.pallet_quantity);
   appendFact(facts, "Loose bag quantity", order.loose_bags_quantity);
+  appendFact(facts, "Carton quantity", order.carton_quantity);
   section.append(facts);
   return section;
 }
@@ -440,9 +443,9 @@ export function createProductLines(order) {
   const products = document.createElement("section");
   products.className = "workspace-modal-section workspace-product-lines";
   const list = document.createElement("ul");
-  (order.product_lines || []).forEach((line) => {
+  (order.product_lines || []).forEach((line, index) => {
     const item = document.createElement("li");
-    item.textContent = `${formatOptional(line.product_name)} - ${line.quantity} ${formatPluralLoadUnit(line.unit, line.quantity)}`;
+    item.textContent = formatProductDetailLine(line, index + 1);
     list.append(item);
   });
   if (!list.children.length) {
@@ -487,9 +490,7 @@ export function createEmptyState(message, iconName) {
 }
 
 export function formatLoad(order) {
-  const pallets = Number(order.pallet_quantity || 0);
-  const bags = Number(order.loose_bags_quantity || 0);
-  return `${pallets} ${formatPluralLoadUnit("PALLETS", pallets)} - ${bags} ${formatPluralLoadUnit("BAGS", bags)}`;
+  return formatOrderLoadQuantity(order);
 }
 
 export function isBusy(state, actionKey) {
