@@ -1,4 +1,7 @@
-import { formatOptional } from "../../utils/format-utils.js";
+import {
+  formatOptional,
+  formatProductDetailLine,
+} from "../../utils/format-utils.js";
 
 import {
   findVehicleAssignment,
@@ -34,16 +37,17 @@ export function createDeliveryGenerationCandidate(
     order_number: order.order_no || order.invoice_number || order.order_id,
     company_name: order.company_name,
     suburb: order.suburb,
+    delivery_address: order.delivery_address,
     delivery_date: order.delivery_date,
+    note: order.note,
+    product_lines: order.product_lines || [],
     trip_no: assignment.trip_no === "trip2" ? "trip2" : "trip1",
     pallet_quantity: Number(order.pallet_quantity || 0),
     loose_bags_quantity: Number(order.loose_bags_quantity || 0),
-    carton_quantity: (order.product_lines || []).reduce(
-      (total, line) => total + (line.unit === "CARTONS" ? Number(line.quantity || 0) : 0),
-      0,
-    ),
+    carton_quantity: Number(order.carton_quantity || 0),
   }));
   return {
+    dispatch_date: board.dispatch_date || deliveryDate,
     delivery_date: deliveryDate,
     driver_id: driver.driver_id,
     driver_name: formatOptional(driver.name, driver.driver_id),
@@ -53,7 +57,6 @@ export function createDeliveryGenerationCandidate(
     orders,
     totals: {
       ...totals,
-      cartons: orders.reduce((total, order) => total + order.carton_quantity, 0),
       trip1: orders.filter((order) => order.trip_no === "trip1").length,
       trip2: orders.filter((order) => order.trip_no === "trip2").length,
     },
@@ -112,7 +115,18 @@ export function createDeliveryGenerationConfirmationModal(state, actions) {
     name.textContent = `${formatOptional(order.order_number)} - ${formatOptional(order.company_name)}`;
     const location = document.createElement("span");
     location.textContent = `${formatOptional(order.suburb)} - ${order.delivery_date}`;
-    identity.append(name, location);
+    const address = document.createElement("span");
+    address.textContent = "Address: " + formatOptional(order.delivery_address);
+    const products = document.createElement("span");
+    products.textContent = "Products: " + ((order.product_lines || [])
+      .map((line, index) => formatProductDetailLine(line, index + 1))
+      .join("; ") || "No product lines");
+    identity.append(name, location, address, products);
+    if (order.note) {
+      const note = document.createElement("span");
+      note.textContent = "Note: " + order.note;
+      identity.append(note);
+    }
     const context = document.createElement("span");
     context.className = "workspace-generation-preview-context";
     context.textContent = [

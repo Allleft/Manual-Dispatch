@@ -312,7 +312,7 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertIn('setButtonContent(addButton, "Add Product Line", "plus")', order_modal_renderer)
         self.assertIn('setButtonContent(removeButton, "Remove", "trash")', order_modal_renderer)
         self.assertIn('{ value: "CARTONS", label: "Cartons" }', order_modal_renderer)
-        self.assertIn('normalized === "CARTONS" ? "Carton"', format_utils)
+        self.assertIn('CARTONS: ["Carton", "Cartons"]', format_utils)
         self.assertIn('"Product Details"', final_summary_renderer)
 
     def test_phase18_final_summary_distance_display_is_present(self):

@@ -15,6 +15,9 @@ DAILY_RUN_SHEET_HEADERS = [
     "PRODUCT",
     "KG'S",
     "Pallets",
+    "Loose Bags",
+    "Cartons",
+    "Notes",
     "COD",
     "CQ",
     "Time In",
@@ -89,17 +92,17 @@ def _write_daily_run_sheet_form(worksheet, run_sheet, delivery_date):
     worksheet["B3"] = "START TIME: ____________________________________"
     worksheet.merge_cells("B5:E5")
     worksheet["B5"] = "TIME LOADING STARTED(TO BE FILLED IN BY STOREMAN)___________"
-    worksheet.merge_cells("F5:N5")
+    worksheet.merge_cells("F5:Q5")
     worksheet["F5"] = "TIME LOADING COMPLETED(TO BE FILLED IN BY STOREMAN)_____________"
     for coordinate in ("B3", "B5", "F5"):
         worksheet[coordinate].font = Font(bold=True, size=9)
         worksheet[coordinate].alignment = Alignment(vertical="center", wrap_text=True)
 
-    worksheet["J7"] = "Time"
-    worksheet["K7"] = "Time"
-    worksheet["M7"] = "Comments"
-    worksheet["N7"] = "PALLETS"
-    for coordinate in ("J7", "K7", "M7", "N7"):
+    worksheet["M7"] = "Time"
+    worksheet["N7"] = "Time"
+    worksheet["P7"] = "Comments"
+    worksheet["Q7"] = "PALLETS"
+    for coordinate in ("M7", "N7", "P7", "Q7"):
         worksheet[coordinate].font = Font(bold=True, size=9)
         worksheet[coordinate].alignment = Alignment(horizontal="center", vertical="center")
 
@@ -127,7 +130,7 @@ def _write_daily_run_sheet_form(worksheet, run_sheet, delivery_date):
     finish.font = Font(bold=True, size=9)
     finish.alignment = Alignment(vertical="center")
     worksheet.row_dimensions[row_index + 1].height = 22
-    worksheet.print_area = f"A1:N{row_index + 1}"
+    worksheet.print_area = f"A1:Q{row_index + 1}"
     _apply_column_widths(worksheet)
     _apply_row_heights(worksheet)
 
@@ -141,20 +144,58 @@ def _ordered_snapshot_rows(run_sheet):
 
 
 def delivery_run_sheet_product_display(order):
-    names = []
-    seen = set()
-    for line in getattr(order, "product_lines_snapshot", None) or []:
+    displays = []
+    for line_no, line in enumerate(
+        getattr(order, "product_lines_snapshot", None) or [],
+        start=1,
+    ):
         product_name = str(getattr(line, "product_name", "") or "").strip()
-        if not product_name:
+        product_code = str(getattr(line, "product_code", "") or "").strip()
+        quantity = getattr(line, "quantity", None)
+        unit = str(getattr(line, "unit", "") or "").strip()
+        if not product_name and not product_code:
             continue
-        key = " ".join(product_name.split()).casefold()
-        if key in seen:
-            continue
-        seen.add(key)
-        names.append(product_name)
-    if names:
-        return "\n".join(names)
+        identity = " ".join(
+            part
+            for part in (
+                f"[{product_code}]" if product_code else "",
+                product_name,
+            )
+            if part
+        )
+        quantity_text = " ".join(
+            part for part in (_display_number(quantity), unit) if part
+        )
+        display = f"{line_no}. {identity}"
+        if quantity_text:
+            display += f" - {quantity_text}"
+        package_quantity = getattr(line, "package_quantity", None)
+        package_unit = str(getattr(line, "package_unit", "") or "").strip()
+        package_text = " ".join(
+            part for part in (_display_number(package_quantity), package_unit) if part
+        )
+        if package_text:
+            display += f" | Packaging: {package_text}"
+        displays.append(display)
+    if displays:
+        return "\n".join(displays)
     return str(getattr(order, "product_snapshot", "") or "").strip()
+
+
+def _product_quantity_total(order, units):
+    total = sum(
+        float(getattr(line, "quantity", 0) or 0)
+        for line in getattr(order, "product_lines_snapshot", None) or []
+        if str(getattr(line, "unit", "") or "").strip().upper() in units
+    )
+    return "" if total == 0 else int(total) if total.is_integer() else total
+
+
+def _display_number(value):
+    if value is None or value == "":
+        return ""
+    numeric = float(value)
+    return str(int(numeric)) if numeric.is_integer() else str(numeric)
 
 
 def _line_count(value):
@@ -187,8 +228,11 @@ def _write_order_row(worksheet, row_index, row_no, order, border):
         order.suburb_snapshot or "",
         order.invoice_number_snapshot or "",
         product_display,
-        "",
+        _product_quantity_total(order, {"KG", "KGS"}),
         _number_or_blank(order.pallet_quantity_snapshot),
+        _number_or_blank(order.loose_bags_quantity_snapshot),
+        _number_or_blank(getattr(order, "carton_quantity_snapshot", 0)),
+        order.note_snapshot or "",
         "",
         "",
         "",
@@ -201,17 +245,20 @@ def _write_order_row(worksheet, row_index, row_no, order, border):
         cell = worksheet.cell(row=row_index, column=column_index, value=value)
         cell.border = border
         cell.alignment = Alignment(
-            horizontal="center" if column_index in {1, 6, 7, 8, 9, 10, 11, 14} else "left",
+            horizontal="center"
+            if column_index in {1, 6, 7, 8, 9, 11, 12, 13, 14, 17}
+            else "left",
             vertical="top",
-            wrap_text=column_index in {2, 3, 5, 13},
+            wrap_text=column_index in {2, 3, 5, 10, 16},
         )
-        if column_index in {6, 7, 14} and value != "":
+        if column_index in {6, 7, 8, 9, 17} and value != "":
             cell.number_format = "General"
-    worksheet.row_dimensions[row_index].height = max(21.95, 16 * _line_count(product_display))
+    content_lines = max(_line_count(product_display), _line_count(order.note_snapshot))
+    worksheet.row_dimensions[row_index].height = max(21.95, 16 * content_lines)
 
 
 def _write_empty_row(worksheet, row_index, row_no, border):
-    for column_index in range(1, 15):
+    for column_index in range(1, 18):
         cell = worksheet.cell(row=row_index, column=column_index, value=row_no if column_index == 1 else "")
         cell.border = border
         cell.alignment = Alignment(horizontal="center" if column_index == 1 else "left", vertical="top")
@@ -233,16 +280,19 @@ def _apply_column_widths(worksheet):
         "B": 27.57,
         "C": 15,
         "D": 12,
-        "E": 16,
-        "F": 5.57,
+        "E": 30,
+        "F": 7,
         "G": 6.86,
-        "H": 5.86,
-        "I": 3,
-        "J": 8,
-        "K": 13,
-        "L": 12.57,
-        "M": 17.29,
-        "N": 7.71,
+        "H": 8,
+        "I": 7,
+        "J": 24,
+        "K": 5.86,
+        "L": 3,
+        "M": 8,
+        "N": 13,
+        "O": 12.57,
+        "P": 17.29,
+        "Q": 7.71,
     }
     for column_letter, width in widths.items():
         worksheet.column_dimensions[column_letter].width = width

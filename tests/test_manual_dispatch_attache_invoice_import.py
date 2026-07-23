@@ -37,7 +37,7 @@ class ManualDispatchAttacheInvoiceImportTest(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
-    def test_commit_import_persists_cartons_and_returns_order_to_board(self):
+    def test_commit_import_persists_product_packaging_and_load_to_board(self):
         request = CommitAttacheInvoicePdfImportRequest(
             rows=[
                 CommitAttacheInvoicePdfImportRow(
@@ -53,16 +53,15 @@ class ManualDispatchAttacheInvoiceImportTest(unittest.TestCase):
                     delivery_date="2026-06-05",
                     pallet_quantity=1,
                     loose_bags_quantity=0,
+                    carton_quantity=2,
                     product_lines=[
                         {
-                            "product_name": "COLOUR RAGS 10KG NET",
-                            "quantity": 1,
-                            "unit": "PALLETS",
-                        },
-                        {
+                            "product_code": "RBAG15",
                             "product_name": "COLOR RAGS 1.5KG BAG",
-                            "quantity": 2,
-                            "unit": "CARTONS",
+                            "quantity": 300,
+                            "unit": "KG",
+                            "package_quantity": 200,
+                            "package_unit": "BAG1.5",
                         },
                     ],
                 )
@@ -93,10 +92,15 @@ class ManualDispatchAttacheInvoiceImportTest(unittest.TestCase):
         self.assertEqual("ACTIVE", imported.status)
         self.assertEqual(1, imported.pallet_quantity)
         self.assertEqual(0, imported.loose_bags_quantity)
-        self.assertEqual(
-            ["PALLETS", "CARTONS"],
-            [line.unit for line in imported.product_lines],
-        )
+        self.assertEqual(2, imported.carton_quantity)
+        self.assertEqual(1, len(imported.product_lines))
+        product = imported.product_lines[0]
+        self.assertEqual("RBAG15", product.product_code)
+        self.assertEqual("COLOR RAGS 1.5KG BAG", product.product_name)
+        self.assertEqual(300, product.quantity)
+        self.assertEqual("KG", product.unit)
+        self.assertEqual(200, product.package_quantity)
+        self.assertEqual("BAG1.5", product.package_unit)
         self.assertNotIn(
             imported.order_id,
             [assignment.task_id for assignment in board.assignments],

@@ -5747,7 +5747,7 @@ select:disabled {
 
 .workspace-product-line-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1.4fr) minmax(90px, 0.5fr) minmax(120px, 0.6fr) auto;
+  grid-template-columns: repeat(3, minmax(140px, 1fr));
   gap: 0.55rem;
   align-items: end;
 }
@@ -5798,11 +5798,11 @@ select:disabled {
 }
 
 .workspace-attache-products {
-  min-width: 420px;
+  min-width: 0;
 }
 
 .workspace-attache-product-row {
-  grid-template-columns: minmax(150px, 1fr) 72px 108px auto;
+  grid-template-columns: repeat(3, minmax(140px, 1fr));
   align-items: start;
   padding-bottom: 0.45rem;
   border-bottom: 1px solid rgba(148, 163, 184, 0.2);
@@ -6019,6 +6019,7 @@ select:disabled {
   line-height: 1;
 }
 
+.workspace-order-products-preview,
 .workspace-order-note-preview {
   margin: 0.62rem 0 0;
   color: var(--muted);
@@ -6193,7 +6194,7 @@ select:disabled {
 
 .workspace-daily-run-sheet-table {
   width: 100%;
-  min-width: 820px;
+  min-width: 1220px;
   border-collapse: collapse;
   table-layout: fixed;
   color: #111827;
@@ -6246,16 +6247,22 @@ select:disabled {
   text-align: left;
 }
 
-.workspace-daily-run-sheet-table th:nth-child(12),
-.workspace-daily-run-sheet-table th:nth-child(13),
-.workspace-daily-run-sheet-table td:nth-child(12),
-.workspace-daily-run-sheet-table td:nth-child(13) {
+.workspace-daily-run-sheet-table th:nth-child(15),
+.workspace-daily-run-sheet-table th:nth-child(16),
+.workspace-daily-run-sheet-table td:nth-child(15),
+.workspace-daily-run-sheet-table td:nth-child(16) {
   width: 10%;
 }
 
 .workspace-daily-run-sheet-table th:nth-child(n+6),
 .workspace-daily-run-sheet-table td:nth-child(n+6) {
   text-align: center;
+}
+
+.workspace-daily-run-sheet-table th:nth-child(10),
+.workspace-daily-run-sheet-table td:nth-child(10) {
+  width: 14%;
+  text-align: left;
 }
 
 .workspace-daily-run-sheet-product-cell {

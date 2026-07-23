@@ -1,8 +1,8 @@
 import { createIcon } from "../../utils/icon-utils.js";
 
 import {
+  formatProductDetailLine,
   formatOptional,
-  formatPluralLoadUnit,
 } from "../../utils/format-utils.js";
 
 import {
@@ -208,7 +208,12 @@ export function createAttacheReviewRow(row, importState, actions) {
     createInlineMeta("Order", row.order_no),
     createInlineMeta("Customer", row.company_name),
     createInlineMeta("Delivery Date", row.delivery_date),
-    createInlineMeta("Load", `${row.pallet_quantity || 0} pallets / ${row.loose_bags_quantity || 0} bags`),
+    createInlineMeta(
+      "Load",
+      (row.pallet_quantity || 0) + " pallets / "
+        + (row.loose_bags_quantity || 0) + " bags / "
+        + (row.carton_quantity || 0) + " cartons",
+    ),
   );
   const warning = document.createElement("p");
   warning.className = "workspace-attache-warning-summary";
@@ -253,6 +258,7 @@ export function createAttacheExpandedEditor(row, actions) {
     createFormSection("Load", [
       createInlineField("Pallet Quantity", createInlineInput(row.pallet_quantity, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "pallet_quantity", Number(value || 0)), "number")),
       createInlineField("Loose Bags Quantity", createInlineInput(row.loose_bags_quantity, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "loose_bags_quantity", Number(value || 0)), "number")),
+      createInlineField("Carton Quantity", createInlineInput(row.carton_quantity, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "carton_quantity", Number(value || 0)), "number")),
     ]),
     createFormSection("Product Lines", [createAttacheProductLineEditor(row, actions)]),
     createFormSection("Notes", [createInlineField("Notes", createInlineTextarea(row.note, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "note", value)))]),
@@ -303,16 +309,18 @@ export function createAttacheProductLineEditor(row, actions) {
     const lineRow = document.createElement("div");
     lineRow.className = "workspace-attache-product-row";
     lineRow.append(
-      createInlineInput(line.product_name, (value) =>
-        actions.updateDeliveryAttacheImportProductLine(row.row_id, index, "product_name", value)),
-      createInlineInput(line.quantity, (value) =>
-        actions.updateDeliveryAttacheImportProductLine(row.row_id, index, "quantity", value), "number"),
-      createInlineSelect(line.unit || "PALLETS", [
-        { value: "PALLETS", label: "PALLETS" },
-        { value: "BAGS", label: "BAGS" },
-        { value: "CARTONS", label: "CARTONS" },
-      ], (value) =>
-        actions.updateDeliveryAttacheImportProductLine(row.row_id, index, "unit", value)),
+      createInlineField("Product Code", createInlineInput(line.product_code, (value) =>
+        actions.updateDeliveryAttacheImportProductLine(row.row_id, index, "product_code", value))),
+      createInlineField("Product Name", createInlineInput(line.product_name, (value) =>
+        actions.updateDeliveryAttacheImportProductLine(row.row_id, index, "product_name", value))),
+      createInlineField("Actual Quantity", createInlineInput(line.quantity, (value) =>
+        actions.updateDeliveryAttacheImportProductLine(row.row_id, index, "quantity", value), "number")),
+      createInlineField("Actual Unit", createInlineInput(line.unit || "KG", (value) =>
+        actions.updateDeliveryAttacheImportProductLine(row.row_id, index, "unit", value))),
+      createInlineField("Packaging Quantity", createInlineInput(line.package_quantity, (value) =>
+        actions.updateDeliveryAttacheImportProductLine(row.row_id, index, "package_quantity", value), "number")),
+      createInlineField("Packaging Unit", createInlineInput(line.package_unit, (value) =>
+        actions.updateDeliveryAttacheImportProductLine(row.row_id, index, "package_unit", value))),
       createActionButton("Remove", () =>
         actions.removeDeliveryAttacheImportProductLine(row.row_id, index)),
     );
@@ -331,6 +339,6 @@ export function createAttacheProductLineEditor(row, actions) {
 
 export function productLineSummary(row) {
   return (row.product_lines || [])
-    .map((line) => `${formatOptional(line.product_name)} - ${line.quantity} ${formatPluralLoadUnit(line.unit, line.quantity)}`)
+    .map((line, index) => formatProductDetailLine(line, index + 1))
     .join("; ") || "No product lines";
 }

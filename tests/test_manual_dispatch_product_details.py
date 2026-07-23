@@ -139,44 +139,91 @@ class ManualDispatchProductDetailsTest(unittest.TestCase):
             [line.unit for line in reloaded.product_lines],
         )
 
-    def test_carton_product_detail_requires_a_pallet_quantity(self):
-        for loose_bags_quantity in (0, 2):
-            with self.subTest(loose_bags_quantity=loose_bags_quantity):
-                with self.assertRaisesRegex(
-                    ValueError,
-                    "Product detail CARTONS requires a pallet quantity",
-                ):
-                    self.service.create_order(
-                        self._create_request(
-                            pallet_quantity=0,
-                            loose_bags_quantity=loose_bags_quantity,
-                            product_lines=[
-                                {
-                                    "product_name": "COLOR RAGS 1.5KG BAG",
-                                    "quantity": 2,
-                                    "unit": "CARTONS",
-                                }
-                            ],
-                        )
-                    )
-
-    def test_rejects_product_detail_unit_that_conflicts_with_order_load_unit(self):
-        with self.assertRaisesRegex(
-            ValueError,
-            "Product detail unit must align with the Order pallet or bag quantity",
-        ):
-            self.service.create_order(
-                self._create_request(
-                    pallet_quantity=5,
-                    product_lines=[
-                        {
-                            "product_name": "colour singlet 10kg",
-                            "quantity": 5,
-                            "unit": "BAGS",
-                        }
-                    ],
-                )
+    def test_product_units_are_independent_of_order_load(self):
+        units = ["KG", "BAG", "ROLL", "PACK", "BOX", "CTN", "PALLETS"]
+        created = self.service.create_order(
+            self._create_request(
+                pallet_quantity=0,
+                loose_bags_quantity=0,
+                carton_quantity=0,
+                product_lines=[
+                    {
+                        "product_name": f"Product {index}",
+                        "quantity": index,
+                        "unit": unit,
+                    }
+                    for index, unit in enumerate(units, start=1)
+                ],
             )
+        )
+
+        self.assertEqual(units, [line.unit for line in created.product_lines])
+        self.assertEqual((0, 0, 0), (
+            created.pallet_quantity,
+            created.loose_bags_quantity,
+            created.carton_quantity,
+        ))
+
+    def test_extended_product_and_carton_round_trip_and_partial_update(self):
+        created = self.service.create_order(
+            self._create_request(
+                pallet_quantity=2,
+                carton_quantity=3,
+                product_lines=[
+                    {
+                        "product_code": "RSING10KG",
+                        "product_name": "COLOUR RAGS 10KG NET BAG",
+                        "quantity": 90,
+                        "unit": "BAG",
+                        "package_quantity": 90,
+                        "package_unit": "BAG10",
+                    }
+                ],
+            )
+        )
+        reloaded = self.repository.get_order(created.order_id)
+
+        self.assertEqual(3, reloaded.carton_quantity)
+        self.assertEqual("RSING10KG", reloaded.product_lines[0].product_code)
+        self.assertEqual(90, reloaded.product_lines[0].package_quantity)
+        self.assertEqual("BAG10", reloaded.product_lines[0].package_unit)
+
+        updated = self.service.update_order(
+            created.order_id,
+            UpdateOrderRequest(carton_quantity=4),
+        )
+
+        self.assertEqual(4, updated.carton_quantity)
+        self.assertEqual(reloaded.product_lines, updated.product_lines)
+
+    def test_rejects_invalid_package_and_product_code_values(self):
+        invalid_lines = [
+            {
+                "product_name": "Product",
+                "quantity": 1,
+                "unit": "KG",
+                "package_quantity": -1,
+                "package_unit": "BAG10",
+            },
+            {
+                "product_name": "Product",
+                "quantity": 1,
+                "unit": "KG",
+                "package_quantity": 1,
+            },
+            {
+                "product_code": "BAD CODE",
+                "product_name": "Product",
+                "quantity": 1,
+                "unit": "KG",
+            },
+        ]
+        for line in invalid_lines:
+            with self.subTest(line=line):
+                with self.assertRaises(ValueError):
+                    self.service.create_order(
+                        self._create_request(product_lines=[line])
+                    )
 
     def test_rejects_invalid_product_detail_quantity(self):
         with self.assertRaisesRegex(
@@ -292,7 +339,7 @@ class ManualDispatchProductDetailsTest(unittest.TestCase):
             "1. colour singlet 10kg - 3 Pallets\n2. pure white singlet 10kg - 2 Pallets",
             values,
         )
-        self.assertIn("5 Pallets", values)
+        self.assertIn("5 Pallets / 0 Bags / 0 Cartons", values)
 
     def test_final_summary_excel_formats_cartons_without_changing_load(self):
         created = self.service.create_order(
@@ -328,8 +375,8 @@ class ManualDispatchProductDetailsTest(unittest.TestCase):
             "2. COLOR RAGS 1.5KG BAG - 2 Cartons",
             values,
         )
-        self.assertIn("1 Pallet", values)
-        self.assertNotIn("2 Bags", values)
+        self.assertIn("1 Pallet / 0 Bags / 0 Cartons", values)
+        self.assertNotIn("1 Pallet / 0 Bags / 2 Cartons", values)
 
     def _create_request(self, **overrides):
         values = {
@@ -345,6 +392,7 @@ class ManualDispatchProductDetailsTest(unittest.TestCase):
             "preferred_driver_id": "",
             "pallet_quantity": 0,
             "loose_bags_quantity": 0,
+            "carton_quantity": 0,
             "start_time": "08:00",
             "end_time": "12:00",
             "note": "Phase 16 product detail test",

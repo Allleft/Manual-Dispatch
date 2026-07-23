@@ -43,6 +43,7 @@ class SQLiteRowMapperMixin:
             preferred_driver_id=row["preferred_driver_id"],
             pallet_quantity=row["pallet_quantity"],
             loose_bags_quantity=row["loose_bags_quantity"],
+            carton_quantity=row["carton_quantity"],
             start_time=row["start_time"],
             end_time=row["end_time"],
             note=row["note"],
@@ -143,6 +144,7 @@ class SQLiteRowMapperMixin:
             vehicle_rego_snapshot=row["vehicle_rego_snapshot"],
             total_pallets=row["total_pallets"],
             total_loose_bags=row["total_loose_bags"],
+            total_cartons=_row_value(row, "total_cartons") or 0,
             status=row["status"],
             generated_at=row["generated_at"],
             saved_at=row["saved_at"],
@@ -173,6 +175,7 @@ class SQLiteRowMapperMixin:
             product_snapshot=row["product_snapshot"],
             pallet_quantity_snapshot=row["pallet_quantity_snapshot"],
             loose_bags_quantity_snapshot=row["loose_bags_quantity_snapshot"],
+            carton_quantity_snapshot=_row_value(row, "carton_quantity_snapshot") or 0,
             note_snapshot=row["note_snapshot"],
             product_lines_snapshot=self._deserialize_product_lines(
                 row["product_details_snapshot"]
@@ -245,6 +248,7 @@ class SQLiteRowMapperMixin:
                     product_snapshot=sheet_row["product_snapshot"],
                     pallet_quantity_snapshot=sheet_row["pallet_quantity_snapshot"],
                     loose_bags_quantity_snapshot=sheet_row["loose_bags_quantity_snapshot"],
+                    carton_quantity_snapshot=sheet_row["carton_quantity_snapshot"],
                     note_snapshot=sheet_row["note_snapshot"],
                     product_lines_snapshot=self._deserialize_product_lines(
                         sheet_row["product_details_snapshot"]
@@ -269,6 +273,7 @@ class SQLiteRowMapperMixin:
             vehicle_rego_snapshot=row["vehicle_rego_snapshot"],
             total_pallets=row["total_pallets"],
             total_loose_bags=row["total_loose_bags"],
+            total_cartons=row["total_cartons"],
             status=row["status"],
             generated_at=row["generated_at"],
             saved_at=row["saved_at"],

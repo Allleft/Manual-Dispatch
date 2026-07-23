@@ -64,6 +64,15 @@ class SQLiteRepositoryBase:
                     "unit": line["unit"]
                     if isinstance(line, dict)
                     else line.unit,
+                    "product_code": line.get("product_code")
+                    if isinstance(line, dict)
+                    else line.product_code,
+                    "package_quantity": line.get("package_quantity")
+                    if isinstance(line, dict)
+                    else line.package_quantity,
+                    "package_unit": line.get("package_unit")
+                    if isinstance(line, dict)
+                    else line.package_unit,
                 }
                 for line in product_lines
             ]
@@ -79,6 +88,13 @@ class SQLiteRepositoryBase:
                 product_name=str(line.get("product_name") or ""),
                 quantity=int(line.get("quantity") or 0),
                 unit=str(line.get("unit") or ""),
+                product_code=line.get("product_code"),
+                package_quantity=(
+                    int(line["package_quantity"])
+                    if line.get("package_quantity") is not None
+                    else None
+                ),
+                package_unit=line.get("package_unit"),
             )
             for line in raw_lines
             if isinstance(line, dict)

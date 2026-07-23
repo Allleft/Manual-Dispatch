@@ -1,4 +1,7 @@
-import { formatOptional } from "../../utils/format-utils.js";
+import {
+  formatOptional,
+  formatProductDetailLine,
+} from "../../utils/format-utils.js";
 
 import {
   scopedDeliveryDate,
@@ -216,6 +219,9 @@ const DAILY_RUN_SHEET_COLUMNS = [
   "PRODUCT",
   "KG'S",
   "Pallets",
+  "Loose Bags",
+  "Cartons",
+  "Notes",
   "COD",
   "CQ",
   "Time In",
@@ -271,8 +277,11 @@ export function dailyRunSheetRowValues(order, rowNumber) {
     formatOptional(order.suburb_snapshot, ""),
     formatOptional(order.invoice_number_snapshot || order.order_no_snapshot, ""),
     formatRunSheetProduct(order),
-    "",
+    formatRunSheetKgTotal(order),
     formatRunSheetNumber(order.pallet_quantity_snapshot),
+    formatRunSheetNumber(order.loose_bags_quantity_snapshot),
+    formatRunSheetNumber(order.carton_quantity_snapshot),
+    formatOptional(order.note_snapshot, ""),
     "",
     "",
     "",
@@ -284,24 +293,20 @@ export function dailyRunSheetRowValues(order, rowNumber) {
 }
 
 export function formatRunSheetProduct(order) {
-  const names = [];
-  const seen = new Set();
-  (order.product_lines_snapshot || []).forEach((line) => {
-    const productName = String(line?.product_name || "").trim();
-    if (!productName) {
-      return;
-    }
-    const key = productName.replace(/\s+/g, " ").toLocaleLowerCase();
-    if (seen.has(key)) {
-      return;
-    }
-    seen.add(key);
-    names.push(productName);
-  });
-  if (names.length) {
-    return names.join("\n");
+  const productLines = order.product_lines_snapshot || [];
+  if (productLines.length) {
+    return productLines
+      .map((line, index) => formatProductDetailLine(line, index + 1))
+      .join("\n");
   }
   return String(order.product_snapshot || "").trim();
+}
+
+export function formatRunSheetKgTotal(order) {
+  const total = (order.product_lines_snapshot || [])
+    .filter((line) => ["KG", "KGS"].includes(String(line.unit || "").toUpperCase()))
+    .reduce((sum, line) => sum + Number(line.quantity || 0), 0);
+  return total > 0 ? formatRunSheetNumber(total) : "";
 }
 
 export function formatRunSheetNumber(value) {

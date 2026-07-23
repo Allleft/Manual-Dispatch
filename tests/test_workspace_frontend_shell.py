@@ -393,8 +393,6 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             "Product Lines",
             "Load Summary",
             "PALLETS",
-            "BAGS",
-            "CARTONS",
             "Preview Import",
             "Confirm Import",
             "Back to files",
@@ -769,7 +767,8 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             "runSheet.trips",
             "product_lines_snapshot",
             "product_snapshot",
-            'names.join("\\n")',
+            "formatProductDetailLine(line, index + 1)",
+            "formatRunSheetKgTotal(order)",
             "workspace-daily-run-sheet-product-cell",
             "formatRunSheetProduct(order)",
             '${labelText} ${valueText}',
@@ -785,7 +784,9 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         row_values_block = paper_suite.split(
             "function dailyRunSheetRowValues", 1
         )[1].split("function formatRunSheetProduct", 1)[0]
-        self.assertNotIn("loose_bags_quantity_snapshot", row_values_block)
+        self.assertIn("loose_bags_quantity_snapshot", row_values_block)
+        self.assertIn("carton_quantity_snapshot", row_values_block)
+        self.assertIn("note_snapshot", row_values_block)
         self.assertNotIn("state.deliveryBoard", paper_suite)
         self.assertIn("runSheet.status", paper_function)
         self.assertIn("context === \"history\"", paper_function)
@@ -825,7 +826,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
 
         self.assertIn("workspace-daily-run-sheet-table-scroll", self.styles)
         self.assertIn("overflow-x: auto", self.styles)
-        self.assertIn("min-width: 820px", self.styles)
+        self.assertIn("min-width: 1220px", self.styles)
         self.assertIn(".workspace-run-sheet-document-card", self.styles)
         self.assertIn(".workspace-run-sheet-date-group", self.styles)
         self.assertIn(".workspace-run-sheet-card-meta", self.styles)

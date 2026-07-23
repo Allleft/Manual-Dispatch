@@ -170,6 +170,12 @@ def _ensure_manual_dispatch_columns(connection):
     _ensure_column(connection, "manual_orders", "status", "TEXT NOT NULL DEFAULT 'ACTIVE'")
     _ensure_column(
         connection,
+        "manual_orders",
+        "carton_quantity",
+        "INTEGER NOT NULL DEFAULT 0",
+    )
+    _ensure_column(
+        connection,
         "manual_drivers",
         "pallet_only",
         "INTEGER NOT NULL DEFAULT 0",
@@ -235,6 +241,30 @@ def _ensure_manual_dispatch_columns(connection):
         "final_trip_summary_rows",
         "estimated_distance_km_from_warehouse_snapshot",
         "REAL",
+    )
+    _ensure_column(
+        connection,
+        "final_trip_summaries",
+        "total_cartons",
+        "INTEGER NOT NULL DEFAULT 0",
+    )
+    _ensure_column(
+        connection,
+        "final_trip_summary_rows",
+        "carton_quantity_snapshot",
+        "INTEGER NOT NULL DEFAULT 0",
+    )
+    _ensure_column(
+        connection,
+        "delivery_run_sheets",
+        "total_cartons",
+        "INTEGER NOT NULL DEFAULT 0",
+    )
+    _ensure_column(
+        connection,
+        "delivery_run_sheet_rows",
+        "carton_quantity_snapshot",
+        "INTEGER NOT NULL DEFAULT 0",
     )
     _ensure_column(
         connection,
@@ -360,10 +390,10 @@ def _ensure_order_product_line_units(connection):
         """
     ).fetchone()
     table_sql = table_row["sql"] if table_row else ""
-    if not table_sql or "CARTONS" in table_sql.upper():
+    if not table_sql:
         return
 
-    expected_columns = {
+    base_columns = {
         "id",
         "order_id",
         "line_no",
@@ -371,11 +401,25 @@ def _ensure_order_product_line_units(connection):
         "quantity",
         "unit",
     }
+    expected_columns = base_columns | {
+        "product_code",
+        "package_quantity",
+        "package_unit",
+    }
     existing_columns = {
         row["name"]
         for row in connection.execute("PRAGMA table_info(order_product_lines)").fetchall()
     }
-    if existing_columns != expected_columns:
+    has_restricted_unit_check = "CHECK(UNITIN" in re.sub(
+        r"\s+",
+        "",
+        table_sql.upper(),
+    )
+    if expected_columns.issubset(existing_columns) and not has_restricted_unit_check:
+        return
+    if not base_columns.issubset(existing_columns) or not existing_columns.issubset(
+        expected_columns
+    ):
         raise RuntimeError(
             "Cannot safely migrate order_product_lines with unexpected columns"
         )
@@ -409,23 +453,41 @@ def _ensure_order_product_line_units(connection):
                 product_name TEXT NOT NULL,
                 quantity INTEGER NOT NULL,
                 unit TEXT NOT NULL,
+                product_code TEXT,
+                package_quantity INTEGER,
+                package_unit TEXT,
                 UNIQUE(order_id, line_no),
                 CHECK(quantity > 0),
-                CHECK(unit IN ('PALLETS', 'BAGS', 'CARTONS')),
+                CHECK(length(TRIM(unit)) BETWEEN 1 AND 20),
+                CHECK(product_code IS NULL OR length(product_code) <= 40),
+                CHECK(package_quantity IS NULL OR package_quantity >= 0),
+                CHECK(package_unit IS NULL OR length(package_unit) <= 20),
                 FOREIGN KEY(order_id) REFERENCES manual_orders(order_id)
                     ON DELETE CASCADE
             )
             """
         )
+        product_code_expression = (
+            "product_code" if "product_code" in existing_columns else "NULL"
+        )
+        package_quantity_expression = (
+            "package_quantity" if "package_quantity" in existing_columns else "NULL"
+        )
+        package_unit_expression = (
+            "package_unit" if "package_unit" in existing_columns else "NULL"
+        )
         connection.execute(
-            """
+            f"""
             INSERT INTO order_product_lines__new (
                 id,
                 order_id,
                 line_no,
                 product_name,
                 quantity,
-                unit
+                unit,
+                product_code,
+                package_quantity,
+                package_unit
             )
             SELECT
                 id,
@@ -433,7 +495,10 @@ def _ensure_order_product_line_units(connection):
                 line_no,
                 product_name,
                 quantity,
-                unit
+                unit,
+                {product_code_expression},
+                {package_quantity_expression},
+                {package_unit_expression}
             FROM order_product_lines
             ORDER BY id
             """

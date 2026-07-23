@@ -7,6 +7,39 @@ from backend.services.manual_dispatch.attache_invoice_pdf_parser import (
 
 
 class AttacheInvoicePdfParserTest(unittest.TestCase):
+    def assert_product(
+        self,
+        line,
+        code,
+        name,
+        quantity,
+        unit,
+        package_quantity=None,
+        package_unit=None,
+    ):
+        self.assertEqual(
+            {
+                "product_name": name,
+                "quantity": quantity,
+                "unit": unit,
+                "product_code": code,
+                "package_quantity": package_quantity,
+                "package_unit": package_unit,
+            },
+            line,
+        )
+
+    def assert_charge_data_excluded(self, parsed):
+        searchable = " ".join(
+            [
+                str(parsed.product_lines),
+                str(parsed.warnings),
+                parsed.note or "",
+            ]
+        ).upper()
+        self.assertNotIn("DELIVERY /FUEL LEVY CHARGE", searchable)
+        self.assertNotIn("TOTAL INVOICE:AUD", searchable)
+
     def assert_order_number_not_in_note(self, parsed):
         note = parsed.note or ""
         self.assertNotIn("Order No", note)
@@ -59,6 +92,22 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
         self.assertEqual("9583 5333", parsed.phone)
         self.assertEqual("3192", parsed.postcode)
         self.assertEqual("2026-02-05", parsed.delivery_date)
+        self.assertEqual((1, 0, 0), (
+            parsed.pallet_quantity,
+            parsed.loose_bags_quantity,
+            parsed.carton_quantity,
+        ))
+        self.assertEqual(1, len(parsed.product_lines))
+        self.assert_product(
+            parsed.product_lines[0],
+            "RSING",
+            "COLOR TSHIRT RAGS",
+            200,
+            "KG",
+            20,
+            "BAG10",
+        )
+        self.assert_charge_data_excluded(parsed)
         self.assert_order_number_not_in_note(parsed)
         self.assertNotEqual("(03) 9930 7740", parsed.phone)
 
@@ -109,9 +158,10 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
             98-102 HUME HIGHWAY SOMERTON VIC 3062
             Amt+GST
             Phone: (03) 9930 7700
-            RWINCH 55.00 KG 200 WINDCHEATER #15 2.750 605.00 550.00
-            BAG10 0.00 20 PLASTIC BAG 10 kg 0.000 0.00 0.00
-            PAL 2.50 PLT 1 PALLET 25.000 27.50 25.00
+            RWIND 121.50 KG 450 WINDCHEATER #15 2.700 1,336.50 1,215.00
+            BAG10 0.00 45 PLASTIC BAG 10 kg 0.000 0.00 0.00
+            PAL 0.00 PLT 1 PALLET 0.000 0.00 0.00
+            DEL 1.00 DEL 1 DELIVERY /FUEL LEVY CHARGE 10.000 11.00 10.00
             """,
             source_filename="184066.pdf",
         )
@@ -128,6 +178,27 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
         self.assertNotIn("98-102 HUME HIGHWAY", parsed.delivery_address)
         self.assertNotIn("SOMERTON", parsed.delivery_address)
         self.assertNotEqual("(03) 9930 7700", parsed.phone)
+        self.assertFalse(
+            any(
+                warning.startswith("Unclassified invoice item:")
+                for warning in parsed.warnings
+            )
+        )
+        self.assertEqual((1, 0, 0), (
+            parsed.pallet_quantity,
+            parsed.loose_bags_quantity,
+            parsed.carton_quantity,
+        ))
+        self.assert_product(
+            parsed.product_lines[0],
+            "RWIND",
+            "WINDCHEATER #15",
+            450,
+            "KG",
+            45,
+            "BAG10",
+        )
+        self.assert_charge_data_excluded(parsed)
 
     def test_postcode_detection_does_not_use_phone_exchange(self):
         self.assertEqual("3175", _find_postcode(["(03) 9768 3537", "3175"]))
@@ -172,6 +243,21 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
         self.assertIn("PAID EWAY\nATTN: DANIELLE FOWLER", parsed.note)
         self.assertNotIn("DELIVERY /FUEL LEVY", parsed.note)
         self.assertNotIn("Total Invoice", parsed.note)
+        self.assertEqual((0, 4, 0), (
+            parsed.pallet_quantity,
+            parsed.loose_bags_quantity,
+            parsed.carton_quantity,
+        ))
+        self.assert_product(
+            parsed.product_lines[0],
+            "RFLAN",
+            "FLANNELETTE #9",
+            40,
+            "KG",
+            4,
+            "BAG10",
+        )
+        self.assert_charge_data_excluded(parsed)
         self.assert_order_number_not_in_note(parsed)
 
     def test_prepayment_operational_note_keeps_customer_email(self):
@@ -196,6 +282,8 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
             3076
             RSING 5.25 KG 30 COLOR TSHIRT RAGS 1.750 57.75 52.50
             BAG10 0.00 3 PLASTIC BAG 10 kg 0.000 0.00 0.00
+            RBATH 3.50 KG 20 COLOURED TOWEL MIX #10 1.750 38.50 35.00
+            BAG10 0.00 2 PLASTIC BAG 10 kg 0.000 0.00 0.00
             DEL 1.00 DEL 1 DELIVERY /FUEL LEVY CHARGE 10.000 11.00 10.00
             EMAIL INVOICE FOR PRE PAYMENT
             accounts@edensexcavations.com.au
@@ -215,6 +303,30 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
             parsed.note,
         )
         self.assertNotIn("admin@teamsaustralia.com.au", parsed.note)
+        self.assertEqual((0, 5, 0), (
+            parsed.pallet_quantity,
+            parsed.loose_bags_quantity,
+            parsed.carton_quantity,
+        ))
+        self.assert_product(
+            parsed.product_lines[0],
+            "RSING",
+            "COLOR TSHIRT RAGS",
+            30,
+            "KG",
+            3,
+            "BAG10",
+        )
+        self.assert_product(
+            parsed.product_lines[1],
+            "RBATH",
+            "COLOURED TOWEL MIX #10",
+            20,
+            "KG",
+            2,
+            "BAG10",
+        )
+        self.assert_charge_data_excluded(parsed)
         self.assert_order_number_not_in_note(parsed)
 
     def test_delivery_docket_operational_note_keeps_multiline_instructions(self):
@@ -272,9 +384,24 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
         self.assertNotIn("PLEASE NOTE NEW BANK ACC DETAILS", parsed.note)
         self.assertNotIn("BSB:", parsed.note)
         self.assertNotIn("654484155", parsed.note)
+        self.assertEqual((1, 0, 0), (
+            parsed.pallet_quantity,
+            parsed.loose_bags_quantity,
+            parsed.carton_quantity,
+        ))
+        self.assert_product(
+            parsed.product_lines[0],
+            "RPWSING",
+            "PURE WHITE SINGLET",
+            450,
+            "KG",
+            45,
+            "BAG10",
+        )
+        self.assert_charge_data_excluded(parsed)
         self.assert_order_number_not_in_note(parsed)
 
-    def test_pallet_transport_replaces_contained_bag_quantity(self):
+    def test_pallet_load_does_not_replace_product_bag_quantity(self):
         parsed = parse_attache_invoice_text(
             """
             Invoice No
@@ -303,20 +430,19 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
         self.assertEqual("6300379", parsed.order_no)
         self.assertEqual(2, parsed.pallet_quantity)
         self.assertEqual(0, parsed.loose_bags_quantity)
-        self.assertEqual(
-            [
-                {
-                    "product_name": "COLOUR RAGS 10KG NET",
-                    "quantity": 2,
-                    "unit": "PALLETS",
-                }
-            ],
-            parsed.product_lines,
+        self.assertEqual(0, parsed.carton_quantity)
+        self.assert_product(
+            parsed.product_lines[0],
+            "RSING10KG",
+            "COLOUR RAGS 10KG NET",
+            90,
+            "BAG",
+            90,
+            "BAG10",
         )
-        self.assertNotIn("BAGS", [line["unit"] for line in parsed.product_lines])
-        self.assertNotIn(90, [line["quantity"] for line in parsed.product_lines])
+        self.assert_charge_data_excluded(parsed)
 
-    def test_pallet_and_carton_transport_units_are_associated_per_product(self):
+    def test_pallet_and_carton_load_remain_order_level(self):
         parsed = parse_attache_invoice_text(
             """
             Invoice No
@@ -349,29 +475,26 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
         self.assertEqual("7147703", parsed.order_no)
         self.assertEqual(1, parsed.pallet_quantity)
         self.assertEqual(0, parsed.loose_bags_quantity)
-        self.assertEqual(
-            [
-                {
-                    "product_name": "COLOUR RAGS 10KG NET",
-                    "quantity": 1,
-                    "unit": "PALLETS",
-                },
-                {
-                    "product_name": "COLOR RAGS 1.5KG BAG",
-                    "quantity": 2,
-                    "unit": "CARTONS",
-                },
-            ],
-            parsed.product_lines,
+        self.assertEqual(2, parsed.carton_quantity)
+        self.assert_product(
+            parsed.product_lines[0],
+            "RSING10KG",
+            "COLOUR RAGS 10KG NET",
+            45,
+            "BAG",
+            45,
+            "BAG10",
         )
-        self.assertNotIn("BAGS", [line["unit"] for line in parsed.product_lines])
-        self.assertNotIn("CARTONS", [line["product_name"] for line in parsed.product_lines])
-        self.assertFalse(
-            any("BAG1.5" in line["product_name"] for line in parsed.product_lines)
+        self.assert_product(
+            parsed.product_lines[1],
+            "RSING1.5KG",
+            "COLOR RAGS 1.5KG BAG",
+            28,
+            "BAG",
+            28,
+            "BAG1.5",
         )
-        self.assertFalse(
-            any(line["quantity"] in {45, 28} for line in parsed.product_lines)
-        )
+        self.assert_charge_data_excluded(parsed)
 
     def test_snap_pack_bag_invoice(self):
         parsed = parse_attache_invoice_text(
@@ -410,23 +533,28 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
         self.assertEqual("2026-03-21", parsed.delivery_date)
         self.assertEqual(0, parsed.pallet_quantity)
         self.assertEqual(15, parsed.loose_bags_quantity)
+        self.assertEqual(0, parsed.carton_quantity)
         self.assertEqual("07:00", parsed.start_time)
         self.assertEqual("12:00", parsed.end_time)
-        self.assertEqual(
-            [
-                {
-                    "product_name": "PURE WHITE SINGLET",
-                    "quantity": 10,
-                    "unit": "BAGS",
-                },
-                {
-                    "product_name": "COLOR TSHIRT RAGS",
-                    "quantity": 5,
-                    "unit": "BAGS",
-                },
-            ],
-            parsed.product_lines,
+        self.assert_product(
+            parsed.product_lines[0],
+            "RPWSING",
+            "PURE WHITE SINGLET",
+            100,
+            "KG",
+            10,
+            "BAG10",
         )
+        self.assert_product(
+            parsed.product_lines[1],
+            "RSING",
+            "COLOR TSHIRT RAGS",
+            25,
+            "KG",
+            5,
+            "BAG5",
+        )
+        self.assert_charge_data_excluded(parsed)
 
     def test_coringle_furniture_mixed_pallet_and_bag_invoice(self):
         parsed = parse_attache_invoice_text(
@@ -462,22 +590,25 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
         self.assertEqual("Coringle Furniture", parsed.company_name)
         self.assertEqual("2026-04-22", parsed.delivery_date)
         self.assertEqual(1, parsed.pallet_quantity)
-        self.assertEqual(3, parsed.loose_bags_quantity)
-        self.assertEqual(
-            [
-                {
-                    "product_name": "PURE WHITE SINGLET",
-                    "quantity": 1,
-                    "unit": "PALLETS",
-                },
-                {
-                    "product_name": "FINESSE-3PLY T/PAPER 180 SHTSx72ROLLS",
-                    "quantity": 3,
-                    "unit": "BAGS",
-                },
-            ],
-            parsed.product_lines,
+        self.assertEqual(0, parsed.loose_bags_quantity)
+        self.assertEqual(0, parsed.carton_quantity)
+        self.assert_product(
+            parsed.product_lines[0],
+            "RPWSING",
+            "PURE WHITE SINGLET",
+            300,
+            "KG",
+            30,
+            "BAG10",
         )
+        self.assert_product(
+            parsed.product_lines[1],
+            "FIN-3PLY",
+            "FINESSE-3PLY T/PAPER 180 SHTS x 72 ROLLS",
+            3,
+            "BAG",
+        )
+        self.assert_charge_data_excluded(parsed)
 
     def test_tutt_bryant_palletized_bag10_is_not_loose_bag(self):
         parsed = parse_attache_invoice_text(
@@ -503,6 +634,7 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
             RSING 385.00 35.00 0.00 KG 1.750 COLOR TSHIRT RAGS 200
             BAG10 0.00 0.00 0.00 0.000 PLASTIC BAG 10 kg 20
             PAL 27.50 2.50 0.00 PLT 25.000 PALLET 1
+            DEL 9.35 0.85 0.00 DELIVERY 8.500 DELIVERY /FUEL LEVY CHARGE 1
             Total Amount 123.45
             """,
             source_filename="183077.pdf",
@@ -514,16 +646,16 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
         self.assertEqual(1, parsed.pallet_quantity)
         self.assertEqual(0, parsed.loose_bags_quantity)
         self.assertIn("NO VAN, MUST BE TRUCK DELIVERY", parsed.note)
-        self.assertEqual(
-            [
-                {
-                    "product_name": "COLOR TSHIRT RAGS",
-                    "quantity": 1,
-                    "unit": "PALLETS",
-                }
-            ],
-            parsed.product_lines,
+        self.assert_product(
+            parsed.product_lines[0],
+            "RSING",
+            "COLOR TSHIRT RAGS",
+            200,
+            "KG",
+            20,
+            "BAG10",
         )
+        self.assert_charge_data_excluded(parsed)
 
     def test_desi_dhaba_opens_instruction(self):
         parsed = parse_attache_invoice_text(
@@ -546,6 +678,7 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
             3064
             RWSHEET 12.75 KG 50 WHITE SHEETING #11S 2.550 140.25 127.50
             BAG10 0.00 5 PLASTIC BAG 10 kg 0.000 0.00 0.00
+            DEL 1.00 DEL 1 DELIVERY /FUEL LEVY CHARGE 10.000 11.00 10.00
             """,
             source_filename="183080.pdf",
         )
@@ -558,16 +691,16 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
         self.assertIsNone(parsed.end_time)
         self.assertEqual(0, parsed.pallet_quantity)
         self.assertEqual(5, parsed.loose_bags_quantity)
-        self.assertEqual(
-            [
-                {
-                    "product_name": "WHITE SHEETING #11S",
-                    "quantity": 5,
-                    "unit": "BAGS",
-                }
-            ],
-            parsed.product_lines,
+        self.assert_product(
+            parsed.product_lines[0],
+            "RWSHEET",
+            "WHITE SHEETING #11S",
+            50,
+            "KG",
+            5,
+            "BAG10",
         )
+        self.assert_charge_data_excluded(parsed)
 
     def test_pakenham_accident_repair_opens_instruction(self):
         parsed = parse_attache_invoice_text(
@@ -590,6 +723,7 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
             3810
             RSING 10.50 KG 60 COLOR TSHIRT RAGS 1.750 115.50 105.00
             BAG10 0.00 6 PLASTIC BAG 10 kg 0.000 0.00 0.00
+            DEL 1.00 DEL 1 DELIVERY /FUEL LEVY CHARGE 10.000 11.00 10.00
             """,
             source_filename="183081.pdf",
         )
@@ -601,16 +735,80 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
         self.assertEqual("08:00", parsed.start_time)
         self.assertIsNone(parsed.end_time)
         self.assertEqual(6, parsed.loose_bags_quantity)
-        self.assertEqual(
-            [
-                {
-                    "product_name": "COLOR TSHIRT RAGS",
-                    "quantity": 6,
-                    "unit": "BAGS",
-                }
-            ],
-            parsed.product_lines,
+        self.assert_product(
+            parsed.product_lines[0],
+            "RSING",
+            "COLOR TSHIRT RAGS",
+            60,
+            "KG",
+            6,
+            "BAG10",
         )
+        self.assert_charge_data_excluded(parsed)
+
+    def test_footer_advertising_is_excluded_and_unknown_rows_warn_safely(self):
+        parsed = parse_attache_invoice_text(
+            """
+            Invoice No 199001
+            Date 04/06/26
+            Invoice to:
+            SAFE CUSTOMER
+            1 TEST ROAD
+            RICHMOND 3121
+            Deliver to:
+            SAFE CUSTOMER
+            1 TEST ROAD
+            RICHMOND
+            3121
+            Tax Invoice
+            RSING 5.25 KG 30 COLOR TSHIRT RAGS 1.750 57.75 52.50
+            MYST 12 UNRECOGNISED WIDGET 99.95
+            Total Invoice:AUD 120.00
+            *NEW PRODUCT*
+            FIN-3PLY 12.00 BAG 3 FINESSE-3PLY T/PAPER 40.000 132.00 120.00
+            """,
+            source_filename="unknown-row.txt",
+        )
+
+        self.assertEqual(["RSING"], [line["product_code"] for line in parsed.product_lines])
+        warning = next(
+            item for item in parsed.warnings if item.startswith("Unclassified invoice item:")
+        )
+        self.assertIn("MYST UNRECOGNISED WIDGET", warning)
+        self.assertNotIn("99.95", warning)
+        self.assertNotIn("120.00", warning)
+        self.assert_charge_data_excluded(parsed)
+
+    def test_packaging_only_associates_with_immediately_preceding_product(self):
+        parsed = parse_attache_invoice_text(
+            """
+            Invoice No 199002
+            Date 04/06/26
+            Invoice to:
+            SAFE CUSTOMER
+            1 TEST ROAD
+            RICHMOND 3121
+            Deliver to:
+            SAFE CUSTOMER
+            1 TEST ROAD
+            RICHMOND
+            3121
+            Code Description
+            RPWSING 24.50 KG 100 PURE WHITE SINGLET 2.450 269.50 245.00
+            MYST 1 AMBIGUOUS ROW 9.95
+            BAG10 0.00 10 PLASTIC BAG 10 kg 0.000 0.00 0.00
+            RSING 4.13 KG 25 COLOR TSHIRT RAGS 1.650 45.38 41.25
+            BAG5 0.00 5 PLASTIC BAG 5 kg 0.000 0.00 0.00
+            Total Invoice:AUD 300.00
+            """,
+            source_filename="packaging-association.txt",
+        )
+
+        self.assertIsNone(parsed.product_lines[0]["package_quantity"])
+        self.assertIsNone(parsed.product_lines[0]["package_unit"])
+        self.assertEqual(5, parsed.product_lines[1]["package_quantity"])
+        self.assertEqual("BAG5", parsed.product_lines[1]["package_unit"])
+        self.assertEqual(5, parsed.loose_bags_quantity)
 
 
 if __name__ == "__main__":

@@ -5,7 +5,9 @@ from backend.schemas import ProductDetailLine
 
 
 ISO_DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-VALID_PRODUCT_DETAIL_UNITS = {"PALLETS", "BAGS", "CARTONS"}
+PRODUCT_CODE_MAX_LENGTH = 40
+PRODUCT_UNIT_MAX_LENGTH = 20
+PRODUCT_UNIT_PATTERN = re.compile(r"^[A-Z0-9][A-Z0-9./_-]*$")
 SQLITE_INTEGER_MAX = 2**63 - 1
 
 
@@ -69,7 +71,7 @@ def load_unit_for_quantities(pallet_quantity, loose_bags_quantity):
     return None
 
 
-def normalize_product_detail_lines(product_lines, load_unit, field_name="product_lines"):
+def normalize_product_detail_lines(product_lines, load_unit=None, field_name="product_lines"):
     if product_lines in (None, ""):
         return []
     if not isinstance(product_lines, list):
@@ -91,13 +93,29 @@ def normalize_product_detail_lines(product_lines, load_unit, field_name="product
         if quantity <= 0:
             raise ValueError(f"{field_name} item {index} quantity must be greater than 0")
 
-        unit = clean_required_text(
+        unit = _bounded_code(
             line.get("unit"),
             f"{field_name} item {index} unit",
-        ).upper()
-        if unit not in VALID_PRODUCT_DETAIL_UNITS:
+            PRODUCT_UNIT_MAX_LENGTH,
+            required=True,
+        )
+        product_code = _bounded_code(
+            line.get("product_code"),
+            f"{field_name} item {index} product_code",
+            PRODUCT_CODE_MAX_LENGTH,
+        )
+        package_quantity = _optional_quantity(
+            line.get("package_quantity"),
+            f"{field_name} item {index} package_quantity",
+        )
+        package_unit = _bounded_code(
+            line.get("package_unit"),
+            f"{field_name} item {index} package_unit",
+            PRODUCT_UNIT_MAX_LENGTH,
+        )
+        if (package_quantity is None) != (package_unit is None):
             raise ValueError(
-                f"{field_name} item {index} unit must be PALLETS, BAGS, or CARTONS"
+                f"{field_name} item {index} package_quantity and package_unit must be provided together"
             )
 
         normalized_lines.append(
@@ -105,27 +123,33 @@ def normalize_product_detail_lines(product_lines, load_unit, field_name="product
                 product_name=product_name,
                 quantity=quantity,
                 unit=unit,
+                product_code=product_code,
+                package_quantity=package_quantity,
+                package_unit=package_unit,
             )
         )
 
-    if any(line.unit == "CARTONS" for line in normalized_lines) and load_unit not in {
-        "PALLETS",
-        "MIXED",
-    }:
-        raise ValueError("Product detail CARTONS requires a pallet quantity.")
-    if normalized_lines and not load_unit:
-        raise ValueError("Product detail unit must align with the Order pallet or bag quantity")
-    allowed_units = {
-        "PALLETS": {"PALLETS", "CARTONS"},
-        "BAGS": {"BAGS"},
-        "MIXED": VALID_PRODUCT_DETAIL_UNITS,
-    }.get(load_unit, set())
-    if (
-        normalized_lines
-        and any(line.unit not in allowed_units for line in normalized_lines)
-    ):
-        raise ValueError("Product detail unit must align with the Order pallet or bag quantity")
     return normalized_lines
+
+
+def _bounded_code(value, field_name, max_length, required=False):
+    text = clean_optional_text(value)
+    if text is None:
+        if required:
+            raise ValueError(f"{field_name} is required")
+        return None
+    normalized = text.upper()
+    if len(normalized) > max_length:
+        raise ValueError(f"{field_name} must be at most {max_length} characters")
+    if not PRODUCT_UNIT_PATTERN.fullmatch(normalized):
+        raise ValueError(f"{field_name} contains unsupported characters")
+    return normalized
+
+
+def _optional_quantity(value, field_name):
+    if value in (None, ""):
+        return None
+    return quantity_or_default(value, field_name)
 
 
 def bool_or_default(value, default):

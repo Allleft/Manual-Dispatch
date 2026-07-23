@@ -74,6 +74,7 @@ def _write_summary_sheet(worksheet, summary):
         ("Saved By", summary.saved_by_account_name or "Unknown"),
         ("Total Pallets", summary.total_pallets),
         ("Total Loose Bags", summary.total_loose_bags),
+        ("Total Cartons", getattr(summary, "total_cartons", 0)),
     ]
 
     for row_index, (label, value) in enumerate(meta_rows, start=1):
@@ -182,20 +183,40 @@ def _format_product_details(order):
     product_lines = getattr(order, "product_lines_snapshot", None) or []
     if not product_lines:
         return "No product details recorded."
-    return "\n".join(
-        f"{index}. {line.product_name} - {line.quantity} {_pluralized_unit(line.unit, line.quantity)}"
-        for index, line in enumerate(product_lines, start=1)
+    return "\n".join(_format_product_line(line, index) for index, line in enumerate(
+        product_lines,
+        start=1,
+    ))
+
+
+def _format_product_line(line, index):
+    product_code = str(getattr(line, "product_code", "") or "").strip()
+    product_name = str(getattr(line, "product_name", "") or "").strip()
+    identity = " ".join(
+        part for part in (
+            f"[{product_code}]" if product_code else "",
+            product_name,
+        ) if part
     )
+    quantity = getattr(line, "quantity", 0)
+    unit = _product_unit(getattr(line, "unit", ""), quantity)
+    display = f"{index}. {identity} - {quantity} {unit}".strip()
+    package_quantity = getattr(line, "package_quantity", None)
+    package_unit = str(getattr(line, "package_unit", "") or "").strip()
+    if package_quantity is not None and package_unit:
+        display += f" | Packaging: {package_quantity} {package_unit}"
+    return display
 
 
 def _format_load_quantity(order):
     pallets = int(getattr(order, "pallet_quantity_snapshot", 0) or 0)
     loose_bags = int(getattr(order, "loose_bags_quantity_snapshot", 0) or 0)
-    if pallets > 0:
-        return f"{pallets} {_pluralized_unit('PALLETS', pallets)}"
-    if loose_bags > 0:
-        return f"{loose_bags} {_pluralized_unit('BAGS', loose_bags)}"
-    return "-"
+    cartons = int(getattr(order, "carton_quantity_snapshot", 0) or 0)
+    return " / ".join((
+        f"{pallets} {_pluralized_unit('PALLETS', pallets)}",
+        f"{loose_bags} {_pluralized_unit('BAGS', loose_bags)}",
+        f"{cartons} {_pluralized_unit('CARTONS', cartons)}",
+    ))
 
 
 def _format_estimated_distance(order):
@@ -233,6 +254,17 @@ def _pluralized_unit(unit, quantity):
         "CARTONS": "Carton",
     }.get(normalized, "Bag")
     return singular if quantity == 1 else f"{singular}s"
+
+
+def _product_unit(unit, quantity):
+    normalized = str(unit or "").upper()
+    if normalized in {"PALLET", "PALLETS"}:
+        return _pluralized_unit("PALLETS", quantity)
+    if normalized in {"BAG", "BAGS"}:
+        return _pluralized_unit("BAGS", quantity)
+    if normalized in {"CARTON", "CARTONS"}:
+        return _pluralized_unit("CARTONS", quantity)
+    return normalized
 
 
 def _apply_column_widths(worksheet):

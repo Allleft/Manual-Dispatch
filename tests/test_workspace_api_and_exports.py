@@ -834,11 +834,23 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self._set_product_lines(
             "ORD-001",
             [
-                ProductDetailLine("Snapshot Alpha Product", 1, "PALLETS"),
+                ProductDetailLine(
+                    "Snapshot Alpha Product",
+                    450,
+                    "KG",
+                    product_code="RWIND",
+                    package_quantity=45,
+                    package_unit="BAG10",
+                ),
                 ProductDetailLine("Snapshot Beta Product", 3, "BAGS"),
                 ProductDetailLine("Snapshot Alpha Product", 1, "PALLETS"),
             ],
         )
+        order = self.repository.get_order("ORD-001")
+        order.loose_bags_quantity = 5
+        order.carton_quantity = 4
+        order.note = "Use rear delivery gate"
+        self.repository.update_order(order)
         self.service.assign_task(
             AssignTaskRequest(
                 dispatch_date=self.dispatch_date,
@@ -906,6 +918,9 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
                 "PRODUCT",
                 "KG'S",
                 "Pallets",
+                "Loose Bags",
+                "Cartons",
+                "Notes",
                 "COD",
                 "CQ",
                 "Time In",
@@ -928,12 +943,20 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         customer_a_row = rows[customer_a_index]
         self.assertEqual(1, customer_a_row[0])
         self.assertEqual("INV-1001", customer_a_row[3])
-        self.assertEqual("Snapshot Alpha Product\nSnapshot Beta Product", customer_a_row[4])
-        self.assertIsNone(customer_a_row[5])
+        self.assertEqual(
+            "1. [RWIND] Snapshot Alpha Product - 450 KG | Packaging: 45 BAG10\n"
+            "2. Snapshot Beta Product - 3 BAGS\n"
+            "3. Snapshot Alpha Product - 1 PALLETS",
+            customer_a_row[4],
+        )
+        self.assertEqual(450, customer_a_row[5])
         self.assertEqual(2, customer_a_row[6])
+        self.assertEqual(5, customer_a_row[7])
+        self.assertEqual(4, customer_a_row[8])
+        self.assertEqual("Use rear delivery gate", customer_a_row[9])
         self.assertTrue(worksheet.cell(row=customer_a_index + 1, column=5).alignment.wrap_text)
         self.assertGreaterEqual(worksheet.row_dimensions[customer_a_index + 1].height, 30)
-        for manual_column in range(7, 14):
+        for manual_column in range(10, 17):
             self.assertIsNone(customer_a_row[manual_column])
 
     def test_delivery_date_export_uses_snapshot_rows_and_one_sheet_per_driver(self):
@@ -942,11 +965,23 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self._set_product_lines(
             "ORD-001",
             [
-                ProductDetailLine("Snapshot Alpha Product", 1, "PALLETS"),
+                ProductDetailLine(
+                    "Snapshot Alpha Product",
+                    450,
+                    "KG",
+                    product_code="RWIND",
+                    package_quantity=45,
+                    package_unit="BAG10",
+                ),
                 ProductDetailLine("Snapshot Beta Product", 3, "BAGS"),
                 ProductDetailLine("Snapshot Alpha Product", 9, "PALLETS"),
             ],
         )
+        snapshot_order = self.repository.get_order("ORD-001")
+        snapshot_order.loose_bags_quantity = 5
+        snapshot_order.carton_quantity = 4
+        snapshot_order.note = "Use rear delivery gate"
+        self.repository.update_order(snapshot_order)
         self.service.assign_task(
             AssignTaskRequest(
                 dispatch_date=self.dispatch_date,
@@ -992,6 +1027,9 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             order.product_lines = [
                 ProductDetailLine(f"Edited Live Product {order_id}", 1, "PALLETS")
             ]
+            order.loose_bags_quantity = 99
+            order.carton_quantity = 99
+            order.note = "Edited live note"
             self.repository.update_order(order)
         with sqlite3.connect(self.db_path) as connection:
             connection.execute(
@@ -1021,6 +1059,9 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             "PRODUCT",
             "KG'S",
             "Pallets",
+            "Loose Bags",
+            "Cartons",
+            "Notes",
             "COD",
             "CQ",
             "Time In",
@@ -1039,7 +1080,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             self.assertEqual(0, worksheet.page_setup.fitToHeight)
             self.assertEqual("$8:$8", worksheet.print_title_rows)
             self.assertEqual(expected_headers, [cell.value for cell in worksheet[8]])
-            self.assertEqual(14, worksheet.max_column)
+            self.assertEqual(17, worksheet.max_column)
             self.assertEqual("DAILY RUN SHEET", worksheet["A1"].value)
             self.assertEqual("DATE  05/05/2026", worksheet["C1"].value)
             self.assertTrue(str(worksheet["F1"].value).startswith("DRIVER: "))
@@ -1071,10 +1112,18 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertEqual("Demo Customer A", john_rows[8][1])
         self.assertEqual("Demo Customer C", john_rows[9][1])
         self.assertEqual("INV-1001", john_rows[8][3])
-        self.assertEqual("Snapshot Alpha Product\nSnapshot Beta Product", john_rows[8][4])
-        self.assertIsNone(john_rows[8][5])
+        self.assertEqual(
+            "1. [RWIND] Snapshot Alpha Product - 450 KG | Packaging: 45 BAG10\n"
+            "2. Snapshot Beta Product - 3 BAGS\n"
+            "3. Snapshot Alpha Product - 9 PALLETS",
+            john_rows[8][4],
+        )
+        self.assertEqual(450, john_rows[8][5])
         self.assertEqual(2, john_rows[8][6])
-        self.assertIsNone(workbook["John"]["F9"].value)
+        self.assertEqual(5, john_rows[8][7])
+        self.assertEqual(4, john_rows[8][8])
+        self.assertEqual("Use rear delivery gate", john_rows[8][9])
+        self.assertEqual(450, workbook["John"]["F9"].value)
         self.assertEqual("General", workbook["John"]["G9"].number_format)
         self.assertTrue(workbook["John"]["E9"].alignment.wrap_text)
         self.assertGreaterEqual(workbook["John"].row_dimensions[9].height, 30)
@@ -1143,13 +1192,22 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             loose_bags_quantity_snapshot=7,
             note_snapshot=None,
             product_lines_snapshot=[
-                ProductDetailLine("Product A", 1, "PALLETS"),
+                ProductDetailLine(
+                    "Product A",
+                    450,
+                    "KG",
+                    product_code="RWIND",
+                    package_quantity=45,
+                    package_unit="BAG10",
+                ),
                 ProductDetailLine("Product B", 2, "BAGS"),
                 ProductDetailLine("Product A", 3, "BAGS"),
             ],
         )
         self.assertEqual(
-            "Product A\nProduct B",
+            "1. [RWIND] Product A - 450 KG | Packaging: 45 BAG10\n"
+            "2. Product B - 2 BAGS\n"
+            "3. Product A - 3 BAGS",
             delivery_run_sheet_product_display(order),
         )
 

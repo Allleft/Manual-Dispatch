@@ -3,7 +3,6 @@ from backend.services.manual_dispatch.normalization import (
     clean_optional_text,
     clean_required_iso_date,
     clean_required_text,
-    load_unit_for_quantities,
     normalize_product_detail_lines,
     quantity_or_default,
 )
@@ -28,11 +27,11 @@ class OrderService:
             request.loose_bags_quantity,
             "loose_bags_quantity",
         )
-        load_unit = load_unit_for_quantities(pallet_quantity, loose_bags_quantity)
-        product_lines = normalize_product_detail_lines(
-            request.product_lines,
-            load_unit,
+        carton_quantity = quantity_or_default(
+            request.carton_quantity,
+            "carton_quantity",
         )
+        product_lines = normalize_product_detail_lines(request.product_lines)
 
         order = Order(
             order_id=self.id_generator.generate_order_id(delivery_date),
@@ -49,6 +48,7 @@ class OrderService:
             preferred_driver_id=clean_optional_text(request.preferred_driver_id),
             pallet_quantity=pallet_quantity,
             loose_bags_quantity=loose_bags_quantity,
+            carton_quantity=carton_quantity,
             start_time=clean_optional_text(request.start_time),
             end_time=clean_optional_text(request.end_time),
             note=clean_optional_text(request.note),
@@ -83,7 +83,11 @@ class OrderService:
             if "loose_bags_quantity" in fields
             else existing.loose_bags_quantity
         )
-        load_unit = load_unit_for_quantities(pallet_quantity, loose_bags_quantity)
+        carton_quantity = (
+            _patch_quantity(request.carton_quantity, "carton_quantity")
+            if "carton_quantity" in fields
+            else existing.carton_quantity
+        )
         product_lines_payload = request.product_lines
         if "product_lines" not in fields:
             product_lines_payload = [
@@ -91,13 +95,13 @@ class OrderService:
                     "product_name": line.product_name,
                     "quantity": line.quantity,
                     "unit": line.unit,
+                    "product_code": line.product_code,
+                    "package_quantity": line.package_quantity,
+                    "package_unit": line.package_unit,
                 }
                 for line in existing.product_lines
             ]
-        product_lines = normalize_product_detail_lines(
-            product_lines_payload,
-            load_unit,
-        )
+        product_lines = normalize_product_detail_lines(product_lines_payload)
 
         order = Order(
             order_id=existing.order_id,
@@ -119,6 +123,7 @@ class OrderService:
             ),
             pallet_quantity=pallet_quantity,
             loose_bags_quantity=loose_bags_quantity,
+            carton_quantity=carton_quantity,
             start_time=_optional_patch_text(request, fields, "start_time", existing.start_time),
             end_time=_optional_patch_text(request, fields, "end_time", existing.end_time),
             note=_optional_patch_text(request, fields, "note", existing.note),
