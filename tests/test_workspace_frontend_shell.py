@@ -497,6 +497,143 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn('function invalidateDeliveryAttachePreview()', self.workspace_actions)
         self.assertIn('No PDF files were dropped.', self.workspace_actions)
 
+    def test_attache_preview_handles_success_failure_and_duplicate_click(self):
+        self._run_delivery_attache_actions_script(
+            """
+            function createHarness(previewImpl) {
+              const selectedFiles = [{ name: "invoice.pdf", type: "application/pdf" }];
+              const state = {
+                isLoggedIn: true,
+                authSessionVersion: 7,
+                workspaceRoute: "delivery/task-pool",
+                activeWorkspace: "delivery",
+                dispatchDate: "2026-07-23",
+                deliveryAttacheImportState: {
+                  isOpen: true,
+                  isPreviewing: false,
+                  isCommitting: false,
+                  step: "files",
+                  files: selectedFiles,
+                  rows: [],
+                  expandedRowIds: {},
+                  error: "",
+                  success: "",
+                },
+              };
+              const apiCalls = [];
+              let renderCount = 0;
+              const context = {
+                state,
+                renderWorkspace: () => { renderCount += 1; },
+                api: {
+                  previewDeliveryAttacheInvoices: async (files) => {
+                    apiCalls.push(files);
+                    return previewImpl(files);
+                  },
+                },
+                deliveryAttachePreviewRequestVersion: 0,
+                actions: {},
+              };
+              context.actions.captureMutationContext = () => ({
+                route: state.workspaceRoute,
+                dispatchDate: state.dispatchDate,
+                activeWorkspace: state.activeWorkspace,
+                authSessionVersion: state.authSessionVersion,
+              });
+              context.actions.isDeliveryMutationCurrent = (snapshot) =>
+                state.isLoggedIn
+                && snapshot.route === state.workspaceRoute
+                && snapshot.dispatchDate === state.dispatchDate
+                && snapshot.activeWorkspace === state.activeWorkspace
+                && snapshot.authSessionVersion === state.authSessionVersion;
+              return {
+                actions: createDeliveryAttacheActions(context),
+                apiCalls,
+                context,
+                getRenderCount: () => renderCount,
+                selectedFiles,
+                state,
+              };
+            }
+
+            let resolveSuccess;
+            const successResponse = new Promise((resolve) => {
+              resolveSuccess = resolve;
+            });
+            const success = createHarness(async () => successResponse);
+            const firstPreview = success.actions.previewDeliveryAttacheImport();
+            const duplicatePreview = success.actions.previewDeliveryAttacheImport();
+            if (success.apiCalls.length !== 1) {
+              throw new Error("duplicate Preview click started another request");
+            }
+            if (!success.state.deliveryAttacheImportState.isPreviewing) {
+              throw new Error("Preview did not enter loading state");
+            }
+            resolveSuccess({
+              rows: [
+                { row_id: "READY", selected: true, importable: true, is_duplicate: false },
+                { row_id: "DUPLICATE", selected: true, importable: true, is_duplicate: true },
+                { row_id: "INVALID", selected: true, importable: false, is_duplicate: false },
+              ],
+            });
+            await Promise.all([firstPreview, duplicatePreview]);
+            if (success.apiCalls[0] !== success.selectedFiles) {
+              throw new Error("Preview API did not receive the selected files");
+            }
+            if (success.context.deliveryAttachePreviewRequestVersion !== 1) {
+              throw new Error("outer Preview request version did not increment");
+            }
+            if (success.state.deliveryAttacheImportState.step !== "review") {
+              throw new Error("successful Preview did not advance to review");
+            }
+            const successRows = success.state.deliveryAttacheImportState.rows;
+            if (successRows.length !== 3) {
+              throw new Error("successful Preview rows were not stored");
+            }
+            if (!successRows[0].selected || successRows[1].selected || successRows[2].selected) {
+              throw new Error("Preview row selection eligibility was not normalized");
+            }
+            if (success.state.deliveryAttacheImportState.isPreviewing) {
+              throw new Error("successful Preview did not clear loading state");
+            }
+            if (success.state.deliveryAttacheImportState.error) {
+              throw new Error("successful Preview displayed an error");
+            }
+            if (success.getRenderCount() !== 2) {
+              throw new Error("successful Preview did not render loading and completion states");
+            }
+
+            const failure = createHarness(async () => {
+              throw new Error("broken PDF");
+            });
+            await failure.actions.previewDeliveryAttacheImport();
+            if (failure.apiCalls.length !== 1) {
+              throw new Error("failed Preview did not call the API exactly once");
+            }
+            if (failure.context.deliveryAttachePreviewRequestVersion !== 1) {
+              throw new Error("failed Preview did not increment the outer request version");
+            }
+            if (!failure.state.deliveryAttacheImportState.error.includes(
+              "Unable to preview Attache invoices. broken PDF"
+            )) {
+              throw new Error("failed Preview did not show the existing user-facing error");
+            }
+            if (failure.state.deliveryAttacheImportState.isPreviewing) {
+              throw new Error("failed Preview did not clear loading state");
+            }
+            if (
+              !failure.state.deliveryAttacheImportState.isOpen
+              || failure.state.deliveryAttacheImportState.step !== "files"
+              || failure.state.deliveryAttacheImportState.files.length !== 1
+            ) {
+              throw new Error("failed Preview did not remain usable for retry");
+            }
+            if (failure.getRenderCount() !== 2) {
+              throw new Error("failed Preview did not render loading and error states");
+            }
+            """
+        )
+
     def test_attache_preview_is_invalidated_by_close_files_and_navigation(self):
         self._run_workspace_actions_script(
             """
@@ -583,6 +720,9 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             }
             if ((state.deliveryAttacheImportState.rows || []).length) {
               throw new Error("route-stale Preview populated rows");
+            }
+            if (state.deliveryAttacheImportState.error) {
+              throw new Error("route-stale Preview displayed an obsolete error");
             }
 
             state.workspaceRoute = "delivery/task-pool";
@@ -5184,6 +5324,25 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         script = textwrap.dedent(
             f"""
             const module = await import({module_uri!r});
+            {body}
+            """
+        )
+        result = subprocess.run(
+            ["node", "--input-type=module", "--eval", script],
+            cwd=PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(0, result.returncode, result.stderr or result.stdout)
+
+    def _run_delivery_attache_actions_script(self, body):
+        module_uri = (
+            FRONTEND_ROOT / "js/actions/workspace/delivery-attache-actions.js"
+        ).as_uri()
+        script = textwrap.dedent(
+            f"""
+            const {{ createDeliveryAttacheActions }} = await import({module_uri!r});
             {body}
             """
         )
