@@ -75,10 +75,10 @@ export function createDeliveryAttacheActions(context) {
     if (importState.isPreviewing || !(importState.files || []).length) {
       return;
     }
-    const context = captureMutationContext();
+    const mutationContext = captureMutationContext();
     const requestVersion = ++context.deliveryAttachePreviewRequestVersion;
     const isCurrent = () =>
-      isDeliveryMutationCurrent(context) &&
+      isDeliveryMutationCurrent(mutationContext) &&
       state.workspaceRoute === "delivery/task-pool" &&
       state.deliveryAttacheImportState?.isOpen &&
       requestVersion === context.deliveryAttachePreviewRequestVersion;
