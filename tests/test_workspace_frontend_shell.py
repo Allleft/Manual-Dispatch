@@ -2620,6 +2620,140 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             r"\.workspace-regular-pickup-list \.opshop-date-card-list\[hidden\]\s*\{\s*display: none;\s*\}",
         )
 
+    def test_regular_rows_render_last_pickup_date_badge_after_pickup_date(self):
+        regular_renderer = self._read("js/render/opshop/opshop-regular-renderer.js")
+        oncall_renderer = self._read("js/render/opshop/opshop-oncall-renderer.js")
+        countryside_renderer = self._read(
+            "js/render/opshop/opshop-countryside-renderer.js"
+        )
+        self.assertIn("opshop-list-item-last-pickup-date", regular_renderer)
+        self.assertIn(
+            'formatOptional(pickup.last_pickup_date, "No record")',
+            regular_renderer,
+        )
+        self.assertIn(
+            "meta.append(suburb, pickupDate, lastPickupDate)",
+            regular_renderer,
+        )
+        self.assertNotIn("fetch(", regular_renderer)
+        self.assertNotIn("opshop-list-item-last-pickup-date", oncall_renderer)
+        self.assertNotIn("opshop-list-item-last-pickup-date", countryside_renderer)
+        self.assertRegex(
+            self.styles,
+            r"\.opshop-list-item-last-pickup-date\s*\{[^}]*"
+            r"border:\s*1px solid #ef9a9a;[^}]*background:\s*#fff1f1;"
+            r"[^}]*color:\s*#b42318;",
+        )
+        self._run_frontend_module_script(
+            "js/render/opshop/opshop-regular-renderer.js",
+            r"""
+            class FakeNode {
+              constructor(tagName, text = "") {
+                this.tagName = tagName;
+                this.children = [];
+                this.attributes = {};
+                this.listeners = {};
+                this._className = "";
+                this._text = text;
+                this.classList = {
+                  add: (...tokens) => {
+                    const classes = new Set(this._className.split(/\s+/).filter(Boolean));
+                    tokens.forEach((token) => classes.add(token));
+                    this._className = [...classes].join(" ");
+                  },
+                  contains: (token) => this._className.split(/\s+/).includes(token),
+                  toggle: (token, force) => {
+                    const classes = new Set(this._className.split(/\s+/).filter(Boolean));
+                    const enabled = force === undefined ? !classes.has(token) : Boolean(force);
+                    enabled ? classes.add(token) : classes.delete(token);
+                    this._className = [...classes].join(" ");
+                    return enabled;
+                  },
+                };
+              }
+              get className() { return this._className; }
+              set className(value) { this._className = String(value || ""); }
+              get textContent() {
+                return this._text + this.children.map((child) => child.textContent || "").join("");
+              }
+              set textContent(value) { this._text = String(value ?? ""); }
+              append(...children) { this.children.push(...children); }
+              setAttribute(name, value) { this.attributes[name] = String(value); }
+              addEventListener(type, listener) {
+                (this.listeners[type] ||= []).push(listener);
+              }
+              querySelector(selector) { return this.querySelectorAll(selector)[0] || null; }
+              querySelectorAll(selector) {
+                const matches = [];
+                const visit = (node) => {
+                  if (selector.startsWith(".")
+                    ? node.classList?.contains(selector.slice(1))
+                    : node.tagName === selector) {
+                    matches.push(node);
+                  }
+                  node.children?.forEach(visit);
+                };
+                this.children.forEach(visit);
+                return matches;
+              }
+            }
+            globalThis.document = {
+              createElement: (tagName) => new FakeNode(tagName),
+              createElementNS: (_namespace, tagName) => new FakeNode(tagName),
+              createTextNode: (text) => new FakeNode("#text", String(text)),
+            };
+            const state = {
+              dispatchDate: "2026-07-24",
+              opshopBoard: { drivers: [] },
+              opshopAssignmentDrafts: {},
+            };
+            const actions = {
+              openOpShopPickupDetail: () => {},
+              startEditOpShopPickupTask: () => {},
+              startDeleteOpShopPickupTask: () => {},
+              updateOpShopAssignmentDraft: () => {},
+            };
+            const basePickup = {
+              pickup_task_id: "PICKUP-1",
+              opshop_name: "Synthetic OP SHOP",
+              suburb: "COBURG",
+              pickup_date: "2026-07-24",
+              run_type: "REGULAR",
+              pickup_category: "NORMAL",
+              assigned_to_locked: false,
+              is_assigned: false,
+              driver_id: null,
+              assigned_driver_id: null,
+            };
+            const cases = [
+              ["2026-07-17", "Last Pickup Date: 2026-07-17"],
+              [null, "Last Pickup Date: No record"],
+              [undefined, "Last Pickup Date: No record"],
+            ];
+            cases.forEach(([lastPickupDate, expectedText], index) => {
+              const pickup = { ...basePickup, pickup_task_id: `PICKUP-${index + 1}` };
+              if (index < 2) pickup.last_pickup_date = lastPickupDate;
+              const row = module.createRegularPickupRow(pickup, state, actions);
+              const meta = row.children[1].children[1];
+              const classes = meta.children.map((child) => child.className);
+              if (classes.join("|") !== "opshop-list-item-suburb|opshop-list-item-date|opshop-list-item-last-pickup-date") {
+                throw new Error(`Unexpected metadata order: ${classes.join("|")}`);
+              }
+              const badge = meta.children[2];
+              if (badge.textContent !== expectedText) {
+                throw new Error(`Unexpected Last Pickup Date text: ${badge.textContent}`);
+              }
+              if (Object.values(badge.listeners).flat().length !== 0) {
+                throw new Error("Last Pickup Date badge must not be interactive");
+              }
+              const actionLabels = row.querySelectorAll("button").map((button) => button.textContent);
+              if (actionLabels.join("|") !== "View details|Edit|Delete") {
+                throw new Error(`Row actions changed: ${actionLabels.join("|")}`);
+              }
+            });
+            """,
+        )
+
     def test_opshop_pickup_date_excel_export_is_scoped_busy_and_non_mutating(self):
         self.assertIn(
             "/api/manual-dispatch/opshop/pickup-collections/export-excel?",

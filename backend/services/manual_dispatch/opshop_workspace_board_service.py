@@ -1,3 +1,6 @@
+from bisect import bisect_left
+from datetime import date
+
 from backend.schemas import (
     OpShopTripSummaryResponse,
     OpShopWorkspaceBoardResponse,
@@ -5,6 +8,14 @@ from backend.schemas import (
 )
 from backend.services.manual_dispatch.normalization import clean_required_iso_date
 from backend.services.manual_dispatch.opshop_pickup_service import OpShopPickupService
+
+
+def _is_iso_date(value):
+    try:
+        parsed = date.fromisoformat(value)
+    except (TypeError, ValueError):
+        return False
+    return parsed.isoformat() == value
 
 
 class OpShopWorkspaceBoardService:
@@ -40,12 +51,14 @@ class OpShopWorkspaceBoardService:
         collectable_task_ids = self._collectable_task_ids(
             pickups_by_id.values()
         )
+        last_pickup_dates = self._last_pickup_dates(pickups_by_id.values())
 
         pickups = sorted(
             (
                 self._workspace_pickup(
                     pickup,
                     pickup.pickup_task_id in collectable_task_ids,
+                    last_pickup_dates.get(pickup.pickup_task_id),
                 )
                 for pickup in pickups_by_id.values()
             ),
@@ -140,8 +153,38 @@ class OpShopWorkspaceBoardService:
             )
         }
 
+    def _last_pickup_dates(self, pickups):
+        regular_pickups = [
+            pickup
+            for pickup in pickups
+            if pickup.run_type == "REGULAR" and _is_iso_date(pickup.pickup_date)
+        ]
+        if not regular_pickups:
+            return {}
+        history_by_opshop_id = (
+            self.repository.list_saved_opshop_pickup_dates_by_opshop_ids(
+                {pickup.opshop_id for pickup in regular_pickups},
+                max(pickup.pickup_date for pickup in regular_pickups),
+            )
+        )
+
+        last_pickup_dates = {}
+        for pickup in regular_pickups:
+            historical_dates = history_by_opshop_id.get(pickup.opshop_id, [])
+            predecessor_index = bisect_left(historical_dates, pickup.pickup_date)
+            last_pickup_dates[pickup.pickup_task_id] = (
+                historical_dates[predecessor_index - 1]
+                if predecessor_index
+                else None
+            )
+        return last_pickup_dates
+
     @staticmethod
-    def _workspace_pickup(pickup, assignment_is_collectable):
+    def _workspace_pickup(
+        pickup,
+        assignment_is_collectable,
+        last_pickup_date=None,
+    ):
         driver_id = pickup.driver_id if assignment_is_collectable else None
         return OpShopWorkspacePickupItem(
             pickup_task_id=pickup.pickup_task_id,
@@ -184,4 +227,5 @@ class OpShopWorkspaceBoardService:
             pickup_category=pickup.pickup_category,
             route_group_id=pickup.route_group_id,
             route_group_name=pickup.route_group_name,
+            last_pickup_date=last_pickup_date,
         )

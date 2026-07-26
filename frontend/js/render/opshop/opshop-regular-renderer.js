@@ -54,7 +54,15 @@ export function createRegularPickupRow(pickup, state, actions) {
     createIcon("calendar"),
     document.createTextNode(`Pickup Date: ${formatOptional(pickup.pickup_date)}`),
   );
-  meta.append(suburb, pickupDate);
+  const lastPickupDate = document.createElement("span");
+  lastPickupDate.className = "opshop-list-item-last-pickup-date";
+  lastPickupDate.append(
+    createIcon("history"),
+    document.createTextNode(
+      `Last Pickup Date: ${formatOptional(pickup.last_pickup_date, "No record")}`,
+    ),
+  );
+  meta.append(suburb, pickupDate, lastPickupDate);
   const currentAssignee = document.createElement("p");
   currentAssignee.className = "workspace-regular-current-assignee";
   currentAssignee.textContent = `Current Assignee: ${currentOpShopDriverName(pickup, state)}`;
