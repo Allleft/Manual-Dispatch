@@ -1,4 +1,14 @@
+from datetime import date
+
 from backend.db.connection import connect
+
+
+def _parse_iso_date(value):
+    try:
+        parsed = date.fromisoformat(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed.isoformat() == value else None
 
 class SQLiteSnapshotRepositoryMixin:
     """Snapshot persistence responsibilities."""
@@ -524,6 +534,49 @@ class SQLiteSnapshotRepositoryMixin:
                 parameters,
             ).fetchall()
         return [self._row_to_opshop_pickup_collection(row) for row in rows]
+
+    def list_saved_opshop_pickup_dates_by_opshop_ids(
+        self,
+        opshop_ids,
+        before_date,
+    ):
+        requested_ids = sorted({opshop_id for opshop_id in opshop_ids if opshop_id})
+        if not requested_ids:
+            return {}
+        parsed_before_date = _parse_iso_date(before_date)
+        if parsed_before_date is None:
+            raise ValueError("before_date must be a valid YYYY-MM-DD date.")
+
+        placeholders = ", ".join("?" for _ in requested_ids)
+        with connect(self.db_path) as connection:
+            rows = connection.execute(
+                f"""
+                SELECT DISTINCT
+                    task.opshop_id AS opshop_id,
+                    collection_row.pickup_date_snapshot AS pickup_date
+                FROM opshop_pickup_collections AS collection
+                JOIN opshop_pickup_collection_rows AS collection_row
+                    ON collection_row.collection_id = collection.collection_id
+                JOIN opshop_pickup_tasks AS task
+                    ON task.pickup_task_id = collection_row.pickup_task_id_snapshot
+                WHERE collection.status = 'SAVED'
+                    AND task.opshop_id IN ({placeholders})
+                    AND collection_row.pickup_date_snapshot IS NOT NULL
+                    AND collection_row.pickup_date_snapshot < ?
+                ORDER BY task.opshop_id, collection_row.pickup_date_snapshot
+                """,
+                (*requested_ids, parsed_before_date.isoformat()),
+            ).fetchall()
+
+        dates_by_opshop_id = {}
+        for row in rows:
+            parsed_pickup_date = _parse_iso_date(row["pickup_date"])
+            if parsed_pickup_date is None or parsed_pickup_date >= parsed_before_date:
+                continue
+            dates_by_opshop_id.setdefault(row["opshop_id"], []).append(
+                parsed_pickup_date.isoformat()
+            )
+        return dates_by_opshop_id
 
     def get_opshop_pickup_collection(self, collection_id):
         with connect(self.db_path) as connection:

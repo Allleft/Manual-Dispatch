@@ -1,4 +1,5 @@
 from dataclasses import replace
+from datetime import date
 from backend.schemas import (
     FinalTripSummary,
     FinalTripSummaryOpShopPickupSnapshot,
@@ -6,6 +7,14 @@ from backend.schemas import (
     FinalTripSummaryTrip,
     ProductDetailLine,
 )
+
+
+def _parse_iso_date(value):
+    try:
+        parsed = date.fromisoformat(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed.isoformat() == value else None
 
 class InMemorySnapshotRepositoryMixin:
     """Snapshot in-memory responsibilities."""
@@ -288,6 +297,42 @@ class InMemorySnapshotRepositoryMixin:
             and (not pickup_date or collection.pickup_date == pickup_date)
             and (not status or collection.status == status)
         ]
+
+    def list_saved_opshop_pickup_dates_by_opshop_ids(
+        self,
+        opshop_ids,
+        before_date,
+    ):
+        requested_ids = {opshop_id for opshop_id in opshop_ids if opshop_id}
+        if not requested_ids:
+            return {}
+        parsed_before_date = _parse_iso_date(before_date)
+        if parsed_before_date is None:
+            raise ValueError("before_date must be a valid YYYY-MM-DD date.")
+
+        tasks_by_id = {
+            task.pickup_task_id: task
+            for task in self.opshop_pickup_tasks
+            if task.opshop_id in requested_ids
+        }
+        dates_by_opshop_id = {}
+        for collection in self.opshop_pickup_collections:
+            if collection.status != "SAVED":
+                continue
+            for row in collection.pickups:
+                task = tasks_by_id.get(row.pickup_task_id_snapshot)
+                if task is None:
+                    continue
+                parsed_pickup_date = _parse_iso_date(row.pickup_date_snapshot)
+                if parsed_pickup_date is None or parsed_pickup_date >= parsed_before_date:
+                    continue
+                dates_by_opshop_id.setdefault(task.opshop_id, set()).add(
+                    parsed_pickup_date.isoformat()
+                )
+        return {
+            opshop_id: sorted(pickup_dates)
+            for opshop_id, pickup_dates in sorted(dates_by_opshop_id.items())
+        }
 
     def get_opshop_pickup_collection(self, collection_id):
         return next(

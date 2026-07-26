@@ -261,6 +261,7 @@ class OpShopWorkspacePickupItem:
     pickup_category: str
     route_group_id: Optional[str]
     route_group_name: Optional[str]
+    last_pickup_date: Optional[str] = None
 
 
 @dataclass

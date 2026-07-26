@@ -110,9 +110,13 @@ class RefactorContractBaselineTest(unittest.TestCase):
         )
 
         self.assertEqual(sqlite_methods, in_memory_methods)
-        self.assertEqual(109, len(sqlite_methods))
+        self.assertEqual(110, len(sqlite_methods))
+        self.assertIn(
+            "list_saved_opshop_pickup_dates_by_opshop_ids",
+            {method["name"] for method in sqlite_methods},
+        )
         self.assertEqual(
-            "cc32115ff6f1fcb1b10cddec22eff236de180fbc576d0632b123dced124b95af",
+            "39554c6e35aaff54c64b2ad84931a82bdbd144611b394fea1912d709d16b6c7f",
             self._contract_digest(sqlite_methods),
         )
 

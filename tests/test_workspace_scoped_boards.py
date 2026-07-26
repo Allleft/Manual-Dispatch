@@ -455,6 +455,80 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
         self.assertEqual(first_regular_ids, second_regular_ids)
         self.assertEqual(1, len(self.repository.list_opshop_pickup_tasks()))
 
+    def test_opshop_board_serializes_regular_last_pickup_date_or_null(self):
+        history_date = "2026-04-28"
+        history_task_id = "PICKUP-REGULAR-HISTORY"
+        self.repository.upsert_opshop_pickup_task(
+            OpShopPickupTask(
+                pickup_task_id=history_task_id,
+                schedule_id="SCHEDULE-REGULAR",
+                opshop_id="OPSHOP-REGULAR",
+                pickup_date=history_date,
+                task_type="OPSHOP_PICKUP",
+                generated_from="REGULAR",
+                status="ACTIVE",
+                dispatch_date=history_date,
+                driver_id=None,
+                trip_no=None,
+                notes="Synthetic saved history",
+                created_at="2026-04-28T00:00:00+00:00",
+                updated_at="2026-04-28T00:00:00+00:00",
+            )
+        )
+        self.service.assign_task(
+            AssignTaskRequest(
+                dispatch_date=history_date,
+                task_type="OPSHOP_PICKUP",
+                task_id=history_task_id,
+                driver_id="DRIVER-1",
+                trip_no="trip1",
+            )
+        )
+        generated = self.service.create_generated_opshop_pickup_collection(
+            GenerateOpShopPickupCollectionRequest(
+                dispatch_date=history_date,
+                pickup_date=history_date,
+                driver_id="DRIVER-1",
+            )
+        )
+        self.service.save_generated_opshop_pickup_collection(
+            generated.collection_id,
+            self._save_request(),
+        )
+
+        no_history_opshop_id = "OPSHOP-REGULAR-NO-HISTORY"
+        self.repository.upsert_opshop_location(
+            self._location(no_history_opshop_id, "Regular No History")
+        )
+        self.repository.upsert_opshop_pickup_schedule(
+            self._schedule(
+                "SCHEDULE-REGULAR-NO-HISTORY",
+                no_history_opshop_id,
+                run_type="REGULAR",
+                run_day="TUESDAY",
+            )
+        )
+
+        response = self.client.get(
+            "/api/manual-dispatch/opshop/board",
+            params={"dispatch_date": self.dispatch_date},
+        )
+
+        self.assertEqual(200, response.status_code)
+        regular_by_opshop_id = {
+            pickup["opshop_id"]: pickup
+            for pickup in response.json()["opshop_pickups"]
+            if pickup["run_type"] == "REGULAR"
+            and pickup["pickup_date"] == self.dispatch_date
+        }
+        self.assertEqual(
+            history_date,
+            regular_by_opshop_id["OPSHOP-REGULAR"]["last_pickup_date"],
+        )
+        self.assertIsNone(
+            regular_by_opshop_id[no_history_opshop_id]["last_pickup_date"]
+        )
+
     def test_delivery_snapshots_filter_only_orders_and_saved_lock_is_scoped(self):
         self._assign_order()
         pickup_id = self._seed_and_assign_oncall_pickup()

@@ -110,6 +110,7 @@ Delivery Orders support manual add, edit, and soft-cancel operations. Delivery T
 - Monday–Thursday Dispatch Dates show the current Monday–Friday pickup week.
 - Friday shows Friday plus the following Monday–Friday; weekend Dispatch Dates show the next Monday–Friday.
 - Past pickup-date groups are collapsed by default. Current and future date groups are expanded by default and can be toggled without losing the page position.
+- Every Regular row shows the most recent strictly earlier Pickup Date from a `SAVED` Pickup Collection for the same stable OP SHOP ID. When none exists it shows `No record`; the value is derived read-only and is not persisted.
 - Template default-driver information is materialised once when an eligible actual task is created or by the controlled source-driver backfill tool.
 - Later manual changes, including an explicit `Unassigned`, remain local drafts until Apply and are not overwritten by refresh or subtype navigation.
 

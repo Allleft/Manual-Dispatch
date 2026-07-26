@@ -4831,6 +4831,30 @@ select:disabled {
   font-weight: 850;
 }
 
+.opshop-list-item-last-pickup-date {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: 100%;
+  border: 1px solid #ef9a9a;
+  border-radius: 999px;
+  padding: 0.24rem 0.58rem;
+  background: #fff1f1;
+  color: #b42318;
+  font-size: 0.86rem;
+  font-weight: 850;
+  line-height: 1.35;
+  white-space: normal;
+}
+
+.opshop-list-item-last-pickup-date .ui-icon {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
+  color: #b42318;
+  stroke-width: 2.35;
+}
+
 .opshop-list-item-date .ui-icon,
 .opshop-date-group-label .ui-icon {
   color: var(--accent-strong);
