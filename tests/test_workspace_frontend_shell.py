@@ -67,8 +67,12 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
                 "js/render/delivery/delivery-attache-modal-renderer.js",
                 "js/render/delivery/delivery-specification-modal-renderer.js",
                 "js/render/delivery/delivery-generation-modal-renderer.js",
+                "js/render/delivery/delivery-closeout-modal-renderer.js",
                 "js/render/delivery/delivery-renderer-utils.js",
             )
+        )
+        self.delivery_closeout_utils = self._read(
+            "js/utils/delivery-closeout-utils.js"
         )
         self.delivery_vehicle_utils = self._read(
             "js/utils/delivery-vehicle-utils.js"
@@ -975,6 +979,106 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("grid-template-columns: minmax(0, 1fr)", self.styles)
         self.assertIn("min-height: 44px", self.styles)
         self.assertIn("white-space: pre-line", self.styles)
+
+    def test_delivery_run_sheet_closeout_contract_and_pure_helpers(self):
+        for expected in (
+            "apiCloseDeliveryRunSheet",
+            "/closeout",
+            "closeDeliveryRunSheet: apiCloseDeliveryRunSheet",
+        ):
+            self.assertIn(expected, self.api + self.workspace_actions)
+        for expected in (
+            "deliveryRunSheetCloseout",
+            "deliveryActionSuccess",
+        ):
+            self.assertIn(expected, self.state)
+        for expected in (
+            "`delivery-closeout:${draft.run_sheet_id}`",
+            "state.deliveryBusyActionKeys?.[actionKey]",
+            "buildDeliveryCloseoutConfirmation",
+            "buildDeliveryCloseoutPayload",
+            "Mark All Delivered",
+            "Choose outcome",
+            "Return to Delivery Task Pool",
+            "Close Run Sheet",
+            "execution_status",
+            "closeout_summary",
+            "closed_by_account_name",
+            "Closeout outcomes",
+            "delivery_address_snapshot",
+            "suburb_snapshot",
+            "Driver:",
+        ):
+            self.assertIn(
+                expected,
+                self.workspace_actions
+                + self.delivery_renderer
+                + self.delivery_closeout_utils,
+            )
+        self.assertIn("workspace-delivery-closeout-row", self.styles)
+        self.assertIn("workspace-run-sheet-outcomes", self.styles)
+
+        self._run_frontend_module_script(
+            "js/utils/delivery-closeout-utils.js",
+            """
+            const runSheet = {
+              run_sheet_id: "DRS-1",
+              delivery_date: "2026-07-28",
+              driver_name_snapshot: "Driver",
+              trips: [{
+                trip_no: "trip1",
+                orders: [
+                  {
+                    row_id: "ROW-1",
+                    row_no: 1,
+                    invoice_number_snapshot: "INV-1",
+                    company_name_snapshot: "A",
+                    delivery_address_snapshot: "1 Test Street",
+                    suburb_snapshot: "Dandenong",
+                  },
+                  { row_id: "ROW-2", invoice_number_snapshot: "INV-2", company_name_snapshot: "B" },
+                ],
+              }],
+            };
+            const draft = module.createDeliveryCloseoutDraft(runSheet);
+            if (draft.rows[0].row_no !== 1 ||
+                draft.rows[0].delivery_address !== "1 Test Street" ||
+                draft.rows[0].suburb !== "Dandenong") {
+              throw new Error("Closeout draft omitted row context");
+            }
+            if (draft.rows.some((row) => row.outcome)) {
+              throw new Error("Closeout outcomes were defaulted");
+            }
+            if (!module.validateDeliveryCloseoutDraft(draft).includes("Choose an outcome")) {
+              throw new Error("Missing outcomes were not rejected");
+            }
+            draft.rows[0].outcome = "DELIVERED";
+            draft.rows[1].outcome = "RETURN_TO_POOL";
+            draft.rows[1].reason_code = "OTHER";
+            draft.rows[1].next_delivery_date = "2026-07-29";
+            if (!module.validateDeliveryCloseoutDraft(draft).includes("Add a note")) {
+              throw new Error("OTHER without a note was not rejected");
+            }
+            draft.rows[1].note = "Customer requested retry";
+            if (module.validateDeliveryCloseoutDraft(draft)) {
+              throw new Error("Valid closeout draft was rejected");
+            }
+            const payload = module.buildDeliveryCloseoutPayload(draft);
+            if (Object.keys(payload.rows[0]).sort().join(",") !==
+                "next_delivery_date,note,outcome,reason_code,run_sheet_row_id") {
+              throw new Error("Closeout payload leaked derived identity fields");
+            }
+            if (payload.rows[0].reason_code !== null || payload.rows[0].next_delivery_date !== null) {
+              throw new Error("Delivered payload retained return-only fields");
+            }
+            const confirmation = module.buildDeliveryCloseoutConfirmation(draft);
+            if (!confirmation.includes("1 delivered; 1 returned") ||
+                !confirmation.includes("2026-07-29") ||
+                !confirmation.includes("cannot be edited")) {
+              throw new Error("Final confirmation omitted irreversible summary details");
+            }
+            """,
+        )
 
     def test_delivery_date_excel_export_is_scoped_busy_and_non_mutating(self):
         self.assertIn(

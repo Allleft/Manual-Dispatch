@@ -49,12 +49,17 @@ export function createWorkspaceStateReset(context) {
     state.countrysideRouteGroupDrafts = {};
     state.collapsedRegularOpShopPickupDates = {};
     state.deliveryActionError = "";
+    state.deliveryActionSuccess = "";
+    state.deliveryRunSheetCloseout = null;
     state.opshopActionError = "";
   }
 
   function clearGenerationConfirmationsForRoute(route) {
     if (route !== "delivery/trip-summary") {
       state.deliveryGenerationConfirmation = null;
+    }
+    if (route !== "delivery/run-sheet") {
+      state.deliveryRunSheetCloseout = null;
     }
     if (route !== "opshop/trip-summary") {
       state.opshopGenerationConfirmation = null;

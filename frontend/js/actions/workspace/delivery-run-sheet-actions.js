@@ -1,3 +1,10 @@
+import {
+  buildDeliveryCloseoutConfirmation,
+  buildDeliveryCloseoutPayload,
+  createDeliveryCloseoutDraft,
+  validateDeliveryCloseoutDraft,
+} from "../../utils/delivery-closeout-utils.js";
+
 export function createDeliveryRunSheetActions(context) {
   const {
     api,
@@ -91,6 +98,120 @@ export function createDeliveryRunSheetActions(context) {
     });
   }
 
+  function openDeliveryRunSheetCloseout(runSheetId) {
+    const runSheet = (state.deliveryRunSheets || []).find(
+      (item) => item.run_sheet_id === runSheetId,
+    );
+    if (
+      !runSheet
+      || runSheet.status !== "SAVED"
+      || (runSheet.execution_status || "OPEN") !== "OPEN"
+    ) {
+      return;
+    }
+    state.deliveryRunSheetCloseout = createDeliveryCloseoutDraft(runSheet);
+    state.deliveryActionError = "";
+    state.deliveryActionSuccess = "";
+    renderWorkspace();
+  }
+
+  function closeDeliveryRunSheetCloseout() {
+    const draft = state.deliveryRunSheetCloseout;
+    if (
+      !draft
+      || state.deliveryBusyActionKeys?.[
+        `delivery-closeout:${draft.run_sheet_id}`
+      ]
+    ) {
+      return;
+    }
+    state.deliveryRunSheetCloseout = null;
+    renderWorkspace();
+  }
+
+  function updateDeliveryCloseoutRow(rowId, field, value) {
+    const draft = state.deliveryRunSheetCloseout;
+    const row = draft?.rows?.find(
+      (item) => item.run_sheet_row_id === rowId,
+    );
+    if (!row) {
+      return;
+    }
+    row[field] = value;
+    if (field === "outcome" && value !== "RETURN_TO_POOL") {
+      row.reason_code = "";
+      row.note = "";
+      row.next_delivery_date = "";
+    }
+    draft.error = "";
+    renderWorkspace();
+  }
+
+  function markAllDeliveryCloseoutRowsDelivered() {
+    const draft = state.deliveryRunSheetCloseout;
+    if (!draft) {
+      return;
+    }
+    draft.rows.forEach((row) => {
+      row.outcome = "DELIVERED";
+      row.reason_code = "";
+      row.note = "";
+      row.next_delivery_date = "";
+    });
+    draft.error = "";
+    renderWorkspace();
+  }
+
+  async function submitDeliveryRunSheetCloseout() {
+    const draft = state.deliveryRunSheetCloseout;
+    if (!draft) {
+      return;
+    }
+    const actionKey = `delivery-closeout:${draft.run_sheet_id}`;
+    if (state.deliveryBusyActionKeys?.[actionKey]) {
+      return;
+    }
+    const error = validateDeliveryCloseoutDraft(draft);
+    if (error) {
+      draft.error = error;
+      renderWorkspace();
+      return;
+    }
+    if (!confirmAction(buildDeliveryCloseoutConfirmation(draft))) {
+      return;
+    }
+    await runDeliveryAction(
+      actionKey,
+      async (context) => {
+        const closedRunSheet = await api.closeDeliveryRunSheet(
+          draft.run_sheet_id,
+          buildDeliveryCloseoutPayload(draft),
+        );
+        if (!isDeliveryMutationCurrent(context)) {
+          return;
+        }
+        state.deliveryRunSheetCloseout = null;
+        const boardPromise = api.getDeliveryWorkspaceBoard(state.dispatchDate);
+        await loadDeliveryRoute(context.route);
+        const board = await boardPromise;
+        if (isDeliveryMutationCurrent(context)) {
+          state.deliveryBoard = board;
+          const summary = closedRunSheet.closeout_summary || {};
+          state.deliveryActionSuccess = [
+            "Run sheet closed.",
+            `${Number(summary.delivered_count || 0)} orders delivered and`,
+            `${Number(summary.returned_to_pool_count || 0)} returned to the Task Pool.`,
+          ].join(" ");
+        }
+      },
+      (requestError) => {
+        if (state.deliveryRunSheetCloseout) {
+          state.deliveryRunSheetCloseout.error = requestError.message;
+        }
+      },
+    );
+  }
+
   async function exportDeliveryRunSheet(runSheetId) {
     await runDeliveryAction(`delivery-export:${runSheetId}`, async () => {
       await api.exportDeliveryRunSheetExcel(runSheetId);
@@ -124,6 +245,11 @@ export function createDeliveryRunSheetActions(context) {
     confirmGenerateDeliveryRunSheet,
     saveDeliveryRunSheet,
     cancelDeliveryRunSheet,
+    openDeliveryRunSheetCloseout,
+    closeDeliveryRunSheetCloseout,
+    updateDeliveryCloseoutRow,
+    markAllDeliveryCloseoutRowsDelivered,
+    submitDeliveryRunSheetCloseout,
     exportDeliveryRunSheet,
     exportDeliveryRunSheets,
     navigateToDeliveryRunSheets,

@@ -1,3 +1,6 @@
+from contextlib import contextmanager
+from copy import deepcopy
+
 from backend.schemas import (
     Driver,
     Order,
@@ -152,3 +155,13 @@ class InMemoryRepositoryBase:
         self._next_final_summary_row_number = 1
         self._next_final_summary_opshop_row_number = 1
         self._next_operator_account_id = 1
+
+    @contextmanager
+    def _immediate_transaction(self):
+        snapshot = deepcopy(self.__dict__)
+        try:
+            yield
+        except Exception:
+            self.__dict__.clear()
+            self.__dict__.update(snapshot)
+            raise

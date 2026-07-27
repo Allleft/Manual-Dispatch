@@ -97,6 +97,7 @@ export function createAuthActions({
     state.deliveryVehiclePendingKeys = {};
     state.deliveryBusyActionKeys = {};
     state.deliveryActionError = "";
+    state.deliveryActionSuccess = "";
     state.opshopCollectionEntryDrafts = {};
     state.opshopCollectionEntryDraftVersions = {};
     state.opshopBusyActionKeys = {};
@@ -107,6 +108,7 @@ export function createAuthActions({
     state.opshopWorkspaceError = "";
     state.activeWorkspace = "";
     state.deliveryGenerationConfirmation = null;
+    state.deliveryRunSheetCloseout = null;
     state.opshopGenerationConfirmation = null;
   }
 

@@ -87,8 +87,10 @@ export function createWorkspaceRouteLoaders(context) {
     state.deliveryBusyActionKeys = {};
     state.opshopBusyActionKeys = {};
     state.deliveryGenerationConfirmation = null;
+    state.deliveryRunSheetCloseout = null;
     state.opshopGenerationConfirmation = null;
     state.deliveryActionError = "";
+    state.deliveryActionSuccess = "";
     state.opshopActionError = "";
     state.deliveryOrderDetailId = "";
     state.deliveryOrderDetailReadOnly = false;
@@ -150,6 +152,7 @@ export function createWorkspaceRouteLoaders(context) {
     state.isDeliveryWorkspaceLoading = true;
     state.deliveryWorkspaceError = "";
     state.deliveryActionError = "";
+    state.deliveryActionSuccess = "";
     renderWorkspace();
     try {
       if (route === "delivery/task-pool") {

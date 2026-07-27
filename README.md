@@ -6,14 +6,16 @@ This is a manual operational system. It deliberately does **not** perform automa
 
 ## What This Branch Delivers
 
-`feature/separate-delivery-and-opshop-workspaces` separates the previous shared workflow into two independent operational workspaces.
+The separated workspaces now include Delivery Run Sheet closeout so completed
+runs can finalize delivered Orders and return undelivered Orders to the Delivery
+Task Pool for a later date.
 
 | Area | Order Delivery | OP SHOP Pickup |
 | --- | --- | --- |
 | Task type | `ORDER` | `OPSHOP_PICKUP` |
 | Operational snapshot | Delivery Run Sheet | Pickup Collection |
 | Generated state | Reserves captured Delivery Orders and the selected vehicle target | Reserves captured pickup tasks |
-| Saved state | Locks only Delivery assignments and vehicle changes for the driver/date | Locks only OP SHOP pickup changes for the driver/date |
+| Saved state | Open sheets reserve captured Orders; closed sheets retain immutable history without reserving them | Locks only OP SHOP pickup changes for the driver/date |
 | Export | Delivery-only workbook | OP SHOP-only workbook |
 | Totals | Pallets, loose bags, and vehicle capacity | No Delivery load or capacity totals |
 
@@ -31,8 +33,8 @@ After login, Home provides the two workspace entry points and checks migration r
 | --- | --- |
 | `#delivery/task-pool` | Review active unassigned Delivery Orders, filter them, create/edit/cancel orders, import Attache invoices, and assign each order to a driver and trip. |
 | `#delivery/trip-summary` | Review Orders by driver and Delivery Date, move Orders between Trip 1 and Trip 2, assign vehicles, and generate a Delivery Run Sheet. |
-| `#delivery/run-sheet` | Review current Generated and Saved Delivery Run Sheets, cancel Generated sheets, save, and export. |
-| `#delivery/history` | Search `SAVED` Delivery Run Sheets by actual Delivery Date, review their full immutable paper snapshots across Dispatch Dates, and re-export Excel. |
+| `#delivery/run-sheet` | Review current Generated and Saved Delivery Run Sheets, cancel Generated sheets, save, close Saved/Open sheets, and export. |
+| `#delivery/history` | Search `SAVED` Delivery Run Sheets by actual Delivery Date, review immutable paper snapshots and read-only closeout outcomes, and re-export Excel. |
 
 ### OP SHOP Pickup
 
@@ -62,12 +64,19 @@ Workspace navigation is hash-based. Browser refresh, copied links, Back, and For
 1. Open **Order Delivery → Task Pool**.
 2. Add a Delivery Order manually, import text-based Attache invoice PDFs, or filter active unassigned Orders by search, urgency, or Delivery Date.
 3. Select a Driver and Trip 1 or Trip 2 for each Order and assign it manually.
-4. Assigned Orders leave the Task Pool globally and remain unavailable there until staff manually unassign them; Generated/Saved Run Sheet snapshots also reserve captured Orders globally.
+4. Assigned Orders leave the Task Pool globally and remain unavailable there until staff manually unassign them; Generated and Saved/Open Run Sheet snapshots also reserve captured Orders globally.
 5. Open **Trip Summary**, select the Delivery Date, review the driver trips, and select a vehicle where required.
 6. Select Generate for a driver/date and confirm the information in the confirmation modal.
 7. Generation creates an immutable `GENERATED` Delivery Run Sheet snapshot and reserves its captured Orders and vehicle target.
 8. From **Run Sheets**, either cancel an incorrect Generated sheet or save/export it. Cancel Generated removes only the snapshot reservation; the original Order assignments remain in Trip Summary until staff manually unassign them. Saving promotes the same snapshot to `SAVED`; it does not rebuild it from mutable live records.
-9. Open **Saved History**, select the actual Delivery Date, and review or re-export the full immutable paper snapshots. History is read-only: it never offers Generate, Save, Cancel, assignment, or editing actions.
+9. For a `SAVED` and `OPEN` sheet, select **Close Run Sheet**, explicitly mark every row `Delivered` or `Return to Delivery Task Pool`, and confirm the irreversible summary. Returned rows require an allowed reason and a next Delivery Date later than the original sheet date; `OTHER` also requires a note.
+10. Closeout is atomic. Delivered Orders become `FINALIZED`; returned Orders stay `ACTIVE`, lose their former assignment, move to the selected later Delivery Date, and reappear in that date's Delivery Task Pool. The original snapshot, trips, sequence, driver, vehicle, and Excel remain unchanged.
+11. Open **Saved History**, select the actual Delivery Date, and review or re-export the full immutable paper snapshots and per-order closeout outcomes. History remains read-only.
+
+Closeout uses `POST /api/manual-dispatch/delivery/run-sheets/{run_sheet_id}/closeout`.
+The current workflow is irreversible and supports only `DELIVERED` and
+`RETURN_TO_POOL`; it does not support partial delivery or automatic midnight
+release.
 
 ### Delivery Orders and Attache Invoice Import
 
@@ -90,7 +99,8 @@ Delivery Orders support manual add, edit, and soft-cancel operations. Delivery T
 - Active Delivery Order assignments reserve those Orders globally from every Delivery Task Pool until staff manually unassign them.
 - `GENERATED` Delivery Run Sheets reserve captured Delivery Orders globally and reserve the selected driver/date vehicle target until cancelled or saved.
 - Cancelling a `GENERATED` Delivery Run Sheet releases only the snapshot reservation; still-assigned Orders remain hidden from Task Pool and return to their original Trip Summary assignment context.
-- `SAVED` Delivery Run Sheets block further Delivery assignment and vehicle changes for their driver/date.
+- `SAVED` + `OPEN` Delivery Run Sheets continue to reserve captured Orders and block Delivery assignment and vehicle changes for their driver/date.
+- `SAVED` + `CLOSED` Delivery Run Sheets remain queryable, auditable, and exportable but do not reserve Orders. A closed sheet cannot be closed or rewritten again.
 - Delivery locks are enforced by the scoped Delivery services and do not block OP SHOP work.
 
 ## OP SHOP Pickup Workflow
@@ -181,6 +191,7 @@ The migration is additive and idempotent. It does not delete or rewrite legacy F
 | `opshop_pickup_tasks` | Actual dated OP SHOP pickup work. |
 | `opshop_countryside_route_groups` | Countryside route-group definitions. |
 | `delivery_run_sheets` / `delivery_run_sheet_rows` | Independent Generated/Saved Delivery Run Sheet snapshots. |
+| `delivery_run_sheet_outcomes` | Immutable per-row closeout outcomes, return reasons, later Delivery Dates, and trusted operator attribution. |
 | `opshop_pickup_collections` / `opshop_pickup_collection_rows` | Independent Generated/Saved OP SHOP Pickup Collection snapshots. |
 | `final_trip_summaries` and child tables | Legacy Final Summary compatibility/history data. |
 
@@ -326,7 +337,7 @@ Failed business events retain strict optional-date fields: `None`, empty and whi
 
 Logbook files may contain operational names, order identifiers, customer or company names, driver names, vehicle registrations, and OP SHOP information. Treat them as private runtime data: do not commit them, attach them to public issues, or share them without appropriate access controls.
 
-Current Delivery coverage includes order creation, update, cancellation and assignment; vehicle assignment changes; Run Sheet generation, cancellation and save; single and daily Run Sheet Excel exports; and Attaché confirmation batch summaries. `ATTACHE_IMPORT_CONFIRMED` is one summary event per attempted confirmation batch, while every successfully imported order continues to produce its existing `ORDER_CREATED` event.
+Current Delivery coverage includes order creation, update, cancellation and assignment; vehicle assignment changes; Run Sheet generation, cancellation, save and closeout; single and daily Run Sheet Excel exports; and Attaché confirmation batch summaries. Closeout records `DELIVERY_RUN_SHEET_CLOSED` plus per-order `DELIVERY_ORDER_DELIVERED` or `DELIVERY_ORDER_RETURNED_TO_POOL` events. `ATTACHE_IMPORT_CONFIRMED` is one summary event per attempted confirmation batch, while every successfully imported order continues to produce its existing `ORDER_CREATED` event.
 
 Current OP SHOP coverage includes Pickup Task creation, update, cancellation, assignment and Countryside assignment; Pickup Collection generation, cancellation and save; single and daily Pickup Collection Excel exports; Regular and Oncall template changes; Countryside route-group changes; and Countryside membership changes.
 

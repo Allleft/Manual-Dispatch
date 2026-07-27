@@ -2,6 +2,8 @@ import { createDeliveryAttacheImportModal } from "./delivery/delivery-attache-mo
 
 import { createDeliveryGenerationConfirmationModal } from "./delivery/delivery-generation-modal-renderer.js";
 
+import { createDeliveryCloseoutModal } from "./delivery/delivery-closeout-modal-renderer.js";
+
 import { createSavedRunSheetHistory } from "./delivery/delivery-history-renderer.js";
 
 import { createDeliveryOrderModal } from "./delivery/delivery-order-modal-renderer.js";
@@ -40,6 +42,9 @@ export function renderDeliveryWorkspace(
     if (state.deliveryActionError) {
       content.append(createStatus(state.deliveryActionError, "error"));
     }
+    if (state.deliveryActionSuccess) {
+      content.append(createStatus(state.deliveryActionSuccess, "success"));
+    }
     if (state.workspaceRoute === "delivery/task-pool") {
       content.append(createDeliveryTaskPool(state.deliveryBoard, state, actions));
     } else if (state.workspaceRoute === "delivery/trip-summary") {
@@ -66,6 +71,12 @@ export function renderDeliveryWorkspace(
     && state.deliveryGenerationConfirmation
   ) {
     page.append(createDeliveryGenerationConfirmationModal(state, actions));
+  }
+  if (
+    state.workspaceRoute === "delivery/run-sheet"
+    && state.deliveryRunSheetCloseout
+  ) {
+    page.append(createDeliveryCloseoutModal(state, actions));
   }
   root.append(page);
 }

@@ -268,6 +268,32 @@ def _ensure_manual_dispatch_columns(connection):
     )
     _ensure_column(
         connection,
+        "delivery_run_sheets",
+        "execution_status",
+        "TEXT NOT NULL DEFAULT 'OPEN'",
+    )
+    _ensure_column(connection, "delivery_run_sheets", "closed_at", "TEXT")
+    _ensure_column(
+        connection,
+        "delivery_run_sheets",
+        "closed_by_account_id",
+        "INTEGER",
+    )
+    _ensure_column(
+        connection,
+        "delivery_run_sheets",
+        "closed_by_account_name",
+        "TEXT",
+    )
+    connection.execute(
+        """
+        UPDATE delivery_run_sheets
+        SET execution_status = 'OPEN'
+        WHERE execution_status IS NULL OR TRIM(execution_status) = ''
+        """
+    )
+    _ensure_column(
+        connection,
         "final_trip_summary_opshop_pickup_rows",
         "pickup_category_snapshot",
         "TEXT",

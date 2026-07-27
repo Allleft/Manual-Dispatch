@@ -102,6 +102,10 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             ("POST", "/api/manual-dispatch/delivery/run-sheets/{run_sheet_id}/save"),
             (
                 "POST",
+                "/api/manual-dispatch/delivery/run-sheets/{run_sheet_id}/closeout",
+            ),
+            (
+                "POST",
                 "/api/manual-dispatch/delivery/run-sheets/{run_sheet_id}/cancel-generated",
             ),
             (

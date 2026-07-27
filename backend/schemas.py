@@ -713,6 +713,41 @@ class DeliveryRunSheetTrip:
 
 
 @dataclass
+class DeliveryRunSheetOutcome:
+    outcome_id: str
+    run_sheet_id: str
+    run_sheet_row_id: str
+    order_id: str
+    outcome: str
+    reason_code: Optional[str]
+    note: Optional[str]
+    next_delivery_date: Optional[str]
+    recorded_at: str
+    recorded_by_account_id: int
+    recorded_by_account_name: str
+
+
+@dataclass
+class DeliveryRunSheetCloseoutSummary:
+    delivered_count: int = 0
+    returned_to_pool_count: int = 0
+
+
+@dataclass
+class CloseDeliveryRunSheetRowRequest:
+    run_sheet_row_id: str
+    outcome: str
+    reason_code: Optional[str] = None
+    note: Optional[str] = None
+    next_delivery_date: Optional[str] = None
+
+
+@dataclass
+class CloseDeliveryRunSheetRequest:
+    rows: List[CloseDeliveryRunSheetRowRequest] = field(default_factory=list)
+
+
+@dataclass
 class DeliveryRunSheet:
     run_sheet_id: str
     dispatch_date: str
@@ -731,6 +766,14 @@ class DeliveryRunSheet:
     legacy_summary_id: Optional[str]
     trips: List[DeliveryRunSheetTrip] = field(default_factory=list)
     total_cartons: int = 0
+    execution_status: str = "OPEN"
+    closed_at: Optional[str] = None
+    closed_by_account_id: Optional[int] = None
+    closed_by_account_name: Optional[str] = None
+    outcomes: List[DeliveryRunSheetOutcome] = field(default_factory=list)
+    closeout_summary: DeliveryRunSheetCloseoutSummary = field(
+        default_factory=DeliveryRunSheetCloseoutSummary
+    )
 
 
 @dataclass

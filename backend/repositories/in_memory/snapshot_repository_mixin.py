@@ -1,6 +1,9 @@
 from dataclasses import replace
 from datetime import date
+
+from backend.errors import StateChangedConflictError
 from backend.schemas import (
+    DeliveryRunSheetCloseoutSummary,
     FinalTripSummary,
     FinalTripSummaryOpShopPickupSnapshot,
     FinalTripSummaryOrderSnapshot,
@@ -15,6 +18,14 @@ def _parse_iso_date(value):
     except (TypeError, ValueError):
         return None
     return parsed if parsed.isoformat() == value else None
+
+
+def _is_reserving_delivery_run_sheet(run_sheet):
+    return run_sheet.status == "GENERATED" or (
+        run_sheet.status == "SAVED"
+        and getattr(run_sheet, "execution_status", "OPEN") == "OPEN"
+    )
+
 
 class InMemorySnapshotRepositoryMixin:
     """Snapshot in-memory responsibilities."""
@@ -131,7 +142,7 @@ class InMemorySnapshotRepositoryMixin:
         return {
             order.task_id
             for run_sheet in self.delivery_run_sheets
-            if run_sheet.status in {"GENERATED", "SAVED"}
+            if _is_reserving_delivery_run_sheet(run_sheet)
             for trip in run_sheet.trips
             for order in trip.orders
             if order.task_type == "ORDER" and order.task_id
@@ -161,7 +172,7 @@ class InMemorySnapshotRepositoryMixin:
         reserving_sheets = [
             run_sheet
             for run_sheet in self.delivery_run_sheets
-            if run_sheet.status in {"GENERATED", "SAVED"}
+            if _is_reserving_delivery_run_sheet(run_sheet)
             and any(
                 order.task_type == "ORDER" and order.task_id == order_id
                 for trip in run_sheet.trips
@@ -221,6 +232,14 @@ class InMemorySnapshotRepositoryMixin:
         return bool(run_sheet and run_sheet.status == "SAVED")
 
     def upsert_delivery_run_sheet(self, run_sheet):
+        existing_sheet = self.get_delivery_run_sheet(run_sheet.run_sheet_id)
+        if (
+            existing_sheet
+            and getattr(existing_sheet, "execution_status", "OPEN") == "CLOSED"
+        ):
+            raise StateChangedConflictError(
+                "Closed Delivery Run Sheets are immutable."
+            )
         duplicate = next(
             (
                 existing
@@ -242,6 +261,77 @@ class InMemorySnapshotRepositoryMixin:
         ]
         self.delivery_run_sheets.append(run_sheet)
         return run_sheet
+
+    def insert_delivery_run_sheet_outcomes(self, outcomes):
+        outcomes_by_sheet = {}
+        for outcome in outcomes:
+            outcomes_by_sheet.setdefault(outcome.run_sheet_id, []).append(outcome)
+        known_sheet_ids = {
+            run_sheet.run_sheet_id for run_sheet in self.delivery_run_sheets
+        }
+        if not set(outcomes_by_sheet).issubset(known_sheet_ids):
+            raise StateChangedConflictError(
+                "Delivery Run Sheet outcome target does not exist."
+            )
+        for index, run_sheet in enumerate(self.delivery_run_sheets):
+            sheet_outcomes = outcomes_by_sheet.get(run_sheet.run_sheet_id)
+            if not sheet_outcomes:
+                continue
+            submitted_row_ids = [
+                outcome.run_sheet_row_id for outcome in sheet_outcomes
+            ]
+            if len(submitted_row_ids) != len(set(submitted_row_ids)):
+                raise StateChangedConflictError(
+                    "Delivery Run Sheet outcomes already exist."
+                )
+            existing_row_ids = {
+                outcome.run_sheet_row_id for outcome in run_sheet.outcomes
+            }
+            if any(
+                outcome.run_sheet_row_id in existing_row_ids
+                for outcome in sheet_outcomes
+            ):
+                raise StateChangedConflictError(
+                    "Delivery Run Sheet outcomes already exist."
+                )
+            combined = [*run_sheet.outcomes, *sheet_outcomes]
+            self.delivery_run_sheets[index] = replace(
+                run_sheet,
+                outcomes=combined,
+                closeout_summary=DeliveryRunSheetCloseoutSummary(
+                    delivered_count=sum(
+                        outcome.outcome == "DELIVERED" for outcome in combined
+                    ),
+                    returned_to_pool_count=sum(
+                        outcome.outcome == "RETURN_TO_POOL"
+                        for outcome in combined
+                    ),
+                ),
+            )
+
+    def mark_delivery_run_sheet_closed(
+        self,
+        run_sheet_id,
+        closed_at,
+        closed_by_account_id,
+        closed_by_account_name,
+    ):
+        for index, run_sheet in enumerate(self.delivery_run_sheets):
+            if (
+                run_sheet.run_sheet_id != run_sheet_id
+                or run_sheet.status != "SAVED"
+                or getattr(run_sheet, "execution_status", "OPEN") != "OPEN"
+            ):
+                continue
+            self.delivery_run_sheets[index] = replace(
+                run_sheet,
+                execution_status="CLOSED",
+                closed_at=closed_at,
+                closed_by_account_id=closed_by_account_id,
+                closed_by_account_name=closed_by_account_name,
+            )
+            return True
+        return False
 
     def promote_generated_delivery_run_sheet_to_saved(
         self,

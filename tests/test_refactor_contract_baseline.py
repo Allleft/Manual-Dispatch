@@ -57,9 +57,9 @@ class RefactorContractBaselineTest(unittest.TestCase):
             if getattr(route, "path", None)
         )
 
-        self.assertEqual(94, len(routes))
+        self.assertEqual(95, len(routes))
         self.assertEqual(
-            "ba78fbfaec1be553f8d33d7a06a2bfe8ef65eb8481d8a659dfc122eaa4485355",
+            "22cb6e31dcf3a11cfbb1c66ef30f84b4c53d43ecbbacb96b1bffa029c951e184",
             self._contract_digest(routes),
         )
 
@@ -97,9 +97,9 @@ class RefactorContractBaselineTest(unittest.TestCase):
         )
 
         public_methods = self._public_methods(ManualDispatchService)
-        self.assertEqual(94, len(public_methods))
+        self.assertEqual(95, len(public_methods))
         self.assertEqual(
-            "7e85257925908821c889c4cb3e07abf68c4914bae6a068c4a0b69ad4676dbf8e",
+            "415b277e405ced2f55bddf5f14cef0f686bc4de5277a47428098e8353f1ce2ec",
             self._contract_digest(public_methods),
         )
 
@@ -110,13 +110,13 @@ class RefactorContractBaselineTest(unittest.TestCase):
         )
 
         self.assertEqual(sqlite_methods, in_memory_methods)
-        self.assertEqual(110, len(sqlite_methods))
+        self.assertEqual(112, len(sqlite_methods))
         self.assertIn(
             "list_saved_opshop_pickup_dates_by_opshop_ids",
             {method["name"] for method in sqlite_methods},
         )
         self.assertEqual(
-            "39554c6e35aaff54c64b2ad84931a82bdbd144611b394fea1912d709d16b6c7f",
+            "35e4d4fefe7cba5cacb925d594101526424402a4426d0c30b6831b1a22f27aa8",
             self._contract_digest(sqlite_methods),
         )
 
@@ -191,19 +191,19 @@ class RefactorContractBaselineTest(unittest.TestCase):
         contract = json.loads(completed.stdout)
 
         self.assertEqual(["function", "function"], contract["rendererTypes"])
-        self.assertEqual(99, len(contract["apiExportNames"]))
+        self.assertEqual(100, len(contract["apiExportNames"]))
         self.assertEqual(
-            "d2f4b1cf7a4105b29dd6136afaa7b72ad67795a5002cd1cd2a65366a510b897d",
+            "31d14ad50a0415062c5844a12a9870e72c25c95b17dcdda9b249f53e175cd78a",
             self._contract_digest(contract["apiExportNames"]),
         )
-        self.assertEqual(80, len(contract["actionNames"]))
+        self.assertEqual(85, len(contract["actionNames"]))
         self.assertEqual(
-            "1d1ac64b33805a33afb51edad8c4433af7a81c407464bc4391e82127441facd6",
+            "8319704b921014cbfbb533fabce1293cde1c6376c16fe9712a0effdd2e4103b5",
             self._contract_digest(contract["actionNames"]),
         )
-        self.assertEqual(186, len(contract["stateFields"]))
+        self.assertEqual(188, len(contract["stateFields"]))
         self.assertEqual(
-            "8eefb11018c154012ced1f01c0c119313d3e12f36c0f9dc8a0b0377d51894971",
+            "f4eee2d5faa8986f4a236943a33e8b70363329eac2b1e6fc1b6bc26939e40aa6",
             self._contract_digest(contract["stateFields"]),
         )
 

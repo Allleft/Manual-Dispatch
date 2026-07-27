@@ -620,6 +620,11 @@
   background: var(--delivery-soft);
 }
 
+.workspace-page-delivery .workspace-badge-closed {
+  color: var(--success);
+  background: var(--success-soft);
+}
+
 .workspace-badge-saved {
   color: var(--success);
   background: var(--success-soft);
@@ -6475,6 +6480,111 @@ select:disabled {
   margin: 0;
 }
 
+.workspace-run-sheet-badges {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+
+.workspace-delivery-closeout-body {
+  display: grid;
+  gap: 1rem;
+}
+
+.workspace-delivery-closeout-summary {
+  margin: 0;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.workspace-delivery-closeout-list {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.workspace-delivery-closeout-row {
+  display: grid;
+  gap: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0.85rem;
+  background: #fff;
+}
+
+.workspace-delivery-closeout-row-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.workspace-delivery-closeout-row-heading strong,
+.workspace-delivery-closeout-row-heading span {
+  overflow-wrap: anywhere;
+}
+
+.workspace-delivery-closeout-row-heading span {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.workspace-delivery-closeout-row-context {
+  margin: -0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.workspace-delivery-closeout-fields {
+  margin: 0;
+}
+
+.workspace-delivery-closeout-actions {
+  justify-content: flex-end;
+  margin: 0;
+}
+
+.workspace-run-sheet-outcomes {
+  display: grid;
+  gap: 0.55rem;
+  border-top: 1px solid #d6dae0;
+  padding-top: 0.8rem;
+}
+
+.workspace-run-sheet-outcomes h4 {
+  margin: 0;
+  color: #111827;
+}
+
+.workspace-run-sheet-outcome-list {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.workspace-run-sheet-outcome {
+  display: grid;
+  gap: 0.2rem;
+  border: 1px solid #d6dae0;
+  border-radius: var(--radius-sm);
+  padding: 0.65rem 0.72rem;
+  background: #f8fafc;
+}
+
+.workspace-run-sheet-outcome strong {
+  color: #111827;
+  font-size: 0.84rem;
+}
+
+.workspace-run-sheet-outcome span {
+  color: #4b5563;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
 @media (max-width: 680px) {
   .workspace-generation-preview-row {
     align-items: flex-start;
@@ -6485,6 +6595,12 @@ select:disabled {
   .workspace-generation-preview-context {
     max-width: none;
     text-align: left;
+  }
+
+  .workspace-delivery-closeout-row-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.25rem;
   }
 }
 
