@@ -43,7 +43,7 @@ class H3OperationalSafetyTest(unittest.TestCase):
         self.assertEqual(
             [
                 "-r requirements.txt",
-                "httpx2==2.9.1",
+                "httpx==0.28.1",
                 "playwright==1.59.0",
             ],
             self._lines("requirements-dev.txt"),
