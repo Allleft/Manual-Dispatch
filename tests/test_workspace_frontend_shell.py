@@ -1082,7 +1082,8 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
 
     def test_delivery_ui_usability_refresh_contracts(self):
         for expected in (
-            "workspace-load-metrics",
+            "workspace-load-summary-fields",
+            "workspace-load-summary-field",
             "workspace-load-product-layout",
             "workspace-product-line-table-scroll",
             "dataset.productLineId",
@@ -1129,6 +1130,128 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn('form.addEventListener("submit"', self.delivery_renderer)
         self.assertIn('submit.type = "submit"', self.delivery_renderer)
         self.assertIn("event.preventDefault()", self.delivery_renderer)
+
+    def test_delivery_order_product_table_layout_contract(self):
+        product_block = self.delivery_renderer.split(
+            "export function createProductLineEditor", 1
+        )[1].split(
+            "export function createLoadAndProductLinesSection", 1
+        )[0]
+        load_block = self.delivery_renderer.split(
+            "export function createLoadAndProductLinesSection", 1
+        )[1].split(
+            "function createProductLineInput", 1
+        )[0]
+
+        self.assertEqual(1, product_block.count('document.createElement("table")'))
+        self.assertEqual(1, product_block.count('document.createElement("thead")'))
+        self.assertEqual(1, product_block.count('document.createElement("tbody")'))
+        self.assertEqual(2, product_block.count('document.createElement("tr")'))
+        self.assertEqual(1, product_block.count('const row = document.createElement("tr")'))
+        self.assertEqual(8, product_block.count("createProductLineCell("))
+        self.assertIn('document.createElement("colgroup")', product_block)
+        self.assertIn('"workspace-product-line-table-row"', product_block)
+        self.assertIn('"actions"', product_block)
+        self.assertIn("dataset.productLineId = line._draft_id", product_block)
+        self.assertIn('"Add Product Line"', product_block)
+        self.assertIn('"Remove product line"', product_block)
+        self.assertIn("Total Actual Quantity:", product_block)
+
+        self.assertEqual(1, load_block.count('"Load Summary"'))
+        self.assertNotIn("workspace-load-metrics", load_block)
+        self.assertIn("workspace-load-summary-fields", load_block)
+        self.assertEqual(3, load_block.count('["'))
+
+        for expected in (
+            "grid-template-rows: auto minmax(0, 1fr) auto",
+            ".workspace-modal-order > .workspace-modal-header",
+            "position: static",
+            ".workspace-modal-order > .workspace-order-modal-body",
+            "overflow-x: hidden",
+            ".workspace-modal-order > .workspace-modal-footer",
+            "grid-template-columns: repeat(3, minmax(160px, 1fr))",
+            "min-width: 1200px",
+            ".workspace-product-column-name { width: 280px; }",
+            "overflow-x: auto",
+            "word-break: normal",
+        ):
+            self.assertIn(expected, self.styles)
+        self.assertNotIn(".workspace-product-line-row {", self.styles)
+        self.assertNotIn("workspace-load-metrics", self.styles)
+
+    def test_delivery_order_product_line_actions_keep_stable_row_identity(self):
+        self._run_workspace_actions_script(
+            """
+            const state = {
+              deliveryOrderForm: {
+                product_lines: [
+                  {
+                    _draft_id: "LINE-A",
+                    product_code: "A",
+                    product_name: "Alpha",
+                    quantity: 1,
+                    unit: "BAG",
+                    package_quantity: 1,
+                    package_unit: "BAG1",
+                  },
+                  {
+                    _draft_id: "LINE-B",
+                    product_code: "B",
+                    product_name: "Beta",
+                    quantity: 2,
+                    unit: "CARTON",
+                    package_quantity: 2,
+                    package_unit: "BOX",
+                  },
+                ],
+              },
+            };
+            let renders = 0;
+            const actions = createWorkspaceActions({
+              state,
+              renderWorkspace: () => { renders += 1; },
+              api: {},
+            });
+
+            const changes = {
+              product_code: "RSING10KG",
+              product_name: "COLOUR RAGS 10KG NET",
+              quantity: "45",
+              unit: "BAG",
+              package_quantity: "45",
+              package_unit: "BAG10",
+            };
+            Object.entries(changes).forEach(([field, value]) => {
+              actions.updateDeliveryOrderProductLine("LINE-A", field, value);
+            });
+            const first = state.deliveryOrderForm.product_lines[0];
+            const second = state.deliveryOrderForm.product_lines[1];
+            if (first.product_name !== changes.product_name ||
+                first.quantity !== 45 ||
+                first.package_quantity !== 45) {
+              throw new Error("Stable row update did not update the requested fields");
+            }
+            if (second.product_code !== "B" || second.product_name !== "Beta") {
+              throw new Error("Stable row update changed a different product line");
+            }
+
+            actions.addDeliveryOrderProductLine();
+            const added = state.deliveryOrderForm.product_lines.at(-1);
+            if (!added._draft_id || state.deliveryOrderForm.product_lines.length !== 3) {
+              throw new Error("Add Product Line did not create a stable draft row");
+            }
+            actions.removeDeliveryOrderProductLine(added._draft_id);
+            if (state.deliveryOrderForm.product_lines.length !== 2 ||
+                state.deliveryOrderForm.product_lines.some(
+                  (line) => line._draft_id === added._draft_id
+                )) {
+              throw new Error("Remove Product Line did not remove the stable draft row");
+            }
+            if (renders !== 2) {
+              throw new Error("Add/remove render behavior changed");
+            }
+            """
+        )
 
     def test_delivery_date_excel_export_is_scoped_busy_and_non_mutating(self):
         self.assertIn(

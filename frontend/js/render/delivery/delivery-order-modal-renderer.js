@@ -52,7 +52,14 @@ export function createDeliveryOrderModal(state, actions) {
   }
 
   if (formMode) {
-    body.append(createDeliveryOrderForm(state, actions, formMode));
+    body.classList.add("workspace-order-modal-body");
+    const form = createDeliveryOrderForm(state, actions, formMode);
+    const footer = form.querySelector(".workspace-modal-footer");
+    footer?.remove();
+    body.append(form);
+    if (footer) {
+      modal.querySelector(".workspace-modal")?.append(footer);
+    }
   } else {
     const locked = isOrderCapturedByRunSheet(order, runSheets);
     body.append(
@@ -244,6 +251,17 @@ export function createProductLineEditor(lines, actions) {
   scroll.setAttribute("aria-label", "Editable product lines");
   const table = document.createElement("table");
   table.className = "workspace-product-line-table";
+  const columns = document.createElement("colgroup");
+  [
+    "sequence",
+    "code",
+    "name",
+    "actual-quantity",
+    "actual-unit",
+    "packaging-quantity",
+    "packaging-unit",
+    "actions",
+  ].forEach((name) => columns.append(createProductLineColumn(name)));
   const head = document.createElement("thead");
   const headRow = document.createElement("tr");
   ["#", "Product Code", "Product Name", "Actual Quantity", "Actual Unit", "Packaging Quantity", "Packaging Unit", "Actions"]
@@ -259,39 +277,39 @@ export function createProductLineEditor(lines, actions) {
   total.className = "workspace-product-line-total";
   (lines || []).forEach((line, index) => {
     const row = document.createElement("tr");
-    row.className = "workspace-product-line-row";
+    row.className = "workspace-product-line-table-row";
     row.dataset.productLineId = line._draft_id;
     row.append(
-      createProductLineCell(String(index + 1)),
+      createProductLineCell(String(index + 1), "sequence"),
       createProductLineCell(createProductLineInput("Product code", line.product_code, (value) =>
-        actions.updateDeliveryOrderProductLine(line._draft_id, "product_code", value))),
+        actions.updateDeliveryOrderProductLine(line._draft_id, "product_code", value)), "code"),
       createProductLineCell(createProductLineInput("Product name", line.product_name, (value) =>
-        actions.updateDeliveryOrderProductLine(line._draft_id, "product_name", value))),
+        actions.updateDeliveryOrderProductLine(line._draft_id, "product_name", value)), "name"),
       createProductLineCell(createProductLineInput("Actual quantity", line.quantity, (value) => {
         line.quantity = value;
         actions.updateDeliveryOrderProductLine(line._draft_id, "quantity", value);
         total.textContent = `Total Actual Quantity: ${formatProductLineTotals(lines)}`;
-      }, "number")),
+      }, "number"), "actual-quantity"),
       createProductLineCell(createProductLineInput("Actual unit", line.unit || "KG", (value) => {
         line.unit = value;
         actions.updateDeliveryOrderProductLine(line._draft_id, "unit", value);
         total.textContent = `Total Actual Quantity: ${formatProductLineTotals(lines)}`;
-      })),
+      }), "actual-unit"),
       createProductLineCell(createProductLineInput("Packaging quantity", line.package_quantity, (value) =>
-        actions.updateDeliveryOrderProductLine(line._draft_id, "package_quantity", value), "number")),
+        actions.updateDeliveryOrderProductLine(line._draft_id, "package_quantity", value), "number"), "packaging-quantity"),
       createProductLineCell(createProductLineInput("Packaging unit", line.package_unit, (value) =>
-        actions.updateDeliveryOrderProductLine(line._draft_id, "package_unit", value))),
+        actions.updateDeliveryOrderProductLine(line._draft_id, "package_unit", value)), "packaging-unit"),
       createProductLineCell(createActionButton("Remove product line", () =>
         actions.removeDeliveryOrderProductLine(line._draft_id), {
         iconName: "trash",
         iconOnly: true,
         accessibleLabel: `Remove product line ${index + 1}`,
         className: "workspace-product-line-remove",
-      })),
+      }), "actions"),
     );
     body.append(row);
   });
-  table.append(head, body);
+  table.append(columns, head, body);
   scroll.append(table);
   total.textContent = `Total Actual Quantity: ${formatProductLineTotals(lines)}`;
   section.append(heading, scroll, total);
@@ -309,40 +327,28 @@ export function createLoadAndProductLinesSection(formState, actions) {
   const subtitle = document.createElement("p");
   subtitle.textContent = "Review load quantities and product details before saving.";
   copy.append(title, subtitle);
-  const metrics = document.createElement("div");
-  metrics.className = "workspace-load-metrics";
-  const metricValues = {};
-  [
-    ["pallet_quantity", "Pallets"],
-    ["loose_bags_quantity", "Loose Bags"],
-    ["carton_quantity", "Cartons"],
-  ].forEach(([field, label]) => {
-    const card = document.createElement("span");
-    const value = document.createElement("strong");
-    value.textContent = String(formState[field] || 0);
-    const text = document.createElement("small");
-    text.textContent = label;
-    card.append(value, text);
-    metrics.append(card);
-    metricValues[field] = value;
-  });
-  header.append(copy, metrics);
+  header.append(copy);
   const content = document.createElement("div");
   content.className = "workspace-load-product-layout";
   const load = document.createElement("section");
   load.className = "workspace-load-editor";
   const loadTitle = document.createElement("h5");
   loadTitle.textContent = "Load Summary";
-  load.append(loadTitle);
+  const loadDescription = document.createElement("p");
+  loadDescription.textContent = "Review and update the delivery load quantities.";
+  const loadFields = document.createElement("div");
+  loadFields.className = "workspace-load-summary-fields";
+  load.append(loadTitle, loadDescription, loadFields);
   [
     ["pallet_quantity", "Pallets"],
     ["loose_bags_quantity", "Loose Bags"],
     ["carton_quantity", "Cartons"],
   ].forEach(([field, label]) => {
-    load.append(createBoundInput(label, formState[field], (value) => {
+    const control = createBoundInput(label, formState[field], (value) => {
       actions.updateDeliveryOrderForm(field, value);
-      metricValues[field].textContent = value || "0";
-    }, { type: "number" }));
+    }, { type: "number" });
+    control.classList.add("workspace-load-summary-field");
+    loadFields.append(control);
   });
   content.append(load, createProductLineEditor(formState.product_lines || [], actions));
   section.append(header, content);
@@ -361,8 +367,15 @@ function createProductLineInput(label, value, onInput, type = "text") {
   return input;
 }
 
-function createProductLineCell(content) {
+function createProductLineColumn(name) {
+  const column = document.createElement("col");
+  column.className = `workspace-product-column-${name}`;
+  return column;
+}
+
+function createProductLineCell(content, name) {
   const cell = document.createElement("td");
+  cell.className = `workspace-product-cell-${name}`;
   if (content?.nodeType) {
     cell.append(content);
   } else {
