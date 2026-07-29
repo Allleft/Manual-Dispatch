@@ -970,7 +970,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
 
         self.assertIn("workspace-daily-run-sheet-table-scroll", self.styles)
         self.assertIn("overflow-x: auto", self.styles)
-        self.assertIn("min-width: 1220px", self.styles)
+        self.assertIn("min-width: 1974px", self.styles)
         self.assertIn(".workspace-run-sheet-document-card", self.styles)
         self.assertIn(".workspace-run-sheet-date-group", self.styles)
         self.assertIn(".workspace-run-sheet-card-meta", self.styles)
@@ -1079,6 +1079,56 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             }
             """,
         )
+
+    def test_delivery_ui_usability_refresh_contracts(self):
+        for expected in (
+            "workspace-load-metrics",
+            "workspace-load-product-layout",
+            "workspace-product-line-table-scroll",
+            "dataset.productLineId",
+            "_draft_id",
+            "formatProductLineTotals",
+            '"Note (optional)"',
+        ):
+            self.assertIn(expected, self.delivery_renderer + self.workspace_actions)
+        self.assertIn(
+            "product_lines: (form.product_lines || []).map((line) => ({",
+            self.workspace_actions,
+        )
+
+        for expected in (
+            "workspace-attache-review-toolbar",
+            "Search invoice, order or customer",
+            "Filter invoice reviews",
+            "dataset.invoiceReviewId",
+            "applyAttacheReviewVisibility",
+            "Warnings / Parse Issues",
+            "updateDeliveryAttacheReviewSearch",
+            "updateDeliveryAttacheReviewFilter",
+        ):
+            self.assertIn(expected, self.delivery_renderer + self.workspace_actions)
+
+        for expected in (
+            "workspace-daily-run-sheet-table-region",
+            "Scroll horizontally to review all delivery and signature columns.",
+            "width: 1974px",
+            "word-break: normal",
+            "white-space: nowrap",
+        ):
+            self.assertIn(expected, self.delivery_renderer + self.styles)
+
+        update_block = self.workspace_actions.split(
+            "function updateDeliveryCloseoutRow", 1
+        )[1].split("function markAllDeliveryCloseoutRowsDelivered", 1)[0]
+        mark_all_block = self.workspace_actions.split(
+            "function markAllDeliveryCloseoutRowsDelivered", 1
+        )[1].split("async function submitDeliveryRunSheetCloseout", 1)[0]
+        self.assertNotIn("renderWorkspace()", update_block)
+        self.assertNotIn("renderWorkspace()", mark_all_block)
+        self.assertIn("patchDeliveryCloseoutCard", self.delivery_renderer)
+        self.assertIn('form.addEventListener("submit"', self.delivery_renderer)
+        self.assertIn('submit.type = "submit"', self.delivery_renderer)
+        self.assertIn("event.preventDefault()", self.delivery_renderer)
 
     def test_delivery_date_excel_export_is_scoped_busy_and_non_mutating(self):
         self.assertIn(

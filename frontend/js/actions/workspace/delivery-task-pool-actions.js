@@ -1,3 +1,10 @@
+let deliveryProductLineDraftSequence = 0;
+
+function nextDeliveryProductLineDraftId() {
+  deliveryProductLineDraftSequence += 1;
+  return `delivery-product-line-${deliveryProductLineDraftSequence}`;
+}
+
 export function createDeliveryTaskPoolActions(context) {
   const {
     api,
@@ -106,6 +113,7 @@ export function createDeliveryTaskPoolActions(context) {
       product_lines: [
         ...((state.deliveryOrderForm || {}).product_lines || []),
         {
+          _draft_id: nextDeliveryProductLineDraftId(),
           product_code: "",
           product_name: "",
           quantity: 0,
@@ -118,8 +126,12 @@ export function createDeliveryTaskPoolActions(context) {
     renderWorkspace();
   }
 
-  function updateDeliveryOrderProductLine(index, field, value) {
+  function updateDeliveryOrderProductLine(lineId, field, value) {
     const lines = [...((state.deliveryOrderForm || {}).product_lines || [])];
+    const index = lines.findIndex((line) => line._draft_id === lineId);
+    if (index < 0) {
+      return;
+    }
     lines[index] = {
       ...(lines[index] || {
         product_code: "",
@@ -139,11 +151,11 @@ export function createDeliveryTaskPoolActions(context) {
     };
   }
 
-  function removeDeliveryOrderProductLine(index) {
+  function removeDeliveryOrderProductLine(lineId) {
     state.deliveryOrderForm = {
       ...(state.deliveryOrderForm || {}),
       product_lines: ((state.deliveryOrderForm || {}).product_lines || []).filter(
-        (_line, lineIndex) => lineIndex !== index,
+        (line) => line._draft_id !== lineId,
       ),
     };
     renderWorkspace();
@@ -371,6 +383,7 @@ export function createDeliveryTaskPoolActions(context) {
       carton_quantity: String(order.carton_quantity ?? 0),
       note: order.note || "",
       product_lines: (order.product_lines || []).map((line) => ({
+        _draft_id: nextDeliveryProductLineDraftId(),
         product_code: line.product_code || "",
         product_name: line.product_name || "",
         quantity: Number(line.quantity || 0),

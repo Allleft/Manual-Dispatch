@@ -152,10 +152,17 @@ export function createDailyRunSheetPaper(
     operationalFields.append(field);
   });
 
+  const tableShell = document.createElement("section");
+  tableShell.className = "workspace-daily-run-sheet-table-region";
+  const tableHint = document.createElement("p");
+  tableHint.className = "workspace-daily-run-sheet-scroll-hint";
+  tableHint.id = `run-sheet-scroll-hint-${runSheet.run_sheet_id}`;
+  tableHint.textContent = "Scroll horizontally to review all delivery and signature columns.";
   const tableRegion = document.createElement("div");
   tableRegion.className = "workspace-daily-run-sheet-table-scroll";
   tableRegion.tabIndex = 0;
   tableRegion.setAttribute("aria-label", "Daily Run Sheet order table");
+  tableRegion.setAttribute("aria-describedby", tableHint.id);
   const table = document.createElement("table");
   table.className = "workspace-daily-run-sheet-table";
   const head = document.createElement("thead");
@@ -182,6 +189,7 @@ export function createDailyRunSheetPaper(
   });
   table.append(head, body);
   tableRegion.append(table);
+  tableShell.append(tableHint, tableRegion);
 
   const finish = document.createElement("p");
   finish.className = "workspace-daily-run-sheet-finish";
@@ -219,7 +227,7 @@ export function createDailyRunSheetPaper(
   if (!embedded) {
     paper.append(metadata);
   }
-  paper.append(operationalFields, tableRegion, finish);
+  paper.append(operationalFields, tableShell, finish);
   if (isHistory && (runSheet.outcomes || []).length) {
     paper.append(createRunSheetOutcomeDetails(runSheet));
   }

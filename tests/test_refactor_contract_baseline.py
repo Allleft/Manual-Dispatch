@@ -196,9 +196,9 @@ class RefactorContractBaselineTest(unittest.TestCase):
             "31d14ad50a0415062c5844a12a9870e72c25c95b17dcdda9b249f53e175cd78a",
             self._contract_digest(contract["apiExportNames"]),
         )
-        self.assertEqual(85, len(contract["actionNames"]))
+        self.assertEqual(87, len(contract["actionNames"]))
         self.assertEqual(
-            "8319704b921014cbfbb533fabce1293cde1c6376c16fe9712a0effdd2e4103b5",
+            "2dc79338aeba07a83d190876436ee42893c3d248a252a89a34592f10a8785d8e",
             self._contract_digest(contract["actionNames"]),
         )
         self.assertEqual(188, len(contract["stateFields"]))

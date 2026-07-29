@@ -144,7 +144,7 @@ export function createDeliveryRunSheetActions(context) {
       row.next_delivery_date = "";
     }
     draft.error = "";
-    renderWorkspace();
+    return row;
   }
 
   function markAllDeliveryCloseoutRowsDelivered() {
@@ -159,7 +159,7 @@ export function createDeliveryRunSheetActions(context) {
       row.next_delivery_date = "";
     });
     draft.error = "";
-    renderWorkspace();
+    return draft;
   }
 
   async function submitDeliveryRunSheetCloseout() {
@@ -174,8 +174,7 @@ export function createDeliveryRunSheetActions(context) {
     const error = validateDeliveryCloseoutDraft(draft);
     if (error) {
       draft.error = error;
-      renderWorkspace();
-      return;
+      return { error };
     }
     if (!confirmAction(buildDeliveryCloseoutConfirmation(draft))) {
       return;

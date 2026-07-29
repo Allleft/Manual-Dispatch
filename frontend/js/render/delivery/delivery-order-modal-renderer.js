@@ -203,15 +203,7 @@ export function createDeliveryOrderForm(state, actions, formMode) {
         }))),
       ], (value) => actions.updateDeliveryOrderForm("preferred_driver_id", value)),
     ]),
-    createFormSection("Load and Product Lines", [
-      createBoundInput("Pallet Quantity", formState.pallet_quantity, (value) =>
-        actions.updateDeliveryOrderForm("pallet_quantity", value), { type: "number" }),
-      createBoundInput("Loose Bags Quantity", formState.loose_bags_quantity, (value) =>
-        actions.updateDeliveryOrderForm("loose_bags_quantity", value), { type: "number" }),
-      createBoundInput("Carton Quantity", formState.carton_quantity, (value) =>
-        actions.updateDeliveryOrderForm("carton_quantity", value), { type: "number" }),
-      createProductLineEditor(formState.product_lines || [], actions),
-    ]),
+    createLoadAndProductLinesSection(formState, actions),
     createFormSection("Notes", [
       createBoundTextarea("Notes", formState.note || "", (value) =>
         actions.updateDeliveryOrderForm("note", value)),
@@ -238,32 +230,152 @@ export function createDeliveryOrderForm(state, actions, formMode) {
 export function createProductLineEditor(lines, actions) {
   const section = document.createElement("section");
   section.className = "workspace-product-line-editor";
-  const title = document.createElement("h4");
-  title.textContent = "Product Lines";
-  const list = document.createElement("div");
-  list.className = "workspace-product-line-list";
+  const heading = document.createElement("div");
+  heading.className = "workspace-load-product-heading";
+  const title = document.createElement("h5");
+  title.textContent = `Product Lines (${lines.length})`;
+  heading.append(title, createActionButton("Add Product Line", actions.addDeliveryOrderProductLine, {
+    iconName: "plus",
+    className: "workspace-product-line-add",
+  }));
+  const scroll = document.createElement("div");
+  scroll.className = "workspace-product-line-table-scroll";
+  scroll.tabIndex = 0;
+  scroll.setAttribute("aria-label", "Editable product lines");
+  const table = document.createElement("table");
+  table.className = "workspace-product-line-table";
+  const head = document.createElement("thead");
+  const headRow = document.createElement("tr");
+  ["#", "Product Code", "Product Name", "Actual Quantity", "Actual Unit", "Packaging Quantity", "Packaging Unit", "Actions"]
+    .forEach((label) => {
+      const cell = document.createElement("th");
+      cell.scope = "col";
+      cell.textContent = label;
+      headRow.append(cell);
+    });
+  head.append(headRow);
+  const body = document.createElement("tbody");
+  const total = document.createElement("p");
+  total.className = "workspace-product-line-total";
   (lines || []).forEach((line, index) => {
-    const row = document.createElement("div");
+    const row = document.createElement("tr");
     row.className = "workspace-product-line-row";
+    row.dataset.productLineId = line._draft_id;
     row.append(
-      createBoundInput("Product Code", line.product_code || "", (value) =>
-        actions.updateDeliveryOrderProductLine(index, "product_code", value)),
-      createBoundInput("Product Name", line.product_name || "", (value) =>
-        actions.updateDeliveryOrderProductLine(index, "product_name", value)),
-      createBoundInput("Actual Quantity", line.quantity ?? 0, (value) =>
-        actions.updateDeliveryOrderProductLine(index, "quantity", value), { type: "number" }),
-      createBoundInput("Actual Unit", line.unit || "KG", (value) =>
-        actions.updateDeliveryOrderProductLine(index, "unit", value)),
-      createBoundInput("Packaging Quantity", line.package_quantity ?? "", (value) =>
-        actions.updateDeliveryOrderProductLine(index, "package_quantity", value), {
-        type: "number",
-      }),
-      createBoundInput("Packaging Unit", line.package_unit || "", (value) =>
-        actions.updateDeliveryOrderProductLine(index, "package_unit", value)),
-      createActionButton("Remove", () => actions.removeDeliveryOrderProductLine(index)),
+      createProductLineCell(String(index + 1)),
+      createProductLineCell(createProductLineInput("Product code", line.product_code, (value) =>
+        actions.updateDeliveryOrderProductLine(line._draft_id, "product_code", value))),
+      createProductLineCell(createProductLineInput("Product name", line.product_name, (value) =>
+        actions.updateDeliveryOrderProductLine(line._draft_id, "product_name", value))),
+      createProductLineCell(createProductLineInput("Actual quantity", line.quantity, (value) => {
+        line.quantity = value;
+        actions.updateDeliveryOrderProductLine(line._draft_id, "quantity", value);
+        total.textContent = `Total Actual Quantity: ${formatProductLineTotals(lines)}`;
+      }, "number")),
+      createProductLineCell(createProductLineInput("Actual unit", line.unit || "KG", (value) => {
+        line.unit = value;
+        actions.updateDeliveryOrderProductLine(line._draft_id, "unit", value);
+        total.textContent = `Total Actual Quantity: ${formatProductLineTotals(lines)}`;
+      })),
+      createProductLineCell(createProductLineInput("Packaging quantity", line.package_quantity, (value) =>
+        actions.updateDeliveryOrderProductLine(line._draft_id, "package_quantity", value), "number")),
+      createProductLineCell(createProductLineInput("Packaging unit", line.package_unit, (value) =>
+        actions.updateDeliveryOrderProductLine(line._draft_id, "package_unit", value))),
+      createProductLineCell(createActionButton("Remove product line", () =>
+        actions.removeDeliveryOrderProductLine(line._draft_id), {
+        iconName: "trash",
+        iconOnly: true,
+        accessibleLabel: `Remove product line ${index + 1}`,
+        className: "workspace-product-line-remove",
+      })),
     );
-    list.append(row);
+    body.append(row);
   });
-  section.append(title, list, createActionButton("Add Product Line", actions.addDeliveryOrderProductLine));
+  table.append(head, body);
+  scroll.append(table);
+  total.textContent = `Total Actual Quantity: ${formatProductLineTotals(lines)}`;
+  section.append(heading, scroll, total);
   return section;
+}
+
+export function createLoadAndProductLinesSection(formState, actions) {
+  const section = document.createElement("section");
+  section.className = "workspace-form-section workspace-load-product-section";
+  const header = document.createElement("div");
+  header.className = "workspace-load-product-header";
+  const copy = document.createElement("div");
+  const title = document.createElement("h4");
+  title.textContent = "Load and Product Lines";
+  const subtitle = document.createElement("p");
+  subtitle.textContent = "Review load quantities and product details before saving.";
+  copy.append(title, subtitle);
+  const metrics = document.createElement("div");
+  metrics.className = "workspace-load-metrics";
+  const metricValues = {};
+  [
+    ["pallet_quantity", "Pallets"],
+    ["loose_bags_quantity", "Loose Bags"],
+    ["carton_quantity", "Cartons"],
+  ].forEach(([field, label]) => {
+    const card = document.createElement("span");
+    const value = document.createElement("strong");
+    value.textContent = String(formState[field] || 0);
+    const text = document.createElement("small");
+    text.textContent = label;
+    card.append(value, text);
+    metrics.append(card);
+    metricValues[field] = value;
+  });
+  header.append(copy, metrics);
+  const content = document.createElement("div");
+  content.className = "workspace-load-product-layout";
+  const load = document.createElement("section");
+  load.className = "workspace-load-editor";
+  const loadTitle = document.createElement("h5");
+  loadTitle.textContent = "Load Summary";
+  load.append(loadTitle);
+  [
+    ["pallet_quantity", "Pallets"],
+    ["loose_bags_quantity", "Loose Bags"],
+    ["carton_quantity", "Cartons"],
+  ].forEach(([field, label]) => {
+    load.append(createBoundInput(label, formState[field], (value) => {
+      actions.updateDeliveryOrderForm(field, value);
+      metricValues[field].textContent = value || "0";
+    }, { type: "number" }));
+  });
+  content.append(load, createProductLineEditor(formState.product_lines || [], actions));
+  section.append(header, content);
+  return section;
+}
+
+function createProductLineInput(label, value, onInput, type = "text") {
+  const input = document.createElement("input");
+  input.type = type;
+  input.setAttribute("aria-label", label);
+  if (type === "number") {
+    input.setAttribute("min", "0");
+  }
+  input.value = value ?? "";
+  input.addEventListener("input", () => onInput(input.value));
+  return input;
+}
+
+function createProductLineCell(content) {
+  const cell = document.createElement("td");
+  if (content?.nodeType) {
+    cell.append(content);
+  } else {
+    cell.textContent = content;
+  }
+  return cell;
+}
+
+export function formatProductLineTotals(lines) {
+  const totals = new Map();
+  (lines || []).forEach((line) => {
+    const unit = String(line.unit || "unit").trim().toUpperCase() || "UNIT";
+    totals.set(unit, (totals.get(unit) || 0) + Number(line.quantity || 0));
+  });
+  return [...totals.entries()].map(([unit, quantity]) => `${quantity} ${unit}`).join(" · ") || "0";
 }

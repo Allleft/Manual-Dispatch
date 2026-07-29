@@ -65,6 +65,8 @@ export const state = {
     files: [],
     rows: [],
     expandedRowIds: {},
+    search: "",
+    filter: "ALL",
     error: "",
     success: "",
   },

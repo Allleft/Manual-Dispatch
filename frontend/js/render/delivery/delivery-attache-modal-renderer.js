@@ -142,17 +142,13 @@ export function createDeliveryAttachePreview(importState, actions) {
     return section;
   }
   section.append(createAttacheSummaryStrip(rows));
-  const selectionRow = document.createElement("div");
-  selectionRow.className = "workspace-action-row workspace-attache-selection-row";
-  selectionRow.append(
-    createActionButton("Select all ready", actions.selectAllReadyDeliveryAttacheRows),
-    createActionButton("Clear selection", actions.clearDeliveryAttacheImportSelection),
-  );
+  const selectionRow = createAttacheReviewToolbar(importState, actions);
   const list = document.createElement("div");
   list.className = "workspace-attache-review-list";
   rows.forEach((row) => {
     list.append(createAttacheReviewRow(row, importState, actions));
   });
+  applyAttacheReviewVisibility(list, importState.search, importState.filter);
   const selectedCount = rows.filter((row) => row.selected && row.importable && !row.is_duplicate).length;
   const footer = document.createElement("footer");
   footer.className = "workspace-modal-footer workspace-modal-footer-sticky";
@@ -191,6 +187,14 @@ export function createAttacheSummaryStrip(rows) {
 export function createAttacheReviewRow(row, importState, actions) {
   const card = document.createElement("article");
   card.className = "workspace-attache-review-card";
+  card.dataset.invoiceReviewId = row.row_id;
+  card.dataset.invoiceSearch = [
+    row.invoice_number,
+    row.order_no,
+    row.company_name,
+  ].map((value) => String(value || "").toLowerCase()).join(" ");
+  card.dataset.invoiceStatus = attacheRowStatus(row).toUpperCase().replaceAll(" ", "_");
+  card.dataset.invoiceSelected = row.selected ? "true" : "false";
   const expanded = Boolean((importState.expandedRowIds || {})[row.row_id]);
   const status = attacheRowStatus(row);
   const header = document.createElement("div");
@@ -199,6 +203,7 @@ export function createAttacheReviewRow(row, importState, actions) {
   checkbox.type = "checkbox";
   checkbox.checked = Boolean(row.selected);
   checkbox.disabled = importState.isCommitting || row.is_duplicate || !row.importable;
+  checkbox.setAttribute("aria-label", `Select invoice ${formatOptional(row.invoice_number, row.row_id)}`);
   checkbox.addEventListener("change", () => actions.toggleDeliveryAttacheImportRow(row.row_id, checkbox.checked));
   const summary = document.createElement("div");
   summary.className = "workspace-attache-review-summary";
@@ -261,17 +266,20 @@ export function createAttacheExpandedEditor(row, actions) {
       createInlineField("Carton Quantity", createInlineInput(row.carton_quantity, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "carton_quantity", Number(value || 0)), "number")),
     ]),
     createFormSection("Product Lines", [createAttacheProductLineEditor(row, actions)]),
+    (row.warnings || []).length
+      ? createAttacheWarnings(row.warnings)
+      : document.createDocumentFragment(),
     createFormSection("Notes", [createInlineField("Notes", createInlineTextarea(row.note, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "note", value)))]),
   );
   return wrapper;
 }
 
 export function attacheRowStatus(row) {
-  if (!row.importable) {
-    return "Not importable";
-  }
   if (row.is_duplicate) {
     return "Duplicate";
+  }
+  if (!row.importable) {
+    return "Not importable";
   }
   if ((row.warnings || []).length) {
     return "Warning";
@@ -282,15 +290,105 @@ export function attacheRowStatus(row) {
 export function createInlineMeta(labelText, value) {
   const item = document.createElement("span");
   item.className = "workspace-inline-meta";
-  item.textContent = `${labelText}: ${formatOptional(value)}`;
+  const label = document.createElement("span");
+  label.textContent = labelText;
+  const content = document.createElement("strong");
+  content.textContent = formatOptional(value);
+  item.append(label, content);
   return item;
 }
 
 export function createMetricPill(labelText, value) {
   const pill = document.createElement("span");
   pill.className = "workspace-metric-pill";
-  pill.textContent = `${labelText}: ${value}`;
+  const label = document.createElement("span");
+  label.textContent = labelText;
+  const content = document.createElement("strong");
+  content.textContent = value;
+  pill.append(label, content);
   return pill;
+}
+
+export function createAttacheReviewToolbar(importState, actions) {
+  const toolbar = document.createElement("div");
+  toolbar.className = "workspace-attache-review-toolbar";
+  const selection = document.createElement("div");
+  selection.className = "workspace-action-row workspace-attache-selection-row";
+  selection.append(
+    createActionButton("Select all ready", actions.selectAllReadyDeliveryAttacheRows),
+    createActionButton("Clear selection", actions.clearDeliveryAttacheImportSelection),
+  );
+  const display = document.createElement("div");
+  display.className = "workspace-attache-display-controls";
+  const filter = document.createElement("select");
+  filter.setAttribute("aria-label", "Filter invoice reviews");
+  [
+    ["ALL", "All invoices"],
+    ["READY", "Ready"],
+    ["WARNING", "Warning"],
+    ["DUPLICATE", "Duplicate"],
+    ["NOT_IMPORTABLE", "Not importable"],
+    ["SELECTED", "Selected"],
+  ].forEach(([value, label]) => {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = label;
+    filter.append(option);
+  });
+  filter.value = importState.filter || "ALL";
+  const search = document.createElement("input");
+  search.type = "search";
+  search.placeholder = "Search invoice, order or customer";
+  search.setAttribute("aria-label", "Search invoice reviews");
+  const refresh = () => {
+    applyAttacheReviewVisibility(
+      toolbar.parentElement?.querySelector(".workspace-attache-review-list"),
+      search.value,
+      filter.value,
+    );
+  };
+  search.value = importState.search || "";
+  search.addEventListener("input", () => {
+    actions.updateDeliveryAttacheReviewSearch(search.value);
+    refresh();
+  });
+  filter.addEventListener("change", () => {
+    actions.updateDeliveryAttacheReviewFilter(filter.value);
+    refresh();
+  });
+  display.append(filter, search);
+  toolbar.append(selection, display);
+  return toolbar;
+}
+
+export function applyAttacheReviewVisibility(list, searchValue = "", filterValue = "ALL") {
+  if (!list) {
+    return;
+  }
+  const search = String(searchValue || "").trim().toLowerCase();
+  [...list.querySelectorAll("[data-invoice-review-id]")].forEach((card) => {
+    const matchesSearch = !search || card.dataset.invoiceSearch.includes(search);
+    const matchesFilter = filterValue === "ALL"
+      || (filterValue === "SELECTED"
+        ? card.dataset.invoiceSelected === "true"
+        : card.dataset.invoiceStatus === filterValue);
+    card.hidden = !(matchesSearch && matchesFilter);
+  });
+}
+
+function createAttacheWarnings(warnings) {
+  const section = document.createElement("section");
+  section.className = "workspace-attache-warning-panel";
+  const title = document.createElement("h4");
+  title.textContent = "Warnings / Parse Issues";
+  const list = document.createElement("ul");
+  warnings.forEach((warning) => {
+    const item = document.createElement("li");
+    item.textContent = warning;
+    list.append(item);
+  });
+  section.append(title, list);
+  return section;
 }
 
 export function createInlineField(labelText, control) {
