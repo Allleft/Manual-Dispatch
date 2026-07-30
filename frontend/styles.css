@@ -7388,6 +7388,21 @@ select:disabled {
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+
+.workspace-modal-delivery-closeout {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(1500px, calc(100vw - 2rem));
+  max-width: 96vw;
+  max-height: min(94vh, 1000px);
+  overflow: hidden;
+  padding: 0;
+}
+
+.workspace-modal-delivery-closeout > .workspace-modal-header {
+  position: static;
 }
 
 .workspace-delivery-closeout-form {
@@ -7398,6 +7413,10 @@ select:disabled {
 
 .workspace-delivery-closeout-list {
   min-height: 0;
+}
+
+.workspace-delivery-closeout-validation:empty {
+  display: none;
 }
 
 .workspace-delivery-closeout-bulk {
@@ -7411,11 +7430,11 @@ select:disabled {
 }
 
 .workspace-delivery-closeout-actions {
-  position: sticky;
-  bottom: -1.25rem;
+  position: relative;
   z-index: 2;
+  margin: 0;
   border-top: 1px solid rgba(31, 101, 232, 0.1);
-  padding: 0.85rem 0 1.25rem;
+  padding: 1rem 1.5rem;
   background: #fff;
 }
 

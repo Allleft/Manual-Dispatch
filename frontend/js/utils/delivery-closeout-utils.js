@@ -22,6 +22,7 @@ export function createDeliveryCloseoutDraft(runSheet) {
         reason_code: "",
         note: "",
         next_delivery_date: "",
+        validation_errors: {},
         row_no: order.row_no,
         trip_no: order.trip_no || trip.trip_no,
         order_label:
@@ -41,26 +42,40 @@ export function validateDeliveryCloseoutDraft(draft) {
     return "This Delivery Run Sheet has no orders to close.";
   }
   for (const row of draft.rows) {
-    if (!["DELIVERED", "RETURN_TO_POOL"].includes(row.outcome)) {
-      return `Choose an outcome for ${row.order_label}.`;
-    }
-    if (row.outcome !== "RETURN_TO_POOL") {
-      continue;
-    }
-    if (!DELIVERY_RETURN_REASONS.some(([code]) => code === row.reason_code)) {
-      return `Choose a return reason for ${row.order_label}.`;
-    }
-    if (!row.next_delivery_date) {
-      return `Choose the next delivery date for ${row.order_label}.`;
-    }
-    if (row.next_delivery_date <= draft.delivery_date) {
-      return `The next delivery date for ${row.order_label} must be later than ${draft.delivery_date}.`;
-    }
-    if (row.reason_code === "OTHER" && !String(row.note || "").trim()) {
-      return `Add a note for the Other reason on ${row.order_label}.`;
+    const error = Object.values(
+      getDeliveryCloseoutRowErrors(row, draft.delivery_date),
+    )[0];
+    if (error) {
+      return error;
     }
   }
   return "";
+}
+
+export function getDeliveryCloseoutRowErrors(row, deliveryDate) {
+  if (!["DELIVERED", "RETURN_TO_POOL"].includes(row?.outcome)) {
+    return {
+      outcome: `Choose an outcome for ${row?.order_label}.`,
+    };
+  }
+  if (row.outcome !== "RETURN_TO_POOL") {
+    return {};
+  }
+  const errors = {};
+  if (!DELIVERY_RETURN_REASONS.some(([code]) => code === row.reason_code)) {
+    errors.reason_code = `Choose a return reason for ${row.order_label}.`;
+  }
+  if (!row.next_delivery_date) {
+    errors.next_delivery_date =
+      `Choose the next delivery date for ${row.order_label}.`;
+  } else if (row.next_delivery_date <= deliveryDate) {
+    errors.next_delivery_date =
+      `The next delivery date for ${row.order_label} must be later than ${deliveryDate}.`;
+  }
+  if (row.reason_code === "OTHER" && !String(row.note || "").trim()) {
+    errors.note = `Add a note for the Other reason on ${row.order_label}.`;
+  }
+  return errors;
 }
 
 export function buildDeliveryCloseoutPayload(draft) {

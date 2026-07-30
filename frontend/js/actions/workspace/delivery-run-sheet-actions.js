@@ -2,6 +2,7 @@ import {
   buildDeliveryCloseoutConfirmation,
   buildDeliveryCloseoutPayload,
   createDeliveryCloseoutDraft,
+  getDeliveryCloseoutRowErrors,
   validateDeliveryCloseoutDraft,
 } from "../../utils/delivery-closeout-utils.js";
 
@@ -137,11 +138,31 @@ export function createDeliveryRunSheetActions(context) {
     if (!row) {
       return;
     }
+    const previousErrors = { ...(row.validation_errors || {}) };
     row[field] = value;
     if (field === "outcome" && value !== "RETURN_TO_POOL") {
       row.reason_code = "";
       row.note = "";
       row.next_delivery_date = "";
+    }
+    if (field === "outcome") {
+      row.validation_errors = {};
+    } else {
+      const currentErrors = getDeliveryCloseoutRowErrors(
+        row,
+        draft.delivery_date,
+      );
+      if (Object.prototype.hasOwnProperty.call(previousErrors, field)) {
+        if (currentErrors[field]) {
+          previousErrors[field] = currentErrors[field];
+        } else {
+          delete previousErrors[field];
+        }
+      }
+      if (field === "reason_code" && value !== "OTHER") {
+        delete previousErrors.note;
+      }
+      row.validation_errors = previousErrors;
     }
     draft.error = "";
     return row;
@@ -157,6 +178,7 @@ export function createDeliveryRunSheetActions(context) {
       row.reason_code = "";
       row.note = "";
       row.next_delivery_date = "";
+      row.validation_errors = {};
     });
     draft.error = "";
     return draft;
@@ -171,10 +193,16 @@ export function createDeliveryRunSheetActions(context) {
     if (state.deliveryBusyActionKeys?.[actionKey]) {
       return;
     }
+    draft.rows.forEach((row) => {
+      row.validation_errors = getDeliveryCloseoutRowErrors(
+        row,
+        draft.delivery_date,
+      );
+    });
     const error = validateDeliveryCloseoutDraft(draft);
     if (error) {
       draft.error = error;
-      return { error };
+      return { error, validation: true };
     }
     if (!confirmAction(buildDeliveryCloseoutConfirmation(draft))) {
       return;

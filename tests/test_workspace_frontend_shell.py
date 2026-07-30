@@ -1052,7 +1052,22 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             if (!module.validateDeliveryCloseoutDraft(draft).includes("Choose an outcome")) {
               throw new Error("Missing outcomes were not rejected");
             }
+            const missingOutcomeErrors = module.getDeliveryCloseoutRowErrors(
+              draft.rows[0],
+              draft.delivery_date,
+            );
+            if (Object.keys(missingOutcomeErrors).join(",") !== "outcome") {
+              throw new Error("Missing outcome leaked return-specific errors");
+            }
             draft.rows[0].outcome = "DELIVERED";
+            draft.rows[0].reason_code = "OTHER";
+            draft.rows[0].next_delivery_date = "";
+            if (Object.keys(module.getDeliveryCloseoutRowErrors(
+              draft.rows[0],
+              draft.delivery_date,
+            )).length) {
+              throw new Error("Delivered row retained return-specific errors");
+            }
             draft.rows[1].outcome = "RETURN_TO_POOL";
             draft.rows[1].reason_code = "OTHER";
             draft.rows[1].next_delivery_date = "2026-07-29";
@@ -1130,6 +1145,158 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn('form.addEventListener("submit"', self.delivery_renderer)
         self.assertIn('submit.type = "submit"', self.delivery_renderer)
         self.assertIn("event.preventDefault()", self.delivery_renderer)
+
+    def test_delivery_closeout_footer_and_local_validation_contract(self):
+        closeout_renderer = self._read(
+            "js/render/delivery/delivery-closeout-modal-renderer.js"
+        )
+        closeout_styles = self.styles.split(
+            ".workspace-modal-delivery-closeout", 1
+        )[1].split("@media (max-width: 1024px)", 1)[0]
+
+        for expected in (
+            'modalShell.classList.add("workspace-modal-delivery-closeout")',
+            "body.dataset.deliveryCloseoutScrollContainer",
+            'form.id = "workspace-delivery-closeout-form"',
+            'cancel.type = "button"',
+            'submit.type = "submit"',
+            'submit.setAttribute("form", form.id)',
+            "body.append(form)",
+            "modalShell.append(actionsRow)",
+            "patchDeliveryCloseoutValidation(card, row)",
+            "data-closeout-field",
+            "dataset.closeoutErrorFor",
+        ):
+            self.assertIn(expected, closeout_renderer)
+        self.assertNotIn("form.append(actionsRow)", closeout_renderer)
+
+        for expected in (
+            "grid-template-rows: auto minmax(0, 1fr) auto",
+            "overflow: hidden",
+            "position: static",
+            "overflow-y: auto",
+            "overscroll-behavior-y: contain",
+            ".workspace-delivery-closeout-actions",
+            "position: relative",
+        ):
+            self.assertIn(expected, self.styles)
+        actions_styles = closeout_styles.split(
+            ".workspace-delivery-closeout-actions", 1
+        )[1]
+        self.assertNotIn("position: absolute", actions_styles)
+        self.assertNotIn("position: fixed", actions_styles)
+        self.assertNotIn("position: sticky", actions_styles)
+
+    def test_delivery_closeout_field_errors_follow_current_draft(self):
+        self._run_workspace_actions_script(
+            """
+            const state = {
+              deliveryRunSheetCloseout: {
+                run_sheet_id: "DRS-VALIDATION",
+                delivery_date: "2026-07-29",
+                driver_name: "Driver",
+                error: "",
+                rows: [
+                  {
+                    run_sheet_row_id: "ROW-A",
+                    order_label: "184068",
+                    outcome: "RETURN_TO_POOL",
+                    reason_code: "",
+                    next_delivery_date: "",
+                    note: "",
+                    validation_errors: {},
+                  },
+                  {
+                    run_sheet_row_id: "ROW-B",
+                    order_label: "184069",
+                    outcome: "DELIVERED",
+                    reason_code: "",
+                    next_delivery_date: "",
+                    note: "Delivered note",
+                    validation_errors: {},
+                  },
+                ],
+              },
+              deliveryBusyActionKeys: {},
+            };
+            let apiCalls = 0;
+            let renders = 0;
+            const actions = createWorkspaceActions({
+              state,
+              renderWorkspace: () => { renders += 1; },
+              confirmAction: () => true,
+              api: {
+                closeDeliveryRunSheet: async () => {
+                  apiCalls += 1;
+                  return {};
+                },
+              },
+            });
+            const draft = state.deliveryRunSheetCloseout;
+            const first = draft.rows[0];
+            const second = draft.rows[1];
+
+            await actions.submitDeliveryRunSheetCloseout();
+            if (!first.validation_errors.reason_code ||
+                !first.validation_errors.next_delivery_date) {
+              throw new Error("Submit did not create field-level return errors");
+            }
+            const secondErrors = JSON.stringify(second.validation_errors);
+
+            actions.updateDeliveryCloseoutRow("ROW-A", "outcome", "DELIVERED");
+            if (Object.keys(first.validation_errors).length ||
+                JSON.stringify(second.validation_errors) !== secondErrors) {
+              throw new Error("Delivered outcome did not clear only its row errors");
+            }
+
+            actions.updateDeliveryCloseoutRow("ROW-A", "outcome", "");
+            await actions.submitDeliveryRunSheetCloseout();
+            if (Object.keys(first.validation_errors).join(",") !== "outcome") {
+              throw new Error("Empty outcome retained return-specific errors");
+            }
+
+            actions.updateDeliveryCloseoutRow(
+              "ROW-A",
+              "outcome",
+              "RETURN_TO_POOL",
+            );
+            await actions.submitDeliveryRunSheetCloseout();
+            actions.updateDeliveryCloseoutRow(
+              "ROW-A",
+              "reason_code",
+              "TIME_RAN_OUT",
+            );
+            if (first.validation_errors.reason_code ||
+                !first.validation_errors.next_delivery_date) {
+              throw new Error("Valid reason cleared the wrong field error");
+            }
+            actions.updateDeliveryCloseoutRow(
+              "ROW-A",
+              "next_delivery_date",
+              "2026-07-30",
+            );
+            if (Object.keys(first.validation_errors).length) {
+              throw new Error("Valid date did not immediately clear its error");
+            }
+
+            actions.updateDeliveryCloseoutRow("ROW-A", "reason_code", "OTHER");
+            await actions.submitDeliveryRunSheetCloseout();
+            if (!first.validation_errors.note) {
+              throw new Error("OTHER without note did not create note error");
+            }
+            actions.updateDeliveryCloseoutRow(
+              "ROW-A",
+              "note",
+              "Customer requested another attempt",
+            );
+            if (first.validation_errors.note) {
+              throw new Error("Valid OTHER note did not immediately clear its error");
+            }
+            if (apiCalls !== 0 || renders !== 0) {
+              throw new Error("Local validation called the API or rerendered workspace");
+            }
+            """
+        )
 
     def test_delivery_order_product_table_layout_contract(self):
         product_block = self.delivery_renderer.split(

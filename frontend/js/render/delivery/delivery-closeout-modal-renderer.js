@@ -28,21 +28,31 @@ export function createDeliveryCloseoutModal(state, actions) {
       closeDisabled: isSubmitting,
     },
   );
+  const modalShell = modal.querySelector(".workspace-modal");
+  modalShell.classList.add("workspace-modal-delivery-closeout");
   const body = modal.querySelector(".workspace-modal-body");
   body.classList.add("workspace-delivery-closeout-body");
+  body.dataset.deliveryCloseoutScrollContainer = "";
   const form = document.createElement("form");
   form.className = "workspace-delivery-closeout-form";
+  form.id = "workspace-delivery-closeout-form";
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const result = await actions.submitDeliveryRunSheetCloseout();
     if (result?.error && document.body.contains(form)) {
       form.querySelector(".workspace-status-error")?.remove();
-      const status = createStatus(result.error, "error");
-      status.classList.add("workspace-closeout-validation");
-      actionsRow.before(status);
-      firstInvalidCloseoutRow(draft)
-        ?.querySelector("select, input, textarea")
-        ?.focus();
+      draft.rows.forEach((row) => {
+        const card = form.querySelector(
+          `[data-closeout-row-id="${row.run_sheet_row_id}"]`,
+        );
+        patchDeliveryCloseoutValidation(card, row);
+      });
+      if (!result.validation) {
+        const status = createStatus(result.error, "error");
+        status.classList.add("workspace-closeout-validation");
+        form.append(status);
+      }
+      firstInvalidCloseoutField(draft)?.focus();
     }
   });
 
@@ -106,7 +116,10 @@ export function createDeliveryCloseoutModal(state, actions) {
     ].filter(Boolean).join(" | ");
     card.append(context);
 
-    card.append(createDeliveryCloseoutFields(row, draft, actions, card));
+    card.append(
+      createDeliveryCloseoutFields(row, draft, actions, card),
+      createDeliveryCloseoutValidation(row),
+    );
     list.append(card);
   });
   form.append(list);
@@ -115,30 +128,31 @@ export function createDeliveryCloseoutModal(state, actions) {
     form.append(createStatus(draft.error, "error"));
   }
   const actionsRow = document.createElement("div");
-  actionsRow.className = "workspace-action-row workspace-delivery-closeout-actions";
-  actionsRow.append(
-    createActionButton("Cancel", actions.closeDeliveryRunSheetCloseout, {
-      disabled: isSubmitting,
-    }),
-    (() => {
-      const submit = createActionButton(
+  actionsRow.className =
+    "workspace-modal-footer workspace-delivery-closeout-actions";
+  const cancel = createActionButton(
+    "Cancel",
+    actions.closeDeliveryRunSheetCloseout,
+    { disabled: isSubmitting },
+  );
+  cancel.type = "button";
+  const submit = createActionButton(
       isSubmitting ? "Closing Run Sheet..." : "Review and Close",
       () => {},
       { disabled: isSubmitting, primary: true },
-      );
-      submit.type = "submit";
-      return submit;
-    })(),
   );
-  form.append(actionsRow);
+  submit.type = "submit";
+  submit.setAttribute("form", form.id);
+  actionsRow.append(cancel, submit);
   body.append(form);
+  modalShell.append(actionsRow);
   return modal;
 }
 
 export function createDeliveryCloseoutFields(row, draft, actions, card) {
   const fields = document.createElement("div");
   fields.className = "workspace-form-grid workspace-delivery-closeout-fields";
-  fields.append(createBoundSelect(
+  const outcomeField = createBoundSelect(
     "Outcome",
     row.outcome,
     [
@@ -147,13 +161,20 @@ export function createDeliveryCloseoutFields(row, draft, actions, card) {
       { value: "RETURN_TO_POOL", label: "Return to Delivery Task Pool" },
     ],
     (value) => {
+      const scrollBody = card.closest(".workspace-delivery-closeout-body");
+      const scrollTop = scrollBody?.scrollTop || 0;
       actions.updateDeliveryCloseoutRow(row.run_sheet_row_id, "outcome", value);
       patchDeliveryCloseoutCard(card, row, draft, actions);
+      if (scrollBody) {
+        scrollBody.scrollTop = scrollTop;
+      }
+      card.querySelector('[data-closeout-field="outcome"]')?.focus();
     },
-  ));
+  );
+  outcomeField.querySelector("select").dataset.closeoutField = "outcome";
+  fields.append(outcomeField);
   if (row.outcome === "RETURN_TO_POOL") {
-    fields.append(
-      createBoundSelect(
+    const reasonField = createBoundSelect(
         "Return reason",
         row.reason_code,
         [
@@ -166,41 +187,51 @@ export function createDeliveryCloseoutFields(row, draft, actions, card) {
             "reason_code",
             value,
           );
+          patchDeliveryCloseoutValidation(card, row);
           const noteLabel = card.querySelector("textarea")?.closest("label")?.querySelector("span");
           if (noteLabel) {
             noteLabel.textContent = value === "OTHER" ? "Note (required)" : "Note (optional)";
           }
         },
-      ),
-    );
+      );
+    reasonField.querySelector("select").dataset.closeoutField = "reason_code";
+    fields.append(reasonField);
     const dateField = document.createElement("label");
     dateField.className = "workspace-field";
     const dateLabel = document.createElement("span");
     dateLabel.textContent = "Next delivery date";
     const dateInput = document.createElement("input");
     dateInput.type = "date";
+    dateInput.dataset.closeoutField = "next_delivery_date";
     dateInput.min = nextDateAfter(draft.delivery_date);
     dateInput.value = row.next_delivery_date || "";
-    dateInput.addEventListener("change", () =>
+    dateInput.addEventListener("change", () => {
       actions.updateDeliveryCloseoutRow(
         row.run_sheet_row_id,
         "next_delivery_date",
         dateInput.value,
-      ));
+      );
+      patchDeliveryCloseoutValidation(card, row);
+    });
     dateField.append(dateLabel, dateInput);
     fields.append(dateField);
   }
-  fields.append(createBoundTextarea(
+  const noteField = createBoundTextarea(
     row.outcome === "RETURN_TO_POOL" && row.reason_code === "OTHER"
       ? "Note (required)"
       : "Note (optional)",
     row.note,
-    (value) => actions.updateDeliveryCloseoutRow(
-      row.run_sheet_row_id,
-      "note",
-      value,
-    ),
-  ));
+    (value) => {
+      actions.updateDeliveryCloseoutRow(
+        row.run_sheet_row_id,
+        "note",
+        value,
+      );
+      patchDeliveryCloseoutValidation(card, row);
+    },
+  );
+  noteField.querySelector("textarea").dataset.closeoutField = "note";
+  fields.append(noteField);
   return fields;
 }
 
@@ -210,22 +241,41 @@ export function patchDeliveryCloseoutCard(card, row, draft, actions) {
   }
   const current = card.querySelector(".workspace-delivery-closeout-fields");
   current?.replaceWith(createDeliveryCloseoutFields(row, draft, actions, card));
+  patchDeliveryCloseoutValidation(card, row);
 }
 
-function firstInvalidCloseoutRow(draft) {
-  const row = draft.rows.find((item) =>
-    !item.outcome
-    || (
-      item.outcome === "RETURN_TO_POOL"
-      && (
-        !item.reason_code
-        || !item.next_delivery_date
-        || (item.reason_code === "OTHER" && !String(item.note || "").trim())
-      )
-    ));
-  return row
-    ? document.querySelector(`[data-closeout-row-id="${row.run_sheet_row_id}"]`)
-    : null;
+export function patchDeliveryCloseoutValidation(card, row) {
+  if (!card || !row) {
+    return;
+  }
+  const current = card.querySelector(".workspace-delivery-closeout-validation");
+  current?.replaceWith(createDeliveryCloseoutValidation(row));
+}
+
+function createDeliveryCloseoutValidation(row) {
+  const validation = document.createElement("div");
+  validation.className = "workspace-delivery-closeout-validation";
+  validation.dataset.closeoutValidationFor = row.run_sheet_row_id;
+  Object.entries(row.validation_errors || {}).forEach(([field, message]) => {
+    const status = createStatus(message, "error");
+    status.dataset.closeoutErrorFor = field;
+    validation.append(status);
+  });
+  return validation;
+}
+
+function firstInvalidCloseoutField(draft) {
+  const row = draft.rows.find(
+    (item) => Object.keys(item.validation_errors || {}).length,
+  );
+  if (!row) {
+    return null;
+  }
+  const card = document.querySelector(
+    `[data-closeout-row-id="${row.run_sheet_row_id}"]`,
+  );
+  const field = Object.keys(row.validation_errors || {})[0];
+  return card?.querySelector(`[data-closeout-field="${field}"]`) || null;
 }
 
 function nextDateAfter(value) {
