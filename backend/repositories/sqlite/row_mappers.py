@@ -1,7 +1,9 @@
 from backend.db.connection import connect
 from backend.schemas import (
     DeliveryRunSheet,
+    DeliveryRunSheetCloseoutSummary,
     DeliveryRunSheetOrderSnapshot,
+    DeliveryRunSheetOutcome,
     DeliveryRunSheetTrip,
     Driver,
     FinalTripSummary,
@@ -229,6 +231,15 @@ class SQLiteRowMapperMixin:
                 """,
                 (row["run_sheet_id"],),
             ).fetchall()
+            outcome_rows = connection.execute(
+                """
+                SELECT *
+                FROM delivery_run_sheet_outcomes
+                WHERE run_sheet_id = ?
+                ORDER BY recorded_at, outcome_id
+                """,
+                (row["run_sheet_id"],),
+            ).fetchall()
 
         trips = []
         for trip_no in ("trip1", "trip2"):
@@ -263,6 +274,24 @@ class SQLiteRowMapperMixin:
             if orders:
                 trips.append(DeliveryRunSheetTrip(trip_no=trip_no, orders=orders))
 
+        outcomes = [
+            DeliveryRunSheetOutcome(
+                outcome_id=outcome_row["outcome_id"],
+                run_sheet_id=outcome_row["run_sheet_id"],
+                run_sheet_row_id=outcome_row["run_sheet_row_id"],
+                order_id=outcome_row["order_id"],
+                outcome=outcome_row["outcome"],
+                reason_code=outcome_row["reason_code"],
+                note=outcome_row["note"],
+                next_delivery_date=outcome_row["next_delivery_date"],
+                recorded_at=outcome_row["recorded_at"],
+                recorded_by_account_id=outcome_row["recorded_by_account_id"],
+                recorded_by_account_name=outcome_row[
+                    "recorded_by_account_name"
+                ],
+            )
+            for outcome_row in outcome_rows
+        ]
         return DeliveryRunSheet(
             run_sheet_id=row["run_sheet_id"],
             dispatch_date=row["dispatch_date"],
@@ -281,6 +310,19 @@ class SQLiteRowMapperMixin:
             saved_by_account_id=row["saved_by_account_id"],
             legacy_summary_id=row["legacy_summary_id"],
             trips=trips,
+            execution_status=_row_value(row, "execution_status") or "OPEN",
+            closed_at=_row_value(row, "closed_at"),
+            closed_by_account_id=_row_value(row, "closed_by_account_id"),
+            closed_by_account_name=_row_value(row, "closed_by_account_name"),
+            outcomes=outcomes,
+            closeout_summary=DeliveryRunSheetCloseoutSummary(
+                delivered_count=sum(
+                    outcome.outcome == "DELIVERED" for outcome in outcomes
+                ),
+                returned_to_pool_count=sum(
+                    outcome.outcome == "RETURN_TO_POOL" for outcome in outcomes
+                ),
+            ),
         )
 
     def _row_to_opshop_pickup_collection(self, row):

@@ -17,7 +17,9 @@ from backend.repositories.sqlite_manual_dispatch_repository import (
 from backend.schemas import (
     AssignTaskRequest,
     DeliveryWorkspaceVehicleAssignmentRequest,
+    DeliveryRunSheet,
     DeliveryRunSheetOrderSnapshot,
+    DeliveryRunSheetTrip,
     OpShopLocation,
     OpShopPickupSchedule,
     OpShopPickupTask,
@@ -27,6 +29,7 @@ from backend.schemas import (
 from backend.services.manual_dispatch_service import ManualDispatchService
 from tests.manual_dispatch_api_test_helpers import authenticate_test_client
 from backend.services.delivery_run_sheet_excel_export_service import (
+    build_delivery_run_sheet_excel,
     build_delivery_run_sheets_excel,
     delivery_run_sheet_product_display,
 )
@@ -100,6 +103,10 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             ("GET", "/api/manual-dispatch/delivery/run-sheets/export-excel"),
             ("GET", "/api/manual-dispatch/delivery/run-sheets/{run_sheet_id}"),
             ("POST", "/api/manual-dispatch/delivery/run-sheets/{run_sheet_id}/save"),
+            (
+                "POST",
+                "/api/manual-dispatch/delivery/run-sheets/{run_sheet_id}/closeout",
+            ),
             (
                 "POST",
                 "/api/manual-dispatch/delivery/run-sheets/{run_sheet_id}/cancel-generated",
@@ -887,8 +894,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertIn("DAILY RUN SHEET", values)
         self.assertIn("DATE  05/05/2026", values)
         self.assertIn("DRIVER: John", values)
-        self.assertIn("REGO #", values)
-        self.assertIn("ABC123", values)
+        self.assertIn("REGO #: ABC123", values)
         self.assertNotIn("EDITED-LIVE-REGO", values)
         self.assertIn("START TIME: ____________________________________", values)
         self.assertIn(
@@ -905,22 +911,22 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertNotIn("Product Details", values)
         self.assertNotIn("Order #", values)
         self.assertEqual("DRIVER: John", worksheet["F1"].value)
-        self.assertEqual("REGO #", worksheet["L1"].value)
-        self.assertEqual("ABC123", worksheet["M1"].value)
+        self.assertEqual("REGO #: ABC123", worksheet["K1"].value)
+        merged_ranges = {str(cell_range) for cell_range in worksheet.merged_cells.ranges}
+        self.assertTrue(
+            {"A1:B1", "C1:E1", "F1:J1", "K1:N1"}.issubset(merged_ranges)
+        )
 
         header_row = [cell.value for cell in worksheet[8]]
         self.assertEqual(
             [
-                None,
+                "Sequence",
                 "Customer Name",
                 "Suburb",
                 "Invoice #",
                 "PRODUCT",
                 "KG'S",
                 "Pallets",
-                "Loose Bags",
-                "Cartons",
-                "Notes",
                 "COD",
                 "CQ",
                 "Time In",
@@ -931,6 +937,10 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             ],
             header_row,
         )
+        self.assertEqual(14, worksheet.max_column)
+        self.assertIn("$A$1:$N$28", worksheet.print_area)
+        self.assertEqual("$7:$8", worksheet.print_title_rows)
+        self.assertEqual(55, worksheet.column_dimensions["E"].width)
 
         rows = list(worksheet.iter_rows(values_only=True))
         customer_a_index = next(
@@ -951,12 +961,16 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         )
         self.assertEqual(450, customer_a_row[5])
         self.assertEqual(2, customer_a_row[6])
-        self.assertEqual(5, customer_a_row[7])
-        self.assertEqual(4, customer_a_row[8])
-        self.assertEqual("Use rear delivery gate", customer_a_row[9])
+        self.assertNotIn("Use rear delivery gate", values)
+        self.assertNotIn("Loose Bags", values)
+        self.assertNotIn("Cartons", values)
+        self.assertNotIn("Notes", values)
         self.assertTrue(worksheet.cell(row=customer_a_index + 1, column=5).alignment.wrap_text)
+        self.assertFalse(
+            worksheet.cell(row=customer_a_index + 1, column=5).alignment.shrink_to_fit
+        )
         self.assertGreaterEqual(worksheet.row_dimensions[customer_a_index + 1].height, 30)
-        for manual_column in range(10, 17):
+        for manual_column in range(7, 14):
             self.assertIsNone(customer_a_row[manual_column])
 
     def test_delivery_date_export_uses_snapshot_rows_and_one_sheet_per_driver(self):
@@ -1052,16 +1066,13 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertNotIn("Sheet", workbook.sheetnames)
 
         expected_headers = [
-            None,
+            "Sequence",
             "Customer Name",
             "Suburb",
             "Invoice #",
             "PRODUCT",
             "KG'S",
             "Pallets",
-            "Loose Bags",
-            "Cartons",
-            "Notes",
             "COD",
             "CQ",
             "Time In",
@@ -1078,13 +1089,14 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             )
             self.assertEqual(1, worksheet.page_setup.fitToWidth)
             self.assertEqual(0, worksheet.page_setup.fitToHeight)
-            self.assertEqual("$8:$8", worksheet.print_title_rows)
+            self.assertEqual("$7:$8", worksheet.print_title_rows)
             self.assertEqual(expected_headers, [cell.value for cell in worksheet[8]])
-            self.assertEqual(17, worksheet.max_column)
+            self.assertEqual(14, worksheet.max_column)
+            self.assertIn("$A$1:$N$28", worksheet.print_area)
             self.assertEqual("DAILY RUN SHEET", worksheet["A1"].value)
             self.assertEqual("DATE  05/05/2026", worksheet["C1"].value)
             self.assertTrue(str(worksheet["F1"].value).startswith("DRIVER: "))
-            self.assertEqual("REGO #", worksheet["L1"].value)
+            self.assertTrue(str(worksheet["K1"].value).startswith("REGO #: "))
             values = [
                 cell.value
                 for row in worksheet.iter_rows()
@@ -1120,9 +1132,6 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         )
         self.assertEqual(450, john_rows[8][5])
         self.assertEqual(2, john_rows[8][6])
-        self.assertEqual(5, john_rows[8][7])
-        self.assertEqual(4, john_rows[8][8])
-        self.assertEqual("Use rear delivery gate", john_rows[8][9])
         self.assertEqual(450, workbook["John"]["F9"].value)
         self.assertEqual("General", workbook["John"]["G9"].number_format)
         self.assertTrue(workbook["John"]["E9"].alignment.wrap_text)
@@ -1130,9 +1139,9 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertGreater(workbook["John"].column_dimensions["B"].width, 25)
         self.assertNotIn("Edited Live Product ORD-001", self._workbook_values(response.content))
         self.assertEqual("DRIVER: John", workbook["John"]["F1"].value)
-        self.assertEqual("ABC123", workbook["John"]["M1"].value)
+        self.assertEqual("REGO #: ABC123", workbook["John"]["K1"].value)
         self.assertEqual("DRIVER: Tony", workbook["Tony"]["F1"].value)
-        self.assertEqual("XYZ888", workbook["Tony"]["M1"].value)
+        self.assertEqual("REGO #: XYZ888", workbook["Tony"]["K1"].value)
         self.assertNotIn("EDITED-LIVE-REGO", self._workbook_values(response.content))
 
         statuses = {
@@ -1172,7 +1181,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             self.dispatch_date,
         )
         no_rego_workbook = load_workbook(BytesIO(no_rego_bytes))
-        self.assertEqual("Not selected", no_rego_workbook.active["M1"].value)
+        self.assertEqual("REGO #: Not selected", no_rego_workbook.active["K1"].value)
 
     def test_delivery_run_sheet_product_display_prefers_snapshot_lines(self):
         order = DeliveryRunSheetOrderSnapshot(
@@ -1216,6 +1225,140 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
 
         order.product_snapshot = "  "
         self.assertEqual("", delivery_run_sheet_product_display(order))
+
+    def test_delivery_export_uses_content_aware_data_row_heights(self):
+        base_order = DeliveryRunSheetOrderSnapshot(
+            row_id="ROW-1",
+            trip_no="trip1",
+            row_no=1,
+            task_type="ORDER",
+            task_id="ORDER-1",
+            order_id_snapshot="ORDER-1",
+            invoice_number_snapshot="184066",
+            order_no_snapshot=None,
+            company_name_snapshot="Short Customer",
+            suburb_snapshot="Coburg",
+            delivery_address_snapshot="Address",
+            product_snapshot=None,
+            pallet_quantity_snapshot=1,
+            loose_bags_quantity_snapshot=7,
+            note_snapshot="Snapshot note must not be exported",
+            carton_quantity_snapshot=4,
+            product_lines_snapshot=[
+                ProductDetailLine(
+                    "Short product",
+                    1,
+                    "KG",
+                    product_code="ONE",
+                )
+            ],
+        )
+        two_line_order = replace(
+            base_order,
+            row_id="ROW-2",
+            row_no=2,
+            task_id="ORDER-2",
+            order_id_snapshot="ORDER-2",
+            invoice_number_snapshot="184068",
+            product_lines_snapshot=[
+                ProductDetailLine(
+                    "COLOUR RAGS 10KG NET",
+                    45,
+                    "BAG",
+                    product_code="RSING10KG",
+                    package_quantity=45,
+                    package_unit="BAG10",
+                ),
+                ProductDetailLine(
+                    "COLOR RAGS 1.5KG BAG",
+                    28,
+                    "BAG",
+                    product_code="RSING1.5KG",
+                    package_quantity=28,
+                    package_unit="BAG1.5",
+                ),
+            ],
+        )
+        long_text_order = replace(
+            base_order,
+            row_id="ROW-3",
+            row_no=3,
+            task_id="ORDER-3",
+            order_id_snapshot="ORDER-3",
+            invoice_number_snapshot="VERY-LONG-INVOICE-REFERENCE-1234567890",
+            company_name_snapshot=(
+                "Very Long Customer Name For Distribution And Warehousing Operations"
+            ),
+            suburb_snapshot=(
+                "Very Long Industrial Estate Suburb Description For Delivery"
+            ),
+            product_lines_snapshot=[
+                ProductDetailLine(
+                    "Extra long product name " * 11,
+                    1,
+                    "PALLETS",
+                    product_code="LONG-PRODUCT",
+                )
+            ],
+        )
+        run_sheet = DeliveryRunSheet(
+            run_sheet_id="RUN-SHEET-1",
+            dispatch_date=self.dispatch_date,
+            delivery_date=self.dispatch_date,
+            driver_id="D001",
+            driver_name_snapshot="Epaminondas Tsatsoulis",
+            vehicle_id=None,
+            vehicle_rego_snapshot=None,
+            total_pallets=3,
+            total_loose_bags=21,
+            status="SAVED",
+            generated_at="2026-05-05T00:00:00+00:00",
+            saved_at="2026-05-05T00:00:00+00:00",
+            saved_by_account_name="Tester",
+            saved_by_account_id=1,
+            legacy_summary_id=None,
+            trips=[
+                DeliveryRunSheetTrip(
+                    trip_no="trip1",
+                    orders=[base_order, two_line_order, long_text_order],
+                )
+            ],
+            total_cartons=12,
+        )
+
+        worksheet = load_workbook(
+            BytesIO(build_delivery_run_sheet_excel(run_sheet))
+        ).active
+        single_height = worksheet.row_dimensions[9].height
+        two_line_height = worksheet.row_dimensions[10].height
+        long_text_height = worksheet.row_dimensions[11].height
+
+        self.assertGreater(two_line_height, single_height)
+        self.assertGreater(long_text_height, two_line_height)
+        self.assertEqual(21.95, worksheet.row_dimensions[12].height)
+        self.assertIn("[RSING10KG]", worksheet["E10"].value)
+        self.assertIn("[RSING1.5KG]", worksheet["E10"].value)
+        self.assertIn("\n", worksheet["E10"].value)
+        for coordinate in ("B11", "C11", "D11", "E11"):
+            self.assertTrue(worksheet[coordinate].alignment.wrap_text)
+            self.assertEqual("top", worksheet[coordinate].alignment.vertical)
+        self.assertFalse(worksheet["E10"].alignment.shrink_to_fit)
+        self.assertEqual("DRIVER: Epaminondas Tsatsoulis", worksheet["F1"].value)
+        self.assertEqual("REGO #: Not selected", worksheet["K1"].value)
+        self.assertTrue(worksheet["F1"].alignment.wrap_text)
+        self.assertTrue(worksheet["K1"].alignment.wrap_text)
+        for row_index in (9, 10, 11):
+            for column_index in range(1, 15):
+                self.assertEqual(
+                    ("thin", "thin", "thin", "thin"),
+                    tuple(
+                        getattr(
+                            worksheet.cell(row_index, column_index).border,
+                            side,
+                        ).style
+                        for side in ("left", "right", "top", "bottom")
+                    ),
+                )
 
     def test_delivery_date_export_rejects_empty_scope_without_mutation(self):
         response = self.client.get(

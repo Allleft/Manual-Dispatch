@@ -230,6 +230,90 @@ class DeliveryEventRecorder(FacadeAuditRecorder):
             },
         )
 
+    def record_delivery_run_sheet_closeout(self, run_sheet):
+        outcomes_by_row_id = {
+            outcome.run_sheet_row_id: outcome
+            for outcome in run_sheet.outcomes
+        }
+        snapshots_by_row_id = {
+            order.row_id: order
+            for trip in run_sheet.trips
+            for order in trip.orders
+        }
+        summary = run_sheet.closeout_summary
+        self._record_logbook(
+            result="SUCCESS",
+            workspace="DELIVERY",
+            actor=run_sheet.closed_by_account_name,
+            action="DELIVERY_RUN_SHEET_CLOSED",
+            entity_type="DELIVERY_RUN_SHEET",
+            entity_id=run_sheet.run_sheet_id,
+            summary=(
+                f"Delivery Run Sheet was closed for "
+                f"{run_sheet.driver_name_snapshot} on {run_sheet.delivery_date}: "
+                f"{summary.delivered_count} delivered and "
+                f"{summary.returned_to_pool_count} returned to pool."
+            ),
+            dispatch_date=run_sheet.dispatch_date,
+            delivery_date=run_sheet.delivery_date,
+            driver=run_sheet.driver_name_snapshot,
+            vehicle=run_sheet.vehicle_rego_snapshot,
+            run_sheet_id=run_sheet.run_sheet_id,
+            metadata={
+                "run_sheet_id": run_sheet.run_sheet_id,
+                "delivery_date": run_sheet.delivery_date,
+                "driver": run_sheet.driver_name_snapshot,
+                "delivered_count": summary.delivered_count,
+                "returned_to_pool_count": summary.returned_to_pool_count,
+                "operator": run_sheet.closed_by_account_name,
+                "timestamp": run_sheet.closed_at,
+            },
+        )
+        for row_id, outcome in outcomes_by_row_id.items():
+            snapshot = snapshots_by_row_id.get(row_id)
+            previous_trip = snapshot.trip_no if snapshot else None
+            action = (
+                "DELIVERY_ORDER_DELIVERED"
+                if outcome.outcome == "DELIVERED"
+                else "DELIVERY_ORDER_RETURNED_TO_POOL"
+            )
+            metadata = {
+                "order_id": outcome.order_id,
+                "run_sheet_id": run_sheet.run_sheet_id,
+                "previous_driver": run_sheet.driver_name_snapshot,
+                "previous_trip": previous_trip,
+                "previous_delivery_date": run_sheet.delivery_date,
+            }
+            if outcome.outcome == "RETURN_TO_POOL":
+                metadata.update(
+                    {
+                        "next_delivery_date": outcome.next_delivery_date,
+                        "reason_code": outcome.reason_code,
+                        "note": outcome.note,
+                    }
+                )
+            self._record_logbook(
+                result="SUCCESS",
+                workspace="DELIVERY",
+                actor=run_sheet.closed_by_account_name,
+                action=action,
+                entity_type="ORDER",
+                entity_id=outcome.order_id,
+                summary=(
+                    f"Delivery Order {outcome.order_id} was "
+                    f"{'delivered' if outcome.outcome == 'DELIVERED' else 'returned to the Delivery Task Pool'}."
+                ),
+                dispatch_date=run_sheet.dispatch_date,
+                delivery_date=(
+                    outcome.next_delivery_date
+                    if outcome.outcome == "RETURN_TO_POOL"
+                    else run_sheet.delivery_date
+                ),
+                driver=run_sheet.driver_name_snapshot,
+                run_sheet_id=run_sheet.run_sheet_id,
+                metadata=metadata,
+            )
+
     def record_attache_import_confirmation(self, rows, outcome):
         rows = list(rows or [])
         if not rows:

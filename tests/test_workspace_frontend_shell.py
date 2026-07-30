@@ -67,8 +67,12 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
                 "js/render/delivery/delivery-attache-modal-renderer.js",
                 "js/render/delivery/delivery-specification-modal-renderer.js",
                 "js/render/delivery/delivery-generation-modal-renderer.js",
+                "js/render/delivery/delivery-closeout-modal-renderer.js",
                 "js/render/delivery/delivery-renderer-utils.js",
             )
+        )
+        self.delivery_closeout_utils = self._read(
+            "js/utils/delivery-closeout-utils.js"
         )
         self.delivery_vehicle_utils = self._read(
             "js/utils/delivery-vehicle-utils.js"
@@ -966,7 +970,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
 
         self.assertIn("workspace-daily-run-sheet-table-scroll", self.styles)
         self.assertIn("overflow-x: auto", self.styles)
-        self.assertIn("min-width: 1220px", self.styles)
+        self.assertIn("min-width: 1974px", self.styles)
         self.assertIn(".workspace-run-sheet-document-card", self.styles)
         self.assertIn(".workspace-run-sheet-date-group", self.styles)
         self.assertIn(".workspace-run-sheet-card-meta", self.styles)
@@ -975,6 +979,446 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("grid-template-columns: minmax(0, 1fr)", self.styles)
         self.assertIn("min-height: 44px", self.styles)
         self.assertIn("white-space: pre-line", self.styles)
+
+    def test_delivery_run_sheet_closeout_contract_and_pure_helpers(self):
+        for expected in (
+            "apiCloseDeliveryRunSheet",
+            "/closeout",
+            "closeDeliveryRunSheet: apiCloseDeliveryRunSheet",
+        ):
+            self.assertIn(expected, self.api + self.workspace_actions)
+        for expected in (
+            "deliveryRunSheetCloseout",
+            "deliveryActionSuccess",
+        ):
+            self.assertIn(expected, self.state)
+        for expected in (
+            "`delivery-closeout:${draft.run_sheet_id}`",
+            "state.deliveryBusyActionKeys?.[actionKey]",
+            "buildDeliveryCloseoutConfirmation",
+            "buildDeliveryCloseoutPayload",
+            "Mark All Delivered",
+            "Choose outcome",
+            "Return to Delivery Task Pool",
+            "Close Run Sheet",
+            "execution_status",
+            "closeout_summary",
+            "closed_by_account_name",
+            "Closeout outcomes",
+            "delivery_address_snapshot",
+            "suburb_snapshot",
+            "Driver:",
+        ):
+            self.assertIn(
+                expected,
+                self.workspace_actions
+                + self.delivery_renderer
+                + self.delivery_closeout_utils,
+            )
+        self.assertIn("workspace-delivery-closeout-row", self.styles)
+        self.assertIn("workspace-run-sheet-outcomes", self.styles)
+
+        self._run_frontend_module_script(
+            "js/utils/delivery-closeout-utils.js",
+            """
+            const runSheet = {
+              run_sheet_id: "DRS-1",
+              delivery_date: "2026-07-28",
+              driver_name_snapshot: "Driver",
+              trips: [{
+                trip_no: "trip1",
+                orders: [
+                  {
+                    row_id: "ROW-1",
+                    row_no: 1,
+                    invoice_number_snapshot: "INV-1",
+                    company_name_snapshot: "A",
+                    delivery_address_snapshot: "1 Test Street",
+                    suburb_snapshot: "Dandenong",
+                  },
+                  { row_id: "ROW-2", invoice_number_snapshot: "INV-2", company_name_snapshot: "B" },
+                ],
+              }],
+            };
+            const draft = module.createDeliveryCloseoutDraft(runSheet);
+            if (draft.rows[0].row_no !== 1 ||
+                draft.rows[0].delivery_address !== "1 Test Street" ||
+                draft.rows[0].suburb !== "Dandenong") {
+              throw new Error("Closeout draft omitted row context");
+            }
+            if (draft.rows.some((row) => row.outcome)) {
+              throw new Error("Closeout outcomes were defaulted");
+            }
+            if (!module.validateDeliveryCloseoutDraft(draft).includes("Choose an outcome")) {
+              throw new Error("Missing outcomes were not rejected");
+            }
+            const missingOutcomeErrors = module.getDeliveryCloseoutRowErrors(
+              draft.rows[0],
+              draft.delivery_date,
+            );
+            if (Object.keys(missingOutcomeErrors).join(",") !== "outcome") {
+              throw new Error("Missing outcome leaked return-specific errors");
+            }
+            draft.rows[0].outcome = "DELIVERED";
+            draft.rows[0].reason_code = "OTHER";
+            draft.rows[0].next_delivery_date = "";
+            if (Object.keys(module.getDeliveryCloseoutRowErrors(
+              draft.rows[0],
+              draft.delivery_date,
+            )).length) {
+              throw new Error("Delivered row retained return-specific errors");
+            }
+            draft.rows[1].outcome = "RETURN_TO_POOL";
+            draft.rows[1].reason_code = "OTHER";
+            draft.rows[1].next_delivery_date = "2026-07-29";
+            if (!module.validateDeliveryCloseoutDraft(draft).includes("Add a note")) {
+              throw new Error("OTHER without a note was not rejected");
+            }
+            draft.rows[1].note = "Customer requested retry";
+            if (module.validateDeliveryCloseoutDraft(draft)) {
+              throw new Error("Valid closeout draft was rejected");
+            }
+            const payload = module.buildDeliveryCloseoutPayload(draft);
+            if (Object.keys(payload.rows[0]).sort().join(",") !==
+                "next_delivery_date,note,outcome,reason_code,run_sheet_row_id") {
+              throw new Error("Closeout payload leaked derived identity fields");
+            }
+            if (payload.rows[0].reason_code !== null || payload.rows[0].next_delivery_date !== null) {
+              throw new Error("Delivered payload retained return-only fields");
+            }
+            const confirmation = module.buildDeliveryCloseoutConfirmation(draft);
+            if (!confirmation.includes("1 delivered; 1 returned") ||
+                !confirmation.includes("2026-07-29") ||
+                !confirmation.includes("cannot be edited")) {
+              throw new Error("Final confirmation omitted irreversible summary details");
+            }
+            """,
+        )
+
+    def test_delivery_ui_usability_refresh_contracts(self):
+        for expected in (
+            "workspace-load-summary-fields",
+            "workspace-load-summary-field",
+            "workspace-load-product-layout",
+            "workspace-product-line-table-scroll",
+            "dataset.productLineId",
+            "_draft_id",
+            "formatProductLineTotals",
+            '"Note (optional)"',
+        ):
+            self.assertIn(expected, self.delivery_renderer + self.workspace_actions)
+        self.assertIn(
+            "product_lines: (form.product_lines || []).map((line) => ({",
+            self.workspace_actions,
+        )
+
+        for expected in (
+            "workspace-attache-review-toolbar",
+            "Search invoice, order or customer",
+            "Filter invoice reviews",
+            "dataset.invoiceReviewId",
+            "applyAttacheReviewVisibility",
+            "Warnings / Parse Issues",
+            "updateDeliveryAttacheReviewSearch",
+            "updateDeliveryAttacheReviewFilter",
+        ):
+            self.assertIn(expected, self.delivery_renderer + self.workspace_actions)
+
+        for expected in (
+            "workspace-daily-run-sheet-table-region",
+            "Scroll horizontally to review all delivery and signature columns.",
+            "width: 1974px",
+            "word-break: normal",
+            "white-space: nowrap",
+        ):
+            self.assertIn(expected, self.delivery_renderer + self.styles)
+
+        update_block = self.workspace_actions.split(
+            "function updateDeliveryCloseoutRow", 1
+        )[1].split("function markAllDeliveryCloseoutRowsDelivered", 1)[0]
+        mark_all_block = self.workspace_actions.split(
+            "function markAllDeliveryCloseoutRowsDelivered", 1
+        )[1].split("async function submitDeliveryRunSheetCloseout", 1)[0]
+        self.assertNotIn("renderWorkspace()", update_block)
+        self.assertNotIn("renderWorkspace()", mark_all_block)
+        self.assertIn("patchDeliveryCloseoutCard", self.delivery_renderer)
+        self.assertIn('form.addEventListener("submit"', self.delivery_renderer)
+        self.assertIn('submit.type = "submit"', self.delivery_renderer)
+        self.assertIn("event.preventDefault()", self.delivery_renderer)
+
+    def test_delivery_closeout_footer_and_local_validation_contract(self):
+        closeout_renderer = self._read(
+            "js/render/delivery/delivery-closeout-modal-renderer.js"
+        )
+        closeout_styles = self.styles.split(
+            ".workspace-modal-delivery-closeout", 1
+        )[1].split("@media (max-width: 1024px)", 1)[0]
+
+        for expected in (
+            'modalShell.classList.add("workspace-modal-delivery-closeout")',
+            "body.dataset.deliveryCloseoutScrollContainer",
+            'form.id = "workspace-delivery-closeout-form"',
+            'cancel.type = "button"',
+            'submit.type = "submit"',
+            'submit.setAttribute("form", form.id)',
+            "body.append(form)",
+            "modalShell.append(actionsRow)",
+            "patchDeliveryCloseoutValidation(card, row)",
+            "data-closeout-field",
+            "dataset.closeoutErrorFor",
+        ):
+            self.assertIn(expected, closeout_renderer)
+        self.assertNotIn("form.append(actionsRow)", closeout_renderer)
+
+        for expected in (
+            "grid-template-rows: auto minmax(0, 1fr) auto",
+            "overflow: hidden",
+            "position: static",
+            "overflow-y: auto",
+            "overscroll-behavior-y: contain",
+            ".workspace-delivery-closeout-actions",
+            "position: relative",
+        ):
+            self.assertIn(expected, self.styles)
+        actions_styles = closeout_styles.split(
+            ".workspace-delivery-closeout-actions", 1
+        )[1]
+        self.assertNotIn("position: absolute", actions_styles)
+        self.assertNotIn("position: fixed", actions_styles)
+        self.assertNotIn("position: sticky", actions_styles)
+
+    def test_delivery_closeout_field_errors_follow_current_draft(self):
+        self._run_workspace_actions_script(
+            """
+            const state = {
+              deliveryRunSheetCloseout: {
+                run_sheet_id: "DRS-VALIDATION",
+                delivery_date: "2026-07-29",
+                driver_name: "Driver",
+                error: "",
+                rows: [
+                  {
+                    run_sheet_row_id: "ROW-A",
+                    order_label: "184068",
+                    outcome: "RETURN_TO_POOL",
+                    reason_code: "",
+                    next_delivery_date: "",
+                    note: "",
+                    validation_errors: {},
+                  },
+                  {
+                    run_sheet_row_id: "ROW-B",
+                    order_label: "184069",
+                    outcome: "DELIVERED",
+                    reason_code: "",
+                    next_delivery_date: "",
+                    note: "Delivered note",
+                    validation_errors: {},
+                  },
+                ],
+              },
+              deliveryBusyActionKeys: {},
+            };
+            let apiCalls = 0;
+            let renders = 0;
+            const actions = createWorkspaceActions({
+              state,
+              renderWorkspace: () => { renders += 1; },
+              confirmAction: () => true,
+              api: {
+                closeDeliveryRunSheet: async () => {
+                  apiCalls += 1;
+                  return {};
+                },
+              },
+            });
+            const draft = state.deliveryRunSheetCloseout;
+            const first = draft.rows[0];
+            const second = draft.rows[1];
+
+            await actions.submitDeliveryRunSheetCloseout();
+            if (!first.validation_errors.reason_code ||
+                !first.validation_errors.next_delivery_date) {
+              throw new Error("Submit did not create field-level return errors");
+            }
+            const secondErrors = JSON.stringify(second.validation_errors);
+
+            actions.updateDeliveryCloseoutRow("ROW-A", "outcome", "DELIVERED");
+            if (Object.keys(first.validation_errors).length ||
+                JSON.stringify(second.validation_errors) !== secondErrors) {
+              throw new Error("Delivered outcome did not clear only its row errors");
+            }
+
+            actions.updateDeliveryCloseoutRow("ROW-A", "outcome", "");
+            await actions.submitDeliveryRunSheetCloseout();
+            if (Object.keys(first.validation_errors).join(",") !== "outcome") {
+              throw new Error("Empty outcome retained return-specific errors");
+            }
+
+            actions.updateDeliveryCloseoutRow(
+              "ROW-A",
+              "outcome",
+              "RETURN_TO_POOL",
+            );
+            await actions.submitDeliveryRunSheetCloseout();
+            actions.updateDeliveryCloseoutRow(
+              "ROW-A",
+              "reason_code",
+              "TIME_RAN_OUT",
+            );
+            if (first.validation_errors.reason_code ||
+                !first.validation_errors.next_delivery_date) {
+              throw new Error("Valid reason cleared the wrong field error");
+            }
+            actions.updateDeliveryCloseoutRow(
+              "ROW-A",
+              "next_delivery_date",
+              "2026-07-30",
+            );
+            if (Object.keys(first.validation_errors).length) {
+              throw new Error("Valid date did not immediately clear its error");
+            }
+
+            actions.updateDeliveryCloseoutRow("ROW-A", "reason_code", "OTHER");
+            await actions.submitDeliveryRunSheetCloseout();
+            if (!first.validation_errors.note) {
+              throw new Error("OTHER without note did not create note error");
+            }
+            actions.updateDeliveryCloseoutRow(
+              "ROW-A",
+              "note",
+              "Customer requested another attempt",
+            );
+            if (first.validation_errors.note) {
+              throw new Error("Valid OTHER note did not immediately clear its error");
+            }
+            if (apiCalls !== 0 || renders !== 0) {
+              throw new Error("Local validation called the API or rerendered workspace");
+            }
+            """
+        )
+
+    def test_delivery_order_product_table_layout_contract(self):
+        product_block = self.delivery_renderer.split(
+            "export function createProductLineEditor", 1
+        )[1].split(
+            "export function createLoadAndProductLinesSection", 1
+        )[0]
+        load_block = self.delivery_renderer.split(
+            "export function createLoadAndProductLinesSection", 1
+        )[1].split(
+            "function createProductLineInput", 1
+        )[0]
+
+        self.assertEqual(1, product_block.count('document.createElement("table")'))
+        self.assertEqual(1, product_block.count('document.createElement("thead")'))
+        self.assertEqual(1, product_block.count('document.createElement("tbody")'))
+        self.assertEqual(2, product_block.count('document.createElement("tr")'))
+        self.assertEqual(1, product_block.count('const row = document.createElement("tr")'))
+        self.assertEqual(8, product_block.count("createProductLineCell("))
+        self.assertIn('document.createElement("colgroup")', product_block)
+        self.assertIn('"workspace-product-line-table-row"', product_block)
+        self.assertIn('"actions"', product_block)
+        self.assertIn("dataset.productLineId = line._draft_id", product_block)
+        self.assertIn('"Add Product Line"', product_block)
+        self.assertIn('"Remove product line"', product_block)
+        self.assertIn("Total Actual Quantity:", product_block)
+
+        self.assertEqual(1, load_block.count('"Load Summary"'))
+        self.assertNotIn("workspace-load-metrics", load_block)
+        self.assertIn("workspace-load-summary-fields", load_block)
+        self.assertEqual(3, load_block.count('["'))
+
+        for expected in (
+            "grid-template-rows: auto minmax(0, 1fr) auto",
+            ".workspace-modal-order > .workspace-modal-header",
+            "position: static",
+            ".workspace-modal-order > .workspace-order-modal-body",
+            "overflow-x: hidden",
+            ".workspace-modal-order > .workspace-modal-footer",
+            "grid-template-columns: repeat(3, minmax(160px, 1fr))",
+            "min-width: 1200px",
+            ".workspace-product-column-name { width: 280px; }",
+            "overflow-x: auto",
+            "word-break: normal",
+        ):
+            self.assertIn(expected, self.styles)
+        self.assertNotIn(".workspace-product-line-row {", self.styles)
+        self.assertNotIn("workspace-load-metrics", self.styles)
+
+    def test_delivery_order_product_line_actions_keep_stable_row_identity(self):
+        self._run_workspace_actions_script(
+            """
+            const state = {
+              deliveryOrderForm: {
+                product_lines: [
+                  {
+                    _draft_id: "LINE-A",
+                    product_code: "A",
+                    product_name: "Alpha",
+                    quantity: 1,
+                    unit: "BAG",
+                    package_quantity: 1,
+                    package_unit: "BAG1",
+                  },
+                  {
+                    _draft_id: "LINE-B",
+                    product_code: "B",
+                    product_name: "Beta",
+                    quantity: 2,
+                    unit: "CARTON",
+                    package_quantity: 2,
+                    package_unit: "BOX",
+                  },
+                ],
+              },
+            };
+            let renders = 0;
+            const actions = createWorkspaceActions({
+              state,
+              renderWorkspace: () => { renders += 1; },
+              api: {},
+            });
+
+            const changes = {
+              product_code: "RSING10KG",
+              product_name: "COLOUR RAGS 10KG NET",
+              quantity: "45",
+              unit: "BAG",
+              package_quantity: "45",
+              package_unit: "BAG10",
+            };
+            Object.entries(changes).forEach(([field, value]) => {
+              actions.updateDeliveryOrderProductLine("LINE-A", field, value);
+            });
+            const first = state.deliveryOrderForm.product_lines[0];
+            const second = state.deliveryOrderForm.product_lines[1];
+            if (first.product_name !== changes.product_name ||
+                first.quantity !== 45 ||
+                first.package_quantity !== 45) {
+              throw new Error("Stable row update did not update the requested fields");
+            }
+            if (second.product_code !== "B" || second.product_name !== "Beta") {
+              throw new Error("Stable row update changed a different product line");
+            }
+
+            actions.addDeliveryOrderProductLine();
+            const added = state.deliveryOrderForm.product_lines.at(-1);
+            if (!added._draft_id || state.deliveryOrderForm.product_lines.length !== 3) {
+              throw new Error("Add Product Line did not create a stable draft row");
+            }
+            actions.removeDeliveryOrderProductLine(added._draft_id);
+            if (state.deliveryOrderForm.product_lines.length !== 2 ||
+                state.deliveryOrderForm.product_lines.some(
+                  (line) => line._draft_id === added._draft_id
+                )) {
+              throw new Error("Remove Product Line did not remove the stable draft row");
+            }
+            if (renders !== 2) {
+              throw new Error("Add/remove render behavior changed");
+            }
+            """
+        )
 
     def test_delivery_date_excel_export_is_scoped_busy_and_non_mutating(self):
         self.assertIn(

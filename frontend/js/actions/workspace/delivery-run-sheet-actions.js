@@ -1,3 +1,11 @@
+import {
+  buildDeliveryCloseoutConfirmation,
+  buildDeliveryCloseoutPayload,
+  createDeliveryCloseoutDraft,
+  getDeliveryCloseoutRowErrors,
+  validateDeliveryCloseoutDraft,
+} from "../../utils/delivery-closeout-utils.js";
+
 export function createDeliveryRunSheetActions(context) {
   const {
     api,
@@ -91,6 +99,146 @@ export function createDeliveryRunSheetActions(context) {
     });
   }
 
+  function openDeliveryRunSheetCloseout(runSheetId) {
+    const runSheet = (state.deliveryRunSheets || []).find(
+      (item) => item.run_sheet_id === runSheetId,
+    );
+    if (
+      !runSheet
+      || runSheet.status !== "SAVED"
+      || (runSheet.execution_status || "OPEN") !== "OPEN"
+    ) {
+      return;
+    }
+    state.deliveryRunSheetCloseout = createDeliveryCloseoutDraft(runSheet);
+    state.deliveryActionError = "";
+    state.deliveryActionSuccess = "";
+    renderWorkspace();
+  }
+
+  function closeDeliveryRunSheetCloseout() {
+    const draft = state.deliveryRunSheetCloseout;
+    if (
+      !draft
+      || state.deliveryBusyActionKeys?.[
+        `delivery-closeout:${draft.run_sheet_id}`
+      ]
+    ) {
+      return;
+    }
+    state.deliveryRunSheetCloseout = null;
+    renderWorkspace();
+  }
+
+  function updateDeliveryCloseoutRow(rowId, field, value) {
+    const draft = state.deliveryRunSheetCloseout;
+    const row = draft?.rows?.find(
+      (item) => item.run_sheet_row_id === rowId,
+    );
+    if (!row) {
+      return;
+    }
+    const previousErrors = { ...(row.validation_errors || {}) };
+    row[field] = value;
+    if (field === "outcome" && value !== "RETURN_TO_POOL") {
+      row.reason_code = "";
+      row.note = "";
+      row.next_delivery_date = "";
+    }
+    if (field === "outcome") {
+      row.validation_errors = {};
+    } else {
+      const currentErrors = getDeliveryCloseoutRowErrors(
+        row,
+        draft.delivery_date,
+      );
+      if (Object.prototype.hasOwnProperty.call(previousErrors, field)) {
+        if (currentErrors[field]) {
+          previousErrors[field] = currentErrors[field];
+        } else {
+          delete previousErrors[field];
+        }
+      }
+      if (field === "reason_code" && value !== "OTHER") {
+        delete previousErrors.note;
+      }
+      row.validation_errors = previousErrors;
+    }
+    draft.error = "";
+    return row;
+  }
+
+  function markAllDeliveryCloseoutRowsDelivered() {
+    const draft = state.deliveryRunSheetCloseout;
+    if (!draft) {
+      return;
+    }
+    draft.rows.forEach((row) => {
+      row.outcome = "DELIVERED";
+      row.reason_code = "";
+      row.note = "";
+      row.next_delivery_date = "";
+      row.validation_errors = {};
+    });
+    draft.error = "";
+    return draft;
+  }
+
+  async function submitDeliveryRunSheetCloseout() {
+    const draft = state.deliveryRunSheetCloseout;
+    if (!draft) {
+      return;
+    }
+    const actionKey = `delivery-closeout:${draft.run_sheet_id}`;
+    if (state.deliveryBusyActionKeys?.[actionKey]) {
+      return;
+    }
+    draft.rows.forEach((row) => {
+      row.validation_errors = getDeliveryCloseoutRowErrors(
+        row,
+        draft.delivery_date,
+      );
+    });
+    const error = validateDeliveryCloseoutDraft(draft);
+    if (error) {
+      draft.error = error;
+      return { error, validation: true };
+    }
+    if (!confirmAction(buildDeliveryCloseoutConfirmation(draft))) {
+      return;
+    }
+    await runDeliveryAction(
+      actionKey,
+      async (context) => {
+        const closedRunSheet = await api.closeDeliveryRunSheet(
+          draft.run_sheet_id,
+          buildDeliveryCloseoutPayload(draft),
+        );
+        if (!isDeliveryMutationCurrent(context)) {
+          return;
+        }
+        state.deliveryRunSheetCloseout = null;
+        const boardPromise = api.getDeliveryWorkspaceBoard(state.dispatchDate);
+        await loadDeliveryRoute(context.route);
+        const board = await boardPromise;
+        if (isDeliveryMutationCurrent(context)) {
+          state.deliveryBoard = board;
+          const summary = closedRunSheet.closeout_summary || {};
+          state.deliveryActionSuccess = [
+            "Run sheet closed.",
+            `${Number(summary.delivered_count || 0)} orders delivered and`,
+            `${Number(summary.returned_to_pool_count || 0)} returned to the Task Pool.`,
+          ].join(" ");
+        }
+      },
+      (requestError) => {
+        if (state.deliveryRunSheetCloseout) {
+          state.deliveryRunSheetCloseout.error = requestError.message;
+        }
+      },
+    );
+  }
+
   async function exportDeliveryRunSheet(runSheetId) {
     await runDeliveryAction(`delivery-export:${runSheetId}`, async () => {
       await api.exportDeliveryRunSheetExcel(runSheetId);
@@ -124,6 +272,11 @@ export function createDeliveryRunSheetActions(context) {
     confirmGenerateDeliveryRunSheet,
     saveDeliveryRunSheet,
     cancelDeliveryRunSheet,
+    openDeliveryRunSheetCloseout,
+    closeDeliveryRunSheetCloseout,
+    updateDeliveryCloseoutRow,
+    markAllDeliveryCloseoutRowsDelivered,
+    submitDeliveryRunSheetCloseout,
     exportDeliveryRunSheet,
     exportDeliveryRunSheets,
     navigateToDeliveryRunSheets,

@@ -115,6 +115,17 @@ export function createDailyRunSheetPaper(
       `Workspace date: ${formatOptional(runSheet.dispatch_date)}`,
     );
   }
+  metadataValues.push(
+    `Execution: ${formatOptional(runSheet.execution_status, "OPEN")}`,
+  );
+  if ((runSheet.execution_status || "OPEN") === "CLOSED") {
+    metadataValues.push(
+      `Closed: ${formatOptional(runSheet.closed_at)}`,
+      `Closed by: ${formatOptional(runSheet.closed_by_account_name, "Unknown")}`,
+      `Delivered: ${Number(runSheet.closeout_summary?.delivered_count || 0)}`,
+      `Returned to pool: ${Number(runSheet.closeout_summary?.returned_to_pool_count || 0)}`,
+    );
+  }
   metadataValues.forEach((value) => {
     const item = document.createElement("span");
     item.textContent = value;
@@ -123,6 +134,10 @@ export function createDailyRunSheetPaper(
   metadata.append(createBadge(
     runSheet.status,
     String(runSheet.status || "").toLowerCase(),
+  ));
+  metadata.append(createBadge(
+    runSheet.execution_status || "OPEN",
+    String(runSheet.execution_status || "OPEN").toLowerCase(),
   ));
 
   const operationalFields = document.createElement("div");
@@ -137,10 +152,17 @@ export function createDailyRunSheetPaper(
     operationalFields.append(field);
   });
 
+  const tableShell = document.createElement("section");
+  tableShell.className = "workspace-daily-run-sheet-table-region";
+  const tableHint = document.createElement("p");
+  tableHint.className = "workspace-daily-run-sheet-scroll-hint";
+  tableHint.id = `run-sheet-scroll-hint-${runSheet.run_sheet_id}`;
+  tableHint.textContent = "Scroll horizontally to review all delivery and signature columns.";
   const tableRegion = document.createElement("div");
   tableRegion.className = "workspace-daily-run-sheet-table-scroll";
   tableRegion.tabIndex = 0;
   tableRegion.setAttribute("aria-label", "Daily Run Sheet order table");
+  tableRegion.setAttribute("aria-describedby", tableHint.id);
   const table = document.createElement("table");
   table.className = "workspace-daily-run-sheet-table";
   const head = document.createElement("thead");
@@ -167,6 +189,7 @@ export function createDailyRunSheetPaper(
   });
   table.append(head, body);
   tableRegion.append(table);
+  tableShell.append(tableHint, tableRegion);
 
   const finish = document.createElement("p");
   finish.className = "workspace-daily-run-sheet-finish";
@@ -204,7 +227,10 @@ export function createDailyRunSheetPaper(
   if (!embedded) {
     paper.append(metadata);
   }
-  paper.append(operationalFields, tableRegion, finish);
+  paper.append(operationalFields, tableShell, finish);
+  if (isHistory && (runSheet.outcomes || []).length) {
+    paper.append(createRunSheetOutcomeDetails(runSheet));
+  }
   if (!embedded) {
     paper.append(actionsRow);
   }
@@ -334,7 +360,16 @@ export function createRunSheetDocumentCard(runSheet, state, actions) {
   const heading = document.createElement("h3");
   heading.textContent = formatOptional(runSheet.driver_name_snapshot, runSheet.driver_id);
   identity.append(kicker, heading);
-  top.append(identity, createBadge(runSheet.status, runSheet.status.toLowerCase()));
+  const badges = document.createElement("div");
+  badges.className = "workspace-run-sheet-badges";
+  badges.append(
+    createBadge(runSheet.status, runSheet.status.toLowerCase()),
+    createBadge(
+      runSheet.execution_status || "OPEN",
+      String(runSheet.execution_status || "OPEN").toLowerCase(),
+    ),
+  );
+  top.append(identity, badges);
 
   const meta = document.createElement("p");
   meta.className = "workspace-run-sheet-card-meta";
@@ -343,12 +378,21 @@ export function createRunSheetDocumentCard(runSheet, state, actions) {
     `Delivery date: ${formatOptional(runSheet.delivery_date)}`,
     `Driver: ${formatOptional(runSheet.driver_name_snapshot, runSheet.driver_id)}`,
     `Status: ${formatOptional(runSheet.status)}`,
+    `Execution: ${formatOptional(runSheet.execution_status, "OPEN")}`,
     `Generated: ${formatOptional(runSheet.generated_at)}`,
   ];
   if (runSheet.status === "SAVED") {
     metadata.push(
       `Saved: ${formatOptional(runSheet.saved_at)}`,
       `Saved by: ${formatOptional(runSheet.saved_by_account_name, "Unknown")}`,
+    );
+  }
+  if ((runSheet.execution_status || "OPEN") === "CLOSED") {
+    metadata.push(
+      `Delivered: ${Number(runSheet.closeout_summary?.delivered_count || 0)}`,
+      `Returned to pool: ${Number(runSheet.closeout_summary?.returned_to_pool_count || 0)}`,
+      `Closed: ${formatOptional(runSheet.closed_at)}`,
+      `Closed by: ${formatOptional(runSheet.closed_by_account_name, "Unknown")}`,
     );
   }
   meta.textContent = metadata.join(" | ");
@@ -368,11 +412,25 @@ export function createRunSheetDocumentCard(runSheet, state, actions) {
   }
   if (runSheet.status === "SAVED") {
     const isExporting = isBusy(state, `delivery-export:${runSheet.run_sheet_id}`);
+    const isOpen = (runSheet.execution_status || "OPEN") === "OPEN";
+    const isClosing = isBusy(
+      state,
+      `delivery-closeout:${runSheet.run_sheet_id}`,
+    );
+    if (isOpen) {
+      actionsRow.append(
+        createActionButton(
+          isClosing ? "Closing..." : "Close Run Sheet",
+          () => actions.openDeliveryRunSheetCloseout(runSheet.run_sheet_id),
+          { disabled: isClosing, primary: true },
+        ),
+      );
+    }
     actionsRow.append(
       createActionButton(
         isExporting ? "Exporting..." : "Export Excel",
         () => actions.exportDeliveryRunSheet(runSheet.run_sheet_id),
-        { disabled: isExporting, primary: true },
+        { disabled: isExporting },
       ),
     );
   }
@@ -383,4 +441,49 @@ export function createRunSheetDocumentCard(runSheet, state, actions) {
     actionsRow,
   );
   return card;
+}
+
+export function createRunSheetOutcomeDetails(runSheet) {
+  const section = document.createElement("section");
+  section.className = "workspace-run-sheet-outcomes";
+  const heading = document.createElement("h4");
+  heading.textContent = "Closeout outcomes";
+  section.append(heading);
+  const outcomesByRow = new Map(
+    (runSheet.outcomes || []).map((outcome) => [
+      outcome.run_sheet_row_id,
+      outcome,
+    ]),
+  );
+  const list = document.createElement("div");
+  list.className = "workspace-run-sheet-outcome-list";
+  dailyRunSheetSnapshotRows(runSheet).forEach((order) => {
+    const outcome = outcomesByRow.get(order.row_id);
+    if (!outcome) {
+      return;
+    }
+    const item = document.createElement("article");
+    item.className = "workspace-run-sheet-outcome";
+    const title = document.createElement("strong");
+    title.textContent = [
+      formatOptional(
+        order.invoice_number_snapshot || order.order_no_snapshot,
+        order.order_id_snapshot,
+      ),
+      formatOptional(order.company_name_snapshot),
+    ].join(" - ");
+    const detail = document.createElement("span");
+    detail.textContent = outcome.outcome === "DELIVERED"
+      ? "Delivered"
+      : [
+        "Returned to Delivery Task Pool",
+        `Next date: ${formatOptional(outcome.next_delivery_date)}`,
+        `Reason: ${formatOptional(outcome.reason_code)}`,
+        outcome.note ? `Note: ${outcome.note}` : "",
+      ].filter(Boolean).join(" | ");
+    item.append(title, detail);
+    list.append(item);
+  });
+  section.append(list);
+  return section;
 }

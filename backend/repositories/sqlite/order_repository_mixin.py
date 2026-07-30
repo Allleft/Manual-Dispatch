@@ -104,7 +104,8 @@ class SQLiteOrderRepositoryMixin:
                     carton_quantity = ?,
                     start_time = ?,
                     end_time = ?,
-                    note = ?
+                    note = ?,
+                    status = ?
                 WHERE order_id = ?
                 """,
                 (
@@ -125,6 +126,7 @@ class SQLiteOrderRepositoryMixin:
                     order.start_time,
                     order.end_time,
                     order.note,
+                    order.status,
                     order.order_id,
                 ),
             )

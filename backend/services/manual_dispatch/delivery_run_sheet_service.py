@@ -1,12 +1,15 @@
 import sqlite3
+from dataclasses import replace
 from datetime import datetime, timezone
 from uuid import uuid4
 
 from backend.errors import StateChangedConflictError
 
 from backend.schemas import (
+    CloseDeliveryRunSheetRowRequest,
     DeliveryRunSheet,
     DeliveryRunSheetOrderSnapshot,
+    DeliveryRunSheetOutcome,
     DeliveryRunSheetTrip,
     ProductDetailLine,
 )
@@ -17,6 +20,21 @@ from backend.services.manual_dispatch.normalization import (
     clean_required_text,
 )
 from backend.services.manual_dispatch.transaction import immediate_transactional
+
+
+DELIVERY_RUN_SHEET_OUTCOMES = frozenset({"DELIVERED", "RETURN_TO_POOL"})
+DELIVERY_RETURN_REASON_CODES = frozenset(
+    {
+        "TIME_RAN_OUT",
+        "CUSTOMER_UNAVAILABLE",
+        "CUSTOMER_CLOSED",
+        "INCORRECT_ADDRESS",
+        "DELIVERY_REFUSED",
+        "DRIVER_OR_VEHICLE_ISSUE",
+        "LOAD_OR_STOCK_ISSUE",
+        "OTHER",
+    }
+)
 
 
 class DeliveryRunSheetService:
@@ -126,6 +144,77 @@ class DeliveryRunSheetService:
             raise ValueError("Only saved Delivery Run Sheets can be exported.")
         return run_sheet
 
+    @immediate_transactional
+    def close_saved(self, run_sheet_id, request, operator_identity):
+        run_sheet_id = clean_required_text(run_sheet_id, "run_sheet_id")
+        run_sheet = self.repository.get_delivery_run_sheet(run_sheet_id)
+        if not run_sheet:
+            raise ValueError(f"Delivery Run Sheet does not exist: {run_sheet_id}")
+        if (
+            run_sheet.status != "SAVED"
+            or getattr(run_sheet, "execution_status", "OPEN") != "OPEN"
+        ):
+            raise StateChangedConflictError(
+                "Only saved, open Delivery Run Sheets can be closed."
+            )
+        account = self.validator.validate_saved_by_account(
+            operator_identity.account_name,
+            operator_identity.account_id,
+        )
+        validated_rows = self._validate_closeout_rows(run_sheet, request)
+        recorded_at = _timestamp()
+        outcomes = [
+            DeliveryRunSheetOutcome(
+                outcome_id=f"DRO-{uuid4().hex.upper()}",
+                run_sheet_id=run_sheet.run_sheet_id,
+                run_sheet_row_id=item["snapshot"].row_id,
+                order_id=item["order"].order_id,
+                outcome=item["outcome"],
+                reason_code=item["reason_code"],
+                note=item["note"],
+                next_delivery_date=item["next_delivery_date"],
+                recorded_at=recorded_at,
+                recorded_by_account_id=account.account_id,
+                recorded_by_account_name=account.account_name,
+            )
+            for item in validated_rows
+        ]
+        try:
+            for item in validated_rows:
+                order = item["order"]
+                if item["outcome"] == "DELIVERED":
+                    updated_order = replace(order, status="FINALIZED")
+                else:
+                    updated_order = replace(
+                        order,
+                        status="ACTIVE",
+                        delivery_date=item["next_delivery_date"],
+                    )
+                self.repository.update_order(updated_order)
+                removed = self.repository.remove_assignments_for_task(
+                    "ORDER",
+                    order.order_id,
+                )
+                if not removed:
+                    raise StateChangedConflictError(
+                        f"Order assignment changed during closeout: {order.order_id}"
+                    )
+            self.repository.insert_delivery_run_sheet_outcomes(outcomes)
+            if not self.repository.mark_delivery_run_sheet_closed(
+                run_sheet.run_sheet_id,
+                recorded_at,
+                account.account_id,
+                account.account_name,
+            ):
+                raise StateChangedConflictError(
+                    "Delivery Run Sheet state changed during closeout."
+                )
+        except sqlite3.IntegrityError as error:
+            raise StateChangedConflictError(
+                "Delivery Run Sheet state changed during closeout."
+            ) from error
+        return self.get(run_sheet.run_sheet_id)
+
     def list_for_date_export(self, delivery_date):
         delivery_date = clean_required_iso_date(delivery_date, "delivery_date")
         run_sheets = [
@@ -150,6 +239,116 @@ class DeliveryRunSheetService:
         raise ValueError(
             f"Only generated Delivery Run Sheets can be {past_tense}."
         )
+
+    def _validate_closeout_rows(self, run_sheet, request):
+        request_rows = getattr(request, "rows", None)
+        if not isinstance(request_rows, list):
+            raise ValueError("rows must be a list.")
+        snapshots = [
+            row
+            for trip in run_sheet.trips
+            for row in trip.orders
+        ]
+        if any(
+            row.task_type != "ORDER"
+            or not row.order_id_snapshot
+            or row.order_id_snapshot != row.task_id
+            for row in snapshots
+        ):
+            raise StateChangedConflictError(
+                "Delivery Run Sheet contains an invalid non-order snapshot."
+            )
+        snapshot_by_row_id = {row.row_id: row for row in snapshots}
+        submitted_row_ids = []
+        normalized_rows = []
+        for request_row in request_rows:
+            if not isinstance(request_row, CloseDeliveryRunSheetRowRequest):
+                raise ValueError("Each closeout row must be a valid row object.")
+            row_id = clean_required_text(
+                request_row.run_sheet_row_id,
+                "run_sheet_row_id",
+            )
+            submitted_row_ids.append(row_id)
+            snapshot = snapshot_by_row_id.get(row_id)
+            if not snapshot:
+                raise StateChangedConflictError(
+                    f"Closeout row does not belong to this run sheet: {row_id}"
+                )
+            normalized_rows.append(
+                self._validate_closeout_row(
+                    run_sheet,
+                    snapshot,
+                    request_row,
+                )
+            )
+        if len(submitted_row_ids) != len(set(submitted_row_ids)):
+            raise StateChangedConflictError(
+                "Each Delivery Run Sheet row must be submitted exactly once."
+            )
+        if set(submitted_row_ids) != set(snapshot_by_row_id):
+            raise StateChangedConflictError(
+                "Closeout must cover every Delivery Run Sheet row exactly once."
+            )
+        return normalized_rows
+
+    def _validate_closeout_row(self, run_sheet, snapshot, request_row):
+        outcome = clean_required_text(request_row.outcome, "outcome").upper()
+        if outcome not in DELIVERY_RUN_SHEET_OUTCOMES:
+            raise ValueError(
+                "outcome must be DELIVERED or RETURN_TO_POOL."
+            )
+        reason_code = clean_optional_text(request_row.reason_code)
+        reason_code = reason_code.upper() if reason_code else None
+        note = clean_optional_text(request_row.note)
+        next_delivery_date = clean_optional_iso_date(
+            request_row.next_delivery_date,
+            "next_delivery_date",
+        )
+        if outcome == "DELIVERED":
+            if reason_code or next_delivery_date:
+                raise ValueError(
+                    "Delivered rows cannot include a reason or next delivery date."
+                )
+        else:
+            if not reason_code or reason_code not in DELIVERY_RETURN_REASON_CODES:
+                raise ValueError(
+                    "Returned rows require an allowed reason_code."
+                )
+            next_delivery_date = clean_required_iso_date(
+                request_row.next_delivery_date,
+                "next_delivery_date",
+            )
+            if next_delivery_date <= run_sheet.delivery_date:
+                raise ValueError(
+                    "next_delivery_date must be later than the original delivery date."
+                )
+            if reason_code == "OTHER" and not note:
+                raise ValueError("OTHER return reasons require a note.")
+        order = self.repository.get_order(snapshot.order_id_snapshot)
+        assignment = self.repository.find_assignment_for_task(
+            "ORDER",
+            snapshot.order_id_snapshot,
+        )
+        if (
+            not order
+            or order.status != "ACTIVE"
+            or order.delivery_date != run_sheet.delivery_date
+            or not assignment
+            or assignment.driver_id != run_sheet.driver_id
+            or assignment.trip_no != snapshot.trip_no
+        ):
+            raise StateChangedConflictError(
+                f"Order state changed since the run sheet was saved: "
+                f"{snapshot.order_id_snapshot}"
+            )
+        return {
+            "snapshot": snapshot,
+            "order": order,
+            "outcome": outcome,
+            "reason_code": reason_code,
+            "note": note,
+            "next_delivery_date": next_delivery_date,
+        }
 
     def _build_trips(self, delivery_date, driver_id):
         assignments = [

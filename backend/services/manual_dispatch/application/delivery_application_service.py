@@ -228,6 +228,41 @@ class DeliveryApplicationService(FacadeApplicationService):
         )
         return run_sheet
 
+    def close_saved_delivery_run_sheet(
+        self,
+        run_sheet_id,
+        request,
+        operator_identity,
+    ):
+        self._ensure_workspace_ready("delivery")
+        current = self.repository.get_delivery_run_sheet(run_sheet_id)
+        try:
+            run_sheet = self.delivery_run_sheet_service.close_saved(
+                run_sheet_id,
+                request,
+                operator_identity,
+            )
+        except Exception as error:
+            self._record_failed_logbook(
+                workspace="DELIVERY",
+                action="DELIVERY_RUN_SHEET_CLOSED",
+                entity_type="DELIVERY_RUN_SHEET",
+                entity_id=run_sheet_id,
+                summary=f"Delivery Run Sheet {run_sheet_id} closeout failed.",
+                dispatch_date=current.dispatch_date if current else None,
+                delivery_date=current.delivery_date if current else None,
+                driver=(
+                    current.driver_name_snapshot
+                    if current
+                    else None
+                ),
+                run_sheet_id=run_sheet_id,
+                metadata={"failure_reason": str(error)},
+            )
+            raise
+        self.delivery_event_recorder.record_delivery_run_sheet_closeout(run_sheet)
+        return run_sheet
+
     def cancel_generated_delivery_run_sheet(self, run_sheet_id):
         self._ensure_workspace_ready("delivery")
         current = self.repository.get_delivery_run_sheet(run_sheet_id)

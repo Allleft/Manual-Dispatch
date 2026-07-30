@@ -270,6 +270,20 @@ export function createDeliveryAttacheActions(context) {
     renderWorkspace();
   }
 
+  function updateDeliveryAttacheReviewSearch(value) {
+    state.deliveryAttacheImportState = {
+      ...(state.deliveryAttacheImportState || {}),
+      search: String(value || ""),
+    };
+  }
+
+  function updateDeliveryAttacheReviewFilter(value) {
+    state.deliveryAttacheImportState = {
+      ...(state.deliveryAttacheImportState || {}),
+      filter: String(value || "ALL"),
+    };
+  }
+
   async function commitDeliveryAttacheImport() {
     const importState = state.deliveryAttacheImportState || {};
     const selectedRows = (importState.rows || []).filter((row) => row.selected);
@@ -336,6 +350,8 @@ export function createDeliveryAttacheActions(context) {
       files: [],
       rows: [],
       expandedRowIds: {},
+      search: "",
+      filter: "ALL",
       error: "",
       success: "",
     };
@@ -365,6 +381,8 @@ export function createDeliveryAttacheActions(context) {
     toggleDeliveryAttacheImportExpanded,
     selectAllReadyDeliveryAttacheRows,
     clearDeliveryAttacheImportSelection,
+    updateDeliveryAttacheReviewSearch,
+    updateDeliveryAttacheReviewFilter,
     commitDeliveryAttacheImport,
     hasDeliveryAttacheDraft,
     invalidateDeliveryAttachePreview,

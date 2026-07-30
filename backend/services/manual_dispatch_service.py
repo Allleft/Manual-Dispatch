@@ -183,6 +183,18 @@ class ManualDispatchService:
     def save_generated_delivery_run_sheet(self, run_sheet_id, request):
         return self.delivery_application_service.save_generated_delivery_run_sheet(run_sheet_id, request)
 
+    def close_saved_delivery_run_sheet(
+        self,
+        run_sheet_id,
+        request,
+        operator_identity,
+    ):
+        return self.delivery_application_service.close_saved_delivery_run_sheet(
+            run_sheet_id,
+            request,
+            operator_identity,
+        )
+
     def cancel_generated_delivery_run_sheet(self, run_sheet_id):
         return self.delivery_application_service.cancel_generated_delivery_run_sheet(run_sheet_id)
 

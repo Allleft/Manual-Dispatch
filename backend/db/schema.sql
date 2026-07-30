@@ -291,8 +291,13 @@ CREATE TABLE IF NOT EXISTS delivery_run_sheets (
     saved_by_account_name TEXT,
     saved_by_account_id INTEGER,
     legacy_summary_id TEXT,
+    execution_status TEXT NOT NULL DEFAULT 'OPEN',
+    closed_at TEXT,
+    closed_by_account_id INTEGER,
+    closed_by_account_name TEXT,
     UNIQUE(dispatch_date, delivery_date, driver_id),
     CHECK(status IN ('GENERATED', 'SAVED')),
+    CHECK(execution_status IN ('OPEN', 'CLOSED')),
     FOREIGN KEY(saved_by_account_id) REFERENCES operator_accounts(id)
 );
 
@@ -326,6 +331,37 @@ CREATE TABLE IF NOT EXISTS delivery_run_sheet_rows (
     FOREIGN KEY(run_sheet_id) REFERENCES delivery_run_sheets(run_sheet_id)
         ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS delivery_run_sheet_outcomes (
+    outcome_id TEXT PRIMARY KEY,
+    run_sheet_id TEXT NOT NULL,
+    run_sheet_row_id TEXT NOT NULL UNIQUE,
+    order_id TEXT NOT NULL,
+    outcome TEXT NOT NULL,
+    reason_code TEXT,
+    note TEXT,
+    next_delivery_date TEXT,
+    recorded_at TEXT NOT NULL,
+    recorded_by_account_id INTEGER NOT NULL,
+    recorded_by_account_name TEXT NOT NULL,
+    CHECK(outcome IN ('DELIVERED', 'RETURN_TO_POOL')),
+    CHECK(
+        (outcome = 'DELIVERED'
+            AND reason_code IS NULL
+            AND next_delivery_date IS NULL)
+        OR
+        (outcome = 'RETURN_TO_POOL'
+            AND reason_code IS NOT NULL
+            AND next_delivery_date IS NOT NULL)
+    ),
+    FOREIGN KEY(run_sheet_id) REFERENCES delivery_run_sheets(run_sheet_id)
+        ON DELETE CASCADE,
+    FOREIGN KEY(run_sheet_row_id) REFERENCES delivery_run_sheet_rows(row_id)
+        ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_delivery_run_sheet_outcomes_run_sheet
+ON delivery_run_sheet_outcomes (run_sheet_id);
 
 CREATE TABLE IF NOT EXISTS opshop_pickup_collections (
     collection_id TEXT PRIMARY KEY,

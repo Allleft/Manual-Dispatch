@@ -84,6 +84,16 @@ export async function apiSaveGeneratedDeliveryRunSheet(runSheetId, payload) {
   );
 }
 
+export async function apiCloseDeliveryRunSheet(runSheetId, payload) {
+  return requestJson(
+    `/api/manual-dispatch/delivery/run-sheets/${encodeURIComponent(runSheetId)}/closeout`,
+    {
+      method: "POST",
+      body: payload,
+    },
+  );
+}
+
 export async function apiCancelGeneratedDeliveryRunSheet(runSheetId) {
   return requestJson(
     `/api/manual-dispatch/delivery/run-sheets/${encodeURIComponent(runSheetId)}/cancel-generated`,

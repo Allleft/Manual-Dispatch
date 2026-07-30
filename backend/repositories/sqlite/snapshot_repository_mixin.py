@@ -1,6 +1,7 @@
 from datetime import date
 
 from backend.db.connection import connect
+from backend.errors import StateChangedConflictError
 
 
 def _parse_iso_date(value):
@@ -214,7 +215,13 @@ class SQLiteSnapshotRepositoryMixin:
                 FROM delivery_run_sheet_rows run_sheet_row
                 JOIN delivery_run_sheets run_sheet
                     ON run_sheet.run_sheet_id = run_sheet_row.run_sheet_id
-                WHERE run_sheet.status IN ('GENERATED', 'SAVED')
+                WHERE (
+                        run_sheet.status = 'GENERATED'
+                        OR (
+                            run_sheet.status = 'SAVED'
+                            AND COALESCE(run_sheet.execution_status, 'OPEN') = 'OPEN'
+                        )
+                    )
                     AND run_sheet_row.task_type = 'ORDER'
                     AND run_sheet_row.task_id IS NOT NULL
                     AND run_sheet_row.task_id != ''
@@ -265,7 +272,13 @@ class SQLiteSnapshotRepositoryMixin:
                 FROM delivery_run_sheets run_sheet
                 JOIN delivery_run_sheet_rows run_sheet_row
                     ON run_sheet_row.run_sheet_id = run_sheet.run_sheet_id
-                WHERE run_sheet.status IN ('GENERATED', 'SAVED')
+                WHERE (
+                        run_sheet.status = 'GENERATED'
+                        OR (
+                            run_sheet.status = 'SAVED'
+                            AND COALESCE(run_sheet.execution_status, 'OPEN') = 'OPEN'
+                        )
+                    )
                     AND run_sheet_row.task_type = 'ORDER'
                     AND run_sheet_row.task_id = ?
                 ORDER BY
@@ -323,6 +336,19 @@ class SQLiteSnapshotRepositoryMixin:
     def upsert_delivery_run_sheet(self, run_sheet):
         with connect(self.db_path) as connection:
             connection.execute("BEGIN IMMEDIATE")
+            existing = connection.execute(
+                """
+                SELECT execution_status
+                FROM delivery_run_sheets
+                WHERE run_sheet_id = ?
+                """,
+                (run_sheet.run_sheet_id,),
+            ).fetchone()
+            if existing and (existing["execution_status"] or "OPEN") == "CLOSED":
+                connection.rollback()
+                raise StateChangedConflictError(
+                    "Closed Delivery Run Sheets are immutable."
+                )
             duplicate = connection.execute(
                 """
                 SELECT run_sheet_id
@@ -363,8 +389,12 @@ class SQLiteSnapshotRepositoryMixin:
                     saved_at,
                     saved_by_account_name,
                     saved_by_account_id,
-                    legacy_summary_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    legacy_summary_id,
+                    execution_status,
+                    closed_at,
+                    closed_by_account_id,
+                    closed_by_account_name
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(run_sheet_id) DO UPDATE SET
                     dispatch_date = excluded.dispatch_date,
                     delivery_date = excluded.delivery_date,
@@ -380,7 +410,11 @@ class SQLiteSnapshotRepositoryMixin:
                     saved_at = excluded.saved_at,
                     saved_by_account_name = excluded.saved_by_account_name,
                     saved_by_account_id = excluded.saved_by_account_id,
-                    legacy_summary_id = excluded.legacy_summary_id
+                    legacy_summary_id = excluded.legacy_summary_id,
+                    execution_status = excluded.execution_status,
+                    closed_at = excluded.closed_at,
+                    closed_by_account_id = excluded.closed_by_account_id,
+                    closed_by_account_name = excluded.closed_by_account_name
                 """,
                 (
                     run_sheet.run_sheet_id,
@@ -399,6 +433,10 @@ class SQLiteSnapshotRepositoryMixin:
                     run_sheet.saved_by_account_name,
                     run_sheet.saved_by_account_id,
                     run_sheet.legacy_summary_id,
+                    run_sheet.execution_status,
+                    run_sheet.closed_at,
+                    run_sheet.closed_by_account_id,
+                    run_sheet.closed_by_account_name,
                 ),
             )
             connection.execute(
@@ -455,6 +493,70 @@ class SQLiteSnapshotRepositoryMixin:
                     )
             connection.commit()
         return self.get_delivery_run_sheet(run_sheet.run_sheet_id)
+
+    def insert_delivery_run_sheet_outcomes(self, outcomes):
+        with connect(self.db_path) as connection:
+            for outcome in outcomes:
+                connection.execute(
+                    """
+                    INSERT INTO delivery_run_sheet_outcomes (
+                        outcome_id,
+                        run_sheet_id,
+                        run_sheet_row_id,
+                        order_id,
+                        outcome,
+                        reason_code,
+                        note,
+                        next_delivery_date,
+                        recorded_at,
+                        recorded_by_account_id,
+                        recorded_by_account_name
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        outcome.outcome_id,
+                        outcome.run_sheet_id,
+                        outcome.run_sheet_row_id,
+                        outcome.order_id,
+                        outcome.outcome,
+                        outcome.reason_code,
+                        outcome.note,
+                        outcome.next_delivery_date,
+                        outcome.recorded_at,
+                        outcome.recorded_by_account_id,
+                        outcome.recorded_by_account_name,
+                    ),
+                )
+            connection.commit()
+
+    def mark_delivery_run_sheet_closed(
+        self,
+        run_sheet_id,
+        closed_at,
+        closed_by_account_id,
+        closed_by_account_name,
+    ):
+        with connect(self.db_path) as connection:
+            cursor = connection.execute(
+                """
+                UPDATE delivery_run_sheets
+                SET execution_status = 'CLOSED',
+                    closed_at = ?,
+                    closed_by_account_id = ?,
+                    closed_by_account_name = ?
+                WHERE run_sheet_id = ?
+                    AND status = 'SAVED'
+                    AND COALESCE(execution_status, 'OPEN') = 'OPEN'
+                """,
+                (
+                    closed_at,
+                    closed_by_account_id,
+                    closed_by_account_name,
+                    run_sheet_id,
+                ),
+            )
+            connection.commit()
+        return cursor.rowcount > 0
 
     def promote_generated_delivery_run_sheet_to_saved(
         self,
