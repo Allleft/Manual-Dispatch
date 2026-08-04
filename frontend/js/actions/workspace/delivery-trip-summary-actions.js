@@ -1,3 +1,6 @@
+import { DEFAULT_TRIP_SUMMARY_DATE } from "../../state/app-state.js";
+
+
 export function createDeliveryTripSummaryActions(context) {
   const {
     api,
@@ -13,12 +16,12 @@ export function createDeliveryTripSummaryActions(context) {
 
   async function loadDeliveryTripSummaryData(
     route = state.workspaceRoute,
-    deliveryDate = state.deliveryTripSummaryDate || state.dispatchDate,
+    deliveryDate = state.deliveryTripSummaryDate || DEFAULT_TRIP_SUMMARY_DATE,
     requestVersion = ++context.deliveryWorkspaceRequestVersion,
     authSessionVersion = state.authSessionVersion,
   ) {
     const scopedDeliveryDate =
-      deliveryDate || state.deliveryTripSummaryDate || state.dispatchDate;
+      deliveryDate || state.deliveryTripSummaryDate || DEFAULT_TRIP_SUMMARY_DATE;
     const isCurrent = () =>
       state.isLoggedIn &&
       state.authSessionVersion === authSessionVersion &&
@@ -43,7 +46,7 @@ export function createDeliveryTripSummaryActions(context) {
   }
 
   async function updateDeliveryTripSummaryDate(nextDate) {
-    const deliveryDate = nextDate || state.dispatchDate;
+    const deliveryDate = nextDate || DEFAULT_TRIP_SUMMARY_DATE;
     if (deliveryDate !== state.deliveryTripSummaryDate) {
       clearDeliveryVehicleTransientState();
     }

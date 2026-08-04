@@ -1,14 +1,18 @@
-import { getTodayLocalDateString } from "../utils/date-utils.js";
+import {
+  getNextBusinessDayLocalDateString,
+  getTodayLocalDateString,
+} from "../utils/date-utils.js";
 
 
 export const DEFAULT_DISPATCH_DATE = getTodayLocalDateString();
+export const DEFAULT_TRIP_SUMMARY_DATE = getNextBusinessDayLocalDateString();
 export const AUTH_ACCOUNT_NAME_SESSION_KEY = "manualDispatchAccountName";
 export const AUTH_ACCOUNT_ID_SESSION_KEY = "manualDispatchAccountId";
 
 
 export const state = {
   dispatchDate: DEFAULT_DISPATCH_DATE,
-  driverSummaryDeliveryDate: DEFAULT_DISPATCH_DATE,
+  driverSummaryDeliveryDate: DEFAULT_TRIP_SUMMARY_DATE,
   activeBoardView: "task-pool",
   workspaceRoute: "home",
   activeWorkspace: "",
@@ -21,7 +25,7 @@ export const state = {
   deliverySavedHistoryRunSheets: [],
   deliveryTripSummaryBoard: null,
   deliveryTripSummaryRunSheets: [],
-  deliveryTripSummaryDate: DEFAULT_DISPATCH_DATE,
+  deliveryTripSummaryDate: DEFAULT_TRIP_SUMMARY_DATE,
   opshopBoard: null,
   opshopPickupCollections: [],
   opshopCollectionEntryDrafts: {},
@@ -32,7 +36,7 @@ export const state = {
   opshopTripSummaryCollections: [],
   opshopTaskPoolView: "regular",
   opshopTaskPoolReturnRoute: "opshop/task-pool/regular",
-  opshopTripSummaryDate: DEFAULT_DISPATCH_DATE,
+  opshopTripSummaryDate: DEFAULT_TRIP_SUMMARY_DATE,
   sharedSpecifications: { drivers: [], vehicles: [] },
   isDeliveryWorkspaceLoading: false,
   deliveryWorkspaceError: "",

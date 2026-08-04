@@ -1,3 +1,5 @@
+import { DEFAULT_TRIP_SUMMARY_DATE } from "../../state/app-state.js";
+
 import { DELIVERY_ROUTES, OPSHOP_ROUTES } from "./workspace-request-context.js";
 
 export function createWorkspaceRouteLoaders(context) {
@@ -162,7 +164,7 @@ export function createWorkspaceRouteLoaders(context) {
           pruneDeliveryDrafts();
         }
       } else if (route === "delivery/trip-summary") {
-        const deliveryDate = state.deliveryTripSummaryDate || dispatchDate;
+        const deliveryDate = state.deliveryTripSummaryDate || DEFAULT_TRIP_SUMMARY_DATE;
         await loadDeliveryTripSummaryData(
           route,
           deliveryDate,
@@ -171,7 +173,7 @@ export function createWorkspaceRouteLoaders(context) {
         );
         return;
       } else if (route === "delivery/run-sheet") {
-        const deliveryDate = state.deliveryTripSummaryDate || dispatchDate;
+        const deliveryDate = state.deliveryTripSummaryDate || DEFAULT_TRIP_SUMMARY_DATE;
         const runSheets = await api.listDeliveryRunSheetsByDeliveryDate(
           deliveryDate,
           "",
@@ -223,7 +225,7 @@ export function createWorkspaceRouteLoaders(context) {
     renderWorkspace();
     try {
       if (route === "opshop/trip-summary") {
-        const pickupDate = state.opshopTripSummaryDate || dispatchDate;
+        const pickupDate = state.opshopTripSummaryDate || DEFAULT_TRIP_SUMMARY_DATE;
         await loadOpShopTripSummaryData(
           route,
           pickupDate,
@@ -232,7 +234,7 @@ export function createWorkspaceRouteLoaders(context) {
         );
         return;
       } else if (route === "opshop/collections") {
-        const pickupDate = state.opshopTripSummaryDate || dispatchDate;
+        const pickupDate = state.opshopTripSummaryDate || DEFAULT_TRIP_SUMMARY_DATE;
         const collections = await api.listOpShopPickupCollectionsByPickupDate(
           pickupDate,
           "",

@@ -1,3 +1,6 @@
+import { DEFAULT_TRIP_SUMMARY_DATE } from "../../state/app-state.js";
+
+
 export function createOpShopTripSummaryActions(context) {
   const {
     api,
@@ -11,12 +14,12 @@ export function createOpShopTripSummaryActions(context) {
 
   async function loadOpShopTripSummaryData(
     route = state.workspaceRoute,
-    pickupDate = state.opshopTripSummaryDate || state.dispatchDate,
+    pickupDate = state.opshopTripSummaryDate || DEFAULT_TRIP_SUMMARY_DATE,
     requestVersion = ++context.opshopWorkspaceRequestVersion,
     authSessionVersion = state.authSessionVersion,
   ) {
     const scopedPickupDate =
-      pickupDate || state.opshopTripSummaryDate || state.dispatchDate;
+      pickupDate || state.opshopTripSummaryDate || DEFAULT_TRIP_SUMMARY_DATE;
     const isCurrent = () =>
       state.isLoggedIn &&
       state.authSessionVersion === authSessionVersion &&
@@ -40,7 +43,7 @@ export function createOpShopTripSummaryActions(context) {
   }
 
   async function updateOpShopTripSummaryDate(nextDate) {
-    state.opshopTripSummaryDate = nextDate || state.dispatchDate;
+    state.opshopTripSummaryDate = nextDate || DEFAULT_TRIP_SUMMARY_DATE;
     if (
       state.workspaceRoute === "opshop/trip-summary"
       || state.workspaceRoute === "opshop/collections"

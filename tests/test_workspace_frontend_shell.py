@@ -377,6 +377,83 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             self.workspace_actions,
         )
 
+    def test_next_business_day_local_date_uses_weekday_rules_without_mutation(self):
+        self._run_frontend_module_script(
+            "js/utils/date-utils.js",
+            """
+            const cases = [
+              [[2026, 8, 3], "2026-08-04"],
+              [[2026, 8, 4], "2026-08-05"],
+              [[2026, 8, 5], "2026-08-06"],
+              [[2026, 8, 6], "2026-08-07"],
+              [[2026, 8, 7], "2026-08-10"],
+              [[2026, 8, 8], "2026-08-10"],
+              [[2026, 8, 9], "2026-08-10"],
+              [[2026, 4, 30], "2026-05-01"],
+              [[2026, 12, 31], "2027-01-01"],
+              [[2026, 7, 31], "2026-08-03"],
+            ];
+            for (const [[year, month, day], expected] of cases) {
+              const input = new Date(year, month - 1, day, 15, 45, 30);
+              const originalTime = input.getTime();
+              const actual = module.getNextBusinessDayLocalDateString(input);
+              if (actual !== expected) {
+                throw new Error(`${year}-${month}-${day} returned ${actual}, expected ${expected}`);
+              }
+              if (input.getTime() !== originalTime) {
+                throw new Error("getNextBusinessDayLocalDateString mutated its Date input");
+              }
+            }
+            """,
+        )
+
+    def test_app_state_separates_trip_summary_default_from_today(self):
+        self._run_frontend_module_script(
+            "js/state/app-state.js",
+            """
+            if (module.DEFAULT_DISPATCH_DATE !== "2026-08-04") {
+              throw new Error(`wrong Dispatch default ${module.DEFAULT_DISPATCH_DATE}`);
+            }
+            if (module.DEFAULT_TRIP_SUMMARY_DATE !== "2026-08-05") {
+              throw new Error(`wrong Trip Summary default ${module.DEFAULT_TRIP_SUMMARY_DATE}`);
+            }
+            for (const field of [
+              "driverSummaryDeliveryDate",
+              "deliveryTripSummaryDate",
+              "opshopTripSummaryDate",
+            ]) {
+              if (module.state[field] !== "2026-08-05") {
+                throw new Error(`${field} did not use the Trip Summary default`);
+              }
+            }
+            for (const field of [
+              "dispatchDate",
+              "deliverySavedHistoryDate",
+              "opshopSavedHistoryDate",
+              "historyDate",
+            ]) {
+              if (module.state[field] !== "2026-08-04") {
+                throw new Error(`${field} no longer defaults to today`);
+              }
+            }
+            """,
+            setup="""
+            const RealDate = Date;
+            globalThis.Date = class extends RealDate {
+              constructor(...args) {
+                if (args.length) {
+                  super(...args);
+                } else {
+                  super(2026, 7, 4, 12, 0, 0, 0);
+                }
+              }
+              static now() {
+                return new RealDate(2026, 7, 4, 12, 0, 0, 0).getTime();
+              }
+            };
+            """,
+        )
+
     def test_delivery_stage_6d_tools_are_scoped_to_delivery_workspace(self):
         for label in (
             "Search",
@@ -792,7 +869,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("navigateWorkspaceRoute = null", self.workspace_actions)
         self.assertIn('await navigateWorkspaceRoute("delivery/run-sheet")', self.workspace_actions)
         self.assertNotIn('window.history.pushState(null, "", "#delivery/run-sheet")', self.workspace_actions)
-        self.assertIn("const deliveryDate = nextDate || state.dispatchDate", self.workspace_actions)
+        self.assertIn("const deliveryDate = nextDate || DEFAULT_TRIP_SUMMARY_DATE", self.workspace_actions)
         self.assertIn("state.deliveryTripSummaryDate = deliveryDate", self.workspace_actions)
         self.assertIn("loadDeliveryTripSummaryData", self.workspace_actions)
         self.assertIn("api.getDeliveryTripSummary", self.workspace_actions)
@@ -3575,7 +3652,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("Generated Pickup Collection is awaiting confirmation", self.opshop_renderer)
         self.assertIn("readyPickupCollectionCandidates(board, collections)", self.opshop_renderer)
         self.assertIn("Generate Pickup Collection", self.opshop_renderer)
-        self.assertIn("opshopTripSummaryDate: DEFAULT_DISPATCH_DATE", self.state)
+        self.assertIn("opshopTripSummaryDate: DEFAULT_TRIP_SUMMARY_DATE", self.state)
         self.assertIn("state.opshopTripSummaryBoard", self.opshop_renderer)
         self.assertIn("state.opshopTripSummaryCollections", self.opshop_renderer)
         self.assertIn("async function updateOpShopTripSummaryDate(nextDate)", self.workspace_actions)
@@ -4866,6 +4943,122 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             """
         )
 
+    def test_trip_summary_empty_fallback_and_route_reload_use_shared_default(self):
+        self._run_workspace_actions_script(
+            """
+            const deliveryDates = [];
+            const opshopDates = [];
+            const state = {
+              isLoggedIn: true,
+              authSessionVersion: 1,
+              workspaceRoute: "delivery/trip-summary",
+              activeWorkspace: "delivery",
+              dispatchDate: "2026-08-04",
+              deliveryTripSummaryDate: "",
+              deliveryTripSummaryBoard: null,
+              deliveryTripSummaryRunSheets: [],
+              deliveryRunSheets: [],
+              deliveryAssignmentDrafts: {},
+              deliveryVehicleDrafts: {},
+              deliveryVehicleClaims: {},
+              deliveryVehicleErrors: {},
+              deliveryVehiclePendingKeys: {},
+              deliveryBusyActionKeys: {},
+              deliveryActionError: "",
+              deliveryActionSuccess: "",
+              isDeliveryWorkspaceLoading: false,
+              deliveryWorkspaceError: "",
+              opshopTripSummaryDate: "",
+              opshopTripSummaryBoard: null,
+              opshopTripSummaryCollections: [],
+              opshopPickupCollections: [],
+              opshopAssignmentDrafts: {},
+              countrysideRouteGroupDrafts: {},
+              opshopBusyActionKeys: {},
+              opshopActionError: "",
+              isOpShopWorkspaceLoading: false,
+              opshopWorkspaceError: "",
+            };
+            const api = {
+              getDeliveryTripSummary: async ({ deliveryDate }) => {
+                deliveryDates.push(deliveryDate);
+                return { orders: [], assignments: [], driver_vehicle_assignments: [], drivers: [] };
+              },
+              listDeliveryRunSheetsByDeliveryDate: async (deliveryDate) => {
+                deliveryDates.push(deliveryDate);
+                return [];
+              },
+              getOpShopTripSummary: async ({ pickupDate }) => {
+                opshopDates.push(pickupDate);
+                return { opshop_pickups: [], drivers: [] };
+              },
+              listOpShopPickupCollectionsByPickupDate: async (pickupDate) => {
+                opshopDates.push(pickupDate);
+                return [];
+              },
+            };
+            const actions = createWorkspaceActions({
+              state,
+              renderWorkspace: () => {},
+              api,
+            });
+
+            await actions.updateDeliveryTripSummaryDate("");
+            if (state.deliveryTripSummaryDate !== "2026-08-05"
+                || deliveryDates.some((date) => date !== "2026-08-05")) {
+              throw new Error("Delivery empty date did not use the shared next-business-day default");
+            }
+
+            state.workspaceRoute = "opshop/trip-summary";
+            state.activeWorkspace = "opshop";
+            await actions.updateOpShopTripSummaryDate("");
+            if (state.opshopTripSummaryDate !== "2026-08-05"
+                || opshopDates.some((date) => date !== "2026-08-05")) {
+              throw new Error("OP SHOP empty date did not use the shared next-business-day default");
+            }
+
+            state.deliveryTripSummaryDate = "2026-07-20";
+            state.workspaceRoute = "delivery/run-sheet";
+            state.activeWorkspace = "delivery";
+            await actions.loadWorkspaceRoute(state.workspaceRoute);
+            state.workspaceRoute = "delivery/trip-summary";
+            await actions.loadWorkspaceRoute(state.workspaceRoute);
+            if (state.deliveryTripSummaryDate !== "2026-07-20"
+                || !deliveryDates.slice(-3).every((date) => date === "2026-07-20")) {
+              throw new Error("Delivery route reload replaced the manual Trip Summary date");
+            }
+
+            state.opshopTripSummaryDate = "2026-09-14";
+            state.workspaceRoute = "opshop/collections";
+            state.activeWorkspace = "opshop";
+            await actions.loadWorkspaceRoute(state.workspaceRoute);
+            state.workspaceRoute = "opshop/trip-summary";
+            await actions.loadWorkspaceRoute(state.workspaceRoute);
+            if (state.opshopTripSummaryDate !== "2026-09-14"
+                || !opshopDates.slice(-3).every((date) => date === "2026-09-14")) {
+              throw new Error("OP SHOP route reload replaced the manual Trip Summary date");
+            }
+            if (state.dispatchDate !== "2026-08-04") {
+              throw new Error("Trip Summary date changes modified Dispatch Date");
+            }
+            """,
+            setup="""
+            const RealDate = Date;
+            globalThis.Date = class extends RealDate {
+              constructor(...args) {
+                if (args.length) {
+                  super(...args);
+                } else {
+                  super(2026, 7, 4, 12, 0, 0, 0);
+                }
+              }
+              static now() {
+                return new RealDate(2026, 7, 4, 12, 0, 0, 0).getTime();
+              }
+            };
+            """,
+        )
+
     def test_opshop_default_driver_is_suggested_not_auto_submitted(self):
         self.assertIn("Suggested default", self.opshop_renderer)
         self.assertIn("defaultDriverHint", self.opshop_renderer)
@@ -5897,10 +6090,11 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             """
         )
 
-    def _run_frontend_module_script(self, relative_path, body):
+    def _run_frontend_module_script(self, relative_path, body, setup=""):
         module_uri = (FRONTEND_ROOT / relative_path).as_uri()
         script = textwrap.dedent(
             f"""
+            {setup}
             const module = await import({module_uri!r});
             {body}
             """
@@ -5933,10 +6127,11 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         )
         self.assertEqual(0, result.returncode, result.stderr or result.stdout)
 
-    def _run_workspace_actions_script(self, body):
+    def _run_workspace_actions_script(self, body, setup=""):
         module_uri = (FRONTEND_ROOT / "js/actions/workspace-actions.js").as_uri()
         script = textwrap.dedent(
             f"""
+            {setup}
             globalThis.window = {{
               location: {{ protocol: "http:", hash: "" }},
               history: {{
