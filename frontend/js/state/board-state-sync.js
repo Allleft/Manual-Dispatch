@@ -1,4 +1,4 @@
-import { state } from "./app-state.js";
+import { DEFAULT_TRIP_SUMMARY_DATE, state } from "./app-state.js";
 
 
 export function normalizeBoardResponse(payload) {
@@ -30,7 +30,7 @@ export function applyBoardResponse(payload, cleanupPendingSelections) {
   const board = normalizeBoardResponse(payload);
   state.dispatchDate = board.dispatchDate;
   if (!state.driverSummaryDeliveryDate) {
-    state.driverSummaryDeliveryDate = board.dispatchDate;
+    state.driverSummaryDeliveryDate = DEFAULT_TRIP_SUMMARY_DATE;
   }
   state.orders = board.orders;
   state.drivers = board.drivers;
