@@ -104,6 +104,8 @@ class PreparedRegularRow:
     schedule: OpShopPickupSchedule
     assigned_to_alias: str | None
     resolved_driver_name: str | None
+    workbook_sheet: str
+    workbook_row: int
 
 
 @dataclass
@@ -328,6 +330,8 @@ def prepare_regular_rows(rows, driver_lookup):
                 schedule=schedule,
                 assigned_to_alias=assigned_to_alias,
                 resolved_driver_name=resolved_name,
+                workbook_sheet=row["__sheet_name"],
+                workbook_row=row["__row_number"],
             )
         )
 
@@ -350,6 +354,11 @@ def preflight_regular_import(connection, prepared_rows):
             existing_location_id = find_location_id_by_key(
                 connection,
                 prepared.location_key,
+                workbook_sheet=prepared.workbook_sheet,
+                workbook_row=prepared.workbook_row,
+                workbook_name=prepared.location.name,
+                workbook_suburb=prepared.location.suburb,
+                workbook_street_address=prepared.location.street_address,
             )
             if existing_location_id:
                 prepared.location.opshop_id = existing_location_id
@@ -405,11 +414,20 @@ def resolve_driver_name(alias):
     return DRIVER_ALIAS_TO_NAME.get(normalized, alias)
 
 
-def find_location_id_by_key(connection, dedupe_key):
+def find_location_id_by_key(
+    connection,
+    dedupe_key,
+    *,
+    workbook_sheet=None,
+    workbook_row=None,
+    workbook_name=None,
+    workbook_suburb=None,
+    workbook_street_address=None,
+):
     matches = []
     for candidate in connection.execute(
         """
-        SELECT opshop_id, name, suburb, street_address
+        SELECT opshop_id, name, suburb, street_address, is_active
         FROM opshop_locations
         ORDER BY opshop_id
         """
@@ -420,12 +438,28 @@ def find_location_id_by_key(connection, dedupe_key):
             candidate["street_address"],
         )
         if candidate_key == dedupe_key:
-            matches.append(candidate["opshop_id"])
+            matches.append(candidate)
     if len(matches) > 1:
-        raise ValueError(
-            "Duplicate OP SHOP physical location identity for imported Regular row"
+        matched_ids = ", ".join(candidate["opshop_id"] for candidate in matches)
+        matched_locations = "; ".join(
+            (
+                f"{candidate['opshop_id']}="
+                f"{candidate['name']}|{candidate['suburb']}|"
+                f"{candidate['street_address']}|active={candidate['is_active']}"
+            )
+            for candidate in matches
         )
-    return matches[0] if matches else None
+        raise ValueError(
+            "Duplicate OP SHOP physical location identity:\n"
+            f"normalized_key={dedupe_key}\n"
+            f"workbook={workbook_sheet or 'unknown'} row={workbook_row or 'unknown'}\n"
+            "workbook_location="
+            f"{workbook_name or ''}|{workbook_suburb or ''}|"
+            f"{workbook_street_address or ''}\n"
+            f"matched_ids={matched_ids}\n"
+            f"matched_locations={matched_locations}"
+        )
+    return matches[0]["opshop_id"] if matches else None
 
 
 def find_schedule_id_by_key(connection, key, location_key=None):
@@ -442,7 +476,7 @@ def find_schedule_id_by_key(connection, key, location_key=None):
     opshop_id, run_day, run_type, pickup_category = key.split("|", 3)
     rows = connection.execute(
         """
-        SELECT schedule_id
+        SELECT schedule_id, active_flag, status
         FROM opshop_pickup_schedules
         WHERE opshop_id = ?
             AND COALESCE(run_day, '') = ?
@@ -453,8 +487,15 @@ def find_schedule_id_by_key(connection, key, location_key=None):
         (opshop_id, run_day, run_type, pickup_category),
     ).fetchall()
     if len(rows) > 1:
+        active_rows = [row for row in rows if bool(row["active_flag"])]
+        if len(active_rows) == 1:
+            return active_rows[0]["schedule_id"]
         raise ValueError(
-            f"Duplicate OP SHOP schedule slot for {opshop_id} {run_day}"
+            f"Duplicate OP SHOP schedule slot for {opshop_id} {run_day}: "
+            + ", ".join(
+                f"{row['schedule_id']} active={row['active_flag']} status={row['status']}"
+                for row in rows
+            )
         )
     if rows:
         return rows[0]["schedule_id"]
@@ -470,6 +511,8 @@ def find_schedule_id_by_key(connection, key, location_key=None):
         """
         SELECT
             schedule.schedule_id,
+            schedule.active_flag,
+            schedule.status,
             location.name,
             location.suburb,
             location.street_address
@@ -490,12 +533,21 @@ def find_schedule_id_by_key(connection, key, location_key=None):
             candidate["street_address"],
         )
         if candidate_key == location_key:
-            physical_matches.append(candidate["schedule_id"])
+            physical_matches.append(candidate)
     if len(physical_matches) > 1:
+        active_matches = [
+            row for row in physical_matches if bool(row["active_flag"])
+        ]
+        if len(active_matches) == 1:
+            return active_matches[0]["schedule_id"]
         raise ValueError(
-            f"Duplicate OP SHOP schedule slot for physical location {run_day}"
+            f"Duplicate OP SHOP schedule slot for physical location {run_day}: "
+            + ", ".join(
+                f"{row['schedule_id']} active={row['active_flag']} status={row['status']}"
+                for row in physical_matches
+            )
         )
-    return physical_matches[0] if physical_matches else None
+    return physical_matches[0]["schedule_id"] if physical_matches else None
 
 
 def upsert_opshop_location_in_transaction(connection, location):

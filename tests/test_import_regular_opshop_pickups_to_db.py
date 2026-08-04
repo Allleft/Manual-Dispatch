@@ -377,6 +377,126 @@ class ImportRegularOpShopPickupsToDbTest(unittest.TestCase):
             )
         )
 
+    def test_import_reuses_only_active_schedule_when_inactive_legacy_slot_exists(self):
+        self.repository.upsert_opshop_location(
+            OpShopLocation(
+                opshop_id="OPSHOP-LEGACY-SLOT",
+                name="Legacy Slot Shop",
+                suburb="Coburg",
+                street_address="10 Sydney Road",
+                area_region="North",
+                primary_contact=None,
+                primary_phone=None,
+                secondary_contact=None,
+                secondary_phone=None,
+                access_type=None,
+                key_required=False,
+                trailer_restriction=None,
+                status_notes=None,
+                is_active=True,
+                created_at="2026-05-01T00:00:00+00:00",
+                updated_at="2026-05-01T00:00:00+00:00",
+            )
+        )
+        for schedule_id, active_flag, status, frequency in (
+            ("LEGACY-INACTIVE", False, "On_Hold", "Fortnightly"),
+            ("CURRENT-ACTIVE", True, "Active", "Weekly"),
+        ):
+            self.repository.upsert_opshop_pickup_schedule(
+                OpShopPickupSchedule(
+                    schedule_id=schedule_id,
+                    opshop_id="OPSHOP-LEGACY-SLOT",
+                    run_day="WEDNESDAY",
+                    run_type="REGULAR",
+                    pickup_frequency=frequency,
+                    time_window="09:00-12:00",
+                    call_before_arrival=False,
+                    call_timing=None,
+                    status=status,
+                    active_flag=active_flag,
+                    fortnight_group=None,
+                    review_required=not active_flag,
+                    review_reason="WORKBOOK_IMPORT",
+                    created_at="2026-05-01T00:00:00+00:00",
+                    updated_at="2026-05-01T00:00:00+00:00",
+                    default_driver_alias=None,
+                )
+            )
+        self._save_workbook(
+            {
+                "WED": [
+                    self._row(
+                        Op_Shop_Name="Legacy Slot Shop",
+                        Street_Address="10 Sydney Road",
+                        Pickup_Frequency="2x Weekly",
+                    )
+                ]
+            }
+        )
+
+        summary = import_regular_opshop_pickups_to_db(
+            self.workbook_path, self.db_path
+        )
+
+        schedules = {
+            schedule.schedule_id: schedule
+            for schedule in self.repository.list_opshop_pickup_schedules()
+        }
+        self.assertEqual(2, len(schedules))
+        self.assertEqual(1, summary.schedules_updated)
+        self.assertEqual("2x Weekly", schedules["CURRENT-ACTIVE"].pickup_frequency)
+        self.assertTrue(schedules["CURRENT-ACTIVE"].active_flag)
+        self.assertEqual("Fortnightly", schedules["LEGACY-INACTIVE"].pickup_frequency)
+        self.assertFalse(schedules["LEGACY-INACTIVE"].active_flag)
+
+    def test_duplicate_location_error_includes_normalized_key_workbook_row_and_ids(self):
+        for opshop_id, address, is_active in (
+            ("OPSHOP-A", "1 Sydney Road", True),
+            ("OPSHOP-B", "1 Sydney Rd", False),
+        ):
+            self.repository.upsert_opshop_location(
+                OpShopLocation(
+                    opshop_id=opshop_id,
+                    name="Shared Shop",
+                    suburb="Coburg",
+                    street_address=address,
+                    area_region="North",
+                    primary_contact=None,
+                    primary_phone=None,
+                    secondary_contact=None,
+                    secondary_phone=None,
+                    access_type=None,
+                    key_required=False,
+                    trailer_restriction=None,
+                    status_notes=None,
+                    is_active=is_active,
+                    created_at="2026-05-01T00:00:00+00:00",
+                    updated_at="2026-05-01T00:00:00+00:00",
+                )
+            )
+        self._save_workbook(
+            {
+                "WED": [
+                    self._row(
+                        Op_Shop_Name="Shared Shop",
+                        Suburb="Coburg",
+                        Street_Address="1 Sydney Road",
+                    )
+                ]
+            }
+        )
+
+        with self.assertRaises(ValueError) as raised:
+            import_regular_opshop_pickups_to_db(self.workbook_path, self.db_path)
+
+        message = str(raised.exception)
+        self.assertIn("normalized_key=shared shop|coburg|1 sydney rd", message)
+        self.assertIn("workbook=WED row=2", message)
+        self.assertIn("workbook_location=Shared Shop|Coburg|1 Sydney Road", message)
+        self.assertIn("matched_ids=OPSHOP-A, OPSHOP-B", message)
+        self.assertIn("OPSHOP-A=Shared Shop|Coburg|1 Sydney Road|active=1", message)
+        self.assertIn("OPSHOP-B=Shared Shop|Coburg|1 Sydney Rd|active=0", message)
+
     def test_exception_after_deactivation_rolls_back_entire_import_transaction(self):
         self.repository.upsert_opshop_location(
             OpShopLocation(
