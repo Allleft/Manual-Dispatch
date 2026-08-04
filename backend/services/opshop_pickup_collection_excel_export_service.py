@@ -65,15 +65,16 @@ def _configure_worksheet(worksheet):
     worksheet.page_setup.orientation = "landscape"
     worksheet.page_setup.paperSize = worksheet.PAPERSIZE_A4
     worksheet.page_setup.fitToWidth = 1
-    worksheet.page_setup.fitToHeight = 0
+    worksheet.page_setup.fitToHeight = 1
     worksheet.sheet_properties.pageSetUpPr.fitToPage = True
+    worksheet.page_setup.scale = None
     worksheet.page_margins = PageMargins(
-        left=0.71,
-        right=0.71,
-        top=0.75,
-        bottom=0.75,
-        header=0.3,
-        footer=0.3,
+        left=0.35,
+        right=0.35,
+        top=0.4,
+        bottom=0.4,
+        header=0.2,
+        footer=0.2,
     )
     widths = {
         "A": 30.71,
@@ -94,7 +95,14 @@ def _configure_worksheet(worksheet):
 
 
 def _write_form_header(worksheet, collection, pickup_date=None):
-    for range_ref in ("A1:L1", "A2:L2", "A3:L3", "A4:L4", "A8:L8"):
+    for range_ref in (
+        "A1:L1",
+        "A2:L2",
+        "A3:L3",
+        "A4:L4",
+        "A5:L5",
+        "A8:L8",
+    ):
         worksheet.merge_cells(range_ref)
 
     worksheet["A1"] = "DAILY OP SHOP COLLECTIONS - WEIGHT SHEET"
@@ -106,15 +114,22 @@ def _write_form_header(worksheet, collection, pickup_date=None):
     )
     worksheet["A4"] = "**Please ensure  HARD & SOFT TOYS are in separate bags**"
     worksheet["A5"] = (
-        f"DRIVER NAME: {collection.driver_name_snapshot or ''}           "
-        f"PICK UP DATE: {_display_date(pickup_date or collection.pickup_date)}            "
+        f"DRIVER NAME: {collection.driver_name_snapshot or ''}    "
+        f"PICK UP DATE: {_display_date(pickup_date or collection.pickup_date)}    "
         f"DAY: {_display_day(pickup_date or collection.pickup_date)}"
     )
     worksheet["A6"] = "REGO # ________________________"
     worksheet["A8"] = "PLEASE RECORD WEIGHT OF BAGS FOR EACH OP SHOP "
-    for coordinate in ("A3", "A4", "A5", "A6", "A8"):
+    for coordinate in ("A3", "A4", "A6", "A8"):
         worksheet[coordinate].font = Font(bold=True, size=11)
         worksheet[coordinate].alignment = Alignment(vertical="center", wrap_text=True)
+    worksheet["A5"].font = Font(bold=True, size=11)
+    worksheet["A5"].alignment = Alignment(
+        horizontal="center",
+        vertical="center",
+        wrap_text=False,
+        shrink_to_fit=True,
+    )
     worksheet["A8"].alignment = Alignment(horizontal="center", vertical="center")
     worksheet["A3"].fill = PatternFill("solid", fgColor="1F1F1F")
     worksheet["A3"].font = Font(bold=True, size=11, color="FFFFFF")
@@ -124,7 +139,7 @@ def _write_form_header(worksheet, collection, pickup_date=None):
     worksheet.row_dimensions[2].height = 26.25
     worksheet.row_dimensions[3].height = 27
     worksheet.row_dimensions[4].height = 23.25
-    worksheet.row_dimensions[5].height = 29.25
+    worksheet.row_dimensions[5].height = 21
     worksheet.row_dimensions[6].height = 21
     worksheet.row_dimensions[7].height = 18.75
     worksheet.row_dimensions[8].height = 27.75

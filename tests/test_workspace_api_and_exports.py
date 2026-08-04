@@ -4,6 +4,7 @@ import shutil
 import sqlite3
 import unittest
 import uuid
+from zipfile import ZipFile
 from unittest.mock import patch
 from dataclasses import replace
 from io import BytesIO
@@ -32,6 +33,9 @@ from backend.services.delivery_run_sheet_excel_export_service import (
     build_delivery_run_sheet_excel,
     build_delivery_run_sheets_excel,
     delivery_run_sheet_product_display,
+)
+from backend.services.opshop_pickup_collection_excel_export_service import (
+    build_opshop_pickup_collection_excel,
 )
 
 try:
@@ -686,13 +690,25 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertEqual("landscape", worksheet.page_setup.orientation)
         self.assertEqual(str(worksheet.PAPERSIZE_A4), str(worksheet.page_setup.paperSize))
         self.assertEqual(1, worksheet.page_setup.fitToWidth)
-        self.assertEqual(0, worksheet.page_setup.fitToHeight)
+        self.assertEqual(1, worksheet.page_setup.fitToHeight)
+        self.assertTrue(worksheet.sheet_properties.pageSetUpPr.fitToPage)
+        self.assertIsNone(worksheet.page_setup.scale)
+        self.assertEqual(0.35, worksheet.page_margins.left)
+        self.assertEqual(0.35, worksheet.page_margins.right)
+        self.assertEqual(0.4, worksheet.page_margins.top)
+        self.assertEqual(0.4, worksheet.page_margins.bottom)
         self.assertEqual("DAILY OP SHOP COLLECTIONS - WEIGHT SHEET", worksheet["A1"].value)
         self.assertIn("NO BOARD GAMES/ PUZZLES", worksheet["A3"].value)
         self.assertIn("HARD & SOFT TOYS", worksheet["A4"].value)
         self.assertIn("DRIVER NAME: John", worksheet["A5"].value)
         self.assertIn("PICK UP DATE: 05/05/2026", worksheet["A5"].value)
         self.assertIn("DAY: TUESDAY", worksheet["A5"].value)
+        self.assertIn("A5:L5", {str(cell_range) for cell_range in worksheet.merged_cells.ranges})
+        self.assertEqual("center", worksheet["A5"].alignment.horizontal)
+        self.assertEqual("center", worksheet["A5"].alignment.vertical)
+        self.assertFalse(worksheet["A5"].alignment.wrap_text)
+        self.assertTrue(worksheet["A5"].alignment.shrink_to_fit)
+        self.assertEqual(21, worksheet.row_dimensions[5].height)
         self.assertEqual("REGO # ________________________", worksheet["A6"].value)
         self.assertEqual("PLEASE RECORD WEIGHT OF BAGS FOR EACH OP SHOP ", worksheet["A8"].value)
         self.assertEqual(
@@ -727,7 +743,37 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertIsNone(worksheet["C13"].value)
         self.assertEqual('0.## "KG"', worksheet["C13"].number_format)
         self.assertGreater(worksheet.column_dimensions["A"].width, 28)
-        self.assertIn("$A$1:$L$22", worksheet.print_area)
+        self.assertEqual(22, worksheet.max_row)
+        self.assertIn(f"$A$1:$L${worksheet.max_row}", worksheet.print_area)
+
+        with ZipFile(BytesIO(response.content)) as archive:
+            worksheet_xml = archive.read("xl/worksheets/sheet1.xml").decode("utf-8")
+            workbook_xml = archive.read("xl/workbook.xml").decode("utf-8")
+        self.assertIn('<mergeCell ref="A5:L5"', worksheet_xml)
+        self.assertIn('fitToWidth="1"', worksheet_xml)
+        self.assertIn('fitToHeight="1"', worksheet_xml)
+        self.assertIn('orientation="landscape"', worksheet_xml)
+        self.assertIn("$A$1:$L$22", workbook_xml)
+
+    def test_opshop_collection_export_keeps_long_driver_header_on_one_line(self):
+        collection_id = self._generate_and_save_collection(
+            self._weight_sheet_entry_payload()
+        )
+        collection = replace(
+            self.service.get_opshop_pickup_collection(collection_id),
+            driver_name_snapshot="Epaminondas Tsatsoulis",
+        )
+
+        workbook = load_workbook(
+            BytesIO(build_opshop_pickup_collection_excel(collection))
+        )
+        worksheet = workbook.active
+
+        self.assertIn("DRIVER NAME: Epaminondas Tsatsoulis", worksheet["A5"].value)
+        self.assertFalse(worksheet["A5"].alignment.wrap_text)
+        self.assertTrue(worksheet["A5"].alignment.shrink_to_fit)
+        self.assertEqual(21, worksheet.row_dimensions[5].height)
+        self.assertEqual("REGO # ________________________", worksheet["A6"].value)
 
     def test_opshop_daily_collection_export_uses_one_sheet_per_driver(self):
         saved_collection_id = self._generate_and_save_collection(
@@ -803,11 +849,19 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertNotIn("Other Date Op Shop", john_values + tony_values)
         for worksheet in workbook.worksheets:
             self.assertEqual("landscape", worksheet.page_setup.orientation)
+            self.assertEqual(str(worksheet.PAPERSIZE_A4), str(worksheet.page_setup.paperSize))
             self.assertEqual(1, worksheet.page_setup.fitToWidth)
-            self.assertEqual(0, worksheet.page_setup.fitToHeight)
+            self.assertEqual(1, worksheet.page_setup.fitToHeight)
+            self.assertTrue(worksheet.sheet_properties.pageSetUpPr.fitToPage)
+            self.assertIsNone(worksheet.page_setup.scale)
+            self.assertIn("A5:L5", {str(cell_range) for cell_range in worksheet.merged_cells.ranges})
+            self.assertFalse(worksheet["A5"].alignment.wrap_text)
+            self.assertTrue(worksheet["A5"].alignment.shrink_to_fit)
             self.assertEqual("DAILY OP SHOP COLLECTIONS - WEIGHT SHEET", worksheet["A1"].value)
             self.assertIn("PICK UP DATE: 05/05/2026", worksheet["A5"].value)
             self.assertEqual("PLEASE RECORD WEIGHT OF BAGS FOR EACH OP SHOP ", worksheet["A8"].value)
+            self.assertEqual(22, worksheet.max_row)
+            self.assertIn(f"$A$1:$L${worksheet.max_row}", worksheet.print_area)
         self.assertEqual(12.5, workbook["John"]["C12"].value)
         self.assertEqual(3.25, workbook["John"]["D12"].value)
         self.assertEqual("09:15", workbook["John"]["E12"].value)
