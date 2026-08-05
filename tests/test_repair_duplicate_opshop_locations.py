@@ -11,6 +11,7 @@ from backend.repositories.sqlite_manual_dispatch_repository import (
     SQLiteManualDispatchRepository,
 )
 from backend.schemas import OpShopLocation, OpShopPickupSchedule, OpShopPickupTask
+from tools.check_logbook_integrity import check_logbook_integrity
 from tools.repair_duplicate_opshop_locations import (
     apply_location_repair,
     audit_duplicate_locations,
@@ -24,6 +25,12 @@ class RepairDuplicateOpShopLocationsTest(unittest.TestCase):
         self.temp_dir.mkdir(parents=True)
         self.db_path = self.temp_dir / "manual_dispatch.sqlite3"
         self.logbook_dir = self.temp_dir / "logbook"
+        self.logbook_env = patch.dict(
+            "os.environ",
+            {"MANUAL_DISPATCH_LOGBOOK_DIR": str(self.logbook_dir)},
+        )
+        self.logbook_env.start()
+        self.addCleanup(self.logbook_env.stop)
         with patch.dict("os.environ", {"MANUAL_DISPATCH_SEED_DEMO_DATA": "false"}):
             self.repository = SQLiteManualDispatchRepository(self.db_path)
 
@@ -62,6 +69,9 @@ class RepairDuplicateOpShopLocationsTest(unittest.TestCase):
         self._add_task("T-DUP", "S-DUP", "DUP", "2026-08-05", driver_id="D001")
         self._add_assignment_and_snapshots("T-DUP")
         snapshots_before = self._snapshot_rows()
+        production_logbook_before = self._directory_snapshot(
+            Path.cwd() / "data" / "logbook"
+        )
 
         result = apply_location_repair(
             self.db_path,
@@ -91,14 +101,33 @@ class RepairDuplicateOpShopLocationsTest(unittest.TestCase):
         event = json.loads(logbook_entries[0].read_text(encoding="utf-8").strip())
         self.assertEqual("Unknown", event["actor"])
         self.assertEqual("DUPLICATE_OPSHOP_LOCATION_REPAIR_COMPLETED", event["action"])
+        integrity_result = check_logbook_integrity(self.logbook_dir)
+        self.assertTrue(integrity_result.ok)
+        self.assertEqual(0, integrity_result.error_count)
+        self.assertEqual(
+            production_logbook_before,
+            self._directory_snapshot(Path.cwd() / "data" / "logbook"),
+        )
 
     def test_second_apply_is_idempotent(self):
         self._add_location("CANON", "Shared Shop", "Coburg", "1 Sydney Road")
         self._add_location("DUP", "SHARED SHOP", "COBURG", "1 Sydney Rd")
-        first = apply_location_repair(self.db_path, "CANON", ["DUP"], yes=True)
+        first = apply_location_repair(
+            self.db_path,
+            "CANON",
+            ["DUP"],
+            yes=True,
+            logbook_dir=self.logbook_dir,
+        )
         after_first = self._sha256()
 
-        second = apply_location_repair(self.db_path, "CANON", ["DUP"], yes=True)
+        second = apply_location_repair(
+            self.db_path,
+            "CANON",
+            ["DUP"],
+            yes=True,
+            logbook_dir=self.logbook_dir,
+        )
 
         self.assertTrue(first["applied"])
         self.assertFalse(second["applied"])
@@ -118,7 +147,13 @@ class RepairDuplicateOpShopLocationsTest(unittest.TestCase):
         self.assertFalse(plan["can_apply"])
         self.assertIn("Schedule slot conflict", " ".join(plan["conflicts"]))
         with self.assertRaisesRegex(ValueError, "Repair cannot be applied"):
-            apply_location_repair(self.db_path, "CANON", ["DUP"], yes=True)
+            apply_location_repair(
+                self.db_path,
+                "CANON",
+                ["DUP"],
+                yes=True,
+                logbook_dir=self.logbook_dir,
+            )
         self.assertEqual(before, self._logical_tables())
 
     def test_duplicate_schedule_date_task_identity_fails_closed(self):
@@ -139,7 +174,13 @@ class RepairDuplicateOpShopLocationsTest(unittest.TestCase):
             "DUP", "SHARED SHOP", "COBURG", "1 Sydney Rd", is_active=False
         )
 
-        result = apply_location_repair(self.db_path, "CANON", ["DUP"], yes=True)
+        result = apply_location_repair(
+            self.db_path,
+            "CANON",
+            ["DUP"],
+            yes=True,
+            logbook_dir=self.logbook_dir,
+        )
 
         self.assertTrue(result["applied"])
         self.assertEqual(["CANON"], self._column("opshop_locations", "opshop_id"))
@@ -303,6 +344,19 @@ class RepairDuplicateOpShopLocationsTest(unittest.TestCase):
 
     def _sha256(self):
         return hashlib.sha256(self.db_path.read_bytes()).hexdigest()
+
+    @staticmethod
+    def _directory_snapshot(directory):
+        if not directory.is_dir():
+            return {}
+        return {
+            str(path.relative_to(directory)): (
+                path.stat().st_size,
+                hashlib.sha256(path.read_bytes()).hexdigest(),
+            )
+            for path in sorted(directory.rglob("*"))
+            if path.is_file()
+        }
 
 
 if __name__ == "__main__":

@@ -1,4 +1,5 @@
 import importlib
+import json
 import os
 import shutil
 import sqlite3
@@ -27,8 +28,13 @@ from backend.schemas import (
     RegisterOperatorAccountRequest,
     SaveGeneratedWorkspaceSnapshotRequest,
 )
+from backend.services.manual_dispatch.logbook_file_service import (
+    LogbookFileService,
+)
 from backend.services.manual_dispatch_service import ManualDispatchService
 from tests.manual_dispatch_api_test_helpers import authenticate_test_client
+from tools.check_logbook_integrity import check_logbook_integrity
+from tools.logbook_contract import KNOWN_ACTIONS
 
 try:
     from fastapi import FastAPI
@@ -40,6 +46,11 @@ except (ImportError, ModuleNotFoundError, RuntimeError):
 
 DELIVERY_DATE = "2026-07-28"
 NEXT_DELIVERY_DATE = "2026-07-29"
+DELIVERY_CLOSEOUT_ACTIONS = {
+    "DELIVERY_RUN_SHEET_CLOSED",
+    "DELIVERY_ORDER_DELIVERED",
+    "DELIVERY_ORDER_RETURNED_TO_POOL",
+}
 
 
 class RecordingLogbook:
@@ -213,6 +224,35 @@ class DeliveryRunSheetCloseoutTest(unittest.TestCase):
                         for entry in logbook.entries
                     ),
                 )
+
+    def test_real_closeout_logbook_matches_integrity_contract(self):
+        repository = SQLiteManualDispatchRepository(
+            self.temp_dir / "logbook-contract.sqlite3"
+        )
+        logbook_dir = self.temp_dir / "logbook"
+        service, identity, run_sheet, _ = self._build_saved_sheet(
+            repository,
+            logbook=LogbookFileService(logbook_dir),
+        )
+
+        closed = service.close_saved_delivery_run_sheet(
+            run_sheet.run_sheet_id,
+            self._valid_request(run_sheet),
+            identity,
+        )
+
+        self.assertEqual(2, closed.closeout_summary.delivered_count)
+        self.assertEqual(2, closed.closeout_summary.returned_to_pool_count)
+        actions = {
+            json.loads(line)["action"]
+            for path in logbook_dir.glob("manual_dispatch_logbook_*.txt")
+            for line in path.read_text(encoding="utf-8").splitlines()
+        }
+        self.assertTrue(DELIVERY_CLOSEOUT_ACTIONS.issubset(actions))
+        self.assertTrue(DELIVERY_CLOSEOUT_ACTIONS.issubset(KNOWN_ACTIONS))
+        integrity_result = check_logbook_integrity(logbook_dir)
+        self.assertTrue(integrity_result.ok)
+        self.assertEqual(0, integrity_result.error_count)
 
     def test_validation_matrix_changes_nothing(self):
         cases = {

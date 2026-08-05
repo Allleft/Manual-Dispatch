@@ -28,10 +28,19 @@ MAINTENANCE_ACTIONS = {
     "REGULAR_WORKBOOK_IMPORT_COMPLETED",
     "ONCALL_WORKBOOK_IMPORT_COMPLETED",
     "COUNTRYSIDE_WORKBOOK_IMPORT_COMPLETED",
+    "DUPLICATE_OPSHOP_LOCATION_REPAIR_COMPLETED",
     "SOURCE_DRIVER_BACKFILL_DRY_RUN",
     "SOURCE_DRIVER_BACKFILL_APPLIED",
     "LEGACY_WORKSPACE_MIGRATION_DRY_RUN",
     "LEGACY_WORKSPACE_MIGRATION_APPLIED",
+}
+DELIVERY_CLOSEOUT_ACTIONS = {
+    "DELIVERY_RUN_SHEET_CLOSED",
+    "DELIVERY_ORDER_DELIVERED",
+    "DELIVERY_ORDER_RETURNED_TO_POOL",
+}
+OPSHOP_REPAIR_ACTIONS = {
+    "DUPLICATE_OPSHOP_LOCATION_REPAIR_COMPLETED",
 }
 
 
@@ -45,7 +54,7 @@ class LogbookIntegrityCheckerTest(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def test_contract_registry_contains_expected_actions_only(self):
-        self.assertEqual(49, len(KNOWN_ACTIONS))
+        self.assertEqual(53, len(KNOWN_ACTIONS))
         self.assertEqual(
             {
                 "LOGBOOK_TEST_DATA_ANNOTATED",
@@ -56,6 +65,8 @@ class LogbookIntegrityCheckerTest(unittest.TestCase):
         self.assertEqual("LOGBOOK_TEST_DATA_ANNOTATED", INCIDENT_ANNOTATION_ACTION)
         self.assertIn(INTEGRITY_INCIDENT_ANNOTATION_ACTION, KNOWN_ACTIONS)
         self.assertTrue(MAINTENANCE_ACTIONS.issubset(KNOWN_ACTIONS))
+        self.assertTrue(DELIVERY_CLOSEOUT_ACTIONS.issubset(KNOWN_ACTIONS))
+        self.assertTrue(OPSHOP_REPAIR_ACTIONS.issubset(KNOWN_ACTIONS))
         self.assertFalse(
             any(
                 "ARCHIVE" in action or "RETENTION" in action
@@ -107,7 +118,7 @@ class LogbookIntegrityCheckerTest(unittest.TestCase):
 
         result = self._check_records(records)
 
-        self.assertEqual(49, result.records_checked)
+        self.assertEqual(53, result.records_checked)
         self.assertEqual(0, result.error_count)
         self.assertEqual(0, result.warning_count)
 
