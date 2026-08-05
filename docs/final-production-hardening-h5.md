@@ -44,6 +44,39 @@ below. Duplicate rows are reported and never automatically removed.
 
 ## Migration workflow
 
+For an existing database, the maintenance order is mandatory:
+
+1. initialize the current schema;
+2. dry-run, apply, and recheck the Legacy Workspace Migration;
+3. dry-run and apply Assignment Identity Repair from its exact decision file;
+4. dry-run, apply, and recheck the H5 Database Invariant Migration;
+5. verify integrity, foreign keys, table counts, business state, and smoke tests.
+
+Do not skip directly from Legacy Migration to H5. Assignment Repair treats the
+current OP SHOP Task as authoritative, preserves the earliest Assignment source
+`dispatch_date`, and removes Assignments for non-ASSIGNED OP SHOP Tasks. Its
+dry-run is read-only and writes the complete private decision plan only to the
+deployment rehearsal directory:
+
+```powershell
+python tools/repair_assignment_identity_conflicts.py `
+  --db-path tmp/final-hardening-validation.sqlite3 `
+  --plan-out tmp/h5-rehearsal/assignment-repair-plan.json
+
+python tools/repair_assignment_identity_conflicts.py `
+  --db-path tmp/final-hardening-validation.sqlite3 `
+  --decision-file tmp/h5-rehearsal/assignment-repair-plan.json `
+  --backup-dir tmp/h5-rehearsal/backups `
+  --logbook-dir tmp/h5-rehearsal/logbook `
+  --actor "Deployment Operator" `
+  --apply --yes
+```
+
+Apply verifies the exact plan, database and row fingerprints, creates and
+checks a SQLite Backup API copy, repeats all decisions under `BEGIN IMMEDIATE`,
+and commits only if duplicates, integrity, and foreign-key checks all pass. It
+does not create H5 indexes.
+
 Never run development validation against the production database. For a QA
 database, first run the default read-only audit:
 

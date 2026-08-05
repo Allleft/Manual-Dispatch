@@ -33,6 +33,7 @@ MAINTENANCE_ACTIONS = {
     "SOURCE_DRIVER_BACKFILL_APPLIED",
     "LEGACY_WORKSPACE_MIGRATION_DRY_RUN",
     "LEGACY_WORKSPACE_MIGRATION_APPLIED",
+    "ASSIGNMENT_IDENTITY_REPAIR_COMPLETED",
 }
 DELIVERY_CLOSEOUT_ACTIONS = {
     "DELIVERY_RUN_SHEET_CLOSED",
@@ -54,7 +55,7 @@ class LogbookIntegrityCheckerTest(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def test_contract_registry_contains_expected_actions_only(self):
-        self.assertEqual(53, len(KNOWN_ACTIONS))
+        self.assertEqual(54, len(KNOWN_ACTIONS))
         self.assertEqual(
             {
                 "LOGBOOK_TEST_DATA_ANNOTATED",
@@ -118,7 +119,7 @@ class LogbookIntegrityCheckerTest(unittest.TestCase):
 
         result = self._check_records(records)
 
-        self.assertEqual(53, result.records_checked)
+        self.assertEqual(54, result.records_checked)
         self.assertEqual(0, result.error_count)
         self.assertEqual(0, result.warning_count)
 
