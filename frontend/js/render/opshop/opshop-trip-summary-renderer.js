@@ -62,10 +62,7 @@ export function createOpShopTripSummary(board, collections, state, actions, onOp
 export function createOpShopTripSummaryToolbar(pickupDate, state, actions) {
   const panel = document.createElement("section");
   panel.className = "workspace-context-panel workspace-context-panel-opshop workspace-opshop-trip-toolbar";
-  const heading = createSectionHeading(
-    "OP SHOP Trip Summary",
-    "Review assigned pickups by driver before generating a Pickup Collection.",
-  );
+  const heading = createSectionHeading("OP SHOP Trip Summary");
   const field = document.createElement("label");
   field.className = "workspace-date-control workspace-opshop-pickup-date-control";
   field.textContent = "Pickup date";

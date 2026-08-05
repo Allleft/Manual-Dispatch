@@ -19,14 +19,9 @@ export function createWorkspacePage(state, onDispatchDateChange) {
   icon.className = "workspace-page-icon";
   icon.append(createIcon("store"));
   const copy = document.createElement("div");
-  const kicker = document.createElement("p");
-  kicker.className = "section-kicker";
-  kicker.textContent = "Pickup workspace";
   const title = document.createElement("h2");
   title.textContent = "OP SHOP Pickup";
-  const description = document.createElement("p");
-  description.textContent = "Assign pickups and manage independent saved pickup collections.";
-  copy.append(kicker, title, description);
+  copy.append(title);
   titleGroup.append(icon, copy);
   heading.append(titleGroup);
   if (state.workspaceRoute.startsWith("opshop/task-pool/")) {

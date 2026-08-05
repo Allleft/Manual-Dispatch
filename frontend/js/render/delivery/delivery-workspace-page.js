@@ -19,14 +19,9 @@ export function createWorkspacePage(state, onDispatchDateChange) {
   icon.className = "workspace-page-icon";
   icon.append(createIcon("truck"));
   const copy = document.createElement("div");
-  const kicker = document.createElement("p");
-  kicker.className = "section-kicker";
-  kicker.textContent = "Delivery workspace";
   const title = document.createElement("h2");
   title.textContent = "Order Delivery";
-  const description = document.createElement("p");
-  description.textContent = "Plan driver trips, generate Delivery Run Sheets, and review saved history.";
-  copy.append(kicker, title, description);
+  copy.append(title);
   titleGroup.append(icon, copy);
   heading.append(titleGroup);
   if (state.workspaceRoute === "delivery/task-pool") {

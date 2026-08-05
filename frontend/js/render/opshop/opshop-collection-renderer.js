@@ -23,10 +23,7 @@ export function createCollectionList(collections, state, actions) {
   wrapper.className = "workspace-stack workspace-pickup-collections";
   const intro = document.createElement("section");
   intro.className = "workspace-context-panel workspace-context-panel-opshop workspace-collection-intro";
-  intro.append(createSectionHeading(
-    "Pickup Collections",
-    "Review generated and saved OP SHOP Pickup Collection weight sheets by actual Pickup date.",
-  ));
+  intro.append(createSectionHeading("Pickup Collections"));
   const pickupDate = state.opshopTripSummaryDate || state.dispatchDate;
   const field = document.createElement("label");
   field.className = "workspace-date-control workspace-opshop-pickup-date-control";

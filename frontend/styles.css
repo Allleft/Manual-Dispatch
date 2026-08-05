@@ -132,17 +132,10 @@
 
 .workspace-home-intro h2 {
   max-width: 760px;
-  margin-bottom: 0.55rem;
+  margin-bottom: 0;
   font-size: clamp(1.8rem, 3vw, 2.8rem);
   line-height: 1.05;
   letter-spacing: -0.05em;
-}
-
-.workspace-home-intro > p:last-child {
-  max-width: 760px;
-  margin-bottom: 0;
-  color: var(--muted);
-  line-height: 1.6;
 }
 
 .workspace-home-grid {
@@ -182,7 +175,6 @@
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 1rem;
-  min-height: 240px;
   border: 1px solid var(--line);
   border-radius: var(--radius-xl);
   padding: clamp(1.25rem, 2.6vw, 2rem);
@@ -255,7 +247,6 @@
   min-width: 0;
 }
 
-.workspace-home-card-kicker,
 .workspace-record-kicker {
   font-size: 0.72rem;
   font-weight: 900;
@@ -263,23 +254,9 @@
   text-transform: uppercase;
 }
 
-.workspace-home-card-delivery .workspace-home-card-kicker {
-  color: var(--delivery-strong);
-}
-
-.workspace-home-card-opshop .workspace-home-card-kicker {
-  color: var(--accent-strong);
-}
-
 .workspace-home-card-content > strong {
   font-size: clamp(1.35rem, 2vw, 1.75rem);
   line-height: 1.15;
-}
-
-.workspace-home-card-description {
-  max-width: 560px;
-  color: var(--muted);
-  line-height: 1.6;
 }
 
 .workspace-home-card-action {
@@ -332,15 +309,9 @@
 }
 
 .workspace-page-title-group h2 {
-  margin-bottom: 0.25rem;
+  margin-bottom: 0;
   font-size: clamp(1.65rem, 2.6vw, 2.35rem);
   letter-spacing: -0.045em;
-}
-
-.workspace-page-title-group p:last-child {
-  margin-bottom: 0;
-  color: var(--muted);
-  line-height: 1.45;
 }
 
 .workspace-date-control {

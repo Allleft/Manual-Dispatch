@@ -418,14 +418,17 @@ export function createMetricGrid(metrics) {
   return grid;
 }
 
-export function createSectionHeading(titleText, descriptionText) {
+export function createSectionHeading(titleText, descriptionText = "") {
   const heading = document.createElement("div");
   heading.className = "workspace-section-heading";
   const title = document.createElement("h3");
   title.textContent = titleText;
-  const description = document.createElement("p");
-  description.textContent = descriptionText;
-  heading.append(title, description);
+  heading.append(title);
+  if (descriptionText) {
+    const description = document.createElement("p");
+    description.textContent = descriptionText;
+    heading.append(description);
+  }
   return heading;
 }
 

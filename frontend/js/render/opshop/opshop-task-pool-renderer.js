@@ -28,10 +28,7 @@ export function createOpShopTaskPool(board, state, actions, onOpenRouteGroupDeta
   wrapper.className = "workspace-stack workspace-opshop-task-pool";
   const toolbar = document.createElement("section");
   toolbar.className = "workspace-context-panel workspace-context-panel-opshop workspace-opshop-task-pool-toolbar";
-  const heading = createSectionHeading(
-    "OP SHOP Pickup Task Pool",
-    "Assign Regular, Oncall, and Countryside pickups before reviewing them by driver.",
-  );
+  const heading = createSectionHeading("OP SHOP Pickup Task Pool");
   const manageTemplates = createRouteActionLink(
     "Manage Templates",
     "#opshop/templates",
@@ -83,7 +80,7 @@ export function createPickupList(board, route, state, actions, onOpenRouteGroupD
       ["Unassigned", pickups.filter((pickup) => !pickup.is_assigned).length, "store"],
       ["Active route groups", (board.countryside_route_groups || []).length, "route"],
     ]),
-    createSectionHeading(context.heading, context.description),
+    createSectionHeading(context.heading),
   );
 
   if (route === "regular" || route === "oncall") {
@@ -142,7 +139,6 @@ export function getPickupRouteContext(route) {
     return {
       title: "Regular pickups",
       heading: "Regular Pickup Schedule",
-      description: "Active scheduled pickup tasks for the current board window",
       emptyMessage: "No Regular pickups are visible for this dispatch date.",
       icon: "calendar",
     };
@@ -151,7 +147,6 @@ export function getPickupRouteContext(route) {
     return {
       title: "Countryside pickups",
       heading: "Countryside Route Pickups",
-      description: "Active countryside pickup tasks with route-group context",
       emptyMessage: "No Countryside pickups are visible for this dispatch date.",
       icon: "tree",
     };
@@ -159,7 +154,6 @@ export function getPickupRouteContext(route) {
   return {
     title: "Oncall pickups",
     heading: "Oncall Pickup Requests",
-    description: "Actual request-driven pickup tasks created by office staff",
     emptyMessage: "No Oncall pickups are visible for this dispatch date.",
     icon: "phone",
   };

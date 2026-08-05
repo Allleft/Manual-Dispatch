@@ -266,7 +266,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, self.delivery_renderer)
         self.assertIn("Delivery Orders", self.delivery_renderer)
-        self.assertIn("Filter active unassigned Orders", self.delivery_renderer)
+        self.assertNotIn("Filter active unassigned Orders", self.delivery_renderer)
         self.assertIn("Delivery Run Sheets", self.delivery_renderer)
 
     def test_opshop_renderer_contains_no_delivery_domain_labels_or_payload_fields(self):
@@ -285,6 +285,98 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("Regular Pickup Schedule", self.opshop_renderer)
         self.assertIn("Oncall Pickup Requests", self.opshop_renderer)
         self.assertIn("Countryside Route Pickups", self.opshop_renderer)
+
+    def test_workspace_renderers_omit_redundant_static_helper_text(self):
+        source = "\n".join(
+            (
+                self._read("index.html"),
+                self.home_renderer,
+                self.delivery_renderer,
+                self.opshop_renderer,
+            )
+        )
+        for removed in (
+            "Manual office workflow",
+            "Choose a workspace",
+            "Delivery operations",
+            "Pickup operations",
+            "Delivery orders and OP SHOP pickups now have separate workspaces",
+            "Assign pickups and manage independent saved pickup collections.",
+            "Plan driver trips, generate Delivery Run Sheets, and review saved history.",
+            "Assign Regular, Oncall, and Countryside pickups before reviewing them by driver.",
+            "Active scheduled pickup tasks for the current board window",
+            "Active countryside pickup tasks with route-group context",
+            "Actual request-driven pickup tasks created by office staff",
+            "Filter active unassigned Orders, then assign each Order directly to a Driver and Trip.",
+            "Review driver trips, manage assigned orders, select vehicles, and generate Delivery Run Sheets.",
+            "Review generated and saved Delivery Run Sheets by actual Delivery date.",
+            "Search saved Delivery Run Sheets by their actual Delivery Date.",
+            "Review assigned pickups by driver before generating a Pickup Collection.",
+            "Review generated and saved OP SHOP Pickup Collection weight sheets by actual Pickup date.",
+            "Search saved OP SHOP Pickup Collections by their actual Pickup Date.",
+            "Add, edit, review, and soft-disable Regular and Oncall templates.",
+        ):
+            self.assertNotIn(removed, source)
+
+        for retained in (
+            "OP SHOP Pickup",
+            "OP SHOP Pickup Task Pool",
+            "Regular Pickup Schedule",
+            "Oncall Pickup Requests",
+            "Countryside Route Pickups",
+            "Order Delivery",
+            "Delivery Orders",
+            "Manage Templates",
+            "Add Pickup Task",
+            "Apply Assignment Changes",
+            "Add Order",
+            "Import Attache Invoices",
+            "Driver & Vehicle Specification",
+            "Pickup workspace date",
+            "Dispatch board date",
+            "No Regular pickups are visible for this dispatch date.",
+            "No unassigned Delivery Orders are available.",
+        ):
+            self.assertIn(retained, source)
+
+        self.assertIn('nav.setAttribute("aria-label", "OP SHOP Pickup workspace")', source)
+        self.assertIn('nav.setAttribute("aria-label", "Order Delivery workspace")', source)
+        self.assertIn('tabs.setAttribute("aria-label", "OP SHOP Task Pool pickup type")', source)
+        self.assertIn('link.setAttribute("aria-current", "page")', source)
+
+    def test_section_heading_without_description_only_creates_title(self):
+        setup = r"""
+            class FakeNode {
+              constructor(tagName) {
+                this.tagName = tagName;
+                this.children = [];
+                this.className = "";
+                this.textContent = "";
+              }
+              append(...children) { this.children.push(...children); }
+            }
+            globalThis.document = {
+              createElement: (tagName) => new FakeNode(tagName),
+              createElementNS: (_namespace, tagName) => new FakeNode(tagName),
+            };
+        """
+        body = r"""
+            const heading = module.createSectionHeading("Only title");
+            if (heading.children.length !== 1) {
+              throw new Error(`Expected one child, got ${heading.children.length}`);
+            }
+            if (heading.children[0].tagName !== "h3" || heading.children[0].textContent !== "Only title") {
+              throw new Error("Heading title was not preserved");
+            }
+            if (heading.children.some((child) => child.tagName === "p")) {
+              throw new Error("Empty description paragraph was rendered");
+            }
+        """
+        for renderer_utils in (
+            "js/render/delivery/delivery-renderer-utils.js",
+            "js/render/opshop/opshop-renderer-utils.js",
+        ):
+            self._run_frontend_module_script(renderer_utils, body, setup=setup)
 
     def test_new_workspace_navigation_and_titles_avoid_legacy_summary_name(self):
         new_workspace_source = "\n".join(
@@ -565,7 +657,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn('event.dataTransfer?.files || []', upload_step)
         self.assertIn('source: "drop"', upload_step)
         self.assertIn('workspace-attache-dropzone-active', upload_step)
-        self.assertIn(
+        self.assertNotIn(
             "Review driver trips, manage assigned orders, select vehicles, and generate Delivery Run Sheets.",
             self.delivery_renderer,
         )
@@ -829,7 +921,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             "function createDeliveryTaskPoolPanel", 1
         )[1].split("function createOrderCard", 1)[0]
         self.assertIn("Delivery Orders", panel_block)
-        self.assertIn("Filter active unassigned Orders", panel_block)
+        self.assertNotIn("Filter active unassigned Orders", panel_block)
         self.assertLess(panel_block.index('"Add Order"'), panel_block.index('"Import Attache Invoices"'))
         self.assertLess(panel_block.index('"Import Attache Invoices"'), panel_block.index('"Driver & Vehicle Specification"'))
         self.assertIn("createOrderAssignmentControls", self.delivery_renderer)
@@ -960,7 +1052,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertNotIn('"Generated Run Sheets"', operational_block)
         self.assertNotIn('"Saved Run Sheets"', operational_block)
         self.assertIn('"Saved Run Sheet History"', history_block)
-        self.assertIn(
+        self.assertNotIn(
             '"Search saved Delivery Run Sheets by their actual Delivery Date."',
             history_block,
         )
@@ -3886,7 +3978,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             "function createSavedPickupCollectionHistory", 1
         )[1].split("function createCollectionList", 1)[0]
         self.assertIn('"Saved Pickup Collection History"', history_block)
-        self.assertIn(
+        self.assertNotIn(
             '"Search saved OP SHOP Pickup Collections by their actual Pickup Date."',
             history_block,
         )

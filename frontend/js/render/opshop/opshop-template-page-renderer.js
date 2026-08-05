@@ -17,10 +17,7 @@ export function createTemplateManagementPage(state, actions) {
   const toolbar = document.createElement("section");
   toolbar.className = "workspace-context-panel workspace-context-panel-opshop workspace-template-toolbar";
   toolbar.append(
-    createSectionHeading(
-      "Manage OP SHOP Templates",
-      "Add, edit, review, and soft-disable Regular and Oncall templates.",
-    ),
+    createSectionHeading("Manage OP SHOP Templates"),
     createRouteActionLink(
       "Back to Task Pool",
       `#${state.opshopTaskPoolReturnRoute || "opshop/task-pool/regular"}`,

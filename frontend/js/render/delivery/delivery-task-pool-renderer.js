@@ -64,14 +64,9 @@ export function createDeliveryTaskPoolPanel(unassignedOrders, filteredOrders, st
   icon.className = "workspace-task-pool-title-icon";
   icon.append(createIcon("truck"));
   const copy = document.createElement("div");
-  const kicker = document.createElement("p");
-  kicker.className = "section-kicker";
-  kicker.textContent = "Order Delivery";
   const title = document.createElement("h3");
   title.textContent = "Delivery Orders";
-  const description = document.createElement("p");
-  description.textContent = "Filter active unassigned Orders, then assign each Order directly to a Driver and Trip.";
-  copy.append(kicker, title, description);
+  copy.append(title);
   titleGroup.append(icon, copy);
 
   const actionsRow = document.createElement("div");

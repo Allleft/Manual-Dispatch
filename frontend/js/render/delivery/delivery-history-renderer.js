@@ -13,10 +13,7 @@ export function createSavedRunSheetHistory(state, actions) {
   const toolbar = document.createElement("section");
   toolbar.className =
     "workspace-context-panel workspace-context-panel-delivery workspace-history-toolbar";
-  const heading = createSectionHeading(
-    "Saved Run Sheet History",
-    "Search saved Delivery Run Sheets by their actual Delivery Date.",
-  );
+  const heading = createSectionHeading("Saved Run Sheet History");
   const field = document.createElement("label");
   field.className = "workspace-date-control workspace-delivery-date-control";
   field.textContent = "Delivery date";

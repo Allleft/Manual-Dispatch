@@ -6,10 +6,7 @@ const WORKSPACES = [
     className: "delivery",
     href: "#delivery/task-pool",
     icon: "truck",
-    kicker: "Delivery operations",
     title: "Order Delivery",
-    description:
-      "Manage delivery orders, assign drivers and vehicles, prepare Delivery Run Sheets, and review saved history.",
     action: "Open Order Delivery",
     readyField: "delivery_ready",
   },
@@ -17,10 +14,7 @@ const WORKSPACES = [
     className: "opshop",
     href: "#opshop/task-pool/regular",
     icon: "store",
-    kicker: "Pickup operations",
     title: "OP SHOP Pickup",
-    description:
-      "Manage regular, oncall and countryside pickups, prepare Pickup Collections, and review saved history.",
     action: "Open OP SHOP Pickup",
     readyField: "opshop_ready",
   },
@@ -32,15 +26,9 @@ export function renderWorkspaceHome(root, { state }) {
 
   const intro = document.createElement("section");
   intro.className = "workspace-home-intro";
-  const kicker = document.createElement("p");
-  kicker.className = "section-kicker";
-  kicker.textContent = "Choose a workspace";
   const title = document.createElement("h2");
   title.textContent = "Where are you working today?";
-  const copy = document.createElement("p");
-  copy.textContent =
-    "Delivery orders and OP SHOP pickups now have separate workspaces, records, and saved operational history.";
-  intro.append(kicker, title, copy);
+  intro.append(title);
 
   const grid = document.createElement("section");
   grid.className = "workspace-home-grid";
@@ -75,15 +63,9 @@ function createWorkspaceCard(workspace, state) {
 
   const content = document.createElement("span");
   content.className = "workspace-home-card-content";
-  const kicker = document.createElement("span");
-  kicker.className = "workspace-home-card-kicker";
-  kicker.textContent = workspace.kicker;
   const title = document.createElement("strong");
   title.textContent = workspace.title;
-  const description = document.createElement("span");
-  description.className = "workspace-home-card-description";
-  description.textContent = workspace.description;
-  content.append(kicker, title, description);
+  content.append(title);
 
   const action = document.createElement("span");
   action.className = "workspace-home-card-action";

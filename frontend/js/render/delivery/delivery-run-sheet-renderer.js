@@ -31,10 +31,7 @@ export function createRunSheetList(runSheets, state, actions) {
 export function createRunSheetToolbar(deliveryDate, state, actions) {
   const panel = document.createElement("section");
   panel.className = "workspace-context-panel workspace-context-panel-delivery workspace-run-sheet-intro";
-  panel.append(createSectionHeading(
-    "Delivery Run Sheets",
-    "Review generated and saved Delivery Run Sheets by actual Delivery date.",
-  ));
+  panel.append(createSectionHeading("Delivery Run Sheets"));
   const field = document.createElement("label");
   field.className = "workspace-date-control workspace-delivery-date-control";
   field.textContent = "Delivery date";

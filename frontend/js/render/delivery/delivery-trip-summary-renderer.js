@@ -61,10 +61,7 @@ export function createDeliveryTripSummary(board, state, actions) {
 export function createTripSummaryToolbar(deliveryDate, state, actions) {
   const panel = document.createElement("section");
   panel.className = "workspace-context-panel workspace-context-panel-delivery";
-  const heading = createSectionHeading(
-    "Delivery Trip Summary",
-    "Review driver trips, manage assigned orders, select vehicles, and generate Delivery Run Sheets.",
-  );
+  const heading = createSectionHeading("Delivery Trip Summary");
   const field = document.createElement("label");
   field.className = "workspace-date-control workspace-delivery-date-control";
   field.textContent = "Delivery date";

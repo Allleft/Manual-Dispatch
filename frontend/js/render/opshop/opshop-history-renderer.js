@@ -13,10 +13,7 @@ export function createSavedPickupCollectionHistory(state, actions) {
   const toolbar = document.createElement("section");
   toolbar.className =
     "workspace-context-panel workspace-context-panel-opshop workspace-history-toolbar";
-  const heading = createSectionHeading(
-    "Saved Pickup Collection History",
-    "Search saved OP SHOP Pickup Collections by their actual Pickup Date.",
-  );
+  const heading = createSectionHeading("Saved Pickup Collection History");
   const field = document.createElement("label");
   field.className = "workspace-date-control workspace-opshop-pickup-date-control";
   field.textContent = "Pickup date";
