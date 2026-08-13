@@ -358,9 +358,15 @@ class OpShopPickupService:
             raise ValueError("OP SHOP pickup task does not exist")
         if task.status in {"CANCELLED", "COMPLETED"}:
             raise ValueError("Cancelled or completed OP SHOP pickup tasks cannot be edited")
+        dispatch_date = _assignment_dispatch_date_for_request(request, task)
+        ensure_opshop_pickup_not_reserved(
+            self.repository,
+            dispatch_date,
+            task.pickup_task_id,
+        )
         self._ensure_opshop_task_not_saved_locked(
             task,
-            _assignment_dispatch_date_for_request(request, task),
+            dispatch_date,
         )
 
         fields = request.model_fields_set
@@ -426,6 +432,11 @@ class OpShopPickupService:
             raise ValueError("OP SHOP pickup task does not exist")
         if task.status not in {"ACTIVE", "ASSIGNED"}:
             raise ValueError("Only active or assigned OP SHOP pickup tasks can be deleted")
+        ensure_opshop_pickup_not_reserved(
+            self.repository,
+            task.dispatch_date or task.pickup_date,
+            task.pickup_task_id,
+        )
         self._ensure_opshop_task_not_saved_locked(task)
 
         self.repository.remove_assignments_for_task("OPSHOP_PICKUP", task.pickup_task_id)
@@ -1080,13 +1091,8 @@ def _validate_multi_weekly_group(schedules, distinct_weekdays, rules, warnings):
 
 
 def _matches_regular_frequency(target_date, rule):
-    if rule.frequency_type in {"WEEKLY", "TWICE_WEEKLY"}:
+    if rule.frequency_type in {"WEEKLY", "TWICE_WEEKLY", "FORTNIGHTLY"}:
         return True
-    if rule.frequency_type == "FORTNIGHTLY":
-        weeks_from_anchor = (
-            target_date - OPSHOP_FORTNIGHT_ANCHOR_DATE
-        ).days // 7
-        return weeks_from_anchor % 2 == 0
     if rule.frequency_type == "MONTHLY":
         return (
             rule.monthly_ordinal is not None

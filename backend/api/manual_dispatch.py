@@ -1,3 +1,5 @@
+from threading import Lock
+
 from fastapi import APIRouter, Depends, Request
 
 from backend.repositories.sqlite_manual_dispatch_repository import (
@@ -50,27 +52,33 @@ from .manual_dispatch_routes.workspace_snapshot_routes import (
 
 
 router = APIRouter(prefix="/api/manual-dispatch", tags=["manual-dispatch"])
-service = ManualDispatchService(SQLiteManualDispatchRepository())
+service = None
+_service_lock = Lock()
 
 
 def _get_service():
+    global service
+    if service is None:
+        with _service_lock:
+            if service is None:
+                service = ManualDispatchService(SQLiteManualDispatchRepository())
     return service
 
 
 def _with_logbook_actor(http_request, callback):
-    return with_logbook_actor(service, http_request, callback)
+    return with_logbook_actor(_get_service(), http_request, callback)
 
 
 def _current_operator_account_name(http_request):
-    return current_operator_account_name(service, http_request)
+    return current_operator_account_name(_get_service(), http_request)
 
 
 def _set_operator_cookie(response, identity):
-    return set_operator_cookie(service, response, identity)
+    return set_operator_cookie(_get_service(), response, identity)
 
 
 def _require_authenticated_operator(http_request: Request):
-    return require_authenticated_operator(service, http_request)
+    return require_authenticated_operator(_get_service(), http_request)
 
 
 def _get_compatibility_dependency(name):

@@ -105,6 +105,9 @@ export function pickupCategoryLabel(pickup) {
 
 export function changedOpShopAssignments(pickups, state) {
   return (pickups || []).filter((pickup) => {
+    if (pickup.assigned_to_locked) {
+      return false;
+    }
     if (!Object.prototype.hasOwnProperty.call(state.opshopAssignmentDrafts, pickup.pickup_task_id)) {
       return false;
     }

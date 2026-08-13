@@ -1,7 +1,9 @@
+from datetime import date
 import unittest
 
 from backend.services.manual_dispatch.attache_invoice_pdf_parser import (
     _find_postcode,
+    _is_stop_marker,
     parse_attache_invoice_text,
 )
 
@@ -81,6 +83,7 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
             DEL 1DELIVERY /FUEL LEVY CHARGE 9.350.850.008.500DEL
             """,
             source_filename="181486.pdf",
+            import_date=date(2026, 2, 4),
         )
 
         self.assertEqual("181486", parsed.invoice_number)
@@ -523,6 +526,7 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
             GST 12.00
             """,
             source_filename="182438.pdf",
+            import_date=date(2026, 3, 20),
         )
 
         self.assertEqual("182438", parsed.invoice_number)
@@ -581,6 +585,7 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
             FUEL LEVY CHARGE 1 DELIVERY
             """,
             source_filename="183075.pdf",
+            import_date=date(2026, 4, 21),
         )
 
         self.assertEqual("183075", parsed.invoice_number)
@@ -808,7 +813,254 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
         self.assertIsNone(parsed.product_lines[0]["package_unit"])
         self.assertEqual(5, parsed.product_lines[1]["package_quantity"])
         self.assertEqual("BAG5", parsed.product_lines[1]["package_unit"])
-        self.assertEqual(5, parsed.loose_bags_quantity)
+        self.assertEqual(15, parsed.loose_bags_quantity)
+        self.assertTrue(
+            any(
+                warning.startswith("Unclassified invoice item:")
+                for warning in parsed.warnings
+            )
+        )
+
+    def test_real_column_order_185517_equivalent_uses_import_date_and_bag_count(self):
+        parsed = parse_attache_invoice_text(
+            """
+            Invoice No 185517
+            Date 11/08/26
+            Order No Date
+            11/08/26 CUSPER 32074
+            Invoice to:
+            CUSTOM PERFORMANCE GARAGE
+            1 SANITIZED ROAD
+            HALLAM 3803
+            Deliver to:
+            CUSTOM PERFORMANCE GARAGE
+            1 SANITIZED ROAD
+            HALLAM
+            3803
+            Tax Invoice
+            RSING 96.25 KG 8.75 0.00 1.750 50 COLOR TSHIRT RAGS
+            BAG10 0.00 0.00 0.00 0.000 5 PLASTIC BAG 10 kg
+            Total Invoice:AUD 105.88
+            """,
+            source_filename="sanitized-185517.txt",
+            import_date=date(2026, 8, 12),
+        )
+
+        self.assertEqual("185517", parsed.invoice_number)
+        self.assertEqual("2026-08-11", parsed.invoice_date)
+        self.assertEqual("2026-08-13", parsed.delivery_date)
+        self.assertEqual("CUSTOM PERFORMANCE GARAGE", parsed.company_name)
+        self.assertEqual("HALLAM", parsed.suburb)
+        self.assertGreaterEqual(len(parsed.product_lines), 1)
+        self.assert_product(
+            parsed.product_lines[0],
+            "RSING",
+            "COLOR TSHIRT RAGS",
+            50,
+            "KG",
+            5,
+            "BAG10",
+        )
+        self.assertEqual(
+            (0, 5, 0),
+            (
+                parsed.pallet_quantity,
+                parsed.loose_bags_quantity,
+                parsed.carton_quantity,
+            ),
+        )
+
+    def test_real_column_order_185497_equivalent_uses_import_date_and_bag_count(self):
+        parsed = parse_attache_invoice_text(
+            """
+            Invoice No 185497
+            Date 11/08/26
+            Order No Date
+            11/08/26 SEVTRA 030482
+            Invoice to:
+            SEVILLE TRACTORS
+            2 SANITIZED ROAD
+            SEVILLE 3139
+            Deliver to:
+            SEVILLE TRACTORS
+            2 SANITIZED ROAD
+            SEVILLE
+            3139
+            Tax Invoice
+            RSING 305.25 KG 27.75 0.00 1.850 150 COLOR TSHIRT RAGS
+            BAG10 0.00 0.00 0.00 0.000 15 PLASTIC BAG 10 kg
+            Total Invoice:AUD 335.78
+            """,
+            source_filename="sanitized-185497.txt",
+            import_date=date(2026, 8, 12),
+        )
+
+        self.assertEqual("185497", parsed.invoice_number)
+        self.assertEqual("2026-08-11", parsed.invoice_date)
+        self.assertEqual("2026-08-13", parsed.delivery_date)
+        self.assertEqual("SEVILLE TRACTORS", parsed.company_name)
+        self.assertEqual("SEVILLE", parsed.suburb)
+        self.assertGreaterEqual(len(parsed.product_lines), 1)
+        self.assert_product(
+            parsed.product_lines[0],
+            "RSING",
+            "COLOR TSHIRT RAGS",
+            150,
+            "KG",
+            15,
+            "BAG10",
+        )
+        self.assertEqual(
+            (0, 15, 0),
+            (
+                parsed.pallet_quantity,
+                parsed.loose_bags_quantity,
+                parsed.carton_quantity,
+            ),
+        )
+
+    def test_total_tools_dandenong_address_profile_is_not_treated_as_total_footer(self):
+        parsed = parse_attache_invoice_text(
+            """
+            Invoice No
+            185505
+            Order NoDate
+            11/08/26 TOTDAN4 129534
+            Invoice to:
+            TOTAL TOOLS - DANDENONG
+            221-232 GREENS ROAD
+            DANDENONG 3175
+            Total
+            Deliver to:
+            TOTAL TOOLS - DANDENONG
+            221-232 GREENS ROAD
+            DANDENONG
+            web: www.melbournecleaningcloths.com.au
+            ABN: 23 114 428 563
+            Tax Invoice
+            9798 4533
+            3175
+            RSING 96.25 KG 8.75 0.00 1.750 50 COLOR TSHIRT RAGS
+            BAG10 0.00 0.00 0.00 0.000 5 PLASTIC BAG 10 kg
+            PAL 27.50 2.50 0.00 PLT 25.000 PALLET 1
+            BARCODES & LABELS
+            Total Invoice:AUD 133.38
+            """,
+            source_filename="sanitized-total-tools-dandenong.txt",
+            import_date=date(2026, 8, 13),
+        )
+
+        self.assertEqual("185505", parsed.invoice_number)
+        self.assertEqual("2026-08-11", parsed.invoice_date)
+        self.assertEqual("TOTDAN4", parsed.customer_code)
+        self.assertEqual("129534", parsed.order_no)
+        self.assertEqual("TOTAL TOOLS - DANDENONG", parsed.company_name)
+        self.assertEqual("221-232 GREENS ROAD", parsed.delivery_address)
+        self.assertEqual("DANDENONG", parsed.suburb)
+        self.assertEqual("3175", parsed.postcode)
+        self.assertEqual("9798 4533", parsed.phone)
+        self.assertEqual("2026-08-14", parsed.delivery_date)
+        self.assertEqual(1, parsed.pallet_quantity)
+        self.assertEqual(0, parsed.loose_bags_quantity)
+        self.assertEqual(
+            ["Unclassified invoice item: BARCODES & LABELS"],
+            parsed.warnings,
+        )
+        self.assertNotIn("Customer name was not found.", parsed.warnings)
+        self.assertNotIn("Suburb was not found.", parsed.warnings)
+
+    def test_total_tools_kilsyth_address_profile_is_not_treated_as_total_footer(self):
+        parsed = parse_attache_invoice_text(
+            """
+            Invoice No
+            185506
+            Order NoDate
+            11/08/26 TOTKIL 132367
+            Invoice to:
+            TOTAL TOOLS KILSYTH
+            CNR CANTERBURY RD & LIVERPOOL RD
+            KILSYTH 3137
+            Total
+            Deliver to:
+            TOTAL TOOLS KILSYTH
+            CNR CANTERBURY RD & LIVERPOOL RD
+            KILSYTH
+            web: www.melbournecleaningcloths.com.au
+            ABN: 23 114 428 563
+            Tax Invoice
+            8739 5110
+            3137
+            RSING 96.25 KG 8.75 0.00 1.750 50 COLOR TSHIRT RAGS
+            BAG10 0.00 0.00 0.00 0.000 5 PLASTIC BAG 10 kg
+            PAL 27.50 2.50 0.00 PLT 25.000 PALLET 1
+            BARCODES & LABELS
+            Total Invoice:AUD 133.38
+            """,
+            source_filename="sanitized-total-tools-kilsyth.txt",
+            import_date=date(2026, 8, 13),
+        )
+
+        self.assertEqual("185506", parsed.invoice_number)
+        self.assertEqual("2026-08-11", parsed.invoice_date)
+        self.assertEqual("TOTKIL", parsed.customer_code)
+        self.assertEqual("132367", parsed.order_no)
+        self.assertEqual("TOTAL TOOLS KILSYTH", parsed.company_name)
+        self.assertEqual(
+            "CNR CANTERBURY RD & LIVERPOOL RD",
+            parsed.delivery_address,
+        )
+        self.assertEqual("KILSYTH", parsed.suburb)
+        self.assertEqual("3137", parsed.postcode)
+        self.assertEqual("8739 5110", parsed.phone)
+        self.assertEqual("2026-08-14", parsed.delivery_date)
+        self.assertEqual(1, parsed.pallet_quantity)
+        self.assertEqual(0, parsed.loose_bags_quantity)
+        self.assertEqual(
+            ["Unclassified invoice item: BARCODES & LABELS"],
+            parsed.warnings,
+        )
+        self.assertNotIn("Customer name was not found.", parsed.warnings)
+        self.assertNotIn("Suburb was not found.", parsed.warnings)
+
+    def test_total_customer_names_are_not_stop_markers_but_total_footers_are(self):
+        self.assertFalse(_is_stop_marker("TOTAL TOOLS - DANDENONG"))
+        self.assertFalse(_is_stop_marker("TOTAL TOOLS KILSYTH"))
+        for footer in (
+            "Total",
+            "TOTAL:",
+            "Total Invoice:AUD 352.00",
+            "Total Net Amount 320.00",
+            "Total GST 32.00",
+            "Total Amount 352.00",
+        ):
+            with self.subTest(footer=footer):
+                self.assertTrue(_is_stop_marker(footer))
+
+    def test_explicit_delivery_date_overrides_import_date_default(self):
+        parsed = parse_attache_invoice_text(
+            """
+            Invoice No 199003
+            Invoice Date 09/08/26
+            Delivery Date 20/08/26
+            Invoice to:
+            EXPLICIT DATE CUSTOMER
+            3 SANITIZED ROAD
+            RICHMOND 3121
+            Deliver to:
+            EXPLICIT DATE CUSTOMER
+            3 SANITIZED ROAD
+            RICHMOND
+            3121
+            Tax Invoice
+            RSING 4.13 KG 25 COLOR TSHIRT RAGS 1.650 45.38 41.25
+            BAG5 0.00 5 PLASTIC BAG 5 kg 0.000 0.00 0.00
+            """,
+            source_filename="explicit-delivery-date.txt",
+            import_date=date(2026, 8, 12),
+        )
+
+        self.assertEqual("2026-08-09", parsed.invoice_date)
+        self.assertEqual("2026-08-20", parsed.delivery_date)
 
 
 if __name__ == "__main__":

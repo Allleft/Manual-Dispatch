@@ -1,0 +1,4 @@
+from manual_dispatch_test_bootstrap import configure_test_environment
+
+
+TEST_ENVIRONMENT = configure_test_environment()

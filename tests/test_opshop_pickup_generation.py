@@ -3,7 +3,12 @@ import unittest
 from backend.repositories.in_memory_manual_dispatch_repository import (
     InMemoryManualDispatchRepository,
 )
-from backend.schemas import OpShopLocation, OpShopPickupSchedule, OpShopPickupTask
+from backend.schemas import (
+    OpShopLocation,
+    OpShopPickupSchedule,
+    OpShopPickupTask,
+    OpShopWorkspaceUnassignPickupRequest,
+)
 from backend.services.manual_dispatch.opshop_regular_frequency import (
     parse_regular_pickup_frequency,
 )
@@ -129,7 +134,7 @@ class RegularOpShopPickupGenerationTest(unittest.TestCase):
         self.assertEqual(1, result.warnings["DUPLICATE_ACTIVE_SCHEDULE_SLOT"])
         self.assertEqual(1, result.skip_reasons["DUPLICATE_ACTIVE_SCHEDULE_SLOT"])
 
-    def test_fortnight_uses_shared_anchor_and_alternates_weeks(self):
+    def test_regular_fortnight_generates_every_week_for_office_manual_selection(self):
         self._add_schedule("FORTNIGHT-MON", "MONDAY", "Fortnight")
 
         first = self._generate("2026-05-18")
@@ -137,9 +142,66 @@ class RegularOpShopPickupGenerationTest(unittest.TestCase):
         third = self._generate("2026-06-01")
 
         self.assertEqual(1, first.tasks_created)
-        self.assertEqual(0, second.tasks_created)
+        self.assertEqual(1, second.tasks_created)
         self.assertEqual(1, third.tasks_created)
-        self.assertEqual(["2026-05-18", "2026-06-01"], self._pickup_dates())
+        self.assertEqual(
+            ["2026-05-18", "2026-05-25", "2026-06-01"],
+            self._pickup_dates(),
+        )
+        self.assertEqual(
+            "Fortnight",
+            self.repository.get_opshop_pickup_schedule(
+                "FORTNIGHT-MON"
+            ).pickup_frequency,
+        )
+
+    def test_regular_fortnight_manual_unassign_persists_after_refresh(self):
+        self._add_schedule(
+            "FORTNIGHT-DEFAULT-MON",
+            "MONDAY",
+            "Fortnight",
+            default_driver_id="D001",
+        )
+
+        first = self._generate("2026-05-18")
+        assigned = self.repository.find_opshop_pickup_task_by_schedule_and_date(
+            "FORTNIGHT-DEFAULT-MON",
+            "2026-05-18",
+        )
+        self.assertEqual(1, first.tasks_created)
+        self.assertEqual("ASSIGNED", assigned.status)
+        self.assertEqual("D001", assigned.driver_id)
+
+        self.service.opshop_workspace_mutation_service.unassign_pickup(
+            OpShopWorkspaceUnassignPickupRequest(
+                dispatch_date="2026-05-18",
+                pickup_task_id=assigned.pickup_task_id,
+            )
+        )
+        refreshed = self._generate("2026-05-18")
+        persisted = self.repository.find_opshop_pickup_task_by_schedule_and_date(
+            "FORTNIGHT-DEFAULT-MON",
+            "2026-05-18",
+        )
+
+        self.assertEqual(0, refreshed.tasks_created)
+        self.assertEqual(1, refreshed.tasks_existing)
+        self.assertEqual(1, len(self.repository.list_opshop_pickup_tasks()))
+        self.assertEqual(assigned.pickup_task_id, persisted.pickup_task_id)
+        self.assertEqual("ACTIVE", persisted.status)
+        self.assertIsNone(persisted.driver_id)
+        self.assertIsNone(
+            self.repository.find_assignment_for_task(
+                "OPSHOP_PICKUP",
+                persisted.pickup_task_id,
+            )
+        )
+        self.assertEqual(
+            "Fortnight",
+            self.repository.get_opshop_pickup_schedule(
+                "FORTNIGHT-DEFAULT-MON"
+            ).pickup_frequency,
+        )
 
     def test_monthly_first_thursday_generates_only_matching_ordinal(self):
         self._add_schedule(
@@ -164,6 +226,69 @@ class RegularOpShopPickupGenerationTest(unittest.TestCase):
         self.assertEqual([], self._pickup_dates())
         self.assertEqual(1, result.skip_reasons["MISSING_PICKUP_FREQUENCY"])
         self.assertEqual(1, result.skip_reasons["UNKNOWN_FREQUENCY"])
+
+    def test_in_memory_oncall_board_uses_inclusive_fourteen_day_lookback(self):
+        self.repository.upsert_opshop_pickup_schedule(
+            OpShopPickupSchedule(
+                schedule_id="ONCALL-BOUNDARY",
+                opshop_id="OPSHOP-001",
+                run_day=None,
+                run_type="ON_CALL",
+                pickup_frequency="On call",
+                time_window="9-12",
+                call_before_arrival=False,
+                call_timing=None,
+                status="Active",
+                active_flag=True,
+                fortnight_group=None,
+                review_required=False,
+                review_reason=None,
+                created_at="2026-05-19T00:00:00+00:00",
+                updated_at="2026-05-19T00:00:00+00:00",
+                pickup_category="NORMAL",
+            )
+        )
+        pickup_dates = (
+            "2026-07-28",
+            "2026-07-29",
+            "2026-08-05",
+            "2026-08-11",
+            "2026-08-12",
+            "2026-08-13",
+        )
+        for pickup_date in pickup_dates:
+            self.repository.upsert_opshop_pickup_task(
+                self._task(
+                    f"ONCALL-{pickup_date}",
+                    "ONCALL-BOUNDARY",
+                    pickup_date,
+                    generated_from="ON_CALL",
+                )
+            )
+
+        board = self.service.get_opshop_workspace_board("2026-08-12")
+        oncall = [
+            pickup for pickup in board.opshop_pickups
+            if pickup.run_type == "ON_CALL"
+        ]
+
+        self.assertEqual(
+            [
+                "2026-07-29",
+                "2026-08-05",
+                "2026-08-11",
+                "2026-08-12",
+                "2026-08-13",
+            ],
+            [pickup.pickup_date for pickup in oncall],
+        )
+        locked_by_date = {
+            pickup.pickup_date: pickup.assigned_to_locked for pickup in oncall
+        }
+        self.assertTrue(locked_by_date["2026-07-29"])
+        self.assertTrue(locked_by_date["2026-08-11"])
+        self.assertFalse(locked_by_date["2026-08-12"])
+        self.assertFalse(locked_by_date["2026-08-13"])
 
     def test_refresh_preserves_manual_unassign_and_cancelled_task(self):
         self._add_schedule(
@@ -274,14 +399,21 @@ class RegularOpShopPickupGenerationTest(unittest.TestCase):
         )
 
     @staticmethod
-    def _task(pickup_task_id, schedule_id, pickup_date, status="ACTIVE"):
+    def _task(
+        pickup_task_id,
+        schedule_id,
+        pickup_date,
+        status="ACTIVE",
+        *,
+        generated_from="REGULAR",
+    ):
         return OpShopPickupTask(
             pickup_task_id=pickup_task_id,
             schedule_id=schedule_id,
             opshop_id="OPSHOP-001",
             pickup_date=pickup_date,
             task_type="OPSHOP_PICKUP",
-            generated_from="REGULAR",
+            generated_from=generated_from,
             status=status,
             dispatch_date=pickup_date,
             driver_id=None,

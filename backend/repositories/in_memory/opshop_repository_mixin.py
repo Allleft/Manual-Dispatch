@@ -354,12 +354,12 @@ class InMemoryOpShopRepositoryMixin:
             ),
         )
 
-    def list_oncall_opshop_pickup_board_items(self, dispatch_date):
+    def list_oncall_opshop_pickup_board_items(self, start_date):
         items = []
         for task in self.opshop_pickup_tasks:
             if task.status not in {"ACTIVE", "ASSIGNED"}:
                 continue
-            if task.pickup_date < dispatch_date:
+            if task.pickup_date < start_date:
                 continue
             if task.generated_from != "ON_CALL":
                 continue

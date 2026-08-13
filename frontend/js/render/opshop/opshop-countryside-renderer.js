@@ -56,6 +56,12 @@ export function createRouteGroupAssignmentForm(
     notes: "",
     ...(state.countrysideRouteGroupDrafts[group.route_group_id] || {}),
   };
+  const lockedPickup = pickups.find(
+    (pickup) =>
+      pickup.route_group_id === group.route_group_id
+      && pickup.pickup_date === draft.pickup_date
+      && pickup.assigned_to_locked,
+  );
   const detailTrigger = document.createElement("button");
   detailTrigger.type = "button";
   detailTrigger.className = "workspace-route-group-detail-trigger";
@@ -89,53 +95,65 @@ export function createRouteGroupAssignmentForm(
   });
   const controls = document.createElement("div");
   controls.className = "workspace-action-row workspace-action-row-stacked";
-  controls.append(
-    createDateField(
-      "Pickup date",
-      draft.pickup_date,
-      (value) => actions.updateCountrysideRouteGroupDraft(
-        group.route_group_id,
-        "pickup_date",
-        value,
-      ),
-    ),
-    createSelect(
-      "Assigned to",
-      draft.assigned_driver_id,
-      [{ value: "", label: "Select driver" }].concat(
-        (state.opshopBoard?.drivers || []).map((driver) => ({
-          value: driver.driver_id,
-          label: driver.name,
-        })),
-      ),
-      (value) => actions.updateCountrysideRouteGroupDraft(
-        group.route_group_id,
-        "assigned_driver_id",
-        value,
-      ),
-    ),
-    createTextField(
-      "Notes",
-      draft.notes,
-      (value) => actions.updateCountrysideRouteGroupDraft(
-        group.route_group_id,
-        "notes",
-        value,
-      ),
+  const pickupDateField = createDateField(
+    "Pickup date",
+    draft.pickup_date,
+    (value) => actions.updateCountrysideRouteGroupDraft(
+      group.route_group_id,
+      "pickup_date",
+      value,
     ),
   );
+  const driverField = createSelect(
+    "Assigned to",
+    draft.assigned_driver_id,
+    [{ value: "", label: "Select driver" }].concat(
+      (state.opshopBoard?.drivers || []).map((driver) => ({
+        value: driver.driver_id,
+        label: driver.name,
+      })),
+    ),
+    (value) => actions.updateCountrysideRouteGroupDraft(
+      group.route_group_id,
+      "assigned_driver_id",
+      value,
+    ),
+  );
+  const notesField = createTextField(
+    "Notes",
+    draft.notes,
+    (value) => actions.updateCountrysideRouteGroupDraft(
+      group.route_group_id,
+      "notes",
+      value,
+    ),
+  );
+  pickupDateField.querySelector("input").disabled = Boolean(lockedPickup);
+  driverField.querySelector("select").disabled = Boolean(lockedPickup);
+  notesField.querySelector("input").disabled = Boolean(lockedPickup);
+  controls.append(pickupDateField, driverField, notesField);
   const assignButton = createActionButton(
     "Assign Route Group",
     () => actions.assignCountrysideRouteGroup(group.route_group_id),
     {
       disabled:
         templateCount === 0 ||
+        Boolean(lockedPickup) ||
         !draft.pickup_date ||
         !draft.assigned_driver_id ||
         isBusy(state, `opshop-route-group:${group.route_group_id}`),
       primary: true,
     },
   );
+  if (lockedPickup) {
+    const warning = document.createElement("p");
+    warning.className = "workspace-status workspace-status-notice";
+    warning.textContent = (
+      lockedPickup.assignment_lock_reason || "This pickup is locked."
+    );
+    row.append(detailTrigger, warning, controls, assignButton);
+    return row;
+  }
   if (templateCount === 0) {
     const warning = document.createElement("p");
     warning.className = "workspace-status workspace-status-notice";

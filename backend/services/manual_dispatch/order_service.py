@@ -1,5 +1,6 @@
 from backend.schemas import Order
 from backend.services.manual_dispatch.normalization import (
+    clean_optional_iso_date,
     clean_optional_text,
     clean_required_iso_date,
     clean_required_text,
@@ -54,6 +55,7 @@ class OrderService:
             note=clean_optional_text(request.note),
             status="ACTIVE",
             product_lines=product_lines,
+            invoice_date=clean_optional_iso_date(request.invoice_date, "invoice_date"),
         )
         return self.repository.create_order(order)
 
@@ -129,6 +131,11 @@ class OrderService:
             note=_optional_patch_text(request, fields, "note", existing.note),
             status=existing.status,
             product_lines=product_lines,
+            invoice_date=(
+                clean_optional_iso_date(request.invoice_date, "invoice_date")
+                if "invoice_date" in fields
+                else existing.invoice_date
+            ),
         )
         return self.repository.update_order(order)
 

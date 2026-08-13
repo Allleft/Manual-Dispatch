@@ -28,6 +28,7 @@ function compareOrderPriority(left, right) {
   }
 
   for (const compare of [
+    compareOptionalIsoDate(leftOrder.invoice_date, rightOrder.invoice_date),
     compareOptionalIsoDate(leftOrder.delivery_date, rightOrder.delivery_date),
     compareOptionalTime(leftOrder.start_time, rightOrder.start_time),
     compareText(leftOrder.invoice_number, rightOrder.invoice_number),

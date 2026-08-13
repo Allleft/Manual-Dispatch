@@ -20,10 +20,13 @@ from backend.schemas import (
     OpShopLocation,
     OpShopPickupSchedule,
     OpShopPickupTask,
+    OpShopWorkspaceAssignmentBatchRequest,
+    OpShopWorkspaceUnassignPickupRequest,
     Order,
     ProductDetailLine,
     RegisterOperatorAccountRequest,
     SaveGeneratedWorkspaceSnapshotRequest,
+    UpdateOpShopPickupTaskRequest,
     Vehicle,
     to_dict,
 )
@@ -258,6 +261,52 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
         self.assertEqual(pickup_date, payload["pickup_date"])
         self.assertEqual([pickup_id], [pickup["pickup_task_id"] for pickup in payload["opshop_pickups"]])
         self.assertEqual(["DRIVER-1"], [pickup["driver_id"] for pickup in payload["opshop_pickups"]])
+
+    def test_opshop_board_oncall_uses_inclusive_fourteen_day_lookback(self):
+        dispatch_date = "2026-08-12"
+        pickup_dates = (
+            "2026-07-28",
+            "2026-07-29",
+            "2026-08-05",
+            "2026-08-11",
+            "2026-08-12",
+            "2026-08-13",
+        )
+        for pickup_date in pickup_dates:
+            self._seed_and_assign_oncall_pickup(
+                pickup_id=f"PICKUP-ONCALL-{pickup_date}",
+                pickup_date=pickup_date,
+            )
+
+        response = self.client.get(
+            "/api/manual-dispatch/opshop/board",
+            params={"dispatch_date": dispatch_date},
+        )
+
+        self.assertEqual(200, response.status_code)
+        oncall = [
+            pickup for pickup in response.json()["opshop_pickups"]
+            if pickup["run_type"] == "ON_CALL"
+            and pickup["pickup_category"] == "NORMAL"
+        ]
+        self.assertEqual(
+            [
+                "2026-07-29",
+                "2026-08-05",
+                "2026-08-11",
+                "2026-08-12",
+                "2026-08-13",
+            ],
+            [pickup["pickup_date"] for pickup in oncall],
+        )
+        locked_by_date = {
+            pickup["pickup_date"]: pickup["assigned_to_locked"]
+            for pickup in oncall
+        }
+        self.assertTrue(locked_by_date["2026-07-29"])
+        self.assertTrue(locked_by_date["2026-08-11"])
+        self.assertFalse(locked_by_date["2026-08-12"])
+        self.assertFalse(locked_by_date["2026-08-13"])
 
     def test_delivery_trip_summary_ignores_legacy_dispatch_date_filter(self):
         delivery_date = "2026-05-06"
@@ -752,12 +801,69 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
     def test_opshop_snapshots_filter_only_pickups_and_cancel_restores_them(self):
         self._assign_order()
         pickup_id = self._seed_and_assign_oncall_pickup()
+        initial_board = self.service.get_opshop_workspace_board(self.dispatch_date)
+        initial_pickup = next(
+            pickup
+            for pickup in initial_board.opshop_pickups
+            if pickup.pickup_task_id == pickup_id
+        )
+        self.assertTrue(initial_pickup.is_assigned)
+        self.assertFalse(initial_pickup.assigned_to_locked)
+        self.assertEqual("DRIVER-1", initial_pickup.assigned_driver_id)
 
         generated = self.service.create_generated_opshop_pickup_collection(
             self._opshop_generate_request()
         )
         generated_board = self.service.get_opshop_workspace_board(self.dispatch_date)
-        self.assertNotIn(pickup_id, self._opshop_pickup_ids(generated_board))
+        generated_pickup = next(
+            pickup
+            for pickup in generated_board.opshop_pickups
+            if pickup.pickup_task_id == pickup_id
+        )
+        self.assertTrue(generated_pickup.is_assigned)
+        self.assertTrue(generated_pickup.assigned_to_locked)
+        self.assertEqual(generated.driver_id, generated_pickup.driver_id)
+        self.assertEqual(generated.driver_id, generated_pickup.assigned_driver_id)
+        self.assertEqual(
+            generated.driver_name_snapshot,
+            generated_pickup.assigned_driver_name,
+        )
+        self.assertEqual(
+            f"Already generated to {generated.driver_name_snapshot}",
+            generated_pickup.assignment_lock_reason,
+        )
+        self.assertNotIn(
+            pickup_id,
+            self._opshop_pickup_ids(
+                self.service.get_opshop_trip_summary_board(self.dispatch_date)
+            ),
+        )
+        with self.assertRaisesRegex(ValueError, "already been generated"):
+            self.service.apply_opshop_workspace_assignments(
+                OpShopWorkspaceAssignmentBatchRequest(
+                    dispatch_date=self.dispatch_date,
+                    assignments=[
+                        {
+                            "pickup_task_id": pickup_id,
+                            "driver_id": "DRIVER-1",
+                        }
+                    ],
+                )
+            )
+        with self.assertRaisesRegex(ValueError, "already been generated"):
+            self.service.unassign_opshop_workspace_pickup(
+                OpShopWorkspaceUnassignPickupRequest(
+                    dispatch_date=self.dispatch_date,
+                    pickup_task_id=pickup_id,
+                )
+            )
+        with self.assertRaisesRegex(ValueError, "already been generated"):
+            self.service.update_opshop_pickup_task(
+                pickup_id,
+                UpdateOpShopPickupTaskRequest(notes="Blocked edit"),
+            )
+        with self.assertRaisesRegex(ValueError, "already been generated"):
+            self.service.delete_opshop_pickup_task(pickup_id)
         self.assertNotIn(
             "ORDER-1",
             self._delivery_task_pool_order_ids(
@@ -771,7 +877,32 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
             )
         )
         cancelled_board = self.service.get_opshop_workspace_board(self.dispatch_date)
-        self.assertIn(pickup_id, self._opshop_pickup_ids(cancelled_board))
+        cancelled_pickup = next(
+            pickup
+            for pickup in cancelled_board.opshop_pickups
+            if pickup.pickup_task_id == pickup_id
+        )
+        self.assertTrue(cancelled_pickup.is_assigned)
+        self.assertFalse(cancelled_pickup.assigned_to_locked)
+        self.assertEqual(generated.driver_id, cancelled_pickup.assigned_driver_id)
+        self.assertIsNone(cancelled_pickup.assignment_lock_reason)
+        assignment = self.repository.find_assignment_for_task(
+            "OPSHOP_PICKUP",
+            pickup_id,
+        )
+        self.assertIsNotNone(assignment)
+        self.assertEqual(generated.driver_id, assignment.driver_id)
+        self.assertIn(
+            pickup_id,
+            self._opshop_pickup_ids(
+                self.service.get_opshop_trip_summary_board(self.dispatch_date)
+            ),
+        )
+        updated = self.service.update_opshop_pickup_task(
+            pickup_id,
+            UpdateOpShopPickupTaskRequest(notes="Permitted after cancel"),
+        )
+        self.assertEqual("Permitted after cancel", updated.notes)
 
         self.service.save_generated_opshop_pickup_collection(
             self.service.create_generated_opshop_pickup_collection(
@@ -781,6 +912,12 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
         )
         saved_board = self.service.get_opshop_workspace_board(self.dispatch_date)
         self.assertNotIn(pickup_id, self._opshop_pickup_ids(saved_board))
+        self.assertNotIn(
+            pickup_id,
+            self._opshop_pickup_ids(
+                self.service.get_opshop_trip_summary_board(self.dispatch_date)
+            ),
+        )
         delivery_board = self.service.get_delivery_workspace_board(self.dispatch_date)
         self.assertNotIn("ORDER-1", self._delivery_task_pool_order_ids(delivery_board))
         self.assertIn("ORDER-1", self._delivery_assignment_ids(delivery_board))

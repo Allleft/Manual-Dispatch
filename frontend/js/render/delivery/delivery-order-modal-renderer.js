@@ -104,6 +104,7 @@ export function createDeliveryOrderReadOnly(order, state, board) {
   fragment.append(
     createModalFactSection("General Information", [
       ["Invoice Number", order.invoice_number],
+      ["Invoice Date", order.invoice_date],
       ["Order Number", order.order_no],
       ["Company Name", order.company_name],
       ["Phone", order.phone],
@@ -176,6 +177,8 @@ export function createDeliveryOrderForm(state, actions, formMode) {
     createFormSection("Customer Information", [
       createBoundInput("Invoice Number", formState.invoice_number, (value) =>
         actions.updateDeliveryOrderForm("invoice_number", value)),
+      createBoundInput("Invoice Date", formState.invoice_date, (value) =>
+        actions.updateDeliveryOrderForm("invoice_date", value), { type: "date" }),
       createBoundInput("Order Number", formState.order_no, (value) =>
         actions.updateDeliveryOrderForm("order_no", value)),
       createBoundInput("Company Name", formState.company_name, (value) =>

@@ -13,6 +13,10 @@ LOGGER = logging.getLogger(__name__)
 MELBOURNE_TIMEZONE_KEY = "Australia/Melbourne"
 DEFAULT_LOGBOOK_DIR = "data/logbook"
 LOGBOOK_DIR_ENV = "MANUAL_DISPATCH_LOGBOOK_DIR"
+TEST_MODE_ENV = "MANUAL_DISPATCH_TEST_MODE"
+DEFAULT_LOGBOOK_TEST_ERROR = (
+    "Automated tests may not use the default Manual Dispatch Logbook"
+)
 
 
 def resolve_logbook_dir(
@@ -22,7 +26,21 @@ def resolve_logbook_dir(
 ) -> Path:
     environment = os.environ if environ is None else environ
     configured_dir = base_dir or environment.get(LOGBOOK_DIR_ENV)
-    return Path(configured_dir or DEFAULT_LOGBOOK_DIR)
+    logbook_dir = Path(configured_dir or DEFAULT_LOGBOOK_DIR)
+    if _is_env_flag_enabled(environment.get(TEST_MODE_ENV)) and _same_path(
+        logbook_dir,
+        Path(DEFAULT_LOGBOOK_DIR),
+    ):
+        raise RuntimeError(DEFAULT_LOGBOOK_TEST_ERROR)
+    return logbook_dir
+
+
+def _is_env_flag_enabled(raw_value: str | None) -> bool:
+    return str(raw_value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _same_path(left: Path, right: Path) -> bool:
+    return str(left.resolve()).casefold() == str(right.resolve()).casefold()
 
 
 def _load_melbourne_timezone():

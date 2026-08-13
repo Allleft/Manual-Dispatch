@@ -1,42 +1,29 @@
-import atexit
 import os
-import shutil
+import tempfile
 import unittest
 from pathlib import Path
 
-
-_WORKSPACE_TMP = (Path.cwd() / "tmp").resolve()
-_PREVIOUS_LOGBOOK_DIR = os.environ.get("MANUAL_DISPATCH_LOGBOOK_DIR")
-_FULL_SUITE_LOGBOOK_DIR = (
-    _WORKSPACE_TMP / f"unittest-logbook-{os.getpid()}"
-).resolve()
-_CONFIGURED_BY_THIS_MODULE = _PREVIOUS_LOGBOOK_DIR is None
-
-if _FULL_SUITE_LOGBOOK_DIR.parent != _WORKSPACE_TMP:
-    raise RuntimeError("Full-suite Logbook isolation escaped the workspace tmp directory.")
-
-if _CONFIGURED_BY_THIS_MODULE:
-    os.environ["MANUAL_DISPATCH_LOGBOOK_DIR"] = str(_FULL_SUITE_LOGBOOK_DIR)
+from manual_dispatch_test_bootstrap import configure_test_environment
 
 
-def _cleanup_full_suite_logbook():
-    if not _CONFIGURED_BY_THIS_MODULE or not _FULL_SUITE_LOGBOOK_DIR.exists():
-        return
-    resolved = _FULL_SUITE_LOGBOOK_DIR.resolve()
-    if resolved.parent != _WORKSPACE_TMP:
-        raise RuntimeError("Refusing to clean a Logbook directory outside workspace tmp.")
-    shutil.rmtree(resolved)
+_TEST_ENVIRONMENT = configure_test_environment()
 
 
-atexit.register(_cleanup_full_suite_logbook)
+class FullSuitePersistenceIsolationTest(unittest.TestCase):
+    def test_default_full_suite_persistence_is_isolated_under_os_temp(self):
+        temp_root = _TEST_ENVIRONMENT["temp_root"]
+        configured_db = Path(os.environ["MANUAL_DISPATCH_DB_PATH"]).resolve()
+        configured_logbook = Path(os.environ["MANUAL_DISPATCH_LOGBOOK_DIR"]).resolve()
 
-
-class FullSuiteLogbookIsolationTest(unittest.TestCase):
-    def test_default_full_suite_logbook_is_isolated_under_tmp(self):
-        configured = Path(os.environ["MANUAL_DISPATCH_LOGBOOK_DIR"]).resolve()
-        if _CONFIGURED_BY_THIS_MODULE:
-            self.assertEqual(_FULL_SUITE_LOGBOOK_DIR, configured)
-            self.assertEqual(_WORKSPACE_TMP, configured.parent)
-            self.assertNotEqual((Path.cwd() / "data" / "logbook").resolve(), configured)
-        else:
-            self.assertEqual(Path(_PREVIOUS_LOGBOOK_DIR).resolve(), configured)
+        self.assertEqual("1", os.environ["MANUAL_DISPATCH_TEST_MODE"])
+        self.assertEqual(Path(tempfile.gettempdir()).resolve(), temp_root.parent)
+        self.assertEqual(temp_root, configured_db.parent)
+        self.assertEqual(temp_root, configured_logbook.parent)
+        self.assertNotEqual(
+            (Path.cwd() / "data" / "manual_dispatch.sqlite3").resolve(),
+            configured_db,
+        )
+        self.assertNotEqual(
+            (Path.cwd() / "data" / "logbook").resolve(),
+            configured_logbook,
+        )

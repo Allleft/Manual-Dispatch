@@ -1,6 +1,9 @@
 import { createRouteGroupContext } from "./opshop-countryside-renderer.js";
 
-import { createPickupCard } from "./opshop-oncall-renderer.js";
+import {
+  createOncallPickupDateGroups,
+  createPickupCard,
+} from "./opshop-oncall-renderer.js";
 
 import { createRegularPickupDateGroups } from "./opshop-regular-renderer.js";
 
@@ -109,6 +112,8 @@ export function createPickupList(board, route, state, actions, onOpenRouteGroupD
 
   if (route === "regular") {
     wrapper.append(createRegularPickupDateGroups(pickups, state, actions));
+  } else if (route === "oncall") {
+    wrapper.append(createOncallPickupDateGroups(pickups, state, actions));
   } else {
     const grid = document.createElement("div");
     grid.className = "workspace-card-grid workspace-pickup-grid";

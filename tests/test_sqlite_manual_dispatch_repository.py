@@ -54,6 +54,12 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
         self.assertIn("manual_dispatch_assignments", tables)
         self.assertIn("manual_driver_vehicle_assignments", tables)
         self.assertIn("order_product_lines", tables)
+        with sqlite3.connect(self.db_path) as connection:
+            order_columns = {
+                row[1]
+                for row in connection.execute("PRAGMA table_info(manual_orders)").fetchall()
+            }
+        self.assertIn("invoice_date", order_columns)
 
     def test_fresh_product_line_schema_allows_extended_unrestricted_units(self):
         with sqlite3.connect(self.db_path) as connection:
@@ -399,6 +405,7 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
         legacy_driver = next(driver for driver in board.drivers if driver.driver_id == "DOLD")
 
         self.assertIsNone(legacy_order.invoice_number)
+        self.assertIsNone(legacy_order.invoice_date)
         self.assertEqual("002848", legacy_order.order_no)
         self.assertIsNone(legacy_order.phone)
         self.assertFalse(legacy_driver.pallet_only)
@@ -450,6 +457,7 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
             }
 
         self.assertIn("invoice_number", order_columns)
+        self.assertIn("invoice_date", order_columns)
         self.assertIn("order_no", order_columns)
         self.assertIn("phone", order_columns)
         self.assertIn("pallet_only", driver_columns)
@@ -468,6 +476,20 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
         self.assertIn("pickup_category_snapshot", final_summary_opshop_columns)
         self.assertIn("route_group_id_snapshot", final_summary_opshop_columns)
         self.assertIn("route_group_name_snapshot", final_summary_opshop_columns)
+        with sqlite3.connect(legacy_path) as connection:
+            legacy_row = connection.execute(
+                """
+                SELECT company_name, delivery_date, suburb, invoice_date
+                FROM manual_orders
+                WHERE order_id = 'ORD-OLD'
+                """
+            ).fetchone()
+            foreign_key_errors = connection.execute("PRAGMA foreign_key_check").fetchall()
+        self.assertEqual(
+            ("Legacy Customer", "2026-05-05", "Moorabbin", None),
+            legacy_row,
+        )
+        self.assertEqual([], foreign_key_errors)
 
     def test_existing_opshop_summary_row_without_category_route_values_loads_safely(self):
         with sqlite3.connect(self.db_path) as connection:

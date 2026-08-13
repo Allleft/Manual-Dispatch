@@ -33,6 +33,7 @@ class SQLiteRowMapperMixin:
         return Order(
             order_id=row["order_id"],
             invoice_number=row["invoice_number"],
+            invoice_date=row["invoice_date"] if "invoice_date" in row.keys() else None,
             order_no=row["order_no"] if "order_no" in row.keys() else None,
             company_name=row["company_name"],
             phone=row["phone"],

@@ -12,6 +12,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_DB_PATH = PROJECT_ROOT / "data" / "manual_dispatch.sqlite3"
 SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 SEED_DEMO_DATA_ENV = "MANUAL_DISPATCH_SEED_DEMO_DATA"
+TEST_MODE_ENV = "MANUAL_DISPATCH_TEST_MODE"
+DEFAULT_DB_TEST_ERROR = (
+    "Automated tests may not open the default Manual Dispatch database"
+)
 _ACTIVE_CONNECTIONS = ContextVar(
     "manual_dispatch_active_sqlite_connections",
     default={},
@@ -73,13 +77,17 @@ class _ManagedConnection:
 
 def get_database_path(db_path=None):
     if db_path:
-        return Path(db_path)
+        database_path = Path(db_path)
+    else:
+        configured_path = os.environ.get("MANUAL_DISPATCH_DB_PATH")
+        database_path = Path(configured_path) if configured_path else DEFAULT_DB_PATH
 
-    configured_path = os.environ.get("MANUAL_DISPATCH_DB_PATH")
-    if configured_path:
-        return Path(configured_path)
-
-    return DEFAULT_DB_PATH
+    if _is_env_flag_enabled(TEST_MODE_ENV) and _same_path(
+        database_path,
+        DEFAULT_DB_PATH,
+    ):
+        raise RuntimeError(DEFAULT_DB_TEST_ERROR)
+    return database_path
 
 
 def connect(db_path=None):
@@ -119,6 +127,10 @@ def borrow_connection(db_path, connection):
 
 def _connection_key(database_path):
     return str(Path(database_path).resolve()).casefold()
+
+
+def _same_path(left, right):
+    return _connection_key(left) == _connection_key(right)
 
 
 def initialize_database(db_path=None):
@@ -165,6 +177,7 @@ def _is_env_flag_enabled(name, default=False):
 def _ensure_manual_dispatch_columns(connection):
     _ensure_order_product_line_units(connection)
     _ensure_column(connection, "manual_orders", "invoice_number", "TEXT")
+    _ensure_column(connection, "manual_orders", "invoice_date", "TEXT")
     _ensure_column(connection, "manual_orders", "order_no", "TEXT")
     _ensure_column(connection, "manual_orders", "phone", "TEXT")
     _ensure_column(connection, "manual_orders", "status", "TEXT NOT NULL DEFAULT 'ACTIVE'")

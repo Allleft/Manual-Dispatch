@@ -9,6 +9,7 @@ export function createWorkspaceBusyActions(context) {
 
   const handleWorkspaceMigrationGuard = (...args) => context.actions.handleWorkspaceMigrationGuard(...args);
   const renderDeliveryWorkspacePreservingScroll = (...args) => context.actions.renderDeliveryWorkspacePreservingScroll(...args);
+  const renderOpShopWorkspacePreservingScroll = (...args) => context.actions.renderOpShopWorkspacePreservingScroll(...args);
   const captureMutationContext = (...args) => context.actions.captureMutationContext(...args);
   const nextActionToken = (...args) => context.actions.nextActionToken(...args);
   const isDeliveryMutationCurrent = (...args) => context.actions.isDeliveryMutationCurrent(...args);
@@ -56,13 +57,22 @@ export function createWorkspaceBusyActions(context) {
     }
   }
 
-  async function runOpShopAction(actionKey, callback, onError = null) {
+  async function runOpShopAction(
+    actionKey,
+    callback,
+    onError = null,
+    { preserveScroll = false } = {},
+  ) {
     const context = captureMutationContext();
     const token = nextActionToken();
     state.opshopBusyActionKeys = state.opshopBusyActionKeys || {};
     setBusyAction(state.opshopBusyActionKeys, actionKey, token);
     state.opshopActionError = "";
-    renderWorkspace();
+    if (preserveScroll) {
+      renderOpShopWorkspacePreservingScroll();
+    } else {
+      renderWorkspace();
+    }
     try {
       await callback(context);
     } catch (error) {
@@ -78,7 +88,13 @@ export function createWorkspaceBusyActions(context) {
       }
     } finally {
       if (clearBusyAction(state.opshopBusyActionKeys, actionKey, token)) {
-        renderWorkspace();
+        if (!preserveScroll || isOpShopMutationCurrent(context)) {
+          if (preserveScroll) {
+            renderOpShopWorkspacePreservingScroll();
+          } else {
+            renderWorkspace();
+          }
+        }
       }
     }
   }

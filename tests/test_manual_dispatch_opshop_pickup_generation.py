@@ -163,7 +163,7 @@ class OpShopPickupGenerationTest(unittest.TestCase):
         self.assertEqual(["2026-05-25", "2026-06-01"], self._pickup_dates())
         self.assertGreaterEqual(result.warnings["FREQUENCY_SOURCE_CONFLICT"], 1)
 
-    def test_regular_fortnightly_uses_shared_anchor_without_group(self):
+    def test_regular_fortnightly_is_visible_every_week_without_rewriting_source(self):
         self._add_schedule(
             "SCHED-REGULAR",
             run_day="MONDAY",
@@ -174,9 +174,15 @@ class OpShopPickupGenerationTest(unittest.TestCase):
 
         result = self._generate()
 
-        self.assertEqual(1, result.tasks_created)
-        self.assertEqual(["2026-06-01"], self._pickup_dates())
+        self.assertEqual(2, result.tasks_created)
+        self.assertEqual(["2026-05-25", "2026-06-01"], self._pickup_dates())
         self.assertNotIn("FORTNIGHT_GROUP_MISSING", result.skip_reasons)
+        self.assertEqual(
+            "Fortnight",
+            self.repository.get_opshop_pickup_schedule(
+                "SCHED-REGULAR"
+            ).pickup_frequency,
+        )
 
     def test_regular_monthly_generates_matching_ordinal(self):
         self._add_schedule(
@@ -516,18 +522,27 @@ class LegacyRegularPickupGenerationApiTest(unittest.TestCase):
         self.assertEqual(2, response.json()["tasks_created"])
         self.assertEqual(["2026-05-18", "2026-05-21"], self._pickup_dates())
 
-    def test_fortnight_uses_shared_anchor_without_group(self):
+    def test_regular_fortnight_generates_every_week_without_rewriting_source(self):
         self._add_regular("FORTNIGHT-WED", "WEDNESDAY", "Fortnight")
 
-        active = self._post("2026-05-17")
-        inactive = self._post("2026-05-24")
-        next_active = self._post("2026-05-31")
+        first = self._post("2026-05-17")
+        second = self._post("2026-05-24")
+        third = self._post("2026-05-31")
 
-        self.assertEqual(1, active.json()["tasks_created"])
-        self.assertEqual(0, inactive.json()["tasks_created"])
-        self.assertEqual(1, next_active.json()["tasks_created"])
-        self.assertEqual(["2026-05-20", "2026-06-03"], self._pickup_dates())
-        self.assertNotIn("FORTNIGHT_GROUP_MISSING", active.json()["skip_reasons"])
+        self.assertEqual(1, first.json()["tasks_created"])
+        self.assertEqual(1, second.json()["tasks_created"])
+        self.assertEqual(1, third.json()["tasks_created"])
+        self.assertEqual(
+            ["2026-05-20", "2026-05-27", "2026-06-03"],
+            self._pickup_dates(),
+        )
+        self.assertNotIn("FORTNIGHT_GROUP_MISSING", first.json()["skip_reasons"])
+        self.assertEqual(
+            "Fortnight",
+            self.repository.get_opshop_pickup_schedule(
+                "FORTNIGHT-WED"
+            ).pickup_frequency,
+        )
 
     def test_monthly_generates_only_matching_ordinal_weekday(self):
         self._add_regular(

@@ -246,7 +246,7 @@ export function createDeliveryAttacheActions(context) {
       ...current,
       expandedRowIds,
     };
-    renderWorkspace();
+    return state.deliveryAttacheImportState;
   }
 
   function selectAllReadyDeliveryAttacheRows() {

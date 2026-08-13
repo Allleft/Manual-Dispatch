@@ -1907,6 +1907,569 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         )
         self.assertEqual(0, result.returncode, result.stderr or result.stdout)
 
+    def test_delivery_task_pool_sorts_urgent_then_oldest_invoice_date(self):
+        self._run_frontend_module_script(
+            "js/utils/delivery-order-priority-utils.js",
+            r"""
+            const orders = [
+              {
+                order_id: "A",
+                urgency: "Normal",
+                invoice_date: "2026-08-09",
+                delivery_date: "2026-08-15",
+              },
+              {
+                order_id: "B",
+                urgency: "Normal",
+                invoice_date: "2026-08-10",
+                delivery_date: "2026-08-14",
+              },
+              {
+                order_id: "C",
+                urgency: "Normal",
+                invoice_date: "2026-08-11",
+                delivery_date: "2026-08-13",
+              },
+              {
+                order_id: "D",
+                urgency: "Urgent",
+                invoice_date: "2026-08-12",
+                delivery_date: "2026-08-16",
+              },
+              {
+                order_id: "E",
+                urgency: "Normal",
+                invoice_date: null,
+                delivery_date: "2026-08-16",
+              },
+            ];
+            const sorted = module.sortDeliveryTaskPoolOrders(orders);
+            if (sorted.map((order) => order.order_id).join("") !== "DABCE") {
+              throw new Error(`Invoice date precedence failed: ${sorted.map((order) => order.order_id)}`);
+            }
+
+            const invalid = module.sortDeliveryTaskPoolOrders([
+              {
+                order_id: "VALID",
+                urgency: "Normal",
+                invoice_date: "2026-08-11",
+                delivery_date: "2026-08-20",
+              },
+              {
+                order_id: "INVALID",
+                urgency: "Normal",
+                invoice_date: "2026-02-30",
+                delivery_date: "2026-08-19",
+              },
+              {
+                order_id: "MISSING",
+                urgency: "Normal",
+                invoice_date: null,
+                delivery_date: "2026-08-18",
+              },
+            ]);
+            if (invalid[0].order_id !== "VALID") {
+              throw new Error("Invalid Invoice Date sorted ahead of a valid Invoice Date");
+            }
+            if (invalid.slice(1).map((order) => order.order_id).join("|") !== "MISSING|INVALID") {
+              throw new Error("Missing/invalid Invoice Dates did not use later deterministic tie-breakers");
+            }
+            """,
+        )
+
+    def test_delivery_search_typing_keeps_input_focus_caret_route_and_scroll(self):
+        task_pool_uri = (
+            FRONTEND_ROOT / "js/render/delivery/delivery-task-pool-renderer.js"
+        ).as_uri()
+        actions_uri = (FRONTEND_ROOT / "js/actions/workspace-actions.js").as_uri()
+        script = textwrap.dedent(
+            r"""
+            class FakeNode {
+              constructor(tagName, text = "") {
+                this.tagName = tagName;
+                this.nodeType = tagName === "#text" ? 3 : 1;
+                this.children = [];
+                this.parentNode = null;
+                this.attributes = {};
+                this.listeners = {};
+                this.dataset = {};
+                this.disabled = false;
+                this.hidden = false;
+                this.value = "";
+                this.type = "";
+                this.placeholder = "";
+                this.selectionStart = 0;
+                this.selectionEnd = 0;
+                this.scrollTop = 0;
+                this.scrollLeft = 0;
+                this._text = text;
+                this._className = "";
+                this.classList = {
+                  add: (...tokens) => {
+                    const classes = new Set(this._className.split(/\s+/).filter(Boolean));
+                    tokens.forEach((token) => classes.add(token));
+                    this._className = [...classes].join(" ");
+                  },
+                  contains: (token) => this._className.split(/\s+/).includes(token),
+                  toggle: (token, enabled) => {
+                    const classes = new Set(this._className.split(/\s+/).filter(Boolean));
+                    enabled ? classes.add(token) : classes.delete(token);
+                    this._className = [...classes].join(" ");
+                    return enabled;
+                  },
+                };
+              }
+              get className() { return this._className; }
+              set className(value) { this._className = String(value || ""); }
+              get textContent() {
+                return this._text + this.children.map((child) => child.textContent || "").join("");
+              }
+              set textContent(value) {
+                this._text = String(value ?? "");
+                this.children = [];
+              }
+              append(...children) {
+                children.forEach((child) => {
+                  if (child === null || child === undefined) return;
+                  child.parentNode = this;
+                  this.children.push(child);
+                });
+              }
+              setAttribute(name, value) { this.attributes[name] = String(value); }
+              addEventListener(type, listener) { (this.listeners[type] ||= []).push(listener); }
+              focus() { document.activeElement = this; }
+              setSelectionRange(start, end) {
+                this.selectionStart = start;
+                this.selectionEnd = end;
+              }
+              replaceWith(replacement) {
+                if (!this.parentNode) throw new Error("Cannot replace a detached node");
+                const index = this.parentNode.children.indexOf(this);
+                replacement.parentNode = this.parentNode;
+                this.parentNode.children[index] = replacement;
+                this.parentNode = null;
+              }
+              querySelector(selector) { return this.querySelectorAll(selector)[0] || null; }
+              querySelectorAll(selector) {
+                const matches = [];
+                const visit = (node) => {
+                  const isClass = selector.startsWith(".");
+                  const matched = isClass
+                    ? node.classList?.contains(selector.slice(1))
+                    : String(node.tagName || "").toLowerCase() === selector.toLowerCase();
+                  if (matched) matches.push(node);
+                  node.children?.forEach(visit);
+                };
+                this.children.forEach(visit);
+                return matches;
+              }
+            }
+
+            const body = new FakeNode("body");
+            globalThis.document = {
+              activeElement: null,
+              body,
+              createElement: (tagName) => new FakeNode(tagName),
+              createElementNS: (_namespace, tagName) => new FakeNode(tagName),
+              createTextNode: (text) => new FakeNode("#text", String(text)),
+              querySelector: (selector) => body.querySelector(selector),
+            };
+            const scrollCalls = [];
+            globalThis.window = {
+              location: { protocol: "http:", hash: "" },
+              history: { pushState: () => {} },
+              scrollX: 17,
+              scrollY: 321,
+              scrollTo: (x, y) => {
+                scrollCalls.push([x, y]);
+                window.scrollX = x;
+                window.scrollY = y;
+              },
+            };
+            globalThis.requestAnimationFrame = (callback) => callback();
+
+            const { createDeliveryTaskPool } = await import("__TASK_POOL_URI__");
+            const { createWorkspaceActions } = await import("__ACTIONS_URI__");
+            const board = {
+              orders: [
+                {
+                  order_id: "TARGET",
+                  invoice_number: "185517",
+                  invoice_date: "2026-08-11",
+                  order_no: "32074",
+                  company_name: "Custom Performance Garage",
+                  phone: "",
+                  delivery_address: "1 Test Road",
+                  suburb: "Hallam",
+                  postcode: "3803",
+                  delivery_date: "2026-08-13",
+                  urgency: "Normal",
+                  pallet_quantity: 0,
+                  loose_bags_quantity: 5,
+                  carton_quantity: 0,
+                  product_lines: [],
+                },
+                {
+                  order_id: "OTHER",
+                  invoice_number: "299999",
+                  invoice_date: "2026-09-20",
+                  order_no: "OTHER",
+                  company_name: "Other Buyer",
+                  phone: "",
+                  delivery_address: "2 Test Road",
+                  suburb: "Seville",
+                  postcode: "9999",
+                  delivery_date: "2026-09-20",
+                  urgency: "Normal",
+                  pallet_quantity: 0,
+                  loose_bags_quantity: 0,
+                  carton_quantity: 0,
+                  product_lines: [],
+                },
+              ],
+              assignments: [],
+              drivers: [],
+            };
+            const state = {
+              isLoggedIn: true,
+              activeWorkspace: "delivery",
+              workspaceRoute: "delivery/task-pool",
+              dispatchDate: "2026-08-12",
+              deliveryBoard: board,
+              deliveryTaskPoolFilters: { search: "", delivery_date: "", urgency: "All" },
+              deliveryAssignmentDrafts: {},
+              deliveryBusyActionKeys: {},
+            };
+            let renders = 0;
+            let boardGets = 0;
+            const actions = createWorkspaceActions({
+              state,
+              renderWorkspace: () => {
+                renders += 1;
+                body.children = [];
+                document.activeElement = null;
+              },
+              api: {
+                getDeliveryWorkspaceBoard: async () => {
+                  boardGets += 1;
+                  return board;
+                },
+              },
+            });
+            body.append(createDeliveryTaskPool(board, state, actions));
+            const search = body.querySelectorAll("input")[0];
+            search.focus();
+
+            const typeText = (text) => {
+              for (const character of text) {
+                search.value += character;
+                search.setSelectionRange(search.value.length, search.value.length);
+                search.listeners.input[0]();
+                if (document.activeElement !== search) {
+                  throw new Error(`Search focus was lost after ${search.value}`);
+                }
+                if (search.selectionStart !== search.value.length
+                    || search.selectionEnd !== search.value.length) {
+                  throw new Error(`Search caret moved after ${search.value}`);
+                }
+                if (body.querySelectorAll("input")[0] !== search) {
+                  throw new Error(`Search input node was replaced after ${search.value}`);
+                }
+                const cards = body.querySelectorAll(".workspace-order-card");
+                if (cards.length !== 1 || !cards[0].textContent.includes("185517")) {
+                  throw new Error(`Live filtered results were stale after ${search.value}`);
+                }
+                const count = body.querySelector(".workspace-filter-count");
+                if (count.textContent !== "1 of 2 visible Orders") {
+                  throw new Error(`Visible metric was stale after ${search.value}: ${count.textContent}`);
+                }
+                if (state.deliveryTaskPoolFilters.search !== search.value) {
+                  throw new Error("Search state did not accumulate the input value");
+                }
+                if (state.workspaceRoute !== "delivery/task-pool") {
+                  throw new Error("Search changed the workspace route");
+                }
+                if (window.scrollX !== 17 || window.scrollY !== 321) {
+                  throw new Error("Search changed the page scroll position");
+                }
+              }
+            };
+
+            typeText("185517");
+            search.value = "";
+            search.setSelectionRange(0, 0);
+            search.listeners.input[0]();
+            typeText("custom performance");
+            if (renders !== 0) throw new Error(`Search broadly rendered ${renders} times`);
+            if (boardGets !== 0) throw new Error(`Search fetched the board ${boardGets} times`);
+            if (scrollCalls.some(([x, y]) => x !== 17 || y !== 321)) {
+              throw new Error("Search restored an incorrect scroll position");
+            }
+            """
+        ).replace("__TASK_POOL_URI__", task_pool_uri).replace(
+            "__ACTIONS_URI__", actions_uri
+        )
+        result = subprocess.run(
+            ["node", "--input-type=module", "--eval", script],
+            cwd=PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(0, result.returncode, result.stderr or result.stdout)
+
+    def test_delivery_invoice_date_is_visible_editable_searchable_and_mapped(self):
+        order_actions = self._read("js/actions/workspace/delivery-task-pool-actions.js")
+        order_modal = self._read("js/render/delivery/delivery-order-modal-renderer.js")
+        attache_modal = self._read("js/render/delivery/delivery-attache-modal-renderer.js")
+        task_pool = self._read("js/render/delivery/delivery-task-pool-renderer.js")
+
+        self.assertIn('invoice_date: order.invoice_date || ""', order_actions)
+        self.assertIn('invoice_date: form.invoice_date || null', order_actions)
+        self.assertIn('["Invoice Date", order.invoice_date]', order_modal)
+        self.assertIn('createBoundInput("Invoice Date"', order_modal)
+        self.assertIn('createInlineMeta("Invoice Date", row.invoice_date)', attache_modal)
+        self.assertIn('createInlineField("Invoice Date"', attache_modal)
+        self.assertIn('createChip(`Invoice Date:', task_pool)
+        search_block = task_pool.split("function deliveryOrderSearchText", 1)[1]
+        self.assertIn("order.invoice_date", search_block)
+
+    def test_attache_review_expand_collapse_preserves_scroll_state_and_summary_order(self):
+        renderer_uri = (
+            FRONTEND_ROOT / "js/render/delivery/delivery-attache-modal-renderer.js"
+        ).as_uri()
+        actions_uri = (
+            FRONTEND_ROOT / "js/actions/workspace/delivery-attache-actions.js"
+        ).as_uri()
+        script = textwrap.dedent(
+            r"""
+            class FakeNode {
+              constructor(tagName, text = "") {
+                this.tagName = tagName;
+                this.nodeType = tagName === "#text" ? 3 : 1;
+                this.children = [];
+                this.parentNode = null;
+                this.attributes = {};
+                this.listeners = {};
+                this.dataset = {};
+                this.disabled = false;
+                this.hidden = false;
+                this.checked = false;
+                this.value = "";
+                this.type = "";
+                this.scrollTop = 0;
+                this.scrollLeft = 0;
+                this._text = text;
+                this._className = "";
+                this.classList = {
+                  add: (...tokens) => {
+                    const classes = new Set(this._className.split(/\s+/).filter(Boolean));
+                    tokens.forEach((token) => classes.add(token));
+                    this._className = [...classes].join(" ");
+                  },
+                  contains: (token) => this._className.split(/\s+/).includes(token),
+                };
+              }
+              get className() { return this._className; }
+              set className(value) { this._className = String(value || ""); }
+              get textContent() {
+                return this._text + this.children.map((child) => child.textContent || "").join("");
+              }
+              set textContent(value) {
+                this._text = String(value ?? "");
+                this.children = [];
+              }
+              append(...children) {
+                children.forEach((child) => {
+                  if (child === null || child === undefined) return;
+                  child.parentNode = this;
+                  this.children.push(child);
+                });
+              }
+              setAttribute(name, value) { this.attributes[name] = String(value); }
+              getAttribute(name) { return this.attributes[name]; }
+              addEventListener(type, listener) { (this.listeners[type] ||= []).push(listener); }
+              focus(options) {
+                this.focusOptions = options;
+                document.activeElement = this;
+              }
+              matches(selector) {
+                if (selector.startsWith(".")) {
+                  return this.classList.contains(selector.slice(1));
+                }
+                return String(this.tagName || "").toLowerCase() === selector.toLowerCase();
+              }
+              closest(selector) {
+                let current = this;
+                while (current) {
+                  if (current.matches?.(selector)) return current;
+                  current = current.parentNode;
+                }
+                return null;
+              }
+              replaceWith(replacement) {
+                if (!this.parentNode) throw new Error("Cannot replace a detached node");
+                const index = this.parentNode.children.indexOf(this);
+                replacement.parentNode = this.parentNode;
+                this.parentNode.children[index] = replacement;
+                this.parentNode = null;
+              }
+              querySelector(selector) { return this.querySelectorAll(selector)[0] || null; }
+              querySelectorAll(selector) {
+                const matches = [];
+                const visit = (node) => {
+                  if (node.matches?.(selector)) matches.push(node);
+                  node.children?.forEach(visit);
+                };
+                this.children.forEach(visit);
+                return matches;
+              }
+            }
+
+            const body = new FakeNode("body");
+            globalThis.document = {
+              activeElement: null,
+              body,
+              createElement: (tagName) => new FakeNode(tagName),
+              createElementNS: (_namespace, tagName) => new FakeNode(tagName),
+              createTextNode: (text) => new FakeNode("#text", String(text)),
+              createDocumentFragment: () => new FakeNode("#fragment"),
+            };
+
+            const { createAttacheReviewRow } = await import("__RENDERER_URI__");
+            const { createDeliveryAttacheActions } = await import("__ACTIONS_URI__");
+            const row = {
+              row_id: "TOTAL-TOOLS",
+              invoice_number: "185505",
+              invoice_date: "2026-08-11",
+              order_no: "129534",
+              company_name: "TOTAL TOOLS - DANDENONG",
+              phone: "9798 4533",
+              delivery_address: "221-232 GREENS ROAD",
+              suburb: "DANDENONG",
+              postcode: "3175",
+              delivery_date: "2026-08-14",
+              start_time: "",
+              end_time: "",
+              urgency: "Normal",
+              pallet_quantity: 1,
+              loose_bags_quantity: 0,
+              carton_quantity: 0,
+              product_lines: [],
+              warnings: [],
+              note: "",
+              selected: true,
+              importable: true,
+              is_duplicate: false,
+            };
+            const state = {
+              workspaceRoute: "delivery/task-pool",
+              deliveryAttacheImportState: {
+                isOpen: true,
+                step: "review",
+                rows: [row],
+                expandedRowIds: {},
+                search: "dandenong",
+                filter: "WARNING",
+              },
+            };
+            let renders = 0;
+            let boardGets = 0;
+            const actions = createDeliveryAttacheActions({
+              state,
+              renderWorkspace: () => { renders += 1; },
+              confirmAction: () => true,
+              navigateWorkspaceRoute: () => { throw new Error("Expand changed route"); },
+              api: {
+                getDeliveryWorkspaceBoard: async () => {
+                  boardGets += 1;
+                  return {};
+                },
+              },
+              actions: {},
+            });
+            const modalBody = new FakeNode("div");
+            modalBody.className = "workspace-modal-body";
+            const reviewList = new FakeNode("div");
+            reviewList.className = "workspace-attache-review-list";
+            reviewList.append(createAttacheReviewRow(
+              row,
+              state.deliveryAttacheImportState,
+              actions,
+            ));
+            modalBody.append(reviewList);
+            body.append(modalBody);
+            modalBody.scrollTop = 900;
+
+            let card = reviewList.children[0];
+            const labels = card.querySelectorAll(".workspace-inline-meta")
+              .map((item) => item.children[0].textContent);
+            const expectedLabels = [
+              "Invoice",
+              "Invoice Date",
+              "Order",
+              "Customer",
+              "Suburb",
+              "Delivery Date",
+              "Load",
+            ];
+            if (labels.join("|") !== expectedLabels.join("|")) {
+              throw new Error(`Collapsed summary order was ${labels.join("|")}`);
+            }
+
+            const click = (button) => button.listeners.click[0]({ stopPropagation: () => {} });
+            let toggle = card.querySelector("button");
+            toggle.focus();
+            click(toggle);
+            card = reviewList.children[0];
+            toggle = card.querySelector("button");
+            if (!state.deliveryAttacheImportState.expandedRowIds[row.row_id]) {
+              throw new Error("Expand did not update state");
+            }
+            if (!card.querySelector(".workspace-attache-expanded-editor")) {
+              throw new Error("Expand did not patch the review row");
+            }
+            if (modalBody.scrollTop !== 900) throw new Error("Expand reset modal scroll");
+            if (document.activeElement !== toggle) throw new Error("Expand lost logical focus");
+            if (!toggle.focusOptions?.preventScroll) {
+              throw new Error("Expand focus may scroll the modal");
+            }
+            if (!row.selected || state.deliveryAttacheImportState.search !== "dandenong"
+                || state.deliveryAttacheImportState.filter !== "WARNING") {
+              throw new Error("Expand lost review selection/filter state");
+            }
+            if (!state.deliveryAttacheImportState.isOpen) throw new Error("Expand closed modal");
+            if (state.workspaceRoute !== "delivery/task-pool") throw new Error("Expand changed route");
+
+            click(toggle);
+            card = reviewList.children[0];
+            toggle = card.querySelector("button");
+            if (state.deliveryAttacheImportState.expandedRowIds[row.row_id]) {
+              throw new Error("Collapse did not update state");
+            }
+            if (card.querySelector(".workspace-attache-expanded-editor")) {
+              throw new Error("Collapse did not patch the review row");
+            }
+            if (modalBody.scrollTop !== 900) throw new Error("Collapse reset modal scroll");
+            if (document.activeElement !== toggle) throw new Error("Collapse lost logical focus");
+            if (!toggle.focusOptions?.preventScroll) {
+              throw new Error("Collapse focus may scroll the modal");
+            }
+            if (renders !== 0) throw new Error(`Expand/Collapse broadly rendered ${renders} times`);
+            if (boardGets !== 0) throw new Error(`Expand/Collapse fetched board ${boardGets} times`);
+            """
+        ).replace("__RENDERER_URI__", renderer_uri).replace(
+            "__ACTIONS_URI__", actions_uri
+        )
+        result = subprocess.run(
+            ["node", "--input-type=module", "--eval", script],
+            cwd=PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(0, result.returncode, result.stderr or result.stdout)
+
     def test_delivery_task_pool_applies_priority_after_filters_and_urgent_styles(self):
         task_pool_block = self.delivery_renderer.split(
             "function createDeliveryTaskPool", 1
@@ -3233,6 +3796,230 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             r"\.workspace-regular-pickup-list \.opshop-date-card-list\[hidden\]\s*\{\s*display: none;\s*\}",
         )
 
+    def test_oncall_task_pool_uses_shared_date_groups_and_compact_rows(self):
+        oncall_renderer = self._read("js/render/opshop/opshop-oncall-renderer.js")
+        task_pool_renderer = self._read(
+            "js/render/opshop/opshop-task-pool-renderer.js"
+        )
+        self.assertIn("createOncallPickupDateGroups", oncall_renderer)
+        self.assertIn("createOncallPickupRow", oncall_renderer)
+        self.assertIn("createOpShopDateGroupList", oncall_renderer)
+        self.assertIn("state.collapsedOncallOpShopPickupDates", oncall_renderer)
+        self.assertIn('idPrefix: "workspace-oncall"', oncall_renderer)
+        self.assertIn("Current Assignee:", oncall_renderer)
+        self.assertIn('"Assigned to"', oncall_renderer)
+        self.assertIn('"View details"', oncall_renderer)
+        self.assertIn('"Edit"', oncall_renderer)
+        self.assertIn('"Delete"', oncall_renderer)
+        oncall_branch = task_pool_renderer.split(
+            '} else if (route === "oncall") {', 1
+        )[1].split("} else {", 1)[0]
+        self.assertIn("createOncallPickupDateGroups", oncall_branch)
+        self.assertNotIn("createPickupCard", oncall_branch)
+
+        self._run_frontend_module_script(
+            "js/render/opshop/opshop-oncall-renderer.js",
+            r"""
+            const toggledDates = [];
+            const state = {
+              dispatchDate: "2026-08-12",
+              collapsedOncallOpShopPickupDates: {},
+              opshopBoard: {
+                drivers: [
+                  { driver_id: "DRIVER-A", name: "Alpha Driver" },
+                  { driver_id: "DRIVER-B", name: "Beta Driver" },
+                ],
+              },
+              opshopAssignmentDrafts: {},
+              opshopBusyActionKeys: {},
+            };
+            const actions = {
+              toggleOncallOpShopDateGroup: (pickupDate) => toggledDates.push(pickupDate),
+              openOpShopPickupDetail: () => {},
+              startEditOpShopPickupTask: () => {},
+              startDeleteOpShopPickupTask: () => {},
+              updateOpShopAssignmentDraft: () => {},
+              unassignOpShopPickup: () => {},
+            };
+            const pickup = (overrides) => ({
+              pickup_task_id: "PICKUP-BASE",
+              opshop_name: "Base OP SHOP",
+              suburb: "COBURG",
+              pickup_date: "2026-08-12",
+              run_type: "ON_CALL",
+              pickup_category: "NORMAL",
+              assigned_to_locked: false,
+              assignment_lock_reason: null,
+              is_assigned: false,
+              driver_id: null,
+              assigned_driver_id: null,
+              assigned_driver_name: null,
+              ...overrides,
+            });
+            const grouped = module.createOncallPickupDateGroups([
+              pickup({
+                pickup_task_id: "OLD-BOUNDARY",
+                opshop_name: "Old Boundary Shop",
+                pickup_date: "2026-07-29",
+                assigned_to_locked: true,
+                assignment_lock_reason: "Historical pickup is locked.",
+                is_assigned: true,
+                driver_id: "DRIVER-A",
+                assigned_driver_id: "DRIVER-A",
+                assigned_driver_name: "Alpha Driver",
+              }),
+              pickup({
+                pickup_task_id: "YESTERDAY",
+                opshop_name: "Yesterday Shop",
+                pickup_date: "2026-08-11",
+                assigned_to_locked: true,
+                assignment_lock_reason: "Historical pickup is locked.",
+                is_assigned: true,
+                driver_id: "DRIVER-A",
+                assigned_driver_id: "DRIVER-A",
+                assigned_driver_name: "Alpha Driver",
+              }),
+              pickup({
+                pickup_task_id: "TODAY-UNASSIGNED",
+                opshop_name: "Alpha Shop",
+              }),
+              pickup({
+                pickup_task_id: "TODAY-ASSIGNED",
+                opshop_name: "Zulu Shop",
+                suburb: "RICHMOND",
+                is_assigned: true,
+                driver_id: "DRIVER-B",
+                assigned_driver_id: "DRIVER-B",
+                assigned_driver_name: "Beta Driver",
+              }),
+              pickup({
+                pickup_task_id: "FUTURE",
+                opshop_name: "Future Shop",
+                pickup_date: "2026-08-13",
+              }),
+            ], state, actions);
+
+            const sections = grouped.querySelectorAll(".opshop-date-group");
+            if (sections.length !== 4) {
+              throw new Error(`Expected 4 exact-date groups, got ${sections.length}`);
+            }
+            const headings = sections.map((section) => section.children[0].textContent);
+            for (const expected of [
+              "Wednesday 29/7(1 pickup)Collapsed",
+              "Tuesday 11/8(1 pickup)Collapsed",
+              "Wednesday 12/8(2 pickups)Expanded",
+              "Thursday 13/8(1 pickup)Expanded",
+            ]) {
+              if (!headings.includes(expected)) {
+                throw new Error(`Missing Oncall heading: ${expected}; got ${headings.join(" | ")}`);
+              }
+            }
+            const lists = sections.map((section) => section.children[1]);
+            if (lists[0].hidden !== true || lists[1].hidden !== true
+                || lists[2].hidden !== false || lists[3].hidden !== false) {
+              throw new Error("Oncall default collapsed/expanded dates are incorrect");
+            }
+            const historicalRow = lists[1].children[0];
+            const historicalButtons = historicalRow.querySelectorAll("button");
+            for (const label of ["Edit", "Delete", "Unassign now"]) {
+              if (!historicalButtons.find((button) => button.textContent === label)?.disabled) {
+                throw new Error(`Historical Oncall row left ${label} enabled`);
+              }
+            }
+            if (!historicalRow.querySelector("select").disabled) {
+              throw new Error("Historical Oncall assignment remained mutable");
+            }
+            const todayRows = lists[2].children;
+            if (!todayRows[0].textContent.includes("Zulu Shop")
+                || !todayRows[1].textContent.includes("Alpha Shop")) {
+              throw new Error("Oncall rows are not stably sorted assigned-first");
+            }
+            const compactText = todayRows[0].textContent;
+            for (const expected of [
+              "Zulu Shop",
+              "RICHMOND",
+              "Pickup Date: 2026-08-12",
+              "Current Assignee: Beta Driver",
+              "Assigned to",
+              "View details",
+              "Edit",
+              "Delete",
+            ]) {
+              if (!compactText.includes(expected)) {
+                throw new Error(`Compact Oncall row is missing: ${expected}`);
+              }
+            }
+            const firstToggle = sections[0].querySelector("button");
+            firstToggle.listeners.click[0]({
+              preventDefault: () => {},
+              stopPropagation: () => {},
+            });
+            if (toggledDates.join("|") !== "2026-07-29") {
+              throw new Error("Oncall group toggle changed more than its own date");
+            }
+            """,
+            setup=r"""
+            class FakeNode {
+              constructor(tagName, text = "") {
+                this.tagName = tagName;
+                this.children = [];
+                this.attributes = {};
+                this.listeners = {};
+                this.dataset = {};
+                this.disabled = false;
+                this.hidden = false;
+                this.value = "";
+                this._text = text;
+                this._className = "";
+                this.classList = {
+                  add: (...tokens) => {
+                    const classes = new Set(this._className.split(/\s+/).filter(Boolean));
+                    tokens.forEach((token) => classes.add(token));
+                    this._className = [...classes].join(" ");
+                  },
+                  contains: (token) => this._className.split(/\s+/).includes(token),
+                  toggle: (token, enabled) => {
+                    const classes = new Set(this._className.split(/\s+/).filter(Boolean));
+                    enabled ? classes.add(token) : classes.delete(token);
+                    this._className = [...classes].join(" ");
+                    return enabled;
+                  },
+                };
+              }
+              get className() { return this._className; }
+              set className(value) { this._className = String(value || ""); }
+              get textContent() {
+                return this._text + this.children.map((child) => child.textContent || "").join("");
+              }
+              set textContent(value) { this._text = String(value ?? ""); }
+              append(...children) { this.children.push(...children); }
+              setAttribute(name, value) { this.attributes[name] = String(value); }
+              addEventListener(type, listener) {
+                (this.listeners[type] ||= []).push(listener);
+              }
+              querySelector(selector) { return this.querySelectorAll(selector)[0] || null; }
+              querySelectorAll(selector) {
+                const matches = [];
+                const visit = (node) => {
+                  if (selector.startsWith(".")
+                    ? node.classList?.contains(selector.slice(1))
+                    : node.tagName === selector) {
+                    matches.push(node);
+                  }
+                  node.children?.forEach(visit);
+                };
+                this.children.forEach(visit);
+                return matches;
+              }
+            }
+            globalThis.document = {
+              createElement: (tagName) => new FakeNode(tagName),
+              createElementNS: (_namespace, tagName) => new FakeNode(tagName),
+              createTextNode: (text) => new FakeNode("#text", String(text)),
+            };
+            """,
+        )
+
     def test_regular_rows_render_last_pickup_date_badge_after_pickup_date(self):
         regular_renderer = self._read("js/render/opshop/opshop-regular-renderer.js")
         oncall_renderer = self._read("js/render/opshop/opshop-oncall-renderer.js")
@@ -3518,6 +4305,51 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             actions.toggleRegularOpShopDateGroup("2026-07-01");
             if (state.collapsedRegularOpShopPickupDates["2026-07-01"] !== true) {
               throw new Error("expanded date group did not collapse");
+            }
+            """
+        )
+
+    def test_oncall_date_toggle_changes_only_one_group_without_board_reload(self):
+        self._run_workspace_actions_script(
+            """
+            const state = {
+              isLoggedIn: true,
+              activeWorkspace: "opshop",
+              workspaceRoute: "opshop/task-pool/oncall",
+              dispatchDate: "2026-08-12",
+              collapsedOncallOpShopPickupDates: { "2026-08-10": true },
+              opshopAssignmentDrafts: { "TASK-1": "" },
+            };
+            let boardCalls = 0;
+            let renderCalls = 0;
+            const actions = createWorkspaceActions({
+              state,
+              renderWorkspace: () => { renderCalls += 1; },
+              api: {
+                getWorkspaceMigrationStatus: async () => ({}),
+                getOpShopWorkspaceBoard: async () => { boardCalls += 1; return {}; },
+              },
+            });
+
+            actions.toggleOncallOpShopDateGroup("2026-08-11");
+            if (state.collapsedOncallOpShopPickupDates["2026-08-11"] !== false) {
+              throw new Error("past Oncall date did not expand from default collapsed state");
+            }
+            if (state.collapsedOncallOpShopPickupDates["2026-08-10"] !== true) {
+              throw new Error("Oncall toggle changed another date group");
+            }
+            if (!Object.prototype.hasOwnProperty.call(state.opshopAssignmentDrafts, "TASK-1")) {
+              throw new Error("Oncall toggle lost the explicit Unassigned draft");
+            }
+            if (boardCalls !== 0 || renderCalls !== 1
+                || state.workspaceRoute !== "opshop/task-pool/oncall"
+                || state.dispatchDate !== "2026-08-12") {
+              throw new Error("Oncall toggle fetched data or changed route/date");
+            }
+            actions.toggleOncallOpShopDateGroup("2026-08-11");
+            if (state.collapsedOncallOpShopPickupDates["2026-08-11"] !== true
+                || renderCalls !== 2 || boardCalls !== 0) {
+              throw new Error("Expanded Oncall group did not collapse locally");
             }
             """
         )
@@ -3859,9 +4691,18 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn("pickupDate: draft.pickup_date", route_card)
         self.assertIn("trigger: detailTrigger", route_card)
         self.assertIn("row.append(detailTrigger, controls, assignButton)", route_card)
-        self.assertIn('createDateField(\n      "Pickup date"', route_card)
-        self.assertIn('createSelect(\n      "Assigned to"', route_card)
-        self.assertIn('createTextField(\n      "Notes"', route_card)
+        self.assertIn(
+            'const pickupDateField = createDateField(\n    "Pickup date"',
+            route_card,
+        )
+        self.assertIn(
+            'const driverField = createSelect(\n    "Assigned to"',
+            route_card,
+        )
+        self.assertIn(
+            'const notesField = createTextField(\n    "Notes"',
+            route_card,
+        )
         self.assertIn('"Assign Route Group"', route_card)
 
     def test_countryside_route_group_drill_down_is_single_local_and_active_only(self):
@@ -5033,6 +5874,311 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
               throw new Error("OP SHOP Task Pool assignment drafts were pruned by Trip Summary reload");
             }
             """
+        )
+
+    def test_opshop_trip_summary_unassign_uses_post_response_without_refresh(self):
+        self._run_workspace_actions_script(
+            """
+            const returnedBoard = {
+              marker: "post-response",
+              pickup_date: "2026-06-24",
+              opshop_pickups: [],
+              drivers: [],
+            };
+            const staleBoard = {
+              marker: "stale-board",
+              pickup_date: "2026-06-24",
+              opshop_pickups: [{ pickup_task_id: "PICKUP-1" }],
+              drivers: [],
+            };
+            let getCalls = 0;
+            let postCalls = 0;
+            let navigationCalls = 0;
+            let staleResolve;
+            let useDeferredResponse = false;
+            const deferredResponse = new Promise((resolve) => {
+              staleResolve = resolve;
+            });
+            const state = {
+              isLoggedIn: true,
+              authSessionVersion: 7,
+              workspaceRoute: "opshop/trip-summary",
+              activeWorkspace: "opshop",
+              dispatchDate: "2026-06-23",
+              opshopTripSummaryDate: "2026-06-24",
+              opshopTripSummaryBoard: staleBoard,
+              opshopTripSummaryCollections: [],
+              opshopBoard: { marker: "task-pool", opshop_pickups: [] },
+              opshopPickupCollections: [],
+              opshopAssignmentDrafts: {
+                "PICKUP-1": "DRIVER-1",
+                "PICKUP-OTHER": "DRIVER-2",
+              },
+              countrysideRouteGroupDrafts: {},
+              opshopBusyActionKeys: {},
+              opshopActionError: "",
+            };
+            const api = {
+              getOpShopTripSummary: async () => {
+                getCalls += 1;
+                throw new Error("Trip Summary GET must not run after unassign");
+              },
+              getOpShopWorkspaceBoard: async () => {
+                getCalls += 1;
+                throw new Error("Task Pool GET must not run after unassign");
+              },
+              listOpShopPickupCollectionsByPickupDate: async () => {
+                getCalls += 1;
+                throw new Error("Collection GET must not run after unassign");
+              },
+              unassignOpShopWorkspacePickup: async (payload) => {
+                postCalls += 1;
+                if (payload.pickup_task_id !== "PICKUP-1"
+                    || Object.prototype.hasOwnProperty.call(payload, "dispatch_date")) {
+                  throw new Error("Trip Summary unassign sent the wrong scoped payload");
+                }
+                return useDeferredResponse ? deferredResponse : returnedBoard;
+              },
+            };
+            window.location.hash = "#opshop/trip-summary";
+            window.scrollX = 5;
+            window.scrollY = 480;
+            window.scrollTo = (x, y) => {
+              window.scrollX = x;
+              window.scrollY = y;
+            };
+            let renderCalls = 0;
+            const actions = createWorkspaceActions({
+              state,
+              renderWorkspace: () => {
+                renderCalls += 1;
+                window.scrollX = 0;
+                window.scrollY = 0;
+              },
+              api,
+              navigateWorkspaceRoute: () => {
+                navigationCalls += 1;
+              },
+            });
+
+            await actions.unassignOpShopPickup("PICKUP-1");
+            if (state.opshopTripSummaryBoard !== returnedBoard) {
+              throw new Error("POST response did not replace Trip Summary board in place");
+            }
+            if (state.opshopBoard.marker !== "task-pool") {
+              throw new Error("Trip Summary unassign polluted the Task Pool board");
+            }
+            if (Object.prototype.hasOwnProperty.call(state.opshopAssignmentDrafts, "PICKUP-1")
+                || state.opshopAssignmentDrafts["PICKUP-OTHER"] !== "DRIVER-2") {
+              throw new Error("Trip Summary unassign did not clear only the matching draft");
+            }
+            if (getCalls !== 0 || navigationCalls !== 0
+                || window.location.hash !== "#opshop/trip-summary") {
+              throw new Error("Trip Summary unassign refreshed or navigated");
+            }
+            if (postCalls !== 1 || renderCalls < 2
+                || window.scrollX !== 5 || window.scrollY !== 480) {
+              throw new Error("Trip Summary unassign lost POST/render/scroll behavior");
+            }
+            if (state.opshopTripSummaryDate !== "2026-06-24"
+                || state.workspaceRoute !== "opshop/trip-summary"
+                || state.opshopActionError
+                || Object.keys(state.opshopBusyActionKeys).length) {
+              throw new Error("Trip Summary unassign lost date/route/error/busy invariants");
+            }
+
+            useDeferredResponse = true;
+            state.opshopTripSummaryBoard = staleBoard;
+            state.opshopAssignmentDrafts["PICKUP-1"] = "DRIVER-1";
+            const staleAction = actions.unassignOpShopPickup("PICKUP-1");
+            state.opshopTripSummaryDate = "2026-06-25";
+            staleResolve({ marker: "obsolete-response", opshop_pickups: [] });
+            await staleAction;
+            if (state.opshopTripSummaryBoard !== staleBoard
+                || state.opshopAssignmentDrafts["PICKUP-1"] !== "DRIVER-1") {
+              throw new Error("Stale Trip Summary response replaced current state");
+            }
+            if (getCalls !== 0 || navigationCalls !== 0 || postCalls !== 2
+                || Object.keys(state.opshopBusyActionKeys).length) {
+              throw new Error("Stale Trip Summary unassign broke request guards");
+            }
+            """,
+            setup="""
+            globalThis.requestAnimationFrame = (callback) => {
+              callback();
+              return 1;
+            };
+            globalThis.setTimeout = () => {
+              throw new Error("Trip Summary unassign must not use a delay");
+            };
+            """,
+        )
+
+    def test_generated_opshop_task_pool_controls_are_locked_with_driver_text(self):
+        oncall_uri = (FRONTEND_ROOT / "js/render/opshop/opshop-oncall-renderer.js").as_uri()
+        countryside_uri = (
+            FRONTEND_ROOT / "js/render/opshop/opshop-countryside-renderer.js"
+        ).as_uri()
+        utils_uri = (FRONTEND_ROOT / "js/render/opshop/opshop-renderer-utils.js").as_uri()
+        self._run_frontend_module_script(
+            "js/render/opshop/opshop-regular-renderer.js",
+            f"""
+            const oncall = await import({oncall_uri!r});
+            const countryside = await import({countryside_uri!r});
+            const utils = await import({utils_uri!r});
+            const lockText = "Already generated to Driver One";
+            const state = {{
+              dispatchDate: "2026-07-24",
+              opshopBoard: {{
+                drivers: [{{ driver_id: "DRIVER-1", name: "Driver One" }}],
+                opshop_pickups: [],
+              }},
+              opshopAssignmentDrafts: {{ "PICKUP-LOCKED": "DRIVER-2" }},
+              countrysideRouteGroupDrafts: {{
+                "ROUTE-1": {{
+                  pickup_date: "2026-07-24",
+                  assigned_driver_id: "DRIVER-2",
+                  notes: "Stale draft",
+                }},
+              }},
+              opshopBusyActionKeys: {{}},
+            }};
+            const actions = {{
+              openOpShopPickupDetail: () => {{}},
+              startEditOpShopPickupTask: () => {{}},
+              startDeleteOpShopPickupTask: () => {{}},
+              updateOpShopAssignmentDraft: () => {{}},
+              unassignOpShopPickup: () => {{}},
+              updateCountrysideRouteGroupDraft: () => {{}},
+              assignCountrysideRouteGroup: () => {{}},
+            }};
+            const locked = {{
+              pickup_task_id: "PICKUP-LOCKED",
+              opshop_name: "Synthetic OP SHOP",
+              suburb: "COBURG",
+              street_address: "1 Test Street",
+              pickup_date: "2026-07-24",
+              run_type: "ON_CALL",
+              pickup_category: "NORMAL",
+              status: "ASSIGNED",
+              assigned_to_locked: true,
+              assignment_lock_reason: lockText,
+              is_assigned: true,
+              driver_id: "DRIVER-1",
+              assigned_driver_id: "DRIVER-1",
+              assigned_driver_name: "Driver One",
+            }};
+
+            const regularRow = module.createRegularPickupRow(
+              {{ ...locked, run_type: "REGULAR" }},
+              state,
+              actions,
+            );
+            const regularButtons = regularRow.querySelectorAll("button");
+            if (!regularRow.querySelector("select").disabled
+                || !regularButtons.find((button) => button.textContent === "Edit").disabled
+                || !regularButtons.find((button) => button.textContent === "Delete").disabled
+                || !regularRow.textContent.includes(lockText)) {{
+              throw new Error("Regular generated pickup controls/text are not locked");
+            }}
+
+            const oncallCard = oncall.createOncallPickupRow(locked, state, actions);
+            const oncallButtons = oncallCard.querySelectorAll("button");
+            for (const label of ["Edit", "Delete", "Unassign now"]) {{
+              if (!oncallButtons.find((button) => button.textContent === label)?.disabled) {{
+                throw new Error(`Oncall generated pickup left ${{label}} enabled`);
+              }}
+            }}
+            if (!oncallCard.querySelector("select").disabled
+                || !oncallCard.textContent.includes(lockText)) {{
+              throw new Error("Oncall generated pickup assignment/text are not locked");
+            }}
+
+            const countrysidePickup = {{
+              ...locked,
+              pickup_category: "COUNTRYSIDE",
+              route_group_id: "ROUTE-1",
+              route_group_name: "Country Route",
+            }};
+            state.opshopBoard.opshop_pickups = [countrysidePickup];
+            const routeForm = countryside.createRouteGroupAssignmentForm(
+              {{ route_group_id: "ROUTE-1", route_group_name: "Country Route" }},
+              new Map([["ROUTE-1", [{{ template_id: "TEMPLATE-1" }}]]]),
+              [countrysidePickup],
+              state,
+              actions,
+              () => {{}},
+            );
+            if (routeForm.querySelectorAll("input").some((input) => !input.disabled)
+                || !routeForm.querySelector("select").disabled
+                || !routeForm.querySelectorAll("button")
+                  .find((button) => button.textContent === "Assign Route Group")?.disabled
+                || !routeForm.textContent.includes(lockText)) {{
+              throw new Error("Countryside generated pickup mutation/text are not locked");
+            }}
+            if (utils.changedOpShopAssignments([locked], state).length !== 0) {{
+              throw new Error("Generated pickup remained eligible for bulk assignment");
+            }}
+            """,
+            setup="""
+            class FakeNode {
+              constructor(tagName, text = "") {
+                this.tagName = tagName;
+                this.children = [];
+                this.attributes = {};
+                this.listeners = {};
+                this.dataset = {};
+                this.disabled = false;
+                this.value = "";
+                this._text = text;
+                this._className = "";
+                this.classList = {
+                  add: (...tokens) => {
+                    const classes = new Set(this._className.split(/\\s+/).filter(Boolean));
+                    tokens.forEach((token) => classes.add(token));
+                    this._className = [...classes].join(" ");
+                  },
+                  contains: (token) => this._className.split(/\\s+/).includes(token),
+                  toggle: (token, enabled) => {
+                    const classes = new Set(this._className.split(/\\s+/).filter(Boolean));
+                    enabled ? classes.add(token) : classes.delete(token);
+                    this._className = [...classes].join(" ");
+                    return enabled;
+                  },
+                };
+              }
+              get className() { return this._className; }
+              set className(value) { this._className = String(value || ""); }
+              get textContent() {
+                return this._text + this.children.map((child) => child.textContent || "").join("");
+              }
+              set textContent(value) { this._text = String(value ?? ""); }
+              append(...children) { this.children.push(...children); }
+              setAttribute(name, value) { this.attributes[name] = String(value); }
+              addEventListener(type, listener) {
+                (this.listeners[type] ||= []).push(listener);
+              }
+              querySelector(selector) { return this.querySelectorAll(selector)[0] || null; }
+              querySelectorAll(selector) {
+                const matches = [];
+                const visit = (node) => {
+                  if (selector.startsWith(".")
+                    ? node.classList?.contains(selector.slice(1))
+                    : node.tagName === selector) {
+                    matches.push(node);
+                  }
+                  node.children?.forEach(visit);
+                };
+                this.children.forEach(visit);
+                return matches;
+              }
+            }
+            globalThis.document = {
+              createElement: (tagName) => new FakeNode(tagName),
+              createElementNS: (_namespace, tagName) => new FakeNode(tagName),
+              createTextNode: (text) => new FakeNode("#text", String(text)),
+            };
+            """,
         )
 
     def test_trip_summary_empty_fallback_and_route_reload_use_shared_default(self):

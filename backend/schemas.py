@@ -37,6 +37,7 @@ class Order:
     status: str = "ACTIVE"
     product_lines: List[ProductDetailLine] = field(default_factory=list)
     estimated_distance_km_from_warehouse: Optional[float] = None
+    invoice_date: Optional[str] = None
 
 
 @dataclass
@@ -262,6 +263,7 @@ class OpShopWorkspacePickupItem:
     route_group_id: Optional[str]
     route_group_name: Optional[str]
     last_pickup_date: Optional[str] = None
+    assignment_lock_reason: Optional[str] = None
 
 
 @dataclass
@@ -910,6 +912,7 @@ class ResetOperatorPasswordRequest:
 @dataclass
 class CreateOrderRequest:
     invoice_number: Optional[str] = None
+    invoice_date: Optional[str] = None
     order_no: Optional[str] = None
     company_name: Optional[str] = None
     phone: Optional[str] = None
@@ -931,6 +934,7 @@ class CreateOrderRequest:
 
 class UpdateOrderRequest(BaseModel):
     invoice_number: Optional[str] = None
+    invoice_date: Optional[str] = None
     order_no: Optional[str] = None
     company_name: Optional[str] = None
     phone: Optional[str] = None
@@ -993,6 +997,7 @@ class CommitAttacheInvoicePdfImportRow:
     importable: bool = True
     is_duplicate: bool = False
     invoice_number: Optional[str] = None
+    invoice_date: Optional[str] = None
     order_no: Optional[str] = None
     company_name: Optional[str] = None
     phone: Optional[str] = None

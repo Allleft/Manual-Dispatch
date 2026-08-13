@@ -1,4 +1,13 @@
+import { createIcon } from "../../utils/icon-utils.js";
+
 import { formatOptional } from "../../utils/format-utils.js";
+
+import { createOpShopDateGroupList } from "../opshop-date-group-list-renderer.js";
+
+import {
+  compareRegularPickups,
+  currentOpShopDriverName,
+} from "./opshop-regular-renderer.js";
 
 import {
   selectedOpShopDriverId,
@@ -10,6 +19,119 @@ import {
   joinValues,
   isBusy,
 } from "./opshop-renderer-utils.js";
+
+export function createOncallPickupDateGroups(pickups, state, actions) {
+  const section = document.createElement("section");
+  section.className = "workspace-regular-pickup-list workspace-oncall-pickup-list";
+  section.append(
+    createOpShopDateGroupList({
+      collapsedDates: state.collapsedOncallOpShopPickupDates || {},
+      comparePickups: (left, right) => compareOncallPickups(left, right, state),
+      dispatchDate: state.dispatchDate,
+      emptyMessage: "No Oncall pickups are visible for this dispatch date.",
+      idPrefix: "workspace-oncall",
+      onToggleDateGroup: actions.toggleOncallOpShopDateGroup,
+      pickups,
+      renderPickup: (pickup) => createOncallPickupRow(pickup, state, actions),
+    }),
+  );
+  return section;
+}
+
+export function createOncallPickupRow(pickup, state, actions) {
+  const row = document.createElement("article");
+  row.className = "opshop-list-item workspace-regular-pickup-row workspace-oncall-pickup-row";
+
+  const icon = document.createElement("span");
+  icon.className = "opshop-list-item-icon";
+  icon.append(createIcon("store"));
+
+  const body = document.createElement("div");
+  body.className = "opshop-list-item-body workspace-regular-pickup-main workspace-oncall-pickup-main";
+  const title = document.createElement("h4");
+  title.textContent = formatOptional(pickup.opshop_name);
+  const meta = document.createElement("div");
+  meta.className = "opshop-list-item-meta";
+  const suburb = document.createElement("span");
+  suburb.className = "opshop-list-item-suburb";
+  suburb.textContent = formatOptional(pickup.suburb);
+  const pickupDate = document.createElement("span");
+  pickupDate.className = "opshop-list-item-date";
+  pickupDate.append(
+    createIcon("calendar"),
+    document.createTextNode(`Pickup Date: ${formatOptional(pickup.pickup_date)}`),
+  );
+  meta.append(suburb, pickupDate);
+  const currentAssignee = document.createElement("p");
+  currentAssignee.className = "workspace-regular-current-assignee workspace-oncall-current-assignee";
+  currentAssignee.textContent = `Current Assignee: ${currentOpShopDriverName(pickup, state)}`;
+  body.append(title, meta, currentAssignee);
+
+  const assignment = createOncallPickupAssignment(pickup, state, actions);
+  const taskActions = document.createElement("div");
+  taskActions.className = "workspace-action-row workspace-regular-pickup-actions workspace-oncall-pickup-actions";
+  taskActions.append(
+    createActionButton(
+      "View details",
+      () => actions.openOpShopPickupDetail(pickup.pickup_task_id),
+    ),
+    createActionButton(
+      "Edit",
+      () => actions.startEditOpShopPickupTask(pickup),
+      { disabled: Boolean(pickup.assigned_to_locked) },
+    ),
+    createActionButton(
+      "Delete",
+      () => actions.startDeleteOpShopPickupTask(pickup),
+      { disabled: Boolean(pickup.assigned_to_locked) },
+    ),
+  );
+  if (pickup.is_assigned) {
+    taskActions.append(
+      createActionButton(
+        "Unassign now",
+        () => actions.unassignOpShopPickup(pickup.pickup_task_id),
+        {
+          disabled: pickup.assigned_to_locked
+            || isBusy(state, `opshop-unassign:${pickup.pickup_task_id}`),
+        },
+      ),
+    );
+  }
+  const controls = document.createElement("div");
+  controls.className = "workspace-regular-pickup-controls workspace-oncall-pickup-controls";
+  controls.append(assignment, taskActions);
+  row.append(icon, body, controls);
+  return row;
+}
+
+export function createOncallPickupAssignment(pickup, state, actions) {
+  const selectedDriverId = selectedOpShopDriverId(pickup, state);
+  const field = createSelect(
+    "Assigned to",
+    selectedDriverId,
+    [{ value: "", label: "Unassigned" }].concat(
+      (state.opshopBoard?.drivers || []).map((driver) => ({
+        value: driver.driver_id,
+        label: driver.name,
+      })),
+    ),
+    (value) => actions.updateOpShopAssignmentDraft(pickup.pickup_task_id, value),
+  );
+  field.classList.add("workspace-regular-assignee-field", "workspace-oncall-assignee-field");
+  field.querySelector("select").disabled = Boolean(pickup.assigned_to_locked);
+  if (pickup.assigned_to_locked) {
+    const lock = document.createElement("span");
+    lock.className = "workspace-regular-assignment-lock workspace-oncall-assignment-lock";
+    lock.textContent = pickup.assignment_lock_reason || "This pickup is locked.";
+    field.append(lock);
+  }
+  return field;
+}
+
+export function compareOncallPickups(left, right, state) {
+  return compareRegularPickups(left, right, state);
+}
 
 export function createPickupCard(pickup, state, actions) {
   const card = document.createElement("article");
@@ -82,6 +204,12 @@ export function createPickupAssignmentControls(pickup, state, actions) {
   );
   driverSelect.querySelector("select").disabled = Boolean(pickup.assigned_to_locked);
   controls.append(driverSelect);
+  if (pickup.assigned_to_locked) {
+    const lock = document.createElement("span");
+    lock.className = "workspace-pickup-assignment-lock";
+    lock.textContent = pickup.assignment_lock_reason || "This pickup is locked.";
+    controls.append(lock);
+  }
   if (pickup.is_assigned) {
     controls.append(
       createActionButton(

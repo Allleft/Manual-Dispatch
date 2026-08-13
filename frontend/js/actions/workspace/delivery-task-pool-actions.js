@@ -1,3 +1,6 @@
+import { updateDeliveryTaskPoolFilteredContent } from "../../render/delivery/delivery-task-pool-renderer.js";
+import { captureWindowScroll, restoreWindowScroll } from "../../utils/scroll-utils.js";
+
 let deliveryProductLineDraftSequence = 0;
 
 function nextDeliveryProductLineDraftId() {
@@ -29,6 +32,17 @@ export function createDeliveryTaskPoolActions(context) {
       ...(state.deliveryTaskPoolFilters || {}),
       [field]: value,
     };
+    if (field === "search") {
+      const scrollSnapshot = captureWindowScroll();
+      if (updateDeliveryTaskPoolFilteredContent(
+        currentDeliveryBoard(),
+        state,
+        context.actions,
+      )) {
+        restoreWindowScroll(scrollSnapshot);
+        return;
+      }
+    }
     renderWorkspace();
   }
 
@@ -366,6 +380,7 @@ export function createDeliveryTaskPoolActions(context) {
   function defaultDeliveryOrderForm(order = {}) {
     return {
       invoice_number: order.invoice_number || "",
+      invoice_date: order.invoice_date || "",
       order_no: order.order_no || "",
       company_name: order.company_name || "",
       phone: order.phone || "",
@@ -401,6 +416,7 @@ export function createDeliveryTaskPoolActions(context) {
   function deliveryOrderPayload(form) {
     return {
       invoice_number: form.invoice_number || null,
+      invoice_date: form.invoice_date || null,
       order_no: form.order_no || null,
       company_name: form.company_name || "",
       phone: form.phone || null,

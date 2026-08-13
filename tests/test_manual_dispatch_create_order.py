@@ -35,10 +35,35 @@ class ManualDispatchCreateOrderTest(unittest.TestCase):
 
         self.assertEqual("ORD-20260505-001", order.order_id)
         self.assertEqual("INV-2001", order.invoice_number)
+        self.assertEqual("2026-05-01", order.invoice_date)
         self.assertEqual("ORD-NO-2001", order.order_no)
         self.assertEqual("0400 000 999", order.phone)
         self.assertEqual("Noble Park", order.suburb)
         self.assertEqual("Normal", order.urgency)
+        self.assertEqual("2026-05-01", self.repository.get_order(order.order_id).invoice_date)
+
+    def test_invoice_date_is_optional_independent_and_validated(self):
+        historical = self.service.create_order(
+            self._request(invoice_number="INV-NO-DATE", invoice_date=None)
+        )
+        independent = self.service.create_order(
+            self._request(
+                invoice_number="INV-INDEPENDENT",
+                invoice_date="2026-08-10",
+                delivery_date="2026-08-15",
+            )
+        )
+
+        self.assertIsNone(historical.invoice_date)
+        self.assertEqual("2026-08-10", independent.invoice_date)
+        self.assertEqual("2026-08-15", independent.delivery_date)
+        with self.assertRaisesRegex(ValueError, "invoice_date must"):
+            self.service.create_order(
+                self._request(
+                    invoice_number="INV-BAD-DATE",
+                    invoice_date="2026-02-30",
+                )
+            )
 
     def test_created_order_appears_in_board_for_delivery_date(self):
         created = self.service.create_order(self._request())
@@ -156,6 +181,7 @@ class ManualDispatchCreateOrderTest(unittest.TestCase):
     def _request(self, **overrides):
         values = {
             "invoice_number": "INV-2001",
+            "invoice_date": "2026-05-01",
             "order_no": "ORD-NO-2001",
             "company_name": "New Customer",
             "phone": "0400 000 999",

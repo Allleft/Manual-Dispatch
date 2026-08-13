@@ -17,6 +17,7 @@ from backend.schemas import (
 from backend.services.manual_dispatch_service import ManualDispatchService
 from backend.services.manual_dispatch.workspace_migration_readiness_service import WorkspaceMigrationRequiredError
 from backend.services.manual_dispatch.attache_invoice_pdf_parser import (
+    current_melbourne_business_date,
     parse_attache_invoice_pdf_bytes,
     with_duplicate_warning,
 )
@@ -69,6 +70,7 @@ def create_attache_router(
                 created = create_order(
                     CreateOrderRequest(
                         invoice_number=row.invoice_number,
+                        invoice_date=row.invoice_date,
                         order_no=row.order_no,
                         company_name=row.company_name,
                         phone=row.phone,
@@ -125,6 +127,7 @@ def create_attache_router(
 
         rows = []
         existing_invoice_numbers = _existing_invoice_numbers()
+        import_date = current_melbourne_business_date()
 
         for uploaded_file in files:
             filename = uploaded_file.filename or "invoice.pdf"
@@ -149,6 +152,7 @@ def create_attache_router(
                 parsed = parse_attache_invoice_pdf_bytes(
                     payload,
                     source_filename=filename,
+                    import_date=import_date,
                 )
                 if parsed.invoice_number and parsed.invoice_number in existing_invoice_numbers:
                     parsed = with_duplicate_warning(parsed)

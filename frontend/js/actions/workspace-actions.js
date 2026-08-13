@@ -142,6 +142,7 @@ export function createWorkspaceActions({
     updateOpShopTaskPoolView,
     updateOpShopTripSummaryDate,
     toggleRegularOpShopDateGroup,
+    toggleOncallOpShopDateGroup,
   } = context.actions;
 
   return {
@@ -232,5 +233,6 @@ export function createWorkspaceActions({
     updateOpShopTaskPoolView,
     updateOpShopTripSummaryDate,
     toggleRegularOpShopDateGroup,
+    toggleOncallOpShopDateGroup,
   };
 }

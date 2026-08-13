@@ -37,6 +37,7 @@ class SQLiteOrderRepositoryMixin:
                 INSERT INTO manual_orders (
                     order_id,
                     invoice_number,
+                    invoice_date,
                     order_no,
                     company_name,
                     phone,
@@ -54,11 +55,12 @@ class SQLiteOrderRepositoryMixin:
                     end_time,
                     note,
                     status
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     order.order_id,
                     order.invoice_number,
+                    order.invoice_date,
                     order.order_no,
                     order.company_name,
                     order.phone,
@@ -89,6 +91,7 @@ class SQLiteOrderRepositoryMixin:
                 UPDATE manual_orders
                 SET
                     invoice_number = ?,
+                    invoice_date = ?,
                     order_no = ?,
                     company_name = ?,
                     phone = ?,
@@ -110,6 +113,7 @@ class SQLiteOrderRepositoryMixin:
                 """,
                 (
                     order.invoice_number,
+                    order.invoice_date,
                     order.order_no,
                     order.company_name,
                     order.phone,

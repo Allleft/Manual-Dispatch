@@ -38,9 +38,28 @@ export function createOpShopWorkspaceActions(context) {
     restoreWindowScroll(scrollSnapshot);
   }
 
+  function toggleOncallOpShopDateGroup(pickupDate) {
+    const scrollSnapshot = captureWindowScroll();
+    state.collapsedOncallOpShopPickupDates = toggleCollapsedPickupDateGroup(
+      state.collapsedOncallOpShopPickupDates || {},
+      pickupDate,
+      state.dispatchDate,
+    );
+    renderWorkspace();
+    restoreWindowScroll(scrollSnapshot);
+  }
+
+  function renderOpShopWorkspacePreservingScroll() {
+    const scrollSnapshot = captureWindowScroll();
+    renderWorkspace();
+    restoreWindowScroll(scrollSnapshot);
+  }
+
   function pruneOpShopDrafts() {
     const pickupIds = new Set(
-      (state.opshopBoard?.opshop_pickups || []).map((pickup) => pickup.pickup_task_id),
+      (state.opshopBoard?.opshop_pickups || [])
+        .filter((pickup) => !pickup.assigned_to_locked)
+        .map((pickup) => pickup.pickup_task_id),
     );
     state.opshopAssignmentDrafts = Object.fromEntries(
       Object.entries(state.opshopAssignmentDrafts || {}).filter(([pickupTaskId]) =>
@@ -48,9 +67,13 @@ export function createOpShopWorkspaceActions(context) {
       ),
     );
     const routeGroupIds = new Set(
-      (state.opshopBoard?.countryside_route_groups || []).map(
-        (routeGroup) => routeGroup.route_group_id,
-      ),
+      (state.opshopBoard?.countryside_route_groups || [])
+        .filter((routeGroup) => !(state.opshopBoard?.opshop_pickups || []).some(
+          (pickup) =>
+            pickup.route_group_id === routeGroup.route_group_id
+            && pickup.assigned_to_locked,
+        ))
+        .map((routeGroup) => routeGroup.route_group_id),
     );
     state.countrysideRouteGroupDrafts = Object.fromEntries(
       Object.entries(state.countrysideRouteGroupDrafts || {}).filter(([routeGroupId]) =>
@@ -62,6 +85,8 @@ export function createOpShopWorkspaceActions(context) {
   return {
     updateOpShopTaskPoolView,
     toggleRegularOpShopDateGroup,
+    toggleOncallOpShopDateGroup,
+    renderOpShopWorkspacePreservingScroll,
     pruneOpShopDrafts,
   };
 }

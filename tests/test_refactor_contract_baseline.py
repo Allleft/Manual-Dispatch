@@ -45,7 +45,7 @@ class RefactorContractBaselineTest(unittest.TestCase):
 
     def test_api_module_keeps_stable_router_and_service_exports(self):
         self.assertIsNotNone(api_module.router)
-        self.assertIsInstance(api_module.service, ManualDispatchService)
+        self.assertIsInstance(api_module._get_service(), ManualDispatchService)
 
     def test_api_path_and_method_contract_fingerprint(self):
         routes = sorted(
@@ -116,7 +116,7 @@ class RefactorContractBaselineTest(unittest.TestCase):
             {method["name"] for method in sqlite_methods},
         )
         self.assertEqual(
-            "35e4d4fefe7cba5cacb925d594101526424402a4426d0c30b6831b1a22f27aa8",
+            "5c8e2689c2527ae492d0c737efa2b6a01dce7eda4ee39103d2108817808ba1cf",
             self._contract_digest(sqlite_methods),
         )
 
@@ -196,9 +196,9 @@ class RefactorContractBaselineTest(unittest.TestCase):
             "31d14ad50a0415062c5844a12a9870e72c25c95b17dcdda9b249f53e175cd78a",
             self._contract_digest(contract["apiExportNames"]),
         )
-        self.assertEqual(87, len(contract["actionNames"]))
+        self.assertEqual(88, len(contract["actionNames"]))
         self.assertEqual(
-            "2dc79338aeba07a83d190876436ee42893c3d248a252a89a34592f10a8785d8e",
+            "4aaef4b2afb04b798de4d9c2e1f9867aa6acce5294304943dd44b7c9ea51286b",
             self._contract_digest(contract["actionNames"]),
         )
         self.assertEqual(188, len(contract["stateFields"]))

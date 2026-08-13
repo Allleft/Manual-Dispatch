@@ -3,6 +3,7 @@ PRAGMA foreign_keys = ON;
 CREATE TABLE IF NOT EXISTS manual_orders (
     order_id TEXT PRIMARY KEY,
     invoice_number TEXT,
+    invoice_date TEXT,
     order_no TEXT,
     company_name TEXT,
     phone TEXT,

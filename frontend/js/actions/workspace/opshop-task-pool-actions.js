@@ -13,6 +13,12 @@ export function createOpShopTaskPoolActions(context) {
   const isOpShopMutationCurrent = (...args) => context.actions.isOpShopMutationCurrent(...args);
 
   function updateOpShopAssignmentDraft(pickupTaskId, driverId) {
+    const pickup = (state.opshopBoard?.opshop_pickups || []).find(
+      (item) => item.pickup_task_id === pickupTaskId,
+    );
+    if (pickup?.assigned_to_locked) {
+      return;
+    }
     state.opshopAssignmentDrafts = {
       ...state.opshopAssignmentDrafts,
       [pickupTaskId]: driverId,
@@ -54,19 +60,30 @@ export function createOpShopTaskPoolActions(context) {
 
   async function unassignOpShopPickup(pickupTaskId) {
     await runOpShopAction(`opshop-unassign:${pickupTaskId}`, async (context) => {
-      await api.unassignOpShopWorkspacePickup({
+      const updatedBoard = await api.unassignOpShopWorkspacePickup({
         ...dispatchMetadataForContext(context),
         pickup_task_id: pickupTaskId,
       });
       if (isOpShopMutationCurrent(context)) {
         const { [pickupTaskId]: _removed, ...remaining } = state.opshopAssignmentDrafts;
         state.opshopAssignmentDrafts = remaining;
-        await loadOpShopRoute(context.route);
+        if (context.route === "opshop/trip-summary") {
+          state.opshopTripSummaryBoard = updatedBoard;
+        } else {
+          await loadOpShopRoute(context.route);
+        }
       }
-    });
+    }, null, { preserveScroll: true });
   }
 
   function updateCountrysideRouteGroupDraft(routeGroupId, field, value) {
+    const currentPickupDate = (
+      state.countrysideRouteGroupDrafts[routeGroupId]?.pickup_date
+      || state.dispatchDate
+    );
+    if (lockedCountrysidePickup(routeGroupId, currentPickupDate)) {
+      return;
+    }
     const current = state.countrysideRouteGroupDrafts[routeGroupId] || {};
     state.countrysideRouteGroupDrafts = {
       ...state.countrysideRouteGroupDrafts,
@@ -88,6 +105,14 @@ export function createOpShopTaskPoolActions(context) {
       notes: "",
       ...(state.countrysideRouteGroupDrafts[routeGroupId] || {}),
     };
+    const lockedPickup = lockedCountrysidePickup(routeGroupId, draft.pickup_date);
+    if (lockedPickup) {
+      state.opshopActionError = (
+        lockedPickup.assignment_lock_reason || "This pickup is locked."
+      );
+      renderWorkspace();
+      return;
+    }
     await runOpShopAction(`opshop-route-group:${routeGroupId}`, async (context) => {
       await api.assignOpShopWorkspaceCountrysideRouteGroup(
         routeGroupId,
@@ -108,6 +133,9 @@ export function createOpShopTaskPoolActions(context) {
 
   function changedOpShopAssignmentDrafts(pickups) {
     return (pickups || []).filter((pickup) => {
+      if (pickup.assigned_to_locked) {
+        return false;
+      }
       if (!Object.prototype.hasOwnProperty.call(
         state.opshopAssignmentDrafts,
         pickup.pickup_task_id,
@@ -120,6 +148,15 @@ export function createOpShopTaskPoolActions(context) {
 
   function currentOpShopDriverId(pickup) {
     return pickup?.assigned_driver_id || pickup?.driver_id || "";
+  }
+
+  function lockedCountrysidePickup(routeGroupId, pickupDate) {
+    return (state.opshopBoard?.opshop_pickups || []).find(
+      (pickup) =>
+        pickup.route_group_id === routeGroupId
+        && pickup.pickup_date === pickupDate
+        && pickup.assigned_to_locked,
+    );
   }
 
   return {

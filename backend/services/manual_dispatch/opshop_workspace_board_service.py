@@ -1,5 +1,5 @@
 from bisect import bisect_left
-from datetime import date
+from datetime import date, timedelta
 
 from backend.schemas import (
     OpShopTripSummaryResponse,
@@ -28,24 +28,33 @@ class OpShopWorkspaceBoardService:
         regular_window = self.pickup_service.ensure_regular_opshop_pickup_tasks_for_week(
             dispatch_date
         )
+        oncall_start_date = (
+            date.fromisoformat(dispatch_date) - timedelta(days=14)
+        ).isoformat()
         collections = self.repository.list_opshop_pickup_collections(dispatch_date)
-        reserved_task_ids = self._reserved_task_ids(collections)
+        saved_task_ids = self._reserved_task_ids(collections, {"SAVED"})
+        generated_collections_by_task_id = (
+            self._generated_collections_by_task_id(collections)
+        )
 
         pickup_lists = [
             self.repository.list_scheduled_opshop_pickup_board_items_for_window(
                 regular_window.window_start,
                 regular_window.window_end,
             ),
-            self.repository.list_oncall_opshop_pickup_board_items(dispatch_date),
+            self.repository.list_oncall_opshop_pickup_board_items(oncall_start_date),
             self.repository.list_countryside_opshop_pickup_board_items(dispatch_date),
             self.repository.list_assigned_opshop_pickup_board_items(dispatch_date),
         ]
         pickups_by_id = {}
         for pickups in pickup_lists:
             for pickup in pickups:
-                if pickup.pickup_task_id in reserved_task_ids:
+                if pickup.pickup_task_id in saved_task_ids:
                     continue
-                pickup.assigned_to_locked = pickup.pickup_date < dispatch_date
+                pickup.assigned_to_locked = (
+                    pickup.pickup_task_id in generated_collections_by_task_id
+                    or pickup.pickup_date < dispatch_date
+                )
                 pickups_by_id[pickup.pickup_task_id] = pickup
 
         collectable_task_ids = self._collectable_task_ids(
@@ -59,6 +68,7 @@ class OpShopWorkspaceBoardService:
                     pickup,
                     pickup.pickup_task_id in collectable_task_ids,
                     last_pickup_dates.get(pickup.pickup_task_id),
+                    generated_collections_by_task_id.get(pickup.pickup_task_id),
                 )
                 for pickup in pickups_by_id.values()
             ),
@@ -129,14 +139,29 @@ class OpShopWorkspaceBoardService:
         )
 
     @staticmethod
-    def _reserved_task_ids(collections):
+    def _reserved_task_ids(collections, statuses=None):
+        reserved_statuses = statuses or {"GENERATED", "SAVED"}
         return {
             pickup.pickup_task_id_snapshot
             for collection in collections
-            if collection.status in {"GENERATED", "SAVED"}
+            if collection.status in reserved_statuses
             for pickup in collection.pickups
             if pickup.pickup_task_id_snapshot
         }
+
+    @staticmethod
+    def _generated_collections_by_task_id(collections):
+        generated_collections = {}
+        for collection in collections:
+            if collection.status != "GENERATED":
+                continue
+            for pickup in collection.pickups:
+                if pickup.pickup_task_id_snapshot:
+                    generated_collections.setdefault(
+                        pickup.pickup_task_id_snapshot,
+                        collection,
+                    )
+        return generated_collections
 
     def _collectable_task_ids(self, pickups):
         candidate_keys = {
@@ -184,8 +209,27 @@ class OpShopWorkspaceBoardService:
         pickup,
         assignment_is_collectable,
         last_pickup_date=None,
+        generated_collection=None,
     ):
-        driver_id = pickup.driver_id if assignment_is_collectable else None
+        generated_driver_id = (
+            generated_collection.driver_id if generated_collection else None
+        )
+        driver_id = (
+            generated_driver_id
+            or (pickup.driver_id if assignment_is_collectable else None)
+        )
+        assigned_driver_name = (
+            generated_collection.driver_name_snapshot
+            if generated_collection
+            else pickup.assigned_driver_name if assignment_is_collectable else None
+        )
+        assignment_lock_reason = None
+        if generated_collection:
+            generated_driver_name = (
+                generated_collection.driver_name_snapshot
+                or generated_collection.driver_id
+            )
+            assignment_lock_reason = f"Already generated to {generated_driver_name}"
         return OpShopWorkspacePickupItem(
             pickup_task_id=pickup.pickup_task_id,
             task_type=pickup.task_type,
@@ -220,12 +264,13 @@ class OpShopWorkspaceBoardService:
             default_driver_alias=pickup.default_driver_alias,
             default_driver_name=pickup.default_driver_name,
             assigned_driver_id=driver_id,
-            assigned_driver_name=(
-                pickup.assigned_driver_name if assignment_is_collectable else None
+            assigned_driver_name=assigned_driver_name,
+            assigned_to_locked=(
+                bool(generated_collection) or pickup.assigned_to_locked
             ),
-            assigned_to_locked=pickup.assigned_to_locked,
             pickup_category=pickup.pickup_category,
             route_group_id=pickup.route_group_id,
             route_group_name=pickup.route_group_name,
             last_pickup_date=last_pickup_date,
+            assignment_lock_reason=assignment_lock_reason,
         )

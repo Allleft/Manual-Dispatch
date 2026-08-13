@@ -28,7 +28,7 @@ export function createDeliveryTaskPool(board, state, actions) {
     return createEmptyState("No Delivery workspace data loaded.", "document");
   }
   const wrapper = document.createElement("div");
-  wrapper.className = "workspace-stack";
+  wrapper.className = "workspace-stack workspace-delivery-task-pool";
   const assignments = assignmentMap(board);
   const unassignedOrders = (board.orders || []).filter(
     (order) => !assignments.has(order.order_id),
@@ -38,6 +38,44 @@ export function createDeliveryTaskPool(board, state, actions) {
   );
 
   wrapper.append(createDeliveryTaskPoolPanel(unassignedOrders, filteredOrders, state, actions));
+  wrapper.append(createDeliveryTaskPoolOrderGrid(
+    unassignedOrders,
+    filteredOrders,
+    board,
+    state,
+    actions,
+  ));
+  return wrapper;
+}
+
+export function updateDeliveryTaskPoolFilteredContent(board, state, actions, root = document) {
+  const wrapper = root.querySelector(".workspace-delivery-task-pool");
+  const currentGrid = wrapper?.querySelector(".workspace-order-grid");
+  if (!board || !wrapper || !currentGrid) {
+    return false;
+  }
+  const assignments = assignmentMap(board);
+  const unassignedOrders = (board.orders || []).filter(
+    (order) => !assignments.has(order.order_id),
+  );
+  const filteredOrders = sortDeliveryTaskPoolOrders(
+    filterDeliveryTaskPoolOrders(unassignedOrders, state.deliveryTaskPoolFilters),
+  );
+  const count = wrapper.querySelector(".workspace-filter-count");
+  if (count) {
+    count.textContent = `${filteredOrders.length} of ${unassignedOrders.length} visible Orders`;
+  }
+  currentGrid.replaceWith(createDeliveryTaskPoolOrderGrid(
+    unassignedOrders,
+    filteredOrders,
+    board,
+    state,
+    actions,
+  ));
+  return true;
+}
+
+function createDeliveryTaskPoolOrderGrid(unassignedOrders, filteredOrders, board, state, actions) {
   const orderGrid = document.createElement("div");
   orderGrid.className = "workspace-card-grid workspace-order-grid";
   if (!unassignedOrders.length) {
@@ -49,8 +87,7 @@ export function createDeliveryTaskPool(board, state, actions) {
       orderGrid.append(createOrderCard(order, board, state, actions));
     });
   }
-  wrapper.append(orderGrid);
-  return wrapper;
+  return orderGrid;
 }
 
 export function createDeliveryTaskPoolPanel(unassignedOrders, filteredOrders, state, actions) {
@@ -95,7 +132,7 @@ export function createDeliveryTaskPoolPanel(unassignedOrders, filteredOrders, st
   const search = createTextInput(
     "Search Orders",
     filters.search || "",
-    "Invoice, order #, company, phone, address, suburb, postcode, product, notes",
+    "Invoice, invoice date, order #, company, phone, address, suburb, postcode, product, notes",
     (value) => actions.updateDeliveryTaskPoolFilter("search", value),
   );
   const date = createTextInput(
@@ -167,6 +204,7 @@ export function createOrderCard(order, board, state, actions) {
   chips.append(
     createChip(`Load: ${formatLoad(order)}`),
     urgencyChip,
+    createChip(`Invoice Date: ${formatOptional(order.invoice_date)}`),
     createChip(`Delivery Date: ${formatOptional(order.delivery_date)}`),
     createChip(`Start: ${formatOptional(order.start_time, "-")}`),
   );
@@ -257,6 +295,7 @@ export function filterDeliveryTaskPoolOrders(orders, filters = {}) {
 export function deliveryOrderSearchText(order) {
   return normalizeSearch([
     order.invoice_number,
+    order.invoice_date,
     order.order_no,
     order.company_name,
     order.phone,

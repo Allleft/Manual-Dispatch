@@ -210,8 +210,10 @@ export function createAttacheReviewRow(row, importState, actions) {
   summary.append(
     createBadge(status),
     createInlineMeta("Invoice", row.invoice_number),
+    createInlineMeta("Invoice Date", row.invoice_date),
     createInlineMeta("Order", row.order_no),
     createInlineMeta("Customer", row.company_name),
+    createInlineMeta("Suburb", row.suburb),
     createInlineMeta("Delivery Date", row.delivery_date),
     createInlineMeta(
       "Load",
@@ -225,8 +227,22 @@ export function createAttacheReviewRow(row, importState, actions) {
   warning.textContent = row.is_duplicate
     ? "Duplicate invoice already exists and cannot be selected."
     : (row.warnings || []).join("; ");
-  const expand = createActionButton(expanded ? "Collapse" : "Expand", () =>
-    actions.toggleDeliveryAttacheImportExpanded(row.row_id));
+  const expand = createActionButton(expanded ? "Collapse" : "Expand", () => {
+    const scrollBody = card.closest(".workspace-modal-body");
+    const scrollTop = scrollBody?.scrollTop || 0;
+    const nextImportState = actions.toggleDeliveryAttacheImportExpanded(row.row_id);
+    const replacement = createAttacheReviewRow(
+      row,
+      nextImportState || importState,
+      actions,
+    );
+    card.replaceWith(replacement);
+    replacement.querySelector("button")?.focus({ preventScroll: true });
+    if (scrollBody) {
+      scrollBody.scrollTop = scrollTop;
+    }
+  });
+  expand.setAttribute("aria-expanded", String(expanded));
   header.append(checkbox, summary, expand);
   card.append(header);
   if (warning.textContent) {
@@ -244,6 +260,7 @@ export function createAttacheExpandedEditor(row, actions) {
   wrapper.append(
     createFormSection("Customer and Invoice", [
       createInlineField("Invoice Number", createInlineInput(row.invoice_number, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "invoice_number", value))),
+      createInlineField("Invoice Date", createInlineInput(row.invoice_date, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "invoice_date", value), "date")),
       createInlineField("Order Number", createInlineInput(row.order_no, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "order_no", value))),
       createInlineField("Company Name", createInlineInput(row.company_name, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "company_name", value))),
       createInlineField("Phone", createInlineInput(row.phone, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "phone", value))),

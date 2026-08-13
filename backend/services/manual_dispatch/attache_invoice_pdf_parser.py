@@ -1,10 +1,11 @@
 from dataclasses import replace
-from datetime import timedelta
+from datetime import date, datetime, timedelta
 from hashlib import sha1
 from io import BytesIO
 import re
 
 from backend.schemas import AttacheInvoicePdfPreviewItem
+from backend.services.manual_dispatch.logbook_file_service import MELBOURNE_TIMEZONE
 from backend.services.manual_dispatch.normalization import clean_optional_text
 
 
@@ -61,9 +62,12 @@ STOP_BLOCK_MARKERS = (
     "Phone:",
     "Price Per Net",
     "Tax Invoice",
-    "Total",
     "UNIT ",
     "web:",
+)
+TOTAL_STOP_PATTERN = re.compile(
+    r"^TOTAL(?:\s*:?\s*$|\s+(?:INVOICE|NET\s+AMOUNT|GST|AMOUNT)\b)",
+    re.IGNORECASE,
 )
 SUPPLIER_ISSUER_MARKERS = (
     "B S L WIPERS",
@@ -91,10 +95,19 @@ LINE_ITEM_FOOTER_PATTERN = re.compile(
 )
 
 
-def parse_attache_invoice_pdf_bytes(pdf_bytes, source_filename="invoice.pdf"):
+def current_melbourne_business_date():
+    return datetime.now(MELBOURNE_TIMEZONE).date()
+
+
+def parse_attache_invoice_pdf_bytes(
+    pdf_bytes,
+    source_filename="invoice.pdf",
+    import_date=None,
+):
     return parse_attache_invoice_text(
         extract_pdf_text(pdf_bytes),
         source_filename=source_filename,
+        import_date=import_date,
     )
 
 
@@ -116,7 +129,7 @@ def extract_pdf_text(pdf_bytes):
     return text
 
 
-def parse_attache_invoice_text(text, source_filename="invoice.txt"):
+def parse_attache_invoice_text(text, source_filename="invoice.txt", import_date=None):
     lines = _normalize_lines(text)
     full_text = "\n".join(lines)
     invoice_number = _find_regex(
@@ -130,8 +143,8 @@ def parse_attache_invoice_text(text, source_filename="invoice.txt"):
         )
     )
     delivery_date = _parse_delivery_date(full_text)
-    if not delivery_date and invoice_date:
-        delivery_date = (invoice_date + timedelta(days=1)).isoformat()
+    if not delivery_date:
+        delivery_date = (_resolve_import_date(import_date) + timedelta(days=1)).isoformat()
 
     time_instruction, start_time, end_time = _parse_time_instruction(full_text)
     customer_code = _parse_customer_code(lines)
@@ -311,12 +324,15 @@ def _parse_customer_profile(lines):
     invoice_profile = _profile_from_address_block(invoice_block)
     delivery_profile = _profile_from_address_block(delivery_block)
 
-    profile = invoice_profile
-    if _is_valid_delivery_profile(delivery_profile):
-        profile = delivery_profile
-
     matching_invoice_postcode = None
-    if profile is delivery_profile and _profiles_match(delivery_profile, invoice_profile):
+    uses_invoice_address_fallback = not (
+        delivery_profile.get("delivery_address")
+        and delivery_profile.get("suburb")
+    )
+    if uses_invoice_address_fallback or _profiles_match(
+        delivery_profile,
+        invoice_profile,
+    ):
         matching_invoice_postcode = invoice_profile.get("postcode")
 
     phone = (
@@ -325,15 +341,24 @@ def _parse_customer_profile(lines):
         or _find_phone(tax_window)
     )
     postcode = (
-        profile.get("postcode")
+        delivery_profile.get("postcode")
         or matching_invoice_postcode
         or _find_postcode(delivery_context)
         or _find_postcode(tax_window)
     )
     return {
-        "company_name": profile.get("company_name"),
-        "delivery_address": profile.get("delivery_address"),
-        "suburb": profile.get("suburb"),
+        "company_name": (
+            invoice_profile.get("company_name")
+            or delivery_profile.get("company_name")
+        ),
+        "delivery_address": (
+            delivery_profile.get("delivery_address")
+            or invoice_profile.get("delivery_address")
+        ),
+        "suburb": (
+            delivery_profile.get("suburb")
+            or invoice_profile.get("suburb")
+        ),
         "postcode": postcode,
         "phone": phone,
     }
@@ -385,9 +410,12 @@ def _collect_tax_invoice_window(lines):
 
 
 def _is_stop_marker(line):
-    upper = str(line or "").upper()
-    if upper.startswith("UNIT ") and _is_unit_street_address(line):
+    text = str(line or "").strip()
+    upper = text.upper()
+    if upper.startswith("UNIT ") and _is_unit_street_address(text):
         return False
+    if TOTAL_STOP_PATTERN.match(text):
+        return True
     return any(upper.startswith(marker.upper()) for marker in STOP_BLOCK_MARKERS)
 
 
@@ -398,13 +426,6 @@ def _is_unit_street_address(line):
             str(line or "").strip(),
             re.IGNORECASE,
         )
-    )
-
-
-def _is_valid_delivery_profile(profile):
-    return all(
-        profile.get(field)
-        for field in ("company_name", "delivery_address", "suburb")
     )
 
 
@@ -424,15 +445,31 @@ def _normalize_profile_value(value):
 
 
 def _profile_from_address_block(block):
-    content = [
-        line
-        for line in block
-        if line
-        and not _parse_time_instruction(line)[0]
-        and not _find_phone([line])
-        and not _is_operational_instruction(line)
-        and not _is_supplier_or_issuer_line(line)
-    ]
+    content = []
+    metadata_value_may_follow = False
+    for line in block:
+        text = str(line or "").strip()
+        if not text:
+            continue
+        if re.match(
+            r"^(?:ORDER\s+(?:NO|NUMBER)|PO\s+(?:NO|NUMBER)|PURCHASE\s+ORDER)\s*:?#?\s*$",
+            text,
+            re.IGNORECASE,
+        ):
+            metadata_value_may_follow = True
+            continue
+        if metadata_value_may_follow:
+            metadata_value_may_follow = False
+            if re.fullmatch(r"[A-Z0-9./-]+", text, re.IGNORECASE):
+                continue
+        if (
+            _parse_time_instruction(text)[0]
+            or _find_phone([text])
+            or _is_operational_instruction(text)
+            or _is_supplier_or_issuer_line(text)
+        ):
+            continue
+        content.append(text)
     if not content:
         return {}
 
@@ -659,10 +696,10 @@ def _parse_product_lines(lines):
             products.append(preceding_product)
             continue
         if category == "PACKAGING":
+            packaging_bags += classification["quantity"]
             if preceding_product is not None:
                 preceding_product["package_quantity"] = classification["quantity"]
                 preceding_product["package_unit"] = classification["unit"]
-                packaging_bags += classification["quantity"]
             else:
                 warnings.append(_unknown_row_warning(line))
             preceding_product = None
@@ -860,12 +897,40 @@ def _parse_product_around_unit(code, parts, unit_index, unit):
         name_tokens = list(after[1:-1])
         while name_tokens and _is_decimal(name_tokens[0]):
             name_tokens.pop(0)
+    elif _is_decimal(after[0]) and len(after) >= 3:
+        quantity_index = next(
+            (
+                index
+                for index, token in enumerate(after)
+                if index > 0
+                and _is_integer(token)
+                and any(not _is_decimal(candidate) for candidate in after[index + 1 :])
+            ),
+            None,
+        )
+        if quantity_index is None:
+            return None
+        quantity = int(after[quantity_index])
+        name_tokens = list(after[quantity_index + 1 :])
     else:
         return None
     name = _clean_product_name(" ".join(name_tokens))
     if not name or quantity <= 0:
         return None
     return _product_line(code, name, quantity, unit)
+
+
+def _resolve_import_date(value):
+    if value is None:
+        return current_melbourne_business_date()
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    parsed = _parse_date(value)
+    if parsed is None:
+        raise ValueError("import_date must be a valid date")
+    return parsed
 
 
 def _strip_trailing_numeric_tokens(tokens):

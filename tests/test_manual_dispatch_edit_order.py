@@ -35,6 +35,7 @@ class ManualDispatchEditOrderTest(unittest.TestCase):
             "ORD-001",
             self._request(
                 invoice_number="INV-9001",
+                invoice_date="2026-05-02",
                 order_no="ORD-NO-9001",
                 company_name="Updated Company",
                 phone="0499 111 222",
@@ -46,6 +47,7 @@ class ManualDispatchEditOrderTest(unittest.TestCase):
         )
 
         self.assertEqual("INV-9001", updated.invoice_number)
+        self.assertEqual("2026-05-02", updated.invoice_date)
         self.assertEqual("ORD-NO-9001", updated.order_no)
         self.assertEqual("Updated Company", updated.company_name)
         self.assertEqual("0499 111 222", updated.phone)
@@ -53,6 +55,29 @@ class ManualDispatchEditOrderTest(unittest.TestCase):
         self.assertEqual(5, updated.pallet_quantity)
         self.assertEqual(0, updated.loose_bags_quantity)
         self.assertEqual("Updated delivery note", updated.note)
+
+    def test_invoice_date_can_be_updated_cleared_and_is_validated(self):
+        updated = self.service.update_order(
+            "ORD-001",
+            self._request(invoice_date="2026-08-10", delivery_date="2026-08-15"),
+        )
+        self.assertEqual("2026-08-10", updated.invoice_date)
+        self.assertEqual("2026-08-15", updated.delivery_date)
+        self.assertEqual(
+            "2026-08-10",
+            self.repository.get_order("ORD-001").invoice_date,
+        )
+
+        cleared = self.service.update_order(
+            "ORD-001",
+            UpdateOrderRequest(invoice_date=None),
+        )
+        self.assertIsNone(cleared.invoice_date)
+        with self.assertRaisesRegex(ValueError, "invoice_date must"):
+            self.service.update_order(
+                "ORD-001",
+                UpdateOrderRequest(invoice_date="2026-13-01"),
+            )
 
     def test_update_order_rejects_missing_suburb(self):
         with self.assertRaises(ValueError):
@@ -199,6 +224,7 @@ class ManualDispatchEditOrderTest(unittest.TestCase):
     def _request(self, **overrides):
         values = {
             "invoice_number": "INV-1001",
+            "invoice_date": None,
             "order_no": "ORD-NO-1001",
             "company_name": "Demo Customer A",
             "phone": "0400 000 001",

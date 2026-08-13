@@ -594,7 +594,7 @@ class SQLiteOpShopRepositoryMixin:
             ).fetchall()
         return [self._row_to_opshop_pickup_board_item(row) for row in rows]
 
-    def list_oncall_opshop_pickup_board_items(self, dispatch_date):
+    def list_oncall_opshop_pickup_board_items(self, start_date):
         with connect(self.db_path) as connection:
             rows = connection.execute(
                 """
@@ -657,7 +657,7 @@ class SQLiteOpShopRepositoryMixin:
                     COALESCE(location.name, ''),
                     task.pickup_task_id
                 """,
-                (dispatch_date,),
+                (start_date,),
             ).fetchall()
         return [self._row_to_opshop_pickup_board_item(row) for row in rows]
 
