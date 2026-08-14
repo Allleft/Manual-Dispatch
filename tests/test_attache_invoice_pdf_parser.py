@@ -919,6 +919,94 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
             ),
         )
 
+    def test_compact_inline_quantity_185555_preserves_actual_and_bag_packaging(self):
+        parsed = parse_attache_invoice_text(
+            """
+            Customer
+            Code
+            Code Description Tax Amount
+            Invoice No
+            185555
+            Order No Date
+            13/08/26 RELLIL 13082026
+            Invoice to:
+            CAPRICORN HEAD OFFICE
+            LOCKED BAG 436
+            VICTORIA PARK PO 6979
+            Disc Price Per Total
+            Deliver to:
+            RELIABLE AUTOMOTIVE SERVICES 37358
+            FACT 52/70-72 CAVEHILL ROAD
+            LILYDALE
+            Tax Invoice
+            RSING 38.50 KG 3.50 0.00 1.750 20 COLOR TSHIRT RAGS
+            BAG10 0.00 0.00 0.00 0.000 2 PLASTIC BAG 10 kg
+            FIN-3PLY 44.00 BAG 4.00 0.00 40.000 1FINESSE-3PLY T/PAPER 180 SHTSx72ROLLS
+            DEL 11.00 DEL 1.00 0.00 10.000 1 DELIVERY /FUEL LEVY CHARGE
+            Total Invoice: $ 93.50
+            """,
+            source_filename="sanitized-185555.txt",
+            import_date=date(2026, 8, 13),
+        )
+
+        self.assertEqual("185555", parsed.invoice_number)
+        self.assertEqual(2, len(parsed.product_lines))
+        self.assert_product(
+            parsed.product_lines[0],
+            "RSING",
+            "COLOR TSHIRT RAGS",
+            20,
+            "KG",
+            2,
+            "BAG10",
+        )
+        self.assert_product(
+            parsed.product_lines[1],
+            "FIN-3PLY",
+            "FINESSE-3PLY T/PAPER 180 SHTS x 72 ROLLS",
+            1,
+            "BAG",
+            1,
+            "BAG",
+        )
+        self.assertEqual(
+            (0, 3, 0),
+            (
+                parsed.pallet_quantity,
+                parsed.loose_bags_quantity,
+                parsed.carton_quantity,
+            ),
+        )
+
+    def test_compact_inline_bag_quantity_is_structural_not_invoice_or_sku_specific(self):
+        parsed = parse_attache_invoice_text(
+            """
+            Invoice No 199555
+            Date 13/08/26
+            Invoice to:
+            GENERIC CUSTOMER
+            1 TEST ROAD
+            MELBOURNE 3000
+            Tax Invoice
+            PAPER-X 22.00 BAG 2.00 0.00 20.000 3GENERIC PAPER 200 SHTSx4ROLLS
+            Total Invoice: $ 22.00
+            """,
+            source_filename="compact-inline-bag.txt",
+            import_date=date(2026, 8, 13),
+        )
+
+        self.assertEqual(1, len(parsed.product_lines))
+        self.assert_product(
+            parsed.product_lines[0],
+            "PAPER-X",
+            "GENERIC PAPER 200 SHTS x 4 ROLLS",
+            3,
+            "BAG",
+            3,
+            "BAG",
+        )
+        self.assertEqual(3, parsed.loose_bags_quantity)
+
     def test_total_tools_dandenong_address_profile_is_not_treated_as_total_footer(self):
         parsed = parse_attache_invoice_text(
             """

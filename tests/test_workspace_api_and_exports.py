@@ -1291,10 +1291,12 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
                     package_unit="PKT25",
                 ),
                 ProductDetailLine(
-                    "SHTS x 72 ROLLS",
-                    180,
+                    "FINESSE-3PLY T/PAPER 180 SHTS x 72 ROLLS",
+                    1,
                     "BAG",
                     product_code="FIN-3PLY",
+                    package_quantity=1,
+                    package_unit="BAG",
                 ),
                 ProductDetailLine("Product B", 2, "BAGS"),
             ],
@@ -1302,7 +1304,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertEqual(
             "RSING - 20 BAG10\n"
             "MIC-MICROF - 10 PKT25\n"
-            "FIN-3PLY - 180 BAG\n"
+            "FIN-3PLY - 1 BAG\n"
             "Product B - 2 BAGS",
             delivery_run_sheet_product_display(order),
         )
@@ -1369,6 +1371,26 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
                 ProductDetailLine("MICRO FIBRE CLOTH 40 X 40", 250, "EACH", "MIC-MICROF", 10, "PKT25"),
             ],
         )
+        invoice_185555 = replace(
+            order_snapshot(
+                5,
+                "CAPRICORN HEAD OFFICE",
+                [
+                    ProductDetailLine("COLOR TSHIRT RAGS", 20, "KG", "RSING", 2, "BAG10"),
+                    ProductDetailLine(
+                        "FINESSE-3PLY T/PAPER 180 SHTS x 72 ROLLS",
+                        1,
+                        "BAG",
+                        "FIN-3PLY",
+                        1,
+                        "BAG",
+                    ),
+                ],
+            ),
+            invoice_number_snapshot="185555",
+            pallet_quantity_snapshot=0,
+            loose_bags_quantity_snapshot=3,
+        )
         run_sheet = DeliveryRunSheet(
             run_sheet_id="RUN-SHEET-COMPACT",
             dispatch_date=self.dispatch_date,
@@ -1388,7 +1410,13 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             trips=[
                 DeliveryRunSheetTrip(
                     trip_no="trip1",
-                    orders=[south_east_sands, rotary_tools, fibreglass, invoice_185526],
+                    orders=[
+                        south_east_sands,
+                        rotary_tools,
+                        fibreglass,
+                        invoice_185526,
+                        invoice_185555,
+                    ],
                 )
             ],
             total_cartons=0,
@@ -1407,6 +1435,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertEqual("RWORK - 30 BAG10\nRWCOTT - 20 BAG10", worksheet["E10"].value)
         self.assertEqual("RPWSING - 45 BAG10\nRSING - 45 BAG10", worksheet["E11"].value)
         self.assertEqual("RBATH - 45 BAG10\nMIC-MICROF - 10 PKT25", worksheet["E12"].value)
+        self.assertEqual("RSING - 2 BAG10\nFIN-3PLY - 1 BAG", worksheet["E13"].value)
         self.assertNotIn("Packaging:", "\n".join(str(worksheet[f"E{row}"].value or "") for row in range(9, 27)))
         self.assertEqual(1, worksheet.page_setup.fitToWidth)
         self.assertEqual(1, worksheet.page_setup.fitToHeight)
@@ -1420,7 +1449,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         )
         self.assertEqual(7.5, worksheet["E9"].font.sz)
         self.assertEqual(8.5, worksheet["B9"].font.sz)
-        self.assertEqual(21.95, worksheet.row_dimensions[13].height)
+        self.assertEqual(21.95, worksheet.row_dimensions[14].height)
 
     def test_delivery_export_uses_content_aware_data_row_heights(self):
         base_order = DeliveryRunSheetOrderSnapshot(
