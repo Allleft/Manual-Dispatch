@@ -14,6 +14,7 @@ import { createDeliveryRunSheetActions } from "./workspace/delivery-run-sheet-ac
 import { createDeliveryHistoryActions } from "./workspace/delivery-history-actions.js";
 import { createDeliverySpecificationActions } from "./workspace/delivery-specification-actions.js";
 import { createDeliveryAttacheActions } from "./workspace/delivery-attache-actions.js";
+import { createDeliveryDocketActions } from "./workspace/delivery-docket-actions.js";
 import { createOpShopWorkspaceActions } from "./workspace/opshop-workspace-actions.js";
 import { createOpShopTaskPoolActions } from "./workspace/opshop-task-pool-actions.js";
 import { createOpShopTripSummaryActions } from "./workspace/opshop-trip-summary-actions.js";
@@ -47,6 +48,7 @@ export function createWorkspaceActions({
   Object.assign(context.actions, createDeliveryHistoryActions(context));
   Object.assign(context.actions, createDeliverySpecificationActions(context));
   Object.assign(context.actions, createDeliveryAttacheActions(context));
+  Object.assign(context.actions, createDeliveryDocketActions(context));
   Object.assign(context.actions, createOpShopWorkspaceActions(context));
   Object.assign(context.actions, createOpShopTaskPoolActions(context));
   Object.assign(context.actions, createOpShopTripSummaryActions(context));
@@ -56,8 +58,11 @@ export function createWorkspaceActions({
 
   const {
     addDeliveryAttacheImportProductLine,
+    addDeliveryDocketImportProductLine,
     addDeliveryOrderProductLine,
     backDeliveryAttacheImportToFiles,
+    backDeliveryDocketImportToFiles,
+    backDeliveryImportToSources,
     cancelActiveDeliveryOrder,
     cancelDeliveryDriverForm,
     applyDeliveryOrderAssignment,
@@ -69,13 +74,16 @@ export function createWorkspaceActions({
     cancelDeliveryVehicleForm,
     clearDeliveryTaskPoolFilters,
     clearDeliveryAttacheImportSelection,
+    clearDeliveryDocketImportSelection,
     cancelOpShopPickupCollection,
     closeDeliveryGenerationConfirmation,
     closeOpShopGenerationConfirmation,
     closeDeliveryAttacheImport,
+    chooseDeliveryImportSource,
     closeDeliveryOrderModal,
     closeDeliverySpecifications,
     commitDeliveryAttacheImport,
+    commitDeliveryDocketImport,
     deleteDeliveryDriver,
     deleteDeliveryVehicle,
     exportDeliveryRunSheet,
@@ -94,10 +102,13 @@ export function createWorkspaceActions({
     openDeliveryRunSheetCloseout,
     openDeliverySpecifications,
     previewDeliveryAttacheImport,
+    previewDeliveryDocketImport,
     clearDeliveryVehicleTransientState,
     removeDeliveryOrderProductLine,
     removeDeliveryAttacheImportProductLine,
     removeDeliveryAttacheImportFile,
+    removeDeliveryDocketImportProductLine,
+    removeDeliveryDocketImportFile,
     saveDeliveryRunSheet,
     saveDeliveryDriver,
     saveDeliveryOrderForm,
@@ -112,8 +123,11 @@ export function createWorkspaceActions({
     startEditDeliveryOrder,
     startEditDeliveryVehicle,
     selectAllReadyDeliveryAttacheRows,
+    selectAllReadyDeliveryDocketRows,
     toggleDeliveryAttacheImportRow,
     toggleDeliveryAttacheImportExpanded,
+    toggleDeliveryDocketImportRow,
+    toggleDeliveryDocketImportExpanded,
     toggleDeliveryDriverAvailability,
     toggleDeliveryVehicleAvailability,
     markAllDeliveryCloseoutRowsDelivered,
@@ -127,6 +141,11 @@ export function createWorkspaceActions({
     updateDeliveryAttacheImportRow,
     updateDeliveryAttacheReviewFilter,
     updateDeliveryAttacheReviewSearch,
+    updateDeliveryDocketImportFiles,
+    updateDeliveryDocketImportProductLine,
+    updateDeliveryDocketImportRow,
+    updateDeliveryDocketReviewFilter,
+    updateDeliveryDocketReviewSearch,
     updateDeliveryDriverForm,
     updateDeliveryCloseoutRow,
     updateDeliveryOrderForm,
@@ -147,8 +166,11 @@ export function createWorkspaceActions({
 
   return {
     addDeliveryAttacheImportProductLine,
+    addDeliveryDocketImportProductLine,
     addDeliveryOrderProductLine,
     backDeliveryAttacheImportToFiles,
+    backDeliveryDocketImportToFiles,
+    backDeliveryImportToSources,
     cancelActiveDeliveryOrder,
     cancelDeliveryDriverForm,
     applyDeliveryOrderAssignment,
@@ -160,13 +182,16 @@ export function createWorkspaceActions({
     cancelDeliveryVehicleForm,
     clearDeliveryTaskPoolFilters,
     clearDeliveryAttacheImportSelection,
+    clearDeliveryDocketImportSelection,
     cancelOpShopPickupCollection,
     closeDeliveryGenerationConfirmation,
     closeOpShopGenerationConfirmation,
     closeDeliveryAttacheImport,
+    chooseDeliveryImportSource,
     closeDeliveryOrderModal,
     closeDeliverySpecifications,
     commitDeliveryAttacheImport,
+    commitDeliveryDocketImport,
     deleteDeliveryDriver,
     deleteDeliveryVehicle,
     exportDeliveryRunSheet,
@@ -185,10 +210,13 @@ export function createWorkspaceActions({
     openDeliveryRunSheetCloseout,
     openDeliverySpecifications,
     previewDeliveryAttacheImport,
+    previewDeliveryDocketImport,
     resetDeliveryVehicleTransientState: clearDeliveryVehicleTransientState,
     removeDeliveryOrderProductLine,
     removeDeliveryAttacheImportProductLine,
     removeDeliveryAttacheImportFile,
+    removeDeliveryDocketImportProductLine,
+    removeDeliveryDocketImportFile,
     saveDeliveryRunSheet,
     saveDeliveryDriver,
     saveDeliveryOrderForm,
@@ -203,8 +231,11 @@ export function createWorkspaceActions({
     startEditDeliveryOrder,
     startEditDeliveryVehicle,
     selectAllReadyDeliveryAttacheRows,
+    selectAllReadyDeliveryDocketRows,
     toggleDeliveryAttacheImportRow,
     toggleDeliveryAttacheImportExpanded,
+    toggleDeliveryDocketImportRow,
+    toggleDeliveryDocketImportExpanded,
     toggleDeliveryDriverAvailability,
     toggleDeliveryVehicleAvailability,
     markAllDeliveryCloseoutRowsDelivered,
@@ -218,6 +249,11 @@ export function createWorkspaceActions({
     updateDeliveryAttacheImportRow,
     updateDeliveryAttacheReviewFilter,
     updateDeliveryAttacheReviewSearch,
+    updateDeliveryDocketImportFiles,
+    updateDeliveryDocketImportProductLine,
+    updateDeliveryDocketImportRow,
+    updateDeliveryDocketReviewFilter,
+    updateDeliveryDocketReviewSearch,
     updateDeliveryDriverForm,
     updateDeliveryCloseoutRow,
     updateDeliveryOrderForm,

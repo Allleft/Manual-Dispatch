@@ -43,6 +43,7 @@ from .manual_dispatch_routes.common import (
     with_logbook_actor,
 )
 from .manual_dispatch_routes.delivery_routes import create_delivery_router
+from .manual_dispatch_routes.delivery_docket_routes import create_delivery_docket_router
 from .manual_dispatch_routes.export_routes import create_export_router
 from .manual_dispatch_routes.legacy_routes import create_legacy_router
 from .manual_dispatch_routes.opshop_routes import create_opshop_router
@@ -95,6 +96,7 @@ create_export_router(_get_service, _get_compatibility_dependency, protected_rout
 create_auth_router(_get_service, router, _require_authenticated_operator)
 for route_factory in (
     create_attache_router,
+    create_delivery_docket_router,
     create_delivery_router,
     create_opshop_router,
     create_workspace_snapshot_router,

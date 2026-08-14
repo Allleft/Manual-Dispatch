@@ -6846,6 +6846,68 @@ select:disabled {
   gap: 1rem;
 }
 
+.workspace-import-source-step {
+  gap: 1rem;
+}
+
+.workspace-import-source-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.workspace-import-source-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.85rem;
+  min-height: 112px;
+  border: 1px solid rgba(31, 101, 232, 0.22);
+  border-radius: 16px;
+  padding: 1rem;
+  color: var(--ink);
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.workspace-import-source-card:hover {
+  border-color: rgba(31, 101, 232, 0.55);
+  box-shadow: 0 10px 24px rgba(31, 101, 232, 0.1);
+  transform: translateY(-1px);
+}
+
+.workspace-import-source-card:focus-visible {
+  outline: 3px solid rgba(31, 101, 232, 0.24);
+  outline-offset: 2px;
+}
+
+.workspace-import-source-card > span:last-child {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.workspace-import-source-card strong {
+  font-size: 1rem;
+}
+
+.workspace-import-source-card span span {
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.workspace-import-source-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
+  color: var(--delivery-strong);
+  background: rgba(31, 101, 232, 0.1);
+}
+
 .workspace-attache-dropzone {
   display: flex;
   align-items: center;
@@ -7430,6 +7492,10 @@ select:disabled {
 }
 
 @media (max-width: 640px) {
+  .workspace-import-source-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .workspace-attache-display-controls {
     align-items: stretch;
     flex-direction: column;

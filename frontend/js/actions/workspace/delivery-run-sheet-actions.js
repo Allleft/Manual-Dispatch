@@ -63,7 +63,7 @@ export function createDeliveryRunSheetActions(context) {
         });
         if (isDeliveryMutationCurrent(context)) {
           state.deliveryGenerationConfirmation = null;
-          await navigateToDeliveryRunSheets();
+          await loadDeliveryRoute(context.route);
         }
       },
       (error) => {

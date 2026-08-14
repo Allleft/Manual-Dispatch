@@ -35,6 +35,7 @@ class H3OperationalSafetyTest(unittest.TestCase):
                 "uvicorn==0.46.0",
                 "openpyxl==3.1.5",
                 "pypdf==6.13.2",
+                "python-docx==1.2.0",
                 "python-multipart==0.0.28",
                 "tzdata==2026.2",
             ],

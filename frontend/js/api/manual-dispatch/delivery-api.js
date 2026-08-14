@@ -160,6 +160,27 @@ export async function apiCommitDeliveryAttacheInvoices(payload) {
   );
 }
 
+export async function apiPreviewDeliveryDockets(files) {
+  const formData = new FormData();
+  Array.from(files || []).forEach((file) => {
+    formData.append("files", file);
+  });
+  return requestFormData(
+    "/api/manual-dispatch/delivery/orders/import-delivery-docket-docx-preview",
+    formData,
+  );
+}
+
+export async function apiCommitDeliveryDockets(payload) {
+  return requestJson(
+    "/api/manual-dispatch/delivery/orders/import-delivery-docket-docx-commit",
+    {
+      method: "POST",
+      body: payload,
+    },
+  );
+}
+
 export async function apiCreateDeliveryDriver(payload) {
   return requestJson("/api/manual-dispatch/delivery/drivers", {
     method: "POST",

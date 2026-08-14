@@ -34,6 +34,8 @@ PRODUCT_UNITS = {
     "CARTON",
     "CARTONS",
     "EA",
+    "EAC",
+    "EACH",
     "KG",
     "KGS",
     "PACK",
@@ -688,9 +690,13 @@ def _parse_product_lines(lines):
     explicit_loose_bags = 0
     packaging_bags = 0
     preceding_product = None
+    pending_packet = None
 
     for line, classification in _line_item_rows(lines):
         category = classification["category"]
+        if pending_packet is not None and category != "PACKET_SUMMARY":
+            _apply_packet_packaging(pending_packet, None, warnings)
+            pending_packet = None
         if category == "PRODUCT":
             preceding_product = classification["product"]
             products.append(preceding_product)
@@ -704,6 +710,27 @@ def _parse_product_lines(lines):
                 warnings.append(_unknown_row_warning(line))
             preceding_product = None
             continue
+        if category == "PACKET_DESCRIPTOR":
+            if preceding_product is None:
+                warnings.append(_unknown_row_warning(line))
+            else:
+                pending_packet = {
+                    "product": preceding_product,
+                    **classification,
+                }
+            preceding_product = None
+            continue
+        if category == "PACKET_SUMMARY":
+            if pending_packet is None:
+                warnings.append(_unknown_row_warning(line))
+            else:
+                _apply_packet_packaging(
+                    pending_packet,
+                    classification["quantity"],
+                    warnings,
+                )
+                pending_packet = None
+            continue
         preceding_product = None
         if category == "LOAD":
             load_kind = classification["load_kind"]
@@ -716,6 +743,9 @@ def _parse_product_lines(lines):
             continue
         if category == "UNKNOWN":
             warnings.append(_unknown_row_warning(line))
+
+    if pending_packet is not None:
+        _apply_packet_packaging(pending_packet, None, warnings)
 
     loose_bags_quantity = explicit_loose_bags
     if pallet_quantity == 0 and carton_quantity == 0:
@@ -755,12 +785,18 @@ def _line_item_rows(lines):
 
 
 def _classify_invoice_row(line):
+    packet_summary = _parse_packet_summary_row(line)
+    if packet_summary:
+        return {"category": "PACKET_SUMMARY", **packet_summary}
     code = _line_code(line)
     if _is_charge_row(code, line):
         return {"category": "CHARGE"}
     packaging = _parse_packaging_row(code, line)
     if packaging:
         return {"category": "PACKAGING", **packaging}
+    packet_descriptor = _parse_packet_descriptor_row(code, line)
+    if packet_descriptor:
+        return {"category": "PACKET_DESCRIPTOR", **packet_descriptor}
     load = _parse_load_row(code, line)
     if load:
         return {"category": "LOAD", **load}
@@ -783,6 +819,79 @@ def _parse_packaging_row(code, line):
     if quantity <= 0:
         return None
     return {"quantity": quantity, "unit": code}
+
+
+def _parse_packet_summary_row(line):
+    match = re.fullmatch(r"\s*(\d+)\s*(?:PACKETS?|PKT)\s*", str(line or ""), re.IGNORECASE)
+    if not match or int(match.group(1)) <= 0:
+        return None
+    return {"quantity": int(match.group(1))}
+
+
+def _parse_packet_descriptor_row(code, line):
+    if code != "PKT":
+        return None
+    text = str(line or "")
+    phrase = re.search(r"\bPIECES\s+(?:IN\s+A|PER)\s+PACKET\b", text, re.IGNORECASE)
+    if not phrase:
+        return None
+
+    before_phrase = text[: phrase.start()]
+    encoded_match = re.search(r"\bPKT(\d+)\s*$", before_phrase, re.IGNORECASE)
+    pieces_match = re.search(r"(\d+)\s*$", before_phrase)
+    pieces_per_packet = None
+    encoded_packet_digits = None
+    if encoded_match:
+        encoded_packet_digits = encoded_match.group(1)
+    elif pieces_match and int(pieces_match.group(1)) > 0:
+        pieces_per_packet = int(pieces_match.group(1))
+
+    after_phrase = text[phrase.end() :]
+    quantity_match = re.search(
+        r"\b(\d+)\s*(?:PKT|PACKETS?)\b",
+        after_phrase,
+        re.IGNORECASE,
+    )
+    package_quantity = int(quantity_match.group(1)) if quantity_match else None
+    return {
+        "pieces_per_packet": pieces_per_packet,
+        "package_quantity": package_quantity,
+        "encoded_packet_digits": encoded_packet_digits,
+    }
+
+
+def _apply_packet_packaging(packet, summary_quantity, warnings):
+    descriptor_quantity = packet.get("package_quantity")
+    if (
+        descriptor_quantity is not None
+        and summary_quantity is not None
+        and descriptor_quantity != summary_quantity
+    ):
+        warnings.append(
+            "Packet quantity mismatch: "
+            f"descriptor says {descriptor_quantity}; summary says {summary_quantity}."
+        )
+
+    package_quantity = descriptor_quantity or summary_quantity
+    pieces_per_packet = packet.get("pieces_per_packet")
+    encoded_packet_digits = packet.get("encoded_packet_digits")
+    if pieces_per_packet is None and encoded_packet_digits:
+        summary_prefix = str(summary_quantity or "")
+        if (
+            summary_prefix
+            and encoded_packet_digits.startswith(summary_prefix)
+            and len(encoded_packet_digits) > len(summary_prefix)
+        ):
+            pieces_per_packet = int(encoded_packet_digits[len(summary_prefix) :])
+        elif len(encoded_packet_digits) <= 3:
+            pieces_per_packet = int(encoded_packet_digits)
+
+    if package_quantity and pieces_per_packet:
+        packet["product"]["package_quantity"] = package_quantity
+        packet["product"]["package_unit"] = f"PKT{pieces_per_packet}"
+        return
+
+    warnings.append("Packet packaging details require review.")
 
 
 def _parse_load_row(code, line):
@@ -809,7 +918,7 @@ def _load_row(load_kind, quantity):
 
 
 def _parse_named_load_quantity(line, label_pattern):
-    before = re.search(rf"\b(\d+)\s*{label_pattern}\b", line, re.IGNORECASE)
+    before = re.search(rf"(?<!\d)(\d+)\s*{label_pattern}\b", line, re.IGNORECASE)
     if before and int(before.group(1)) > 0:
         return int(before.group(1))
     after = re.search(rf"\b{label_pattern}\s+(\d+)\b", line, re.IGNORECASE)
@@ -875,6 +984,41 @@ def _parse_product_row(code, line):
 
 def _parse_compact_product_row(code, line):
     remainder = str(line or "")[len(code) :].strip()
+    unit_pattern = "|".join(sorted(PRODUCT_UNITS, key=len, reverse=True))
+    leading_unit = re.match(
+        rf"^({unit_pattern})(\d+)(?=[A-Z])(.+)$",
+        remainder,
+        re.IGNORECASE,
+    )
+    if leading_unit:
+        name_tokens = _strip_trailing_numeric_tokens(leading_unit.group(3).split())
+        name = _clean_product_name(" ".join(name_tokens))
+        if name:
+            return _product_line(
+                code,
+                name,
+                int(leading_unit.group(2)),
+                leading_unit.group(1),
+            )
+
+    leading_quantity = re.match(r"^(\d+)(?=[A-Z])(.+)$", remainder, re.IGNORECASE)
+    if leading_quantity:
+        payload = leading_quantity.group(2).split()
+        for unit_index in range(len(payload) - 1, 0, -1):
+            unit = payload[unit_index].upper()
+            if unit not in PRODUCT_UNITS:
+                continue
+            if not payload[unit_index + 1 :] or not _is_decimal(payload[unit_index + 1]):
+                continue
+            name = _clean_product_name(" ".join(payload[:unit_index]))
+            if name:
+                return _product_line(
+                    code,
+                    name,
+                    int(leading_quantity.group(1)),
+                    unit,
+                )
+
     match = re.match(
         r"^(\d+)(?=[A-Z])(.+?)(?:\d[\d.,]*)+(KG|BAG|ROLL|PACK|BOX|CTN)\s*$",
         remainder,
@@ -956,11 +1100,16 @@ def _product_line(code, name, quantity, unit):
     return {
         "product_name": _clean_product_name(name),
         "quantity": quantity,
-        "unit": str(unit or "").upper(),
+        "unit": _canonical_product_unit(unit),
         "product_code": code,
         "package_quantity": None,
         "package_unit": None,
     }
+
+
+def _canonical_product_unit(unit):
+    normalized = str(unit or "").upper()
+    return "EACH" if normalized == "EAC" else normalized
 
 
 def _clean_product_name(value):

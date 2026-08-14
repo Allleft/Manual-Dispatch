@@ -23,8 +23,31 @@ export function createDeliveryAttacheImportModal(state, actions) {
   if (!importState.isOpen) {
     return document.createDocumentFragment();
   }
+  const source = state.deliveryDocumentImportState?.source || "attache";
+  if (source === "chooser") {
+    const chooser = createWorkspaceModal(
+      "Import Delivery Document",
+      actions.closeDeliveryAttacheImport,
+      {
+        eyebrow: "Delivery Order Import",
+        subtitle: "Choose the document source to start the matching review workflow.",
+        iconName: "cloud-upload",
+        width: "import",
+      },
+    );
+    chooser.querySelector(".workspace-modal-body").append(
+      createDeliveryImportSourceChooser(actions),
+    );
+    return chooser;
+  }
+  if (source === "docket") {
+    return createDeliveryDocketImportModal(
+      state.deliveryDocketImportState || {},
+      actions,
+    );
+  }
   const modal = createWorkspaceModal(
-    "Import Attache Invoices",
+    "Import Attaché Invoices",
     actions.closeDeliveryAttacheImport,
     {
       eyebrow: "Delivery Order Import",
@@ -46,6 +69,372 @@ export function createDeliveryAttacheImportModal(state, actions) {
     body.append(createDeliveryAttacheFileStep(importState, actions));
   }
   return modal;
+}
+
+export function createDeliveryImportSourceChooser(actions) {
+  const section = document.createElement("section");
+  section.className = "workspace-modal-section workspace-import-source-step";
+  section.append(createSectionHeading(
+    "Select document source",
+    "Each source uses its own parser and keeps its own upload draft.",
+  ));
+  const choices = document.createElement("div");
+  choices.className = "workspace-import-source-grid";
+  choices.append(
+    createImportSourceChoice(
+      "Attaché Invoice",
+      "Import Attaché PDF invoices.",
+      "document",
+      () => actions.chooseDeliveryImportSource("attache"),
+    ),
+    createImportSourceChoice(
+      "Delivery Docket",
+      "Import Delivery Docket DOCX files.",
+      "cloud-upload",
+      () => actions.chooseDeliveryImportSource("docket"),
+    ),
+  );
+  const footer = document.createElement("footer");
+  footer.className = "workspace-modal-footer";
+  footer.append(createActionButton("Cancel", actions.closeDeliveryAttacheImport));
+  section.append(choices, footer);
+  return section;
+}
+
+function createImportSourceChoice(titleText, description, iconName, onSelect) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "workspace-import-source-card";
+  const icon = document.createElement("span");
+  icon.className = "workspace-import-source-icon";
+  icon.append(createIcon(iconName));
+  const copy = document.createElement("span");
+  const title = document.createElement("strong");
+  title.textContent = titleText;
+  const detail = document.createElement("span");
+  detail.textContent = description;
+  copy.append(title, detail);
+  button.append(icon, copy);
+  button.addEventListener("click", onSelect);
+  return button;
+}
+
+export function createDeliveryDocketImportModal(importState, actions) {
+  const modal = createWorkspaceModal(
+    "Import Delivery Dockets",
+    actions.closeDeliveryAttacheImport,
+    {
+      eyebrow: "Delivery Order Import",
+      subtitle: "Upload DOCX dockets, review extracted values, then confirm selected imports.",
+      iconName: "cloud-upload",
+      width: "import",
+    },
+  );
+  const body = modal.querySelector(".workspace-modal-body");
+  if (importState.error) {
+    body.append(createStatus(importState.error, "error"));
+  }
+  if (importState.success) {
+    body.append(createStatus(importState.success, "loading"));
+  }
+  body.append(
+    (importState.step || "files") === "review"
+      ? createDeliveryDocketPreview(importState, actions)
+      : createDeliveryDocketFileStep(importState, actions),
+  );
+  return modal;
+}
+
+export function createDeliveryDocketFileStep(importState, actions) {
+  const controls = document.createElement("section");
+  controls.className = "workspace-modal-section workspace-attache-file-step workspace-docket-file-step";
+  controls.append(createSectionHeading(
+    "Step 1: Select Delivery Dockets",
+    "DOCX files only. Choose one or more Delivery Docket documents.",
+  ));
+  const dropZone = document.createElement("div");
+  dropZone.className = "workspace-attache-dropzone";
+  let dragDepth = 0;
+  const setDragActive = (active) => {
+    dropZone.classList.toggle("workspace-attache-dropzone-active", active);
+  };
+  dropZone.addEventListener("dragenter", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    dragDepth += 1;
+    setDragActive(true);
+  });
+  dropZone.addEventListener("dragover", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = "copy";
+    }
+    setDragActive(true);
+  });
+  dropZone.addEventListener("dragleave", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (!dragDepth) {
+      setDragActive(false);
+    }
+  });
+  dropZone.addEventListener("drop", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    dragDepth = 0;
+    setDragActive(false);
+    actions.updateDeliveryDocketImportFiles(event.dataTransfer?.files || [], {
+      source: "drop",
+    });
+  });
+  const fileInput = document.createElement("input");
+  fileInput.type = "file";
+  fileInput.accept = "application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx";
+  fileInput.multiple = true;
+  fileInput.className = "visually-hidden-file-input";
+  fileInput.id = "delivery-docket-file-input";
+  fileInput.addEventListener("change", () =>
+    actions.updateDeliveryDocketImportFiles(fileInput.files));
+  const fileButton = document.createElement("label");
+  fileButton.className = "button-secondary workspace-action-button workspace-file-select-button";
+  fileButton.setAttribute("for", fileInput.id);
+  fileButton.append(createIcon("document"), document.createTextNode("Choose DOCX files"));
+  const selected = document.createElement("strong");
+  selected.textContent = `${(importState.files || []).length} file${(importState.files || []).length === 1 ? "" : "s"} selected`;
+  const helper = document.createElement("p");
+  helper.className = "workspace-muted";
+  helper.textContent = "Drop DOCX files here, or use Choose DOCX files.";
+  dropZone.append(fileInput, fileButton, selected, helper);
+  const fileList = document.createElement("div");
+  fileList.className = "workspace-attache-file-list";
+  (importState.files || []).forEach((file, index) => {
+    const chip = document.createElement("span");
+    chip.className = "workspace-file-chip";
+    chip.append(document.createTextNode(file.name || `DOCX ${index + 1}`));
+    chip.append(createActionButton(
+      "Remove",
+      () => actions.removeDeliveryDocketImportFile(index),
+      {
+        disabled: importState.isPreviewing,
+        className: "workspace-file-chip-remove",
+      },
+    ));
+    fileList.append(chip);
+  });
+  const footer = document.createElement("footer");
+  footer.className = "workspace-modal-footer";
+  footer.append(
+    createActionButton("Back", actions.backDeliveryImportToSources),
+    createActionButton("Cancel", actions.closeDeliveryAttacheImport),
+    createActionButton("Preview Import", actions.previewDeliveryDocketImport, {
+      iconName: "view",
+      primary: true,
+      disabled: importState.isPreviewing || !(importState.files || []).length,
+    }),
+  );
+  controls.append(dropZone, fileList, footer);
+  return controls;
+}
+
+export function createDeliveryDocketPreview(importState, actions) {
+  const section = document.createElement("section");
+  section.className = "workspace-modal-section workspace-attache-review-step workspace-docket-review-step";
+  const rows = importState.rows || [];
+  section.append(createSectionHeading(
+    "Step 2: Review extracted Delivery Dockets",
+    "Check parsed values, expand rows for edits, then confirm selected imports.",
+  ));
+  if (!rows.length) {
+    section.append(createEmptyState("No Delivery Docket previews yet.", "document"));
+    return section;
+  }
+  section.append(createAttacheSummaryStrip(rows));
+  const toolbar = createDeliveryDocketReviewToolbar(importState, actions);
+  const list = document.createElement("div");
+  list.className = "workspace-attache-review-list workspace-docket-review-list";
+  rows.forEach((row) => {
+    list.append(createDeliveryDocketReviewRow(row, importState, actions));
+  });
+  applyAttacheReviewVisibility(list, importState.search, importState.filter);
+  const selectedCount = rows.filter(
+    (row) => row.selected && row.importable && !row.is_duplicate,
+  ).length;
+  const footer = document.createElement("footer");
+  footer.className = "workspace-modal-footer workspace-modal-footer-sticky";
+  footer.append(
+    createActionButton("Back to files", actions.backDeliveryDocketImportToFiles),
+    createActionButton("Cancel", actions.closeDeliveryAttacheImport),
+    createActionButton(
+      `Confirm Import (${selectedCount} selected)`,
+      actions.commitDeliveryDocketImport,
+      {
+        disabled: importState.isCommitting || selectedCount === 0,
+        primary: true,
+        iconName: "cloud-upload",
+      },
+    ),
+  );
+  section.append(toolbar, list, footer);
+  return section;
+}
+
+export function createDeliveryDocketReviewRow(row, importState, actions) {
+  const card = document.createElement("article");
+  card.className = "workspace-attache-review-card workspace-docket-review-card";
+  card.dataset.invoiceReviewId = row.row_id;
+  card.dataset.docketReviewId = row.row_id;
+  card.dataset.invoiceSearch = [
+    row.docket_number,
+    row.docket_reference,
+    row.invoice_number,
+    row.order_no,
+    row.company_name,
+    row.suburb,
+    row.note,
+  ].map((value) => String(value || "").toLowerCase()).join(" ");
+  card.dataset.invoiceStatus = attacheRowStatus(row).toUpperCase().replaceAll(" ", "_");
+  card.dataset.invoiceSelected = row.selected ? "true" : "false";
+  const expanded = Boolean((importState.expandedRowIds || {})[row.row_id]);
+  const status = attacheRowStatus(row);
+  const header = document.createElement("div");
+  header.className = "workspace-attache-review-header";
+  const checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.checked = Boolean(row.selected);
+  checkbox.disabled = importState.isCommitting || row.is_duplicate || !row.importable;
+  checkbox.setAttribute(
+    "aria-label",
+    `Select Delivery Docket ${formatOptional(row.docket_number, row.row_id)}`,
+  );
+  checkbox.addEventListener("change", () =>
+    actions.toggleDeliveryDocketImportRow(row.row_id, checkbox.checked));
+  const summary = document.createElement("div");
+  summary.className = "workspace-attache-review-summary";
+  summary.append(
+    createBadge(status),
+    createInlineMeta("Docket", row.docket_number),
+    createInlineMeta("Invoice", row.invoice_number),
+    createInlineMeta("Invoice Date", row.invoice_date),
+    createInlineMeta("Order", row.order_no),
+    createInlineMeta("Customer", row.company_name),
+    createInlineMeta("Suburb", row.suburb),
+    createInlineMeta("Delivery Date", row.delivery_date),
+    createInlineMeta(
+      "Load",
+      (row.pallet_quantity || 0) + " pallets / "
+        + (row.loose_bags_quantity || 0) + " bags / "
+        + (row.carton_quantity || 0) + " cartons",
+    ),
+  );
+  const warning = document.createElement("p");
+  warning.className = "workspace-attache-warning-summary";
+  warning.textContent = row.is_duplicate
+    ? "Duplicate invoice already exists and cannot be selected."
+    : (row.warnings || []).join("; ");
+  const expand = createActionButton(expanded ? "Collapse" : "Expand", () => {
+    const scrollBody = card.closest(".workspace-modal-body");
+    const scrollTop = scrollBody?.scrollTop || 0;
+    const nextImportState = actions.toggleDeliveryDocketImportExpanded(row.row_id);
+    const currentRow = (nextImportState?.rows || []).find(
+      (candidate) => candidate.row_id === row.row_id,
+    ) || row;
+    const replacement = createDeliveryDocketReviewRow(
+      currentRow,
+      nextImportState || importState,
+      actions,
+    );
+    card.replaceWith(replacement);
+    replacement.querySelector("button")?.focus({ preventScroll: true });
+    if (scrollBody) {
+      scrollBody.scrollTop = scrollTop;
+    }
+  });
+  expand.setAttribute("aria-expanded", String(expanded));
+  header.append(checkbox, summary, expand);
+  card.append(header);
+  if (warning.textContent) {
+    card.append(warning);
+  }
+  if (expanded) {
+    card.append(createDeliveryDocketExpandedEditor(row, actions));
+  }
+  return card;
+}
+
+export function createDeliveryDocketExpandedEditor(row, actions) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "workspace-attache-expanded-editor workspace-docket-expanded-editor";
+  wrapper.append(
+    createFormSection("Source Information", [
+      createInlineMeta("Source Filename", row.source_filename),
+      createInlineMeta("Delivery Docket Number", row.docket_number),
+      createInlineMeta("Docket Reference", row.docket_reference),
+      createInlineMeta("Delivery Mode", row.delivery_mode),
+    ]),
+    createAttacheExpandedEditor(row, docketActionAdapter(actions)),
+  );
+  return wrapper;
+}
+
+function docketActionAdapter(actions) {
+  return {
+    updateDeliveryAttacheImportRow: actions.updateDeliveryDocketImportRow,
+    updateDeliveryAttacheImportProductLine: actions.updateDeliveryDocketImportProductLine,
+    addDeliveryAttacheImportProductLine: actions.addDeliveryDocketImportProductLine,
+    removeDeliveryAttacheImportProductLine: actions.removeDeliveryDocketImportProductLine,
+  };
+}
+
+export function createDeliveryDocketReviewToolbar(importState, actions) {
+  const toolbar = document.createElement("div");
+  toolbar.className = "workspace-attache-review-toolbar";
+  const selection = document.createElement("div");
+  selection.className = "workspace-action-row workspace-attache-selection-row";
+  selection.append(
+    createActionButton("Select all ready", actions.selectAllReadyDeliveryDocketRows),
+    createActionButton("Clear selection", actions.clearDeliveryDocketImportSelection),
+  );
+  const display = document.createElement("div");
+  display.className = "workspace-attache-display-controls";
+  const filter = document.createElement("select");
+  filter.setAttribute("aria-label", "Filter Delivery Docket reviews");
+  [
+    ["ALL", "All dockets"],
+    ["READY", "Ready"],
+    ["WARNING", "Warning"],
+    ["DUPLICATE", "Duplicate"],
+    ["NOT_IMPORTABLE", "Not importable"],
+    ["SELECTED", "Selected"],
+  ].forEach(([value, label]) => {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = label;
+    filter.append(option);
+  });
+  filter.value = importState.filter || "ALL";
+  const search = document.createElement("input");
+  search.type = "search";
+  search.placeholder = "Search docket, invoice, order or customer";
+  search.setAttribute("aria-label", "Search Delivery Docket reviews");
+  search.value = importState.search || "";
+  const refresh = () => applyAttacheReviewVisibility(
+    toolbar.parentElement?.querySelector(".workspace-attache-review-list"),
+    search.value,
+    filter.value,
+  );
+  search.addEventListener("input", () => {
+    actions.updateDeliveryDocketReviewSearch(search.value);
+    refresh();
+  });
+  filter.addEventListener("change", () => {
+    actions.updateDeliveryDocketReviewFilter(filter.value);
+    refresh();
+  });
+  display.append(filter, search);
+  toolbar.append(selection, display);
+  return toolbar;
 }
 
 export function createDeliveryAttacheFileStep(importState, actions) {
@@ -121,6 +510,7 @@ export function createDeliveryAttacheFileStep(importState, actions) {
   const footer = document.createElement("footer");
   footer.className = "workspace-modal-footer";
   footer.append(
+    createActionButton("Back", actions.backDeliveryImportToSources),
     createActionButton("Cancel", actions.closeDeliveryAttacheImport),
     createActionButton("Preview Import", actions.previewDeliveryAttacheImport, {
       iconName: "view",

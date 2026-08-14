@@ -1,3 +1,5 @@
+const MAX_ATTACHE_IMPORT_FILES = 30;
+
 export function createDeliveryAttacheActions(context) {
   const {
     api,
@@ -14,25 +16,77 @@ export function createDeliveryAttacheActions(context) {
 
   function openDeliveryAttacheImport() {
     invalidateDeliveryAttachePreview();
+    context.actions.invalidateDeliveryDocketPreview?.();
     state.deliveryAttacheImportState = {
       ...defaultDeliveryAttacheImportState(),
       isOpen: true,
     };
+    state.deliveryDocumentImportState = {
+      isOpen: true,
+      source: "chooser",
+    };
+    state.deliveryDocketImportState = context.actions.defaultDeliveryDocketImportState?.()
+      || defaultDeliveryDocketImportStateFallback();
     renderWorkspace();
   }
 
   function closeDeliveryAttacheImport() {
-    if (hasDeliveryAttacheDraft() && !confirmAction("Discard the current Attaché invoice import?")) {
+    const hasDocketDraft = context.actions.hasDeliveryDocketDraft?.() || false;
+    if (
+      (hasDeliveryAttacheDraft() || hasDocketDraft)
+      && !confirmAction("Discard the current Delivery Document import?")
+    ) {
       return;
     }
     invalidateDeliveryAttachePreview();
+    context.actions.invalidateDeliveryDocketPreview?.();
     state.deliveryAttacheImportState = defaultDeliveryAttacheImportState();
+    state.deliveryDocumentImportState = {
+      isOpen: false,
+      source: "chooser",
+    };
+    state.deliveryDocketImportState = context.actions.defaultDeliveryDocketImportState?.()
+      || defaultDeliveryDocketImportStateFallback();
+    renderWorkspace();
+  }
+
+  function chooseDeliveryImportSource(source) {
+    if (!["attache", "docket"].includes(source)) {
+      return;
+    }
+    state.deliveryDocumentImportState = {
+      isOpen: true,
+      source,
+    };
+    renderWorkspace();
+  }
+
+  function backDeliveryImportToSources() {
+    invalidateDeliveryAttachePreview();
+    context.actions.invalidateDeliveryDocketPreview?.();
+    state.deliveryDocumentImportState = {
+      isOpen: true,
+      source: "chooser",
+    };
     renderWorkspace();
   }
 
   function updateDeliveryAttacheImportFiles(files, { source = "chooser" } = {}) {
     invalidateDeliveryAttachePreview();
     const selectedFiles = Array.from(files || []);
+    if (selectedFiles.length > MAX_ATTACHE_IMPORT_FILES) {
+      state.deliveryAttacheImportState = {
+        ...(state.deliveryAttacheImportState || defaultDeliveryAttacheImportState()),
+        files: [],
+        rows: [],
+        step: "files",
+        expandedRowIds: {},
+        error: "You can import up to 30 files at a time.",
+        success: "",
+      };
+      renderWorkspace();
+      return;
+    }
     const pdfFiles = selectedFiles.filter(isPdfFile);
     const rejectedCount = selectedFiles.length - pdfFiles.length;
     let error = "";
@@ -366,9 +420,26 @@ export function createDeliveryAttacheActions(context) {
     return type === "application/pdf" || name.endsWith(".pdf");
   }
 
+  function defaultDeliveryDocketImportStateFallback() {
+    return {
+      isPreviewing: false,
+      isCommitting: false,
+      step: "files",
+      files: [],
+      rows: [],
+      expandedRowIds: {},
+      search: "",
+      filter: "ALL",
+      error: "",
+      success: "",
+    };
+  }
+
   return {
     openDeliveryAttacheImport,
     closeDeliveryAttacheImport,
+    chooseDeliveryImportSource,
+    backDeliveryImportToSources,
     updateDeliveryAttacheImportFiles,
     removeDeliveryAttacheImportFile,
     previewDeliveryAttacheImport,

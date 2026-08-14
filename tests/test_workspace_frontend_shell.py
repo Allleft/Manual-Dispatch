@@ -330,7 +330,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             "Add Pickup Task",
             "Apply Assignment Changes",
             "Add Order",
-            "Import Attache Invoices",
+            "Import Delivery Document",
             "Driver & Vehicle Specification",
             "Pickup workspace date",
             "Dispatch board date",
@@ -559,7 +559,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             "Notes",
             "Clear filters",
             "Add Order",
-            "Import Attache Invoices",
+            "Import Delivery Document",
             "Driver & Vehicle Specification",
             "Delivery Order",
             "General Information",
@@ -807,6 +807,65 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             """
         )
 
+    def test_attache_file_selection_accepts_30_and_rejects_31_without_preview(self):
+        self._run_delivery_attache_actions_script(
+            """
+            const state = {
+              workspaceRoute: "delivery/task-pool",
+              activeWorkspace: "delivery",
+              isLoggedIn: true,
+              authSessionVersion: 1,
+              dispatchDate: "2026-08-13",
+              deliveryAttacheImportState: {
+                isOpen: true, step: "files", files: [], rows: [], expandedRowIds: {},
+                error: "", success: "",
+              },
+            };
+            let previewCalls = 0;
+            const context = {
+              state,
+              renderWorkspace: () => {},
+              api: {
+                previewDeliveryAttacheInvoices: async (files) => {
+                  previewCalls += 1;
+                  return { rows: files.map((_file, index) => ({
+                    row_id: `ROW-${index}`, selected: true, importable: true, is_duplicate: false,
+                  })) };
+                },
+              },
+              deliveryAttachePreviewRequestVersion: 0,
+              actions: {},
+            };
+            context.actions.captureMutationContext = () => ({
+              route: state.workspaceRoute,
+              dispatchDate: state.dispatchDate,
+              activeWorkspace: state.activeWorkspace,
+              authSessionVersion: state.authSessionVersion,
+            });
+            context.actions.isDeliveryMutationCurrent = () => true;
+            const actions = createDeliveryAttacheActions(context);
+            const pdf = (index) => ({ name: `invoice-${index}.pdf`, type: "application/pdf" });
+
+            actions.updateDeliveryAttacheImportFiles(Array.from({ length: 30 }, (_item, index) => pdf(index)));
+            if (state.deliveryAttacheImportState.files.length !== 30 || state.deliveryAttacheImportState.error) {
+              throw new Error("exactly 30 Attaché files were not accepted");
+            }
+            await actions.previewDeliveryAttacheImport();
+            if (previewCalls !== 1 || state.deliveryAttacheImportState.rows.length !== 30) {
+              throw new Error("30-file Attaché preview did not use one batch request");
+            }
+
+            actions.updateDeliveryAttacheImportFiles(Array.from({ length: 31 }, (_item, index) => pdf(index)));
+            if (state.deliveryAttacheImportState.files.length !== 0
+                || state.deliveryAttacheImportState.rows.length !== 0
+                || state.deliveryAttacheImportState.error !== "You can import up to 30 files at a time.") {
+              throw new Error("31-file Attaché selection was not rejected as a whole batch");
+            }
+            await actions.previewDeliveryAttacheImport();
+            if (previewCalls !== 1) throw new Error("rejected Attaché batch reached Preview API");
+            """
+        )
+
     def test_attache_preview_is_invalidated_by_close_files_and_navigation(self):
         self._run_workspace_actions_script(
             """
@@ -922,8 +981,8 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         )[1].split("function createOrderCard", 1)[0]
         self.assertIn("Delivery Orders", panel_block)
         self.assertNotIn("Filter active unassigned Orders", panel_block)
-        self.assertLess(panel_block.index('"Add Order"'), panel_block.index('"Import Attache Invoices"'))
-        self.assertLess(panel_block.index('"Import Attache Invoices"'), panel_block.index('"Driver & Vehicle Specification"'))
+        self.assertLess(panel_block.index('"Add Order"'), panel_block.index('"Import Delivery Document"'))
+        self.assertLess(panel_block.index('"Import Delivery Document"'), panel_block.index('"Driver & Vehicle Specification"'))
         self.assertIn("createOrderAssignmentControls", self.delivery_renderer)
         self.assertIn('"Driver"', self.delivery_renderer)
         self.assertIn('"Trip"', self.delivery_renderer)
@@ -3303,11 +3362,20 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             const assignedPayloads = [];
             const generatedPayloads = [];
             const navigatedRoutes = [];
+            let tripSummaryLoads = 0;
             const api = {
               getWorkspaceMigrationStatus: async () => ({}),
               getDeliveryWorkspaceBoard: async () => state.deliveryBoard,
+              getDeliveryTripSummary: async ({ deliveryDate }) => {
+                tripSummaryLoads += 1;
+                return { ...state.deliveryBoard, delivery_date: deliveryDate };
+              },
               getOpShopWorkspaceBoard: async () => state.opshopBoard,
               listDeliveryRunSheets: async () => [],
+              listDeliveryRunSheetsByDeliveryDate: async (deliveryDate) =>
+                generatedPayloads.length
+                  ? [{ run_sheet_id: "DRS-1", delivery_date: deliveryDate, status: "GENERATED" }]
+                  : [],
               listOpShopPickupCollections: async () => [],
               assignDeliveryWorkspaceOrder: async (payload) => {
                 assignedPayloads.push(payload);
@@ -3330,7 +3398,8 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
               },
             });
 
-            actions.updateDeliveryTripSummaryDate("2026-06-22");
+            window.location.hash = "#delivery/trip-summary";
+            await actions.updateDeliveryTripSummaryDate("2026-06-22");
             if (state.deliveryTripSummaryDate !== "2026-06-22") {
               throw new Error("Trip Summary rejected historical delivery date");
             }
@@ -3370,18 +3439,30 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
                 generatedPayloads[0].driver_id !== "D001") {
               throw new Error("Generate Run Sheet payload was not scoped correctly");
             }
-            if (state.workspaceRoute !== "delivery/run-sheet" ||
-                window.location.hash !== "#delivery/run-sheet" ||
-                navigatedRoutes.join(",") !== "delivery/run-sheet") {
-              throw new Error("Generate did not navigate to Delivery Run Sheets");
+            if (state.workspaceRoute !== "delivery/trip-summary" ||
+                window.location.hash !== "#delivery/trip-summary" ||
+                navigatedRoutes.length !== 0) {
+              throw new Error("Generate left Trip Summary or changed its browser route");
             }
+            if (state.deliveryTripSummaryDate !== "2026-06-22" || tripSummaryLoads !== 2) {
+              throw new Error("Generate did not reload the selected Trip Summary date exactly once");
+            }
+            if (state.deliveryGenerationConfirmation !== null ||
+                state.deliveryTripSummaryRunSheets[0]?.run_sheet_id !== "DRS-1") {
+              throw new Error("Generate did not close confirmation and expose the generated sheet");
+            }
+
             """
+        )
+        self.assertIn(
+            '{ route: "delivery/run-sheet", label: "Run Sheets" }',
+            self.delivery_renderer,
         )
 
     def test_delivery_generate_ignores_dispatch_changes_but_rejects_stale_routes(self):
         self._run_workspace_actions_script(
             """
-            async function runScenario(mutator, shouldNavigate) {
+            async function runScenario(mutator, shouldReload) {
               const state = {
                 isLoggedIn: true,
                 workspaceRoute: "delivery/trip-summary",
@@ -3402,10 +3483,16 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
                 countrysideRouteGroupDrafts: {},
               };
               let resolveGenerate;
+              let tripSummaryLoads = 0;
               const api = {
                 createGeneratedDeliveryRunSheet: async () => new Promise((resolve) => {
                   resolveGenerate = () => resolve({ run_sheet_id: "DRS-1" });
                 }),
+                getDeliveryTripSummary: async () => {
+                  tripSummaryLoads += 1;
+                  return state.deliveryBoard;
+                },
+                listDeliveryRunSheetsByDeliveryDate: async () => [{ run_sheet_id: "DRS-1" }],
               };
               const navigatedRoutes = [];
               const actions = createWorkspaceActions({
@@ -3428,11 +3515,14 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
               mutator(state);
               resolveGenerate();
               await pending;
-              if (shouldNavigate && navigatedRoutes.join(",") !== "delivery/run-sheet") {
+              if (navigatedRoutes.length !== 0) {
+                throw new Error("Generate response navigated unexpectedly");
+              }
+              if (shouldReload && tripSummaryLoads !== 1) {
                 throw new Error("Dispatch-only change incorrectly made Generate stale");
               }
-              if (!shouldNavigate && navigatedRoutes.length !== 0) {
-                throw new Error("Stale route Generate response navigated unexpectedly");
+              if (!shouldReload && tripSummaryLoads !== 0) {
+                throw new Error("Stale route Generate response reloaded an obsolete route");
               }
             }
 
@@ -3479,6 +3569,10 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
                   deliveryCalls += 1;
                   return deliveryGate.promise;
                 },
+                getDeliveryTripSummary: async () => deliveryState.deliveryBoard,
+                listDeliveryRunSheetsByDeliveryDate: async () => [
+                  { run_sheet_id: "DRS-1", status: "GENERATED" },
+                ],
               },
               navigateWorkspaceRoute: (route) => {
                 deliveryRoutes.push(route);
@@ -3511,8 +3605,11 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             }
             deliveryGate.resolve({ run_sheet_id: "DRS-1" });
             await Promise.all([firstDeliveryConfirm, secondDeliveryConfirm]);
-            if (deliveryRoutes.join(",") !== "delivery/run-sheet") {
-              throw new Error("Delivery confirmed Generate did not continue existing navigation");
+            if (deliveryRoutes.length !== 0
+                || deliveryState.workspaceRoute !== "delivery/trip-summary"
+                || deliveryState.deliveryGenerationConfirmation !== null
+                || deliveryState.deliveryTripSummaryRunSheets[0]?.run_sheet_id !== "DRS-1") {
+              throw new Error("Delivery confirmed Generate did not stay and reload Trip Summary");
             }
 
             const opshopGate = deferred();

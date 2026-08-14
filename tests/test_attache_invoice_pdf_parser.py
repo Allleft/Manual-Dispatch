@@ -1036,6 +1036,148 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
             with self.subTest(footer=footer):
                 self.assertTrue(_is_stop_marker(footer))
 
+    def test_real_packet_layout_185526_maps_packet_metadata_to_one_product(self):
+        parsed = parse_attache_invoice_text(
+            """
+            Invoice No
+            185526
+            Order NoDate
+            12/08/26 LOTHEI PO-1677
+            Invoice to:
+            LOTUS COMMERCIAL PTY LTD - MEL
+            2/58 DOUGHARTY RD
+            HEIDELBERG 3084
+            Deliver to:
+            LOTUS COMMERCIAL PTY LTD - MEL
+            2/58 DOUGHARTY RD
+            HEIDELBERG
+            Tax Invoice
+            1300 653 536
+            3084
+            Code Description Price Per Net Amt+GST
+            RBATH KG450COLOURED TOWEL MIX #10 2.300 1,138.50 1035.00 103.50
+            BAG10 45PLASTIC BAG 10 kg 0.000 0.00 0.00 0.00
+            MIC-MICROF 250MICRO FIBRE CLOTH 40 X 40 EACH 1.090 299.75 272.50 27.25
+            PKT PKT1025 PIECES IN A PACKET 0.000 0.00 0.00 0.00
+            10 PACKETS
+            PAL PLT1PALLET 0.000 0.00 0.00 0.00
+            DEL DEL1DELIVERY /FUEL LEVY CHARGE 10.000 11.00 10.00 1.00
+            """,
+            source_filename="sanitized-185526.txt",
+            import_date=date(2026, 8, 13),
+        )
+
+        self.assertEqual("185526", parsed.invoice_number)
+        self.assertEqual("2026-08-12", parsed.invoice_date)
+        self.assertEqual("PO-1677", parsed.order_no)
+        self.assertEqual("LOTUS COMMERCIAL PTY LTD - MEL", parsed.company_name)
+        self.assertEqual("1300 653 536", parsed.phone)
+        self.assertEqual("2/58 DOUGHARTY RD", parsed.delivery_address)
+        self.assertEqual("HEIDELBERG", parsed.suburb)
+        self.assertEqual("3084", parsed.postcode)
+        self.assertEqual("2026-08-14", parsed.delivery_date)
+        self.assertEqual(1, parsed.pallet_quantity)
+        self.assertEqual(0, parsed.loose_bags_quantity)
+        self.assertEqual(0, parsed.carton_quantity)
+        self.assertEqual(2, len(parsed.product_lines))
+        self.assert_product(
+            parsed.product_lines[0],
+            "RBATH",
+            "COLOURED TOWEL MIX #10",
+            450,
+            "KG",
+            45,
+            "BAG10",
+        )
+        self.assert_product(
+            parsed.product_lines[1],
+            "MIC-MICROF",
+            "MICRO FIBRE CLOTH 40 X 40",
+            250,
+            "EACH",
+            10,
+            "PKT25",
+        )
+        packet_warning_text = " ".join(parsed.warnings).upper()
+        self.assertNotIn("PKT", packet_warning_text)
+        self.assertNotIn("PACKET", packet_warning_text)
+
+    def test_packet_summary_variants_confirm_structural_packet_packaging(self):
+        for summary in ("10 PACKETS", "10 PACKET", "10 PKT"):
+            with self.subTest(summary=summary):
+                parsed = parse_attache_invoice_text(
+                    f"""
+                    Invoice No 199101
+                    Invoice Date 12/08/26
+                    Invoice to:
+                    PACKET TEST CUSTOMER
+                    1 TEST ROAD
+                    RICHMOND 3121
+                    Deliver to:
+                    PACKET TEST CUSTOMER
+                    1 TEST ROAD
+                    RICHMOND
+                    3121
+                    Code Description Price Per Net Amt+GST
+                    MICRO 250MICRO FIBRE CLOTH EACH 1.000 1.00 1.00 0.00
+                    PKT 25 PIECES PER PACKET 0.000 0.00 0.00 0.00
+                    {summary}
+                    """,
+                    source_filename="packet-summary.txt",
+                    import_date=date(2026, 8, 13),
+                )
+
+                self.assertEqual(1, len(parsed.product_lines))
+                self.assert_product(
+                    parsed.product_lines[0],
+                    "MICRO",
+                    "MICRO FIBRE CLOTH",
+                    250,
+                    "EACH",
+                    10,
+                    "PKT25",
+                )
+                self.assertEqual(0, parsed.loose_bags_quantity)
+                self.assertFalse(any("Unclassified" in warning for warning in parsed.warnings))
+
+    def test_packet_descriptor_and_summary_mismatch_requires_review_warning(self):
+        parsed = parse_attache_invoice_text(
+            """
+            Invoice No 199102
+            Invoice Date 12/08/26
+            Invoice to:
+            PACKET TEST CUSTOMER
+            1 TEST ROAD
+            RICHMOND 3121
+            Deliver to:
+            PACKET TEST CUSTOMER
+            1 TEST ROAD
+            RICHMOND
+            3121
+            Code Description Price Per Net Amt+GST
+            MICRO 250MICRO FIBRE CLOTH EAC 1.000 1.00 1.00 0.00
+            PKT 25 PIECES IN A PACKET 8 PKT 0.000 0.00 0.00 0.00
+            10 PACKETS
+            """,
+            source_filename="packet-mismatch.txt",
+            import_date=date(2026, 8, 13),
+        )
+
+        self.assert_product(
+            parsed.product_lines[0],
+            "MICRO",
+            "MICRO FIBRE CLOTH",
+            250,
+            "EACH",
+            8,
+            "PKT25",
+        )
+        self.assertEqual(0, parsed.loose_bags_quantity)
+        self.assertTrue(
+            any("packet quantity mismatch" in warning.lower() for warning in parsed.warnings),
+            parsed.warnings,
+        )
+
     def test_explicit_delivery_date_overrides_import_date_default(self):
         parsed = parse_attache_invoice_text(
             """

@@ -938,6 +938,21 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertEqual("Daily Run Sheet", worksheet.title)
         self.assertEqual("landscape", worksheet.page_setup.orientation)
         self.assertEqual(str(worksheet.PAPERSIZE_A4), str(worksheet.page_setup.paperSize))
+        self.assertEqual(1, worksheet.page_setup.fitToWidth)
+        self.assertEqual(1, worksheet.page_setup.fitToHeight)
+        self.assertEqual(16, worksheet["A1"].font.sz)
+        for coordinate in ("C1", "F1"):
+            self.assertEqual(11, worksheet[coordinate].font.sz)
+        self.assertEqual(14, worksheet["L1"].font.sz)
+        self.assertEqual(9, worksheet["A8"].font.sz)
+        self.assertEqual(8.5, worksheet["B9"].font.sz)
+        self.assertEqual(7.5, worksheet["E9"].font.sz)
+        self.assertEqual(8.5, worksheet["B12"].font.sz)
+        self.assertEqual(21, worksheet.row_dimensions[8].height)
+        self.assertAlmostEqual(0.118, worksheet.page_margins.left, places=3)
+        self.assertAlmostEqual(0.197, worksheet.page_margins.right, places=3)
+        self.assertAlmostEqual(0.394, worksheet.page_margins.top, places=3)
+        self.assertAlmostEqual(0.157, worksheet.page_margins.bottom, places=3)
 
         values = [
             cell.value
@@ -965,11 +980,9 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertNotIn("Product Details", values)
         self.assertNotIn("Order #", values)
         self.assertEqual("DRIVER: John", worksheet["F1"].value)
-        self.assertEqual("REGO #: ABC123", worksheet["K1"].value)
+        self.assertEqual("REGO #: ABC123", worksheet["L1"].value)
         merged_ranges = {str(cell_range) for cell_range in worksheet.merged_cells.ranges}
-        self.assertTrue(
-            {"A1:B1", "C1:E1", "F1:J1", "K1:N1"}.issubset(merged_ranges)
-        )
+        self.assertEqual({"B5:E5", "F5:N5"}, merged_ranges)
 
         header_row = [cell.value for cell in worksheet[8]]
         self.assertEqual(
@@ -987,14 +1000,17 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
                 "Time Out",
                 "PRINT NAME",
                 "SIGNATURE",
-                "NO. # PALLETS RETND",
+                "RETND",
             ],
             header_row,
         )
         self.assertEqual(14, worksheet.max_column)
         self.assertIn("$A$1:$N$28", worksheet.print_area)
         self.assertEqual("$7:$8", worksheet.print_title_rows)
-        self.assertEqual(55, worksheet.column_dimensions["E"].width)
+        self.assertEqual(
+            [3.855, 27.57, 15, 12, 16, 5.57, 6.855, 5.855, 3, 8, 8, 12.57, 17.285, 7.71],
+            [worksheet.column_dimensions[column].width for column in "ABCDEFGHIJKLMN"],
+        )
 
         rows = list(worksheet.iter_rows(values_only=True))
         customer_a_index = next(
@@ -1008,9 +1024,9 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertEqual(1, customer_a_row[0])
         self.assertEqual("INV-1001", customer_a_row[3])
         self.assertEqual(
-            "1. [RWIND] Snapshot Alpha Product - 450 KG | Packaging: 45 BAG10\n"
-            "2. Snapshot Beta Product - 3 BAGS\n"
-            "3. Snapshot Alpha Product - 1 PALLETS",
+            "RWIND - 45 BAG10\n"
+            "Snapshot Beta Product - 3 BAGS\n"
+            "Snapshot Alpha Product - 1 PALLETS",
             customer_a_row[4],
         )
         self.assertEqual(450, customer_a_row[5])
@@ -1023,7 +1039,8 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertFalse(
             worksheet.cell(row=customer_a_index + 1, column=5).alignment.shrink_to_fit
         )
-        self.assertGreaterEqual(worksheet.row_dimensions[customer_a_index + 1].height, 30)
+        self.assertGreater(worksheet.row_dimensions[customer_a_index + 1].height, 21.95)
+        self.assertLessEqual(worksheet.row_dimensions[customer_a_index + 1].height, 60)
         for manual_column in range(7, 14):
             self.assertIsNone(customer_a_row[manual_column])
 
@@ -1133,7 +1150,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             "Time Out",
             "PRINT NAME",
             "SIGNATURE",
-            "NO. # PALLETS RETND",
+            "RETND",
         ]
         for worksheet in workbook.worksheets:
             self.assertEqual("landscape", worksheet.page_setup.orientation)
@@ -1142,7 +1159,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
                 str(worksheet.page_setup.paperSize),
             )
             self.assertEqual(1, worksheet.page_setup.fitToWidth)
-            self.assertEqual(0, worksheet.page_setup.fitToHeight)
+            self.assertEqual(1, worksheet.page_setup.fitToHeight)
             self.assertEqual("$7:$8", worksheet.print_title_rows)
             self.assertEqual(expected_headers, [cell.value for cell in worksheet[8]])
             self.assertEqual(14, worksheet.max_column)
@@ -1150,7 +1167,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             self.assertEqual("DAILY RUN SHEET", worksheet["A1"].value)
             self.assertEqual("DATE  05/05/2026", worksheet["C1"].value)
             self.assertTrue(str(worksheet["F1"].value).startswith("DRIVER: "))
-            self.assertTrue(str(worksheet["K1"].value).startswith("REGO #: "))
+            self.assertTrue(str(worksheet["L1"].value).startswith("REGO #: "))
             values = [
                 cell.value
                 for row in worksheet.iter_rows()
@@ -1170,7 +1187,9 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             self.assertIn("Time Out", values)
             self.assertIn("PRINT NAME", values)
             self.assertIn("SIGNATURE", values)
-            self.assertIn("NO. # PALLETS RETND", values)
+            self.assertIn("NO. #", values)
+            self.assertIn("PALLETS", values)
+            self.assertIn("RETND", values)
             self.assertFalse(any(str(value).startswith("Edited Live") for value in values))
 
         john_rows = list(workbook["John"].iter_rows(values_only=True))
@@ -1179,9 +1198,9 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertEqual("Demo Customer C", john_rows[9][1])
         self.assertEqual("INV-1001", john_rows[8][3])
         self.assertEqual(
-            "1. [RWIND] Snapshot Alpha Product - 450 KG | Packaging: 45 BAG10\n"
-            "2. Snapshot Beta Product - 3 BAGS\n"
-            "3. Snapshot Alpha Product - 9 PALLETS",
+            "RWIND - 45 BAG10\n"
+            "Snapshot Beta Product - 3 BAGS\n"
+            "Snapshot Alpha Product - 9 PALLETS",
             john_rows[8][4],
         )
         self.assertEqual(450, john_rows[8][5])
@@ -1193,9 +1212,9 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertGreater(workbook["John"].column_dimensions["B"].width, 25)
         self.assertNotIn("Edited Live Product ORD-001", self._workbook_values(response.content))
         self.assertEqual("DRIVER: John", workbook["John"]["F1"].value)
-        self.assertEqual("REGO #: ABC123", workbook["John"]["K1"].value)
+        self.assertEqual("REGO #: ABC123", workbook["John"]["L1"].value)
         self.assertEqual("DRIVER: Tony", workbook["Tony"]["F1"].value)
-        self.assertEqual("REGO #: XYZ888", workbook["Tony"]["K1"].value)
+        self.assertEqual("REGO #: XYZ888", workbook["Tony"]["L1"].value)
         self.assertNotIn("EDITED-LIVE-REGO", self._workbook_values(response.content))
 
         statuses = {
@@ -1235,7 +1254,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             self.dispatch_date,
         )
         no_rego_workbook = load_workbook(BytesIO(no_rego_bytes))
-        self.assertEqual("REGO #: Not selected", no_rego_workbook.active["K1"].value)
+        self.assertEqual("REGO #: Not selected", no_rego_workbook.active["L1"].value)
 
     def test_delivery_run_sheet_product_display_prefers_snapshot_lines(self):
         order = DeliveryRunSheetOrderSnapshot(
@@ -1256,21 +1275,35 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             note_snapshot=None,
             product_lines_snapshot=[
                 ProductDetailLine(
-                    "Product A",
-                    450,
+                    "COLOR TSHIRT RAGS",
+                    200,
                     "KG",
-                    product_code="RWIND",
-                    package_quantity=45,
+                    product_code="RSING",
+                    package_quantity=20,
                     package_unit="BAG10",
                 ),
+                ProductDetailLine(
+                    "MICRO FIBRE CLOTH 40 X 40",
+                    250,
+                    "EACH",
+                    product_code="MIC-MICROF",
+                    package_quantity=10,
+                    package_unit="PKT25",
+                ),
+                ProductDetailLine(
+                    "SHTS x 72 ROLLS",
+                    180,
+                    "BAG",
+                    product_code="FIN-3PLY",
+                ),
                 ProductDetailLine("Product B", 2, "BAGS"),
-                ProductDetailLine("Product A", 3, "BAGS"),
             ],
         )
         self.assertEqual(
-            "1. [RWIND] Product A - 450 KG | Packaging: 45 BAG10\n"
-            "2. Product B - 2 BAGS\n"
-            "3. Product A - 3 BAGS",
+            "RSING - 20 BAG10\n"
+            "MIC-MICROF - 10 PKT25\n"
+            "FIN-3PLY - 180 BAG\n"
+            "Product B - 2 BAGS",
             delivery_run_sheet_product_display(order),
         )
 
@@ -1279,6 +1312,115 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
 
         order.product_snapshot = "  "
         self.assertEqual("", delivery_run_sheet_product_display(order))
+
+    def test_delivery_export_keeps_all_compact_bag_and_packet_lines_on_one_page(self):
+        def order_snapshot(row_no, company_name, product_lines):
+            return DeliveryRunSheetOrderSnapshot(
+                row_id=f"ROW-{row_no}",
+                trip_no="trip1",
+                row_no=row_no,
+                task_type="ORDER",
+                task_id=f"ORDER-{row_no}",
+                order_id_snapshot=f"ORDER-{row_no}",
+                invoice_number_snapshot=f"1855{row_no:02d}",
+                order_no_snapshot=None,
+                company_name_snapshot=company_name,
+                suburb_snapshot="Melbourne",
+                delivery_address_snapshot="Address",
+                product_snapshot=None,
+                pallet_quantity_snapshot=1,
+                loose_bags_quantity_snapshot=0,
+                note_snapshot=None,
+                product_lines_snapshot=product_lines,
+            )
+
+        south_east_sands = order_snapshot(
+            1,
+            "South East Sands",
+            [
+                ProductDetailLine("COLOR RAGS 5KG BAG", 1, "BAG", "RSING5KG", 1, "BAG5"),
+                ProductDetailLine("WHITE T-SHIRT RAGS 10KG NET", 1, "BAG", "RWTSHIRT10", 1, "BAG10"),
+                ProductDetailLine("FLANNEL RAGS 10KG", 1, "BAG", "RFLAN10KG", 1, "BAG10"),
+                ProductDetailLine("WHITE BATH TOWEL 10KG NET", 1, "BAG", "RWBATH10KG", 1, "BAG10"),
+                ProductDetailLine("COLOUR BATH TOWEL 10KG", 1, "BAG", "RBATH10KG", 1, "BAG10"),
+            ],
+        )
+        rotary_tools = order_snapshot(
+            2,
+            "ROTARY TOOLS",
+            [
+                ProductDetailLine("WORKSHOP MIX #29", 300, "KG", "RWORK", 30, "BAG10"),
+                ProductDetailLine("WHITE COTTON #1", 200, "KG", "RWCOTT", 20, "BAG10"),
+            ],
+        )
+        fibreglass = order_snapshot(
+            3,
+            "FIBREGLASS TRANSPORT EQUIPMENT",
+            [
+                ProductDetailLine("PURE WHITE SINGLET", 450, "KG", "RPWSING", 45, "BAG10"),
+                ProductDetailLine("COLOR TSHIRT RAGS", 450, "KG", "RSING", 45, "BAG10"),
+            ],
+        )
+        invoice_185526 = order_snapshot(
+            4,
+            "LOTUS COMMERCIAL PTY LTD - MEL",
+            [
+                ProductDetailLine("COLOURED TOWEL MIX #10", 450, "KG", "RBATH", 45, "BAG10"),
+                ProductDetailLine("MICRO FIBRE CLOTH 40 X 40", 250, "EACH", "MIC-MICROF", 10, "PKT25"),
+            ],
+        )
+        run_sheet = DeliveryRunSheet(
+            run_sheet_id="RUN-SHEET-COMPACT",
+            dispatch_date=self.dispatch_date,
+            delivery_date=self.dispatch_date,
+            driver_id="D001",
+            driver_name_snapshot="Gavin Fynn",
+            vehicle_id=None,
+            vehicle_rego_snapshot=None,
+            total_pallets=4,
+            total_loose_bags=0,
+            status="SAVED",
+            generated_at="2026-05-05T00:00:00+00:00",
+            saved_at="2026-05-05T00:00:00+00:00",
+            saved_by_account_name="Tester",
+            saved_by_account_id=1,
+            legacy_summary_id=None,
+            trips=[
+                DeliveryRunSheetTrip(
+                    trip_no="trip1",
+                    orders=[south_east_sands, rotary_tools, fibreglass, invoice_185526],
+                )
+            ],
+            total_cartons=0,
+        )
+
+        worksheet = load_workbook(BytesIO(build_delivery_run_sheet_excel(run_sheet))).active
+
+        self.assertEqual(
+            "RSING5KG - 1 BAG5\n"
+            "RWTSHIRT10 - 1 BAG10\n"
+            "RFLAN10KG - 1 BAG10\n"
+            "RWBATH10KG - 1 BAG10\n"
+            "RBATH10KG - 1 BAG10",
+            worksheet["E9"].value,
+        )
+        self.assertEqual("RWORK - 30 BAG10\nRWCOTT - 20 BAG10", worksheet["E10"].value)
+        self.assertEqual("RPWSING - 45 BAG10\nRSING - 45 BAG10", worksheet["E11"].value)
+        self.assertEqual("RBATH - 45 BAG10\nMIC-MICROF - 10 PKT25", worksheet["E12"].value)
+        self.assertNotIn("Packaging:", "\n".join(str(worksheet[f"E{row}"].value or "") for row in range(9, 27)))
+        self.assertEqual(1, worksheet.page_setup.fitToWidth)
+        self.assertEqual(1, worksheet.page_setup.fitToHeight)
+        self.assertIn("$A$1:$N$28", worksheet.print_area)
+        self.assertEqual(18, len(range(9, 27)))
+        self.assertGreaterEqual(worksheet.row_dimensions[9].height, 45)
+        self.assertLessEqual(worksheet.row_dimensions[9].height, 60)
+        self.assertLessEqual(
+            max(worksheet.row_dimensions[row].height for row in range(9, 27)),
+            60,
+        )
+        self.assertEqual(7.5, worksheet["E9"].font.sz)
+        self.assertEqual(8.5, worksheet["B9"].font.sz)
+        self.assertEqual(21.95, worksheet.row_dimensions[13].height)
 
     def test_delivery_export_uses_content_aware_data_row_heights(self):
         base_order = DeliveryRunSheetOrderSnapshot(
@@ -1389,18 +1531,24 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
 
         self.assertGreater(two_line_height, single_height)
         self.assertGreater(long_text_height, two_line_height)
+        self.assertEqual(21.95, single_height)
+        self.assertLessEqual(long_text_height, 60)
         self.assertEqual(21.95, worksheet.row_dimensions[12].height)
-        self.assertIn("[RSING10KG]", worksheet["E10"].value)
-        self.assertIn("[RSING1.5KG]", worksheet["E10"].value)
+        self.assertEqual(1, worksheet.page_setup.fitToHeight)
+        self.assertIn("RSING10KG - 45 BAG10", worksheet["E10"].value)
+        self.assertIn("RSING1.5KG - 28 BAG1.5", worksheet["E10"].value)
         self.assertIn("\n", worksheet["E10"].value)
         for coordinate in ("B11", "C11", "D11", "E11"):
             self.assertTrue(worksheet[coordinate].alignment.wrap_text)
             self.assertEqual("top", worksheet[coordinate].alignment.vertical)
         self.assertFalse(worksheet["E10"].alignment.shrink_to_fit)
+        for coordinate in ("A9", "B9", "M9", "B12"):
+            self.assertEqual(8.5, worksheet[coordinate].font.sz)
+        self.assertEqual(7.5, worksheet["E9"].font.sz)
         self.assertEqual("DRIVER: Epaminondas Tsatsoulis", worksheet["F1"].value)
-        self.assertEqual("REGO #: Not selected", worksheet["K1"].value)
-        self.assertTrue(worksheet["F1"].alignment.wrap_text)
-        self.assertTrue(worksheet["K1"].alignment.wrap_text)
+        self.assertEqual("REGO #: Not selected", worksheet["L1"].value)
+        self.assertFalse(worksheet["F1"].alignment.wrap_text)
+        self.assertFalse(worksheet["L1"].alignment.wrap_text)
         for row_index in (9, 10, 11):
             for column_index in range(1, 15):
                 self.assertEqual(
@@ -1413,6 +1561,31 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
                         for side in ("left", "right", "top", "bottom")
                     ),
                 )
+
+        large_run_sheet = replace(
+            run_sheet,
+            trips=[
+                DeliveryRunSheetTrip(
+                    trip_no="trip1",
+                    orders=[
+                        replace(
+                            base_order,
+                            row_id=f"ROW-LARGE-{index}",
+                            row_no=index,
+                            task_id=f"ORDER-LARGE-{index}",
+                            order_id_snapshot=f"ORDER-LARGE-{index}",
+                        )
+                        for index in range(1, 20)
+                    ],
+                )
+            ],
+        )
+        large_worksheet = load_workbook(
+            BytesIO(build_delivery_run_sheet_excel(large_run_sheet))
+        ).active
+        self.assertEqual(0, large_worksheet.page_setup.fitToHeight)
+        self.assertEqual(1, large_worksheet.page_setup.fitToWidth)
+        self.assertTrue(str(large_worksheet.print_area).endswith("$N$29"))
 
     def test_delivery_date_export_rejects_empty_scope_without_mutation(self):
         response = self.client.get(

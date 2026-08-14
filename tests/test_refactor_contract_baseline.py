@@ -57,9 +57,23 @@ class RefactorContractBaselineTest(unittest.TestCase):
             if getattr(route, "path", None)
         )
 
-        self.assertEqual(95, len(routes))
+        self.assertEqual(97, len(routes))
+        self.assertIn(
+            (
+                "/api/manual-dispatch/delivery/orders/import-delivery-docket-docx-preview",
+                ("POST",),
+            ),
+            routes,
+        )
+        self.assertIn(
+            (
+                "/api/manual-dispatch/delivery/orders/import-delivery-docket-docx-commit",
+                ("POST",),
+            ),
+            routes,
+        )
         self.assertEqual(
-            "22cb6e31dcf3a11cfbb1c66ef30f84b4c53d43ecbbacb96b1bffa029c951e184",
+            "ab82894eec8875bdd702113aace6068d3b7aea7520d9e6dc0b1f382f05867501",
             self._contract_digest(routes),
         )
 
@@ -191,19 +205,25 @@ class RefactorContractBaselineTest(unittest.TestCase):
         contract = json.loads(completed.stdout)
 
         self.assertEqual(["function", "function"], contract["rendererTypes"])
-        self.assertEqual(100, len(contract["apiExportNames"]))
+        self.assertEqual(102, len(contract["apiExportNames"]))
+        self.assertIn("apiPreviewDeliveryDockets", contract["apiExportNames"])
+        self.assertIn("apiCommitDeliveryDockets", contract["apiExportNames"])
         self.assertEqual(
-            "31d14ad50a0415062c5844a12a9870e72c25c95b17dcdda9b249f53e175cd78a",
+            "c970821f02bcbb4a6109ebdf9ba2d00f7ffa63844d33911f7627192211294acf",
             self._contract_digest(contract["apiExportNames"]),
         )
-        self.assertEqual(88, len(contract["actionNames"]))
+        self.assertEqual(105, len(contract["actionNames"]))
+        self.assertIn("previewDeliveryDocketImport", contract["actionNames"])
+        self.assertIn("commitDeliveryDocketImport", contract["actionNames"])
         self.assertEqual(
-            "4aaef4b2afb04b798de4d9c2e1f9867aa6acce5294304943dd44b7c9ea51286b",
+            "8e4fe91668be2101b9c8ff46a97cb46da9f2c0f3a02e23ebdf87c647278aefb0",
             self._contract_digest(contract["actionNames"]),
         )
-        self.assertEqual(188, len(contract["stateFields"]))
+        self.assertEqual(190, len(contract["stateFields"]))
+        self.assertIn("deliveryDocumentImportState", contract["stateFields"])
+        self.assertIn("deliveryDocketImportState", contract["stateFields"])
         self.assertEqual(
-            "f4eee2d5faa8986f4a236943a33e8b70363329eac2b1e6fc1b6bc26939e40aa6",
+            "eb1a9f7fe296ff6e34a3226bb735708f4aad110f6d2a3238e1a44b0b9e55ff2f",
             self._contract_digest(contract["stateFields"]),
         )
 

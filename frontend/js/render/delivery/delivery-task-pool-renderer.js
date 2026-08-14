@@ -114,7 +114,7 @@ export function createDeliveryTaskPoolPanel(unassignedOrders, filteredOrders, st
       disabled: state.isDeliveryWorkspaceLoading,
       iconName: "plus",
     }),
-    createActionButton("Import Attache Invoices", actions.openDeliveryAttacheImport, {
+    createActionButton("Import Delivery Document", actions.openDeliveryAttacheImport, {
       disabled: state.isDeliveryWorkspaceLoading,
       primary: true,
       iconName: "cloud-upload",

@@ -235,6 +235,87 @@ class ManualDispatchAttacheInvoiceImportTest(unittest.TestCase):
         self.assertEqual("2026-08-13", persisted.delivery_date)
         self.assertEqual(5, persisted.loose_bags_quantity)
 
+    def test_batch_limits_accept_30_and_reject_31_for_preview_and_commit(self):
+        sanitized_text = """
+        Invoice No 199900
+        Date 12/08/26
+        Order No Date
+        12/08/26 BATCH30 ORDER-30
+        Invoice to:
+        BATCH LIMIT CUSTOMER
+        30 TEST ROAD
+        RICHMOND 3121
+        Deliver to:
+        BATCH LIMIT CUSTOMER
+        30 TEST ROAD
+        RICHMOND
+        3121
+        Tax Invoice
+        TEST 1 KG SAMPLE PRODUCT 1.000 1.00 1.00 0.00
+        """
+        files = [
+            (
+                "files",
+                (
+                    f"batch-{index:02d}.pdf",
+                    b"%PDF-1.4 sanitized batch fixture",
+                    "application/pdf",
+                ),
+            )
+            for index in range(31)
+        ]
+
+        with (
+            patch.object(manual_dispatch_api, "service", self.service),
+            patch(
+                "backend.services.manual_dispatch.attache_invoice_pdf_parser.extract_pdf_text",
+                return_value=sanitized_text,
+            ),
+        ):
+            authenticate_test_client(self.client, self.service, self.identity)
+            rows = None
+            for file_count in (1, 20, 21, 30):
+                preview_response = self.client.post(
+                    "/api/manual-dispatch/delivery/orders/import-attache-pdf-preview",
+                    files=files[:file_count],
+                )
+                self.assertEqual(200, preview_response.status_code, preview_response.text)
+                preview_rows = preview_response.json()["rows"]
+                self.assertEqual(file_count, len(preview_rows))
+                if file_count == 30:
+                    rows = preview_rows
+            self.assertIsNotNone(rows)
+
+            overflow_preview = self.client.post(
+                "/api/manual-dispatch/delivery/orders/import-attache-pdf-preview",
+                files=files,
+            )
+            self.assertEqual(413, overflow_preview.status_code, overflow_preview.text)
+
+            for index, row in enumerate(rows):
+                row["row_id"] = f"ATTACHE-BATCH-{index:02d}"
+                row["source_filename"] = f"batch-{index:02d}.pdf"
+                row["invoice_number"] = f"920{index:03d}"
+                row["order_no"] = f"BATCH-{index:02d}"
+                row["is_duplicate"] = False
+                row["importable"] = True
+                row["selected"] = True
+            commit_response = self.client.post(
+                "/api/manual-dispatch/delivery/orders/import-attache-pdf-commit",
+                json={"rows": rows},
+            )
+            self.assertEqual(200, commit_response.status_code, commit_response.text)
+            self.assertEqual(30, commit_response.json()["imported_count"])
+
+            overflow_row = {**rows[-1]}
+            overflow_row["row_id"] = "ATTACHE-BATCH-OVERFLOW"
+            overflow_row["invoice_number"] = "920999"
+            overflow_commit = self.client.post(
+                "/api/manual-dispatch/delivery/orders/import-attache-pdf-commit",
+                json={"rows": [*rows, overflow_row]},
+            )
+            self.assertEqual(413, overflow_commit.status_code, overflow_commit.text)
+
 
 if __name__ == "__main__":
     unittest.main()
