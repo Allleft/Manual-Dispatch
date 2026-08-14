@@ -700,6 +700,8 @@ def _parse_product_lines(lines):
         if category == "PRODUCT":
             preceding_product = classification["product"]
             products.append(preceding_product)
+            if str(preceding_product.get("package_unit") or "").upper() == "BAG":
+                packaging_bags += int(preceding_product.get("package_quantity") or 0)
             continue
         if category == "PACKAGING":
             packaging_bags += classification["quantity"]
@@ -1033,6 +1035,14 @@ def _parse_product_around_unit(code, parts, unit_index, unit):
     after = parts[unit_index + 1 :]
     if not after:
         return None
+    inline_product = _parse_inline_quantity_after_financials(after)
+    if inline_product:
+        quantity, name = inline_product
+        product = _product_line(code, name, quantity, unit)
+        if product["unit"] in {"BAG", "BAGS"}:
+            product["package_quantity"] = quantity
+            product["package_unit"] = "BAG"
+        return product
     if _is_integer(after[0]):
         quantity = int(after[0])
         name_tokens = _strip_trailing_numeric_tokens(after[1:])
@@ -1062,6 +1072,19 @@ def _parse_product_around_unit(code, parts, unit_index, unit):
     if not name or quantity <= 0:
         return None
     return _product_line(code, name, quantity, unit)
+
+
+def _parse_inline_quantity_after_financials(tokens):
+    for index in range(3, len(tokens)):
+        if not all(_is_decimal(token) for token in tokens[:index]):
+            break
+        match = re.fullmatch(r"(\d+)(?=[A-Z])(.+)", tokens[index], re.IGNORECASE)
+        if not match or int(match.group(1)) <= 0:
+            continue
+        name = _clean_product_name(" ".join([match.group(2), *tokens[index + 1 :]]))
+        if name:
+            return int(match.group(1)), name
+    return None
 
 
 def _resolve_import_date(value):
