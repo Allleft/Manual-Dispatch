@@ -176,6 +176,7 @@ def _is_env_flag_enabled(name, default=False):
 
 def _ensure_manual_dispatch_columns(connection):
     _ensure_order_product_line_units(connection)
+    _ensure_delivery_order_area_overrides(connection)
     _ensure_column(connection, "manual_orders", "invoice_number", "TEXT")
     _ensure_column(connection, "manual_orders", "invoice_date", "TEXT")
     _ensure_column(connection, "manual_orders", "order_no", "TEXT")
@@ -418,6 +419,22 @@ def _ensure_manual_dispatch_columns(connection):
         """
     )
     _backfill_manual_order_numbers(connection)
+
+
+def _ensure_delivery_order_area_overrides(connection):
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS delivery_order_area_overrides (
+            order_id TEXT PRIMARY KEY,
+            delivery_area TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            updated_by TEXT,
+            CHECK(delivery_area IN ('SOUTHEAST', 'LOCAL')),
+            FOREIGN KEY(order_id) REFERENCES manual_orders(order_id)
+                ON DELETE CASCADE
+        )
+        """
+    )
 
 
 def _ensure_order_product_line_units(connection):

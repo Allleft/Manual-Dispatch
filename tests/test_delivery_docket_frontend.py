@@ -394,7 +394,10 @@ class DeliveryDocketFrontendTest(unittest.TestCase):
             list.append(createDeliveryDocketReviewRow(row, state.deliveryDocketImportState, actions));
             body.append(list);
             body.scrollTop = 720;
-            const expected = ["Docket", "Invoice", "Invoice Date", "Order", "Customer", "Suburb", "Delivery Date", "Load"];
+            const expected = [
+              "Docket", "Invoice", "Invoice Date", "Order", "Customer", "Suburb",
+              "Delivery Area", "Region", "Delivery Date", "Load",
+            ];
             let card = list.children[0];
             const labels = card.querySelectorAll(".workspace-inline-meta").map((item) => item.children[0].textContent);
             if (labels.join("|") !== expected.join("|")) throw new Error(`summary order ${labels.join("|")}`);

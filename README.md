@@ -82,6 +82,17 @@ release.
 
 Delivery Orders support manual add, edit, and soft-cancel operations. Delivery Task Pool cards are sorted Urgent-first and support search across identifiers, customer details, address, product, and notes.
 
+#### Delivery Area classification and manual override
+
+Every active Delivery Order is classified independently of its existing `zone` into one of two Task Pool business areas: East, South, and South East regions map to **South East**; North, City, West, and South West regions map to **Local**. Classification first normalizes the existing supported suburb aliases and matches exact suburb + postcode; only when postcode is absent may a single verified suburb record be used as fallback. Unknown or postcode-conflicting locations remain **Needs Area Review** and never default to Local.
+
+The verified starter mapping is maintained in `backend/data/delivery_suburb_regions.json`. It is intentionally not a guessed or comprehensive postcode list; expand it only with business-approved suburb, postcode, and region records. Changing an Order's suburb or postcode recalculates the automatic area and clears any previous manual override. Add Order requires an explicit South East or Local choice when automatic classification is unknown, while Attaché and Delivery Docket imports may remain in Needs Area Review with a visible warning.
+
+Task Pool filters apply before Orders are grouped into South East, Local, and Needs Area Review sections. Staff can drag an unassigned Order by its dedicated handle or use the keyboard-accessible **Move area** select. A successful move persists only the manual area override and updates the current board in place; **Reset to Automatic** removes it. Generated or Saved/Open Run Sheet reservations continue to block Order changes.
+
+- `POST /api/manual-dispatch/delivery/area-classification` previews suburb/postcode classification.
+- `PATCH /api/manual-dispatch/delivery/orders/{order_id}/delivery-area` sets `LOCAL` / `SOUTHEAST`, or clears an override with `null`.
+
 `Import Attache Invoices` supports one or more text-based Attache invoice PDFs:
 
 - Uploading a PDF only creates a preview; it does not write to SQLite.
@@ -515,6 +526,9 @@ Key workspace coverage is in:
 - `tests/test_workspace_legacy_migration.py`
 - `tests/test_workspace_safety_hardening.py`
 - `tests/test_workspace_frontend_shell.py`
+- `tests/test_delivery_area_classification.py`
+- `tests/test_delivery_area_api.py`
+- `tests/test_delivery_area_frontend.py`
 - `tests/test_opshop_pickup_collection_generation.py`
 
 Browser smoke testing remains necessary for route navigation, assignment drafts, confirmation modals, Generated → Saved lifecycle, saved history/export, and office data workflows.

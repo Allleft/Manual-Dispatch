@@ -38,6 +38,11 @@ class Order:
     product_lines: List[ProductDetailLine] = field(default_factory=list)
     estimated_distance_km_from_warehouse: Optional[float] = None
     invoice_date: Optional[str] = None
+    auto_delivery_region: Optional[str] = None
+    auto_delivery_area: Optional[str] = None
+    delivery_area_override: Optional[str] = None
+    delivery_area: Optional[str] = None
+    delivery_area_source: str = "AUTO"
 
 
 @dataclass
@@ -930,6 +935,7 @@ class CreateOrderRequest:
     end_time: Optional[str] = None
     note: Optional[str] = None
     product_lines: Optional[List[dict]] = None
+    delivery_area: Optional[str] = None
 
 
 class UpdateOrderRequest(BaseModel):
@@ -978,6 +984,11 @@ class AttacheInvoicePdfPreviewItem:
     end_time: Optional[str] = None
     note: Optional[str] = None
     product_lines: List[dict] = field(default_factory=list)
+    auto_delivery_region: Optional[str] = None
+    auto_delivery_area: Optional[str] = None
+    delivery_area_override: Optional[str] = None
+    delivery_area: Optional[str] = None
+    delivery_area_source: str = "AUTO"
     warnings: List[str] = field(default_factory=list)
     is_duplicate: bool = False
     importable: bool = True
@@ -1048,6 +1059,11 @@ class DeliveryDocketDocxPreviewItem:
     end_time: Optional[str] = None
     note: Optional[str] = None
     product_lines: List[dict] = field(default_factory=list)
+    auto_delivery_region: Optional[str] = None
+    auto_delivery_area: Optional[str] = None
+    delivery_area_override: Optional[str] = None
+    delivery_area: Optional[str] = None
+    delivery_area_source: str = "AUTO"
     warnings: List[str] = field(default_factory=list)
     is_duplicate: bool = False
     importable: bool = True
@@ -1088,6 +1104,15 @@ class CommitDeliveryDocketDocxImportRow:
     end_time: Optional[str] = None
     note: Optional[str] = None
     product_lines: Optional[List[dict]] = None
+
+
+class DeliveryAreaClassificationRequest(BaseModel):
+    suburb: Optional[str] = None
+    postcode: Optional[str] = None
+
+
+class UpdateDeliveryOrderAreaRequest(BaseModel):
+    delivery_area: Optional[str]
 
 
 @dataclass

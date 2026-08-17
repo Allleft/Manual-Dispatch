@@ -32,6 +32,50 @@ class DeliveryEventRecorder(FacadeAuditRecorder):
             },
         )
 
+    def record_delivery_order_area_change(self, before, order):
+        if not order:
+            return
+        before = dict(before or {})
+        cleared = order.delivery_area_override is None
+        action = (
+            "ORDER_DELIVERY_AREA_OVERRIDE_CLEARED"
+            if cleared
+            else "ORDER_DELIVERY_AREA_OVERRIDDEN"
+        )
+        label = self._order_entity_id(order)
+        if cleared:
+            summary = (
+                f"Order {label} Delivery Area override was cleared; automatic "
+                f"area is {order.auto_delivery_area or 'Needs Review'}."
+            )
+        else:
+            summary = (
+                f"Order {label} moved from "
+                f"{before.get('delivery_area') or 'Needs Review'} to "
+                f"{order.delivery_area}."
+            )
+        self._record_logbook(
+            result="SUCCESS",
+            workspace="DELIVERY",
+            action=action,
+            entity_type="ORDER",
+            entity_id=label,
+            summary=summary,
+            delivery_date=order.delivery_date,
+            metadata={
+                "order_id": order.order_id,
+                "previous_effective_area": before.get("delivery_area"),
+                "new_effective_area": order.delivery_area,
+                "auto_delivery_area": order.auto_delivery_area,
+                "auto_delivery_region": order.auto_delivery_region,
+                "previous_override_area": before.get("delivery_area_override"),
+                "new_override_area": order.delivery_area_override,
+                "delivery_area_source": order.delivery_area_source,
+                "suburb": order.suburb,
+                "postcode": order.postcode,
+            },
+        )
+
     def _record_delivery_assignment_change(
         self,
         dispatch_date,

@@ -2,6 +2,7 @@ import {
   apiApplyOpShopWorkspaceAssignments,
   apiAssignDeliveryWorkspaceOrder,
   apiAssignDeliveryWorkspaceVehicle,
+  apiClassifyDeliveryArea,
   apiAssignOpShopWorkspaceCountrysideRouteGroup,
   apiCancelGeneratedDeliveryRunSheet,
   apiCloseDeliveryRunSheet,
@@ -40,6 +41,7 @@ import {
   apiUpdateOpShopPickupCollectionRows,
   apiUpdateDeliveryDriver,
   apiUpdateDeliveryOrder,
+  apiUpdateDeliveryOrderArea,
   apiUpdateDeliveryVehicle,
 } from "../../api/manual-dispatch-api.js";
 
@@ -65,6 +67,7 @@ export const DEFAULT_API = {
   applyOpShopWorkspaceAssignments: apiApplyOpShopWorkspaceAssignments,
   assignDeliveryWorkspaceOrder: apiAssignDeliveryWorkspaceOrder,
   assignDeliveryWorkspaceVehicle: apiAssignDeliveryWorkspaceVehicle,
+  classifyDeliveryArea: apiClassifyDeliveryArea,
   assignOpShopWorkspaceCountrysideRouteGroup: apiAssignOpShopWorkspaceCountrysideRouteGroup,
   cancelDeliveryOrder: apiCancelDeliveryOrder,
   cancelGeneratedDeliveryRunSheet: apiCancelGeneratedDeliveryRunSheet,
@@ -103,6 +106,7 @@ export const DEFAULT_API = {
   updateOpShopPickupCollectionRows: apiUpdateOpShopPickupCollectionRows,
   updateDeliveryDriver: apiUpdateDeliveryDriver,
   updateDeliveryOrder: apiUpdateDeliveryOrder,
+  updateDeliveryOrderArea: apiUpdateDeliveryOrderArea,
   updateDeliveryVehicle: apiUpdateDeliveryVehicle,
 };
 
@@ -126,6 +130,10 @@ export function createWorkspaceRequestContext({
     opshopWorkspaceRequestVersion: 0,
     deliveryAttachePreviewRequestVersion: 0,
     deliveryDocketPreviewRequestVersion: 0,
+    deliveryOrderAreaClassificationVersion: 0,
+    deliveryAreaMutationVersions: {},
+    deliveryAttacheAreaClassificationVersions: {},
+    deliveryDocketAreaClassificationVersions: {},
     deliverySpecificationRequestVersion: 0,
     deliveryVehicleMutationVersion: 0,
     deliveryVehicleQueueIdCounter: 0,

@@ -9,6 +9,13 @@ class DeliveryApplicationService(FacadeApplicationService):
         self._ensure_workspace_ready("delivery")
         return self.delivery_workspace_board_service.get_board(dispatch_date)
 
+    def classify_delivery_area(self, request):
+        self._ensure_workspace_ready("delivery")
+        return self.delivery_order_area_resolver.classify(
+            request.suburb,
+            request.postcode,
+        )
+
     def get_delivery_trip_summary_board(self, delivery_date):
         self._ensure_workspace_ready("delivery")
         return self.delivery_workspace_board_service.get_trip_summary_board(
@@ -307,16 +314,80 @@ class DeliveryApplicationService(FacadeApplicationService):
 
     def create_delivery_order(self, request):
         self._ensure_workspace_ready("delivery")
+        requested_area = request.delivery_area
+        if requested_area is not None:
+            requested_area = self.delivery_order_area_resolver.validate_area(
+                requested_area
+            )
         order = self.order_service.create_order(request)
         self._record_order_event("ORDER_CREATED", order)
+        if requested_area is not None:
+            before = {
+                "delivery_area": order.delivery_area,
+                "delivery_area_override": order.delivery_area_override,
+                "delivery_area_source": order.delivery_area_source,
+            }
+            order = self.delivery_order_area_resolver.set_override(
+                order.order_id,
+                requested_area,
+                updated_by=self._current_logbook_actor(),
+            )
+            self._record_delivery_order_area_change(before, order)
         return order
 
     def update_delivery_order(self, order_id, request):
         self._ensure_workspace_ready("delivery")
         ensure_order_not_reserved(self.repository, None, order_id)
+        existing = self.delivery_order_area_resolver.resolve_order(
+            self.repository.get_order(order_id)
+        )
+        before = None
+        if existing:
+            before = {
+                "delivery_area": existing.delivery_area,
+                "delivery_area_override": existing.delivery_area_override,
+                "delivery_area_source": existing.delivery_area_source,
+            }
         order = self.order_service.update_order(order_id, request)
         self._record_order_event("ORDER_UPDATED", order)
+        if (
+            before
+            and before["delivery_area_override"] is not None
+            and order.delivery_area_override is None
+        ):
+            self._record_delivery_order_area_change(before, order)
         return order
+
+    def update_delivery_order_area(self, order_id, request):
+        self._ensure_workspace_ready("delivery")
+        ensure_order_not_reserved(self.repository, None, order_id)
+        existing = self.delivery_order_area_resolver.resolve_order(
+            self.repository.get_order(order_id)
+        )
+        if not existing:
+            raise ValueError(f"Order does not exist: {order_id}")
+        before = {
+            "delivery_area": existing.delivery_area,
+            "delivery_area_override": existing.delivery_area_override,
+            "delivery_area_source": existing.delivery_area_source,
+        }
+        if request.delivery_area is None:
+            if existing.delivery_area_override is None:
+                return existing
+            updated = self.delivery_order_area_resolver.clear_override(order_id)
+        else:
+            requested_area = self.delivery_order_area_resolver.validate_area(
+                request.delivery_area
+            )
+            if requested_area == existing.delivery_area:
+                return existing
+            updated = self.delivery_order_area_resolver.set_override(
+                order_id,
+                requested_area,
+                updated_by=self._current_logbook_actor(),
+            )
+        self._record_delivery_order_area_change(before, updated)
+        return updated
 
     def cancel_delivery_order(self, order_id):
         self._ensure_workspace_ready("delivery")

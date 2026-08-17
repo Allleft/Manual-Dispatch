@@ -7,11 +7,15 @@ from backend.services.manual_dispatch.normalization import clean_required_iso_da
 from backend.services.manual_dispatch.suburb_distance_service import (
     get_estimated_distance_km,
 )
+from backend.services.manual_dispatch.delivery_suburb_region_service import (
+    DeliveryOrderAreaResolver,
+)
 
 
 class DeliveryWorkspaceBoardService:
-    def __init__(self, repository):
+    def __init__(self, repository, area_resolver=None):
         self.repository = repository
+        self.area_resolver = area_resolver or DeliveryOrderAreaResolver(repository)
 
     def get_board(self, dispatch_date):
         dispatch_date = clean_required_iso_date(dispatch_date, "dispatch_date")
@@ -24,6 +28,7 @@ class DeliveryWorkspaceBoardService:
             if order.order_id not in reserved_task_ids
         ]
         for order in orders:
+            self.area_resolver.resolve_order(order)
             order.estimated_distance_km_from_warehouse = get_estimated_distance_km(
                 order.suburb
             )
@@ -72,6 +77,7 @@ class DeliveryWorkspaceBoardService:
             if order.order_id not in reserved_task_ids
         ]
         for order in orders:
+            self.area_resolver.resolve_order(order)
             order.estimated_distance_km_from_warehouse = get_estimated_distance_km(
                 order.suburb
             )

@@ -45,6 +45,9 @@ from backend.schemas import (
     RegisterOperatorAccountRequest,
 )
 from backend.services.manual_dispatch_service import ManualDispatchService
+from backend.services.manual_dispatch.delivery_suburb_region_service import (
+    UNKNOWN_DELIVERY_AREA_WARNING,
+)
 from tests.manual_dispatch_api_test_helpers import authenticate_test_client
 
 
@@ -157,6 +160,16 @@ class ManualDispatchDeliveryDocketImportTest(unittest.TestCase):
             self.assertEqual(2, len(rows))
             self.assertEqual(["2026-08-14", "2026-08-14"], [row["delivery_date"] for row in rows])
             self.assertEqual(["4373", "4375"], [row["docket_number"] for row in rows])
+            self.assertEqual("WEST", rows[0]["auto_delivery_region"])
+            self.assertEqual("LOCAL", rows[0]["auto_delivery_area"])
+            self.assertEqual("LOCAL", rows[0]["delivery_area"])
+            self.assertEqual("AUTO", rows[0]["delivery_area_source"])
+            self.assertNotIn(UNKNOWN_DELIVERY_AREA_WARNING, rows[0]["warnings"])
+            self.assertEqual("SOUTHEAST", rows[1]["auto_delivery_region"])
+            self.assertEqual("SOUTHEAST", rows[1]["auto_delivery_area"])
+            self.assertEqual("SOUTHEAST", rows[1]["delivery_area"])
+            self.assertEqual("AUTO", rows[1]["delivery_area_source"])
+            self.assertNotIn(UNKNOWN_DELIVERY_AREA_WARNING, rows[1]["warnings"])
 
             rows[0]["company_name"] = "EDITED FINAL CUSTOMER"
             rows[0]["note"] += "\nOperator Review: dock access confirmed"
@@ -179,6 +192,14 @@ class ManualDispatchDeliveryDocketImportTest(unittest.TestCase):
             self.assertEqual("30 SPENCER STREET", imported["delivery_address"])
             self.assertIn("Delivery Docket: 4373", imported["note"])
             self.assertIn("dock access confirmed", imported["note"])
+            self.assertEqual("WEST", imported["auto_delivery_region"])
+            self.assertEqual("LOCAL", imported["delivery_area"])
+            self.assertEqual("AUTO", imported["delivery_area_source"])
+            imported_southeast = next(
+                order for order in board_orders if order["invoice_number"] == "185512"
+            )
+            self.assertEqual("SOUTHEAST", imported_southeast["delivery_area"])
+            self.assertEqual("SOUTHEAST", imported_southeast["auto_delivery_region"])
 
         reloaded_service = ManualDispatchService(
             SQLiteManualDispatchRepository(self.db_path)
@@ -188,6 +209,9 @@ class ManualDispatchDeliveryDocketImportTest(unittest.TestCase):
         self.assertEqual("EDITED FINAL CUSTOMER", persisted.company_name)
         self.assertEqual(360, persisted.product_lines[0].quantity)
         self.assertEqual("BAG10", persisted.product_lines[0].package_unit)
+        self.assertEqual("WEST", persisted.auto_delivery_region)
+        self.assertEqual("LOCAL", persisted.delivery_area)
+        self.assertEqual("AUTO", persisted.delivery_area_source)
 
         self.repository.create_driver(
             Driver(

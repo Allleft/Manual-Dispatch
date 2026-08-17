@@ -1,3 +1,9 @@
+import { applyDeliveryAreaClassification } from "../../utils/delivery-area-utils.js";
+import {
+  captureElementScroll,
+  restoreElementScroll,
+} from "../../utils/scroll-utils.js";
+
 const MAX_DELIVERY_DOCKET_IMPORT_FILES = 30;
 
 export function createDeliveryDocketActions(context) {
@@ -137,6 +143,71 @@ export function createDeliveryDocketActions(context) {
         row.row_id === rowId ? { ...row, [field]: value } : row,
       ),
     };
+  }
+
+  async function classifyDeliveryDocketImportRow(rowId) {
+    const importState = state.deliveryDocketImportState || {};
+    const row = (importState.rows || []).find((candidate) => candidate.row_id === rowId);
+    if (!row) {
+      return;
+    }
+    const suburb = String(row.suburb || "");
+    const postcode = String(row.postcode || "");
+    const versions = context.deliveryDocketAreaClassificationVersions;
+    const requestVersion = (versions[rowId] || 0) + 1;
+    versions[rowId] = requestVersion;
+    const mutationContext = captureMutationContext();
+    const isCurrent = () => {
+      const latest = (state.deliveryDocketImportState?.rows || []).find(
+        (candidate) => candidate.row_id === rowId,
+      );
+      return isDeliveryMutationCurrent(mutationContext)
+        && state.workspaceRoute === "delivery/task-pool"
+        && state.deliveryAttacheImportState?.isOpen
+        && state.deliveryDocumentImportState?.source === "docket"
+        && versions[rowId] === requestVersion
+        && String(latest?.suburb || "") === suburb
+        && String(latest?.postcode || "") === postcode;
+    };
+    try {
+      const classification = suburb.trim()
+        ? await api.classifyDeliveryArea(suburb, postcode)
+        : {
+            known: false,
+            auto_delivery_region: null,
+            auto_delivery_area: null,
+            delivery_area: null,
+          };
+      if (!isCurrent()) {
+        return;
+      }
+      state.deliveryDocketImportState = {
+        ...state.deliveryDocketImportState,
+        rows: state.deliveryDocketImportState.rows.map((candidate) =>
+          candidate.row_id === rowId
+            ? applyDeliveryAreaClassification(candidate, classification)
+            : candidate,
+        ),
+        error: "",
+      };
+    } catch (error) {
+      if (!isCurrent()) {
+        return;
+      }
+      state.deliveryDocketImportState = {
+        ...state.deliveryDocketImportState,
+        error: `Unable to classify Delivery Area. ${error.message}`,
+      };
+    }
+    renderDeliveryDocketImportPreservingScroll();
+  }
+
+  function renderDeliveryDocketImportPreservingScroll() {
+    const snapshot = typeof document === "undefined"
+      ? null
+      : captureElementScroll(".workspace-modal-body");
+    renderWorkspace();
+    restoreElementScroll(snapshot);
   }
 
   function updateDeliveryDocketImportProductLine(rowId, lineIndex, field, value) {
@@ -351,6 +422,7 @@ export function createDeliveryDocketActions(context) {
     previewDeliveryDocketImport,
     backDeliveryDocketImportToFiles,
     updateDeliveryDocketImportRow,
+    classifyDeliveryDocketImportRow,
     updateDeliveryDocketImportProductLine,
     addDeliveryDocketImportProductLine,
     removeDeliveryDocketImportProductLine,

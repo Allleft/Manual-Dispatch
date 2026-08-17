@@ -14,6 +14,9 @@ from backend.services.manual_dispatch.delivery_docket_docx_parser import (
     parse_delivery_docket_docx_bytes,
     with_duplicate_warning,
 )
+from backend.services.manual_dispatch.delivery_suburb_region_service import (
+    apply_delivery_area_preview,
+)
 from backend.services.manual_dispatch.workspace_migration_readiness_service import (
     WorkspaceMigrationRequiredError,
 )
@@ -90,7 +93,7 @@ def create_delivery_docket_router(
                 )
                 if parsed.invoice_number and parsed.invoice_number in existing_invoice_numbers:
                     parsed = with_duplicate_warning(parsed)
-                rows.append(parsed)
+                rows.append(apply_delivery_area_preview(parsed))
             except ValueError as error:
                 raise HTTPException(
                     status_code=400,

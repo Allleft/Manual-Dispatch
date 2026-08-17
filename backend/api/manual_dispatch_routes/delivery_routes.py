@@ -8,11 +8,13 @@ from backend.schemas import (
     CreateDriverRequest,
     CreateOrderRequest,
     CreateVehicleRequest,
+    DeliveryAreaClassificationRequest,
     DeliveryWorkspaceAssignOrderRequest,
     DeliveryWorkspaceUnassignOrderRequest,
     DeliveryWorkspaceVehicleAssignmentRequest,
     DeliveryWorkspaceVehicleClearRequest,
     UpdateDriverRequest,
+    UpdateDeliveryOrderAreaRequest,
     UpdateOrderRequest,
     UpdateVehicleRequest,
     to_dict,
@@ -59,6 +61,24 @@ def create_delivery_router(
     def get_delivery_specifications():
         service = get_service()
         return to_dict(service.get_delivery_specifications())
+
+    @router.post("/delivery/area-classification")
+    def classify_delivery_area(request: DeliveryAreaClassificationRequest):
+        service = get_service()
+        try:
+            classification = service.classify_delivery_area(request)
+            return {
+                "normalized_suburb": classification.normalized_suburb,
+                "postcode": classification.postcode,
+                "auto_delivery_region": classification.region,
+                "auto_delivery_area": classification.auto_delivery_area,
+                "delivery_area_override": None,
+                "delivery_area": classification.auto_delivery_area,
+                "delivery_area_source": "AUTO",
+                "known": classification.known,
+            }
+        except ValueError as error:
+            raise to_http_exception(error) from error
 
     @router.post("/delivery/drivers")
     def create_delivery_driver(request: CreateDriverRequest):
@@ -144,6 +164,22 @@ def create_delivery_router(
                 service,
                 http_request,
                 lambda: to_dict(service.cancel_delivery_order(order_id)),
+            )
+        except ValueError as error:
+            raise to_http_exception(error) from error
+
+    @router.patch("/delivery/orders/{order_id}/delivery-area")
+    def update_delivery_order_area(
+        order_id: str,
+        request: UpdateDeliveryOrderAreaRequest,
+        http_request: Request = None,
+    ):
+        service = get_service()
+        try:
+            return with_logbook_actor(
+                service,
+                http_request,
+                lambda: to_dict(service.update_delivery_order_area(order_id, request)),
             )
         except ValueError as error:
             raise to_http_exception(error) from error

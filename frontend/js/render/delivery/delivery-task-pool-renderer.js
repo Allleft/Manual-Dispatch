@@ -33,12 +33,13 @@ export function createDeliveryTaskPool(board, state, actions) {
   const unassignedOrders = (board.orders || []).filter(
     (order) => !assignments.has(order.order_id),
   );
-  const filteredOrders = sortDeliveryTaskPoolOrders(
-    filterDeliveryTaskPoolOrders(unassignedOrders, state.deliveryTaskPoolFilters),
+  const filteredOrders = filterDeliveryTaskPoolOrders(
+    unassignedOrders,
+    state.deliveryTaskPoolFilters,
   );
 
   wrapper.append(createDeliveryTaskPoolPanel(unassignedOrders, filteredOrders, state, actions));
-  wrapper.append(createDeliveryTaskPoolOrderGrid(
+  wrapper.append(createDeliveryTaskPoolGroups(
     unassignedOrders,
     filteredOrders,
     board,
@@ -50,22 +51,23 @@ export function createDeliveryTaskPool(board, state, actions) {
 
 export function updateDeliveryTaskPoolFilteredContent(board, state, actions, root = document) {
   const wrapper = root.querySelector(".workspace-delivery-task-pool");
-  const currentGrid = wrapper?.querySelector(".workspace-order-grid");
-  if (!board || !wrapper || !currentGrid) {
+  const currentGroups = wrapper?.querySelector(".workspace-delivery-task-pool-groups");
+  if (!board || !wrapper || !currentGroups) {
     return false;
   }
   const assignments = assignmentMap(board);
   const unassignedOrders = (board.orders || []).filter(
     (order) => !assignments.has(order.order_id),
   );
-  const filteredOrders = sortDeliveryTaskPoolOrders(
-    filterDeliveryTaskPoolOrders(unassignedOrders, state.deliveryTaskPoolFilters),
+  const filteredOrders = filterDeliveryTaskPoolOrders(
+    unassignedOrders,
+    state.deliveryTaskPoolFilters,
   );
   const count = wrapper.querySelector(".workspace-filter-count");
   if (count) {
     count.textContent = `${filteredOrders.length} of ${unassignedOrders.length} visible Orders`;
   }
-  currentGrid.replaceWith(createDeliveryTaskPoolOrderGrid(
+  currentGroups.replaceWith(createDeliveryTaskPoolGroups(
     unassignedOrders,
     filteredOrders,
     board,
@@ -75,15 +77,155 @@ export function updateDeliveryTaskPoolFilteredContent(board, state, actions, roo
   return true;
 }
 
-function createDeliveryTaskPoolOrderGrid(unassignedOrders, filteredOrders, board, state, actions) {
+export function createDeliveryTaskPoolGroups(
+  unassignedOrders,
+  filteredOrders,
+  board,
+  state,
+  actions,
+) {
+  const groups = document.createElement("div");
+  groups.className = "workspace-delivery-task-pool-groups";
+  const visibleGroups = groupDeliveryTaskPoolOrders(filteredOrders);
+  const allGroups = groupDeliveryTaskPoolOrders(unassignedOrders);
+  groups.append(
+    createDeliveryAreaSection({
+      area: "SOUTHEAST",
+      title: "South East",
+      description: "East · South · South East",
+      orders: visibleGroups.SOUTHEAST,
+      totalCount: allGroups.SOUTHEAST.length,
+      board,
+      state,
+      actions,
+    }),
+    createDeliveryAreaSection({
+      area: "LOCAL",
+      title: "Local",
+      description: "North · City · West · South West",
+      orders: visibleGroups.LOCAL,
+      totalCount: allGroups.LOCAL.length,
+      board,
+      state,
+      actions,
+    }),
+  );
+  if (allGroups.REVIEW.length) {
+    groups.append(createDeliveryAreaSection({
+      area: "REVIEW",
+      title: "Needs Area Review",
+      description: "Unmapped suburb · Move to South East or Local",
+      orders: visibleGroups.REVIEW,
+      totalCount: allGroups.REVIEW.length,
+      board,
+      state,
+      actions,
+      acceptsDrop: false,
+    }));
+  }
+  return groups;
+}
+
+export function groupDeliveryTaskPoolOrders(orders) {
+  const groups = { SOUTHEAST: [], LOCAL: [], REVIEW: [] };
+  (orders || []).forEach((order) => {
+    const area = String(order.delivery_area || "").toUpperCase();
+    groups[area === "SOUTHEAST" || area === "LOCAL" ? area : "REVIEW"].push(order);
+  });
+  return Object.fromEntries(
+    Object.entries(groups).map(([area, items]) => [
+      area,
+      sortDeliveryTaskPoolOrders(items),
+    ]),
+  );
+}
+
+function createDeliveryAreaSection({
+  area,
+  title,
+  description,
+  orders,
+  totalCount,
+  board,
+  state,
+  actions,
+  acceptsDrop = true,
+}) {
+  const section = document.createElement("section");
+  section.className = "workspace-delivery-area-section";
+  section.classList.toggle("workspace-delivery-area-review", area === "REVIEW");
+  section.dataset.deliveryArea = area;
+  const titleId = `delivery-area-${area.toLowerCase()}-title`;
+  section.setAttribute("aria-labelledby", titleId);
+  const header = document.createElement("div");
+  header.className = "workspace-delivery-area-header";
+  const copy = document.createElement("div");
+  const heading = document.createElement("h3");
+  heading.id = titleId;
+  heading.textContent = title;
+  const helper = document.createElement("p");
+  helper.textContent = description;
+  copy.append(heading, helper);
+  const count = document.createElement("span");
+  count.className = "workspace-delivery-area-count";
+  count.textContent = `${orders.length} Order${orders.length === 1 ? "" : "s"}`;
+  if (orders.length !== totalCount) {
+    count.title = `${totalCount} total before filters`;
+  }
+  header.append(copy, count);
+  const dropHint = document.createElement("p");
+  dropHint.className = "workspace-delivery-area-drop-hint";
+  dropHint.textContent = acceptsDrop ? `Drop Order in ${title}` : description;
+  section.append(
+    header,
+    dropHint,
+    createDeliveryTaskPoolOrderGrid(
+      orders,
+      board,
+      state,
+      actions,
+      totalCount
+        ? "No Orders in this area match the current filters."
+        : `No unassigned ${title} Orders.`,
+    ),
+  );
+  if (acceptsDrop) {
+    installDeliveryAreaDropZone(section, area, actions);
+  }
+  return section;
+}
+
+function installDeliveryAreaDropZone(section, area, actions) {
+  section.addEventListener("dragover", (event) => {
+    event.preventDefault();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = "move";
+    }
+    section.classList.add("workspace-delivery-area-drop-active");
+  });
+  section.addEventListener("dragleave", (event) => {
+    if (!section.contains(event.relatedTarget)) {
+      section.classList.remove("workspace-delivery-area-drop-active");
+    }
+  });
+  section.addEventListener("drop", (event) => {
+    event.preventDefault();
+    section.classList.remove("workspace-delivery-area-drop-active");
+    const orderId = event.dataTransfer?.getData("application/x-manual-dispatch-order")
+      || event.dataTransfer?.getData("text/plain");
+    if (orderId) {
+      actions.moveDeliveryOrderToArea(orderId, area);
+    }
+  });
+}
+
+function createDeliveryTaskPoolOrderGrid(orders, board, state, actions, emptyMessage) {
   const orderGrid = document.createElement("div");
   orderGrid.className = "workspace-card-grid workspace-order-grid";
-  if (!unassignedOrders.length) {
-    orderGrid.append(createEmptyState("No unassigned Delivery Orders are available.", "document"));
-  } else if (!filteredOrders.length) {
-    orderGrid.append(createEmptyState("No unassigned Delivery Orders match the filters.", "document"));
+  if (!orders.length) {
+    orderGrid.append(createEmptyState(emptyMessage, "document"));
   } else {
-    filteredOrders.forEach((order) => {
+    orders.forEach((order) => {
       orderGrid.append(createOrderCard(order, board, state, actions));
     });
   }
@@ -165,6 +307,8 @@ export function createDeliveryTaskPoolPanel(unassignedOrders, filteredOrders, st
 export function createOrderCard(order, board, state, actions) {
   const card = document.createElement("article");
   card.className = "workspace-record-card workspace-order-card";
+  card.dataset.orderId = order.order_id;
+  card.dataset.deliveryArea = order.delivery_area || "REVIEW";
   const urgency = normalizeDeliveryOrderUrgency(order.urgency);
   const isUrgent = isDeliveryOrderUrgent(urgency);
   card.classList.toggle("workspace-order-card-urgent", isUrgent);
@@ -195,7 +339,13 @@ export function createOrderCard(order, board, state, actions) {
   identity.append(eyebrow, orderNumber, title, suburb);
   const urgencyBadge = createBadge(urgency);
   urgencyBadge.classList.toggle("workspace-order-badge-urgent", isUrgent);
-  top.append(identity, urgencyBadge);
+  const cardActions = document.createElement("div");
+  cardActions.className = "workspace-order-card-actions";
+  cardActions.append(
+    urgencyBadge,
+    createOrderAreaMoveControls(order, card, state, actions),
+  );
+  top.append(identity, cardActions);
 
   const chips = document.createElement("div");
   chips.className = "workspace-order-chip-row";
@@ -208,6 +358,15 @@ export function createOrderCard(order, board, state, actions) {
     createChip(`Delivery Date: ${formatOptional(order.delivery_date)}`),
     createChip(`Start: ${formatOptional(order.start_time, "-")}`),
   );
+  if (order.delivery_area_source === "MANUAL") {
+    const manual = createChip("Manual Area");
+    manual.classList.add("workspace-order-chip-manual-area");
+    chips.append(manual);
+  } else if (!order.delivery_area) {
+    const review = createChip("Needs Area Review");
+    review.classList.add("workspace-order-chip-area-review");
+    chips.append(review);
+  }
   const body = document.createElement("div");
   body.className = "workspace-order-card-body";
   const info = document.createElement("div");
@@ -228,6 +387,63 @@ export function createOrderCard(order, board, state, actions) {
   body.append(info, createOrderAssignmentControls(order, board, state, actions));
   card.append(body);
   return card;
+}
+
+function createOrderAreaMoveControls(order, card, state, actions) {
+  const controls = document.createElement("div");
+  controls.className = "workspace-order-area-controls";
+  controls.addEventListener("click", (event) => event.stopPropagation());
+  controls.addEventListener("keydown", (event) => event.stopPropagation());
+  const busy = isBusy(state, `delivery-area:${order.order_id}`);
+  const label = formatOptional(order.invoice_number, order.order_id);
+  const handle = document.createElement("button");
+  handle.type = "button";
+  handle.className = "workspace-order-drag-handle";
+  handle.draggable = !busy;
+  handle.disabled = busy;
+  handle.textContent = "⠿";
+  handle.setAttribute("aria-label", `Drag Delivery Order ${label} to another area`);
+  handle.title = "Drag to South East or Local";
+  handle.addEventListener("dragstart", (event) => {
+    card.classList.add("workspace-order-card-dragging");
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("application/x-manual-dispatch-order", order.order_id);
+      event.dataTransfer.setData("text/plain", order.order_id);
+    }
+  });
+  handle.addEventListener("dragend", () => {
+    card.classList.remove("workspace-order-card-dragging");
+    document.querySelectorAll(".workspace-delivery-area-drop-active").forEach(
+      (item) => item.classList.remove("workspace-delivery-area-drop-active"),
+    );
+  });
+  const move = document.createElement("select");
+  move.className = "workspace-order-area-move-select";
+  move.disabled = busy;
+  move.setAttribute("aria-label", `Move Delivery Order ${label} to another area`);
+  const prompt = document.createElement("option");
+  prompt.value = "";
+  prompt.textContent = "Move area";
+  move.append(prompt);
+  [
+    ["SOUTHEAST", "Move to South East"],
+    ["LOCAL", "Move to Local"],
+  ].filter(([area]) => area !== order.delivery_area).forEach(([area, text]) => {
+    const option = document.createElement("option");
+    option.value = area;
+    option.textContent = text;
+    move.append(option);
+  });
+  move.addEventListener("change", () => {
+    const targetArea = move.value;
+    move.value = "";
+    if (targetArea) {
+      actions.moveDeliveryOrderToArea(order.order_id, targetArea);
+    }
+  });
+  controls.append(handle, move);
+  return controls;
 }
 
 export function createOrderAssignmentControls(order, board, state, actions) {

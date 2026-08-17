@@ -85,7 +85,12 @@ export function createSelect(labelText, value, options, onChange) {
   return label;
 }
 
-export function createBoundInput(labelText, value, onInput, { type = "text" } = {}) {
+export function createBoundInput(
+  labelText,
+  value,
+  onInput,
+  { type = "text", onChange = null } = {},
+) {
   const label = document.createElement("label");
   label.className = "workspace-field";
   const text = document.createElement("span");
@@ -97,6 +102,9 @@ export function createBoundInput(labelText, value, onInput, { type = "text" } = 
   }
   input.value = value ?? "";
   input.addEventListener("input", () => onInput(input.value));
+  if (typeof onChange === "function") {
+    input.addEventListener("change", () => onChange(input.value));
+  }
   label.append(text, input);
   return label;
 }
@@ -335,7 +343,12 @@ export function createTableHeader(labels) {
   return thead;
 }
 
-export function createInlineInput(value, onInput, type = "text") {
+export function createInlineInput(
+  value,
+  onInput,
+  type = "text",
+  { onChange = null } = {},
+) {
   const input = document.createElement("input");
   input.type = type;
   if (type === "number") {
@@ -343,6 +356,9 @@ export function createInlineInput(value, onInput, type = "text") {
   }
   input.value = value ?? "";
   input.addEventListener("input", () => onInput(input.value));
+  if (typeof onChange === "function") {
+    input.addEventListener("change", () => onChange(input.value));
+  }
   return input;
 }
 

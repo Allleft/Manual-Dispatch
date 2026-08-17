@@ -7,12 +7,18 @@ from backend.services.manual_dispatch.normalization import (
     normalize_product_detail_lines,
     quantity_or_default,
 )
+from backend.services.manual_dispatch.delivery_suburb_region_service import (
+    DeliveryOrderAreaResolver,
+    canonical_delivery_location,
+)
+from backend.services.manual_dispatch.transaction import immediate_transactional
 
 
 class OrderService:
-    def __init__(self, repository, id_generator):
+    def __init__(self, repository, id_generator, area_resolver=None):
         self.repository = repository
         self.id_generator = id_generator
+        self.area_resolver = area_resolver or DeliveryOrderAreaResolver(repository)
 
     def create_order(self, request):
         suburb = clean_required_text(request.suburb, "suburb")
@@ -57,8 +63,9 @@ class OrderService:
             product_lines=product_lines,
             invoice_date=clean_optional_iso_date(request.invoice_date, "invoice_date"),
         )
-        return self.repository.create_order(order)
+        return self.area_resolver.resolve_order(self.repository.create_order(order))
 
+    @immediate_transactional
     def update_order(self, order_id, request):
         existing = self.repository.get_order(order_id)
         if not existing:
@@ -137,7 +144,14 @@ class OrderService:
                 else existing.invoice_date
             ),
         )
-        return self.repository.update_order(order)
+        location_changed = canonical_delivery_location(
+            existing.suburb,
+            existing.postcode,
+        ) != canonical_delivery_location(order.suburb, order.postcode)
+        updated = self.repository.update_order(order)
+        if location_changed:
+            self.repository.clear_delivery_order_area_override(order_id)
+        return self.area_resolver.resolve_order(updated)
 
     def cancel_order(self, order_id):
         existing = self.repository.get_order(order_id)

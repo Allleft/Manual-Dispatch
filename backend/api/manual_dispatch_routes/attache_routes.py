@@ -21,6 +21,9 @@ from backend.services.manual_dispatch.attache_invoice_pdf_parser import (
     parse_attache_invoice_pdf_bytes,
     with_duplicate_warning,
 )
+from backend.services.manual_dispatch.delivery_suburb_region_service import (
+    apply_delivery_area_preview,
+)
 from .common import (
     require_legacy_mutations_enabled,
     to_http_exception,
@@ -156,7 +159,7 @@ def create_attache_router(
                 )
                 if parsed.invoice_number and parsed.invoice_number in existing_invoice_numbers:
                     parsed = with_duplicate_warning(parsed)
-                rows.append(parsed)
+                rows.append(apply_delivery_area_preview(parsed))
             except ValueError as error:
                 raise HTTPException(
                     status_code=400,

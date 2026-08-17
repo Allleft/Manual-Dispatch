@@ -120,6 +120,7 @@ export function createDeliveryOrderReadOnly(order, state, board) {
       ["Zone", order.zone],
       ["Urgency", order.urgency],
     ]),
+    createModalFactSection("Delivery Area", deliveryOrderAreaFacts(order)),
     assignmentFacts.length
       ? createModalFactSection("Current Assignment", assignmentFacts)
       : document.createDocumentFragment(),
@@ -162,6 +163,16 @@ export function createDeliveryOrderActions(order, locked, state, actions) {
       className: "workspace-modal-action-button workspace-modal-action-danger",
     }),
   );
+  if (order.delivery_area_source === "MANUAL") {
+    row.append(createActionButton(
+      "Reset to Automatic",
+      () => actions.resetDeliveryOrderArea(order.order_id),
+      {
+        disabled: locked || isBusy(state, `delivery-area:${order.order_id}`),
+        className: "workspace-modal-action-button workspace-modal-action-neutral",
+      },
+    ));
+  }
   return row;
 }
 
@@ -190,9 +201,13 @@ export function createDeliveryOrderForm(state, actions, formMode) {
       createBoundInput("Delivery Address", formState.delivery_address, (value) =>
         actions.updateDeliveryOrderForm("delivery_address", value)),
       createBoundInput("Suburb", formState.suburb, (value) =>
-        actions.updateDeliveryOrderForm("suburb", value)),
+        actions.updateDeliveryOrderForm("suburb", value), {
+        onChange: actions.classifyDeliveryOrderForm,
+      }),
       createBoundInput("Postcode", formState.postcode, (value) =>
-        actions.updateDeliveryOrderForm("postcode", value)),
+        actions.updateDeliveryOrderForm("postcode", value), {
+        onChange: actions.classifyDeliveryOrderForm,
+      }),
       createBoundInput("Delivery Date", formState.delivery_date, (value) =>
         actions.updateDeliveryOrderForm("delivery_date", value), { type: "date" }),
       createBoundInput("Start Time", formState.start_time, (value) =>
@@ -213,6 +228,7 @@ export function createDeliveryOrderForm(state, actions, formMode) {
         }))),
       ], (value) => actions.updateDeliveryOrderForm("preferred_driver_id", value)),
     ]),
+    createDeliveryAreaFormSection(formState, actions, formMode),
     createLoadAndProductLinesSection(formState, actions),
     createFormSection("Notes", [
       createBoundTextarea("Notes", formState.note || "", (value) =>
@@ -228,13 +244,112 @@ export function createDeliveryOrderForm(state, actions, formMode) {
     createActionButton(formMode === "edit" ? "Save Changes" : "Create Order", () => actions.saveDeliveryOrderForm(), {
       disabled: isBusy(state, formMode === "edit"
         ? `delivery-order-edit:${state.deliveryOrderDetailId}`
-        : "delivery-order-add"),
+        : "delivery-order-add")
+        || formState.delivery_area_classification_pending
+        || Boolean(formState.delivery_area_classification_error)
+        || (formMode === "add"
+          && formState.delivery_area_known === false
+          && !formState.delivery_area_selection),
       primary: true,
       iconName: "document",
     }),
   );
   form.append(row);
   return form;
+}
+
+export function createDeliveryAreaFormSection(formState, actions, formMode) {
+  const section = document.createElement("section");
+  section.className = "workspace-form-section workspace-delivery-area-preview";
+  const title = document.createElement("h4");
+  title.textContent = "Delivery Area";
+  section.append(title);
+  if (formState.delivery_area_classification_pending) {
+    section.append(createStatus("Determining Delivery Area...", "loading"));
+    return section;
+  }
+  if (formState.delivery_area_classification_error) {
+    section.append(createStatus(formState.delivery_area_classification_error, "error"));
+    return section;
+  }
+  if (formState.delivery_area_known === null) {
+    const helper = document.createElement("p");
+    helper.className = "workspace-muted";
+    helper.textContent = "Enter a suburb and postcode to determine the Delivery Area.";
+    section.append(helper);
+    return section;
+  }
+  const effectiveArea = formState.delivery_area_source === "MANUAL"
+    ? formState.delivery_area
+    : formState.auto_delivery_area;
+  section.append(createModalFactSection("Classification", [
+    ["Delivery Area", formatDeliveryArea(effectiveArea)],
+    [
+      "Area Source",
+      formState.delivery_area_source === "MANUAL" ? "Manual Override" : "Automatic",
+    ],
+    ["Automatic Area", formatDeliveryArea(formState.auto_delivery_area)],
+    ["Automatic Region", formatDeliveryRegion(formState.auto_delivery_region)],
+  ]));
+  if (formState.delivery_area_known === false) {
+    section.append(createStatus(
+      formMode === "add"
+        ? "Delivery Area could not be determined. Choose an area before creating the Order."
+        : "Delivery Area could not be determined. Saving this location will place the Order in Needs Area Review.",
+      "error",
+    ));
+    if (formMode === "add") {
+      section.append(createBoundSelect(
+        "Delivery Area (required)",
+        formState.delivery_area_selection || "",
+        [
+          { value: "", label: "Choose Delivery Area" },
+          { value: "SOUTHEAST", label: "South East" },
+          { value: "LOCAL", label: "Local" },
+        ],
+        (value) => actions.updateDeliveryOrderForm("delivery_area_selection", value),
+      ));
+    }
+  }
+  return section;
+}
+
+export function deliveryOrderAreaFacts(order) {
+  const facts = [
+    ["Delivery Area", formatDeliveryArea(order.delivery_area)],
+    [
+      "Area Source",
+      order.delivery_area_source === "MANUAL" ? "Manual Override" : "Automatic",
+    ],
+  ];
+  if (order.delivery_area_source === "MANUAL") {
+    facts.push(["Automatic Area", formatDeliveryArea(order.auto_delivery_area)]);
+  }
+  facts.push(["Automatic Region", formatDeliveryRegion(order.auto_delivery_region)]);
+  return facts;
+}
+
+export function formatDeliveryArea(area) {
+  if (area === "SOUTHEAST") {
+    return "South East";
+  }
+  if (area === "LOCAL") {
+    return "Local";
+  }
+  return "Needs Area Review";
+}
+
+export function formatDeliveryRegion(region) {
+  const labels = {
+    SOUTHEAST: "South East",
+    SOUTHWEST: "South West",
+    EAST: "East",
+    SOUTH: "South",
+    NORTH: "North",
+    CITY: "City",
+    WEST: "West",
+  };
+  return labels[region] || "Needs Review";
 }
 
 export function createProductLineEditor(lines, actions) {

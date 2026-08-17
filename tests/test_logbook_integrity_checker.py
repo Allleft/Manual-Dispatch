@@ -40,6 +40,10 @@ DELIVERY_CLOSEOUT_ACTIONS = {
     "DELIVERY_ORDER_DELIVERED",
     "DELIVERY_ORDER_RETURNED_TO_POOL",
 }
+DELIVERY_AREA_ACTIONS = {
+    "ORDER_DELIVERY_AREA_OVERRIDDEN",
+    "ORDER_DELIVERY_AREA_OVERRIDE_CLEARED",
+}
 OPSHOP_REPAIR_ACTIONS = {
     "DUPLICATE_OPSHOP_LOCATION_REPAIR_COMPLETED",
 }
@@ -55,7 +59,7 @@ class LogbookIntegrityCheckerTest(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def test_contract_registry_contains_expected_actions_only(self):
-        self.assertEqual(54, len(KNOWN_ACTIONS))
+        self.assertEqual(56, len(KNOWN_ACTIONS))
         self.assertEqual(
             {
                 "LOGBOOK_TEST_DATA_ANNOTATED",
@@ -67,6 +71,7 @@ class LogbookIntegrityCheckerTest(unittest.TestCase):
         self.assertIn(INTEGRITY_INCIDENT_ANNOTATION_ACTION, KNOWN_ACTIONS)
         self.assertTrue(MAINTENANCE_ACTIONS.issubset(KNOWN_ACTIONS))
         self.assertTrue(DELIVERY_CLOSEOUT_ACTIONS.issubset(KNOWN_ACTIONS))
+        self.assertTrue(DELIVERY_AREA_ACTIONS.issubset(KNOWN_ACTIONS))
         self.assertTrue(OPSHOP_REPAIR_ACTIONS.issubset(KNOWN_ACTIONS))
         self.assertFalse(
             any(
@@ -119,7 +124,7 @@ class LogbookIntegrityCheckerTest(unittest.TestCase):
 
         result = self._check_records(records)
 
-        self.assertEqual(54, result.records_checked)
+        self.assertEqual(56, result.records_checked)
         self.assertEqual(0, result.error_count)
         self.assertEqual(0, result.warning_count)
 

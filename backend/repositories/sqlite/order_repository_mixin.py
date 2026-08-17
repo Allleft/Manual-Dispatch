@@ -1,5 +1,10 @@
+from datetime import datetime, timezone
+
 from backend.db.connection import connect
 from backend.schemas import ProductDetailLine
+from backend.services.manual_dispatch.delivery_suburb_region_service import (
+    validate_delivery_area,
+)
 
 class SQLiteOrderRepositoryMixin:
     """Order persistence responsibilities."""
@@ -152,6 +157,70 @@ class SQLiteOrderRepositoryMixin:
         if cursor.rowcount == 0:
             raise ValueError(f"Order does not exist: {order_id}")
         return self.get_order(order_id)
+
+    def get_delivery_order_area_override(self, order_id):
+        with connect(self.db_path) as connection:
+            row = connection.execute(
+                """
+                SELECT delivery_area
+                FROM delivery_order_area_overrides
+                WHERE order_id = ?
+                """,
+                (order_id,),
+            ).fetchone()
+        return row["delivery_area"] if row else None
+
+    def set_delivery_order_area_override(
+        self,
+        order_id,
+        delivery_area,
+        updated_by=None,
+    ):
+        normalized = validate_delivery_area(delivery_area)
+        with connect(self.db_path) as connection:
+            exists = connection.execute(
+                "SELECT 1 FROM manual_orders WHERE order_id = ?",
+                (order_id,),
+            ).fetchone()
+            if not exists:
+                raise ValueError(f"Order does not exist: {order_id}")
+            connection.execute(
+                """
+                INSERT INTO delivery_order_area_overrides (
+                    order_id,
+                    delivery_area,
+                    updated_at,
+                    updated_by
+                ) VALUES (?, ?, ?, ?)
+                ON CONFLICT(order_id) DO UPDATE SET
+                    delivery_area = excluded.delivery_area,
+                    updated_at = excluded.updated_at,
+                    updated_by = excluded.updated_by
+                """,
+                (
+                    order_id,
+                    normalized,
+                    datetime.now(timezone.utc).isoformat(),
+                    updated_by,
+                ),
+            )
+            connection.commit()
+        return normalized
+
+    def clear_delivery_order_area_override(self, order_id):
+        with connect(self.db_path) as connection:
+            exists = connection.execute(
+                "SELECT 1 FROM manual_orders WHERE order_id = ?",
+                (order_id,),
+            ).fetchone()
+            if not exists:
+                raise ValueError(f"Order does not exist: {order_id}")
+            cursor = connection.execute(
+                "DELETE FROM delivery_order_area_overrides WHERE order_id = ?",
+                (order_id,),
+            )
+            connection.commit()
+        return cursor.rowcount > 0
 
     def _replace_order_product_lines(self, connection, order_id, product_lines):
         connection.execute(

@@ -137,6 +137,9 @@ class ManualDispatchAttacheInvoiceImportTest(unittest.TestCase):
         self.assertEqual(1, imported.pallet_quantity)
         self.assertEqual(0, imported.loose_bags_quantity)
         self.assertEqual(2, imported.carton_quantity)
+        self.assertIsNone(imported.auto_delivery_area)
+        self.assertIsNone(imported.delivery_area)
+        self.assertEqual("AUTO", imported.delivery_area_source)
         self.assertEqual(1, len(imported.product_lines))
         product = imported.product_lines[0]
         self.assertEqual("RBAG15", product.product_code)
@@ -201,6 +204,11 @@ class ManualDispatchAttacheInvoiceImportTest(unittest.TestCase):
             self.assertEqual("2026-08-11", preview_row["invoice_date"])
             self.assertEqual("2026-08-13", preview_row["delivery_date"])
             self.assertEqual(5, preview_row["loose_bags_quantity"])
+            self.assertEqual("SOUTHEAST", preview_row["auto_delivery_region"])
+            self.assertEqual("SOUTHEAST", preview_row["auto_delivery_area"])
+            self.assertEqual("SOUTHEAST", preview_row["delivery_area"])
+            self.assertEqual("AUTO", preview_row["delivery_area_source"])
+            self.assertEqual([], preview_row["warnings"])
 
             commit_response = self.client.post(
                 "/api/manual-dispatch/delivery/orders/import-attache-pdf-commit",
@@ -221,6 +229,9 @@ class ManualDispatchAttacheInvoiceImportTest(unittest.TestCase):
             )
             self.assertEqual("2026-08-11", api_order["invoice_date"])
             self.assertEqual("2026-08-13", api_order["delivery_date"])
+            self.assertEqual("SOUTHEAST", api_order["auto_delivery_region"])
+            self.assertEqual("SOUTHEAST", api_order["delivery_area"])
+            self.assertEqual("AUTO", api_order["delivery_area_source"])
 
         reloaded_repository = SQLiteManualDispatchRepository(self.db_path)
         reloaded_board = ManualDispatchService(
@@ -234,6 +245,9 @@ class ManualDispatchAttacheInvoiceImportTest(unittest.TestCase):
         self.assertEqual("2026-08-11", persisted.invoice_date)
         self.assertEqual("2026-08-13", persisted.delivery_date)
         self.assertEqual(5, persisted.loose_bags_quantity)
+        self.assertEqual("SOUTHEAST", persisted.auto_delivery_region)
+        self.assertEqual("SOUTHEAST", persisted.delivery_area)
+        self.assertEqual("AUTO", persisted.delivery_area_source)
 
     def test_batch_limits_accept_30_and_reject_31_for_preview_and_commit(self):
         sanitized_text = """

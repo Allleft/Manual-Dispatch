@@ -5,6 +5,9 @@ from backend.services.manual_dispatch.auth_service import OperatorAuthService
 from backend.services.manual_dispatch.board_service import BoardService
 from backend.services.manual_dispatch.delivery_run_sheet_service import DeliveryRunSheetService
 from backend.services.manual_dispatch.delivery_workspace_board_service import DeliveryWorkspaceBoardService
+from backend.services.manual_dispatch.delivery_suburb_region_service import (
+    DeliveryOrderAreaResolver,
+)
 from backend.services.manual_dispatch.delivery_workspace_mutation_service import DeliveryWorkspaceMutationService
 from backend.services.manual_dispatch.final_summary_service import FinalSummaryService
 from backend.services.manual_dispatch.id_generation import ManualDispatchIdGenerator
@@ -59,7 +62,12 @@ class ManualDispatchService:
             self.validator,
             self.board_service,
         )
-        self.order_service = OrderService(self.repository, self.id_generator)
+        self.delivery_order_area_resolver = DeliveryOrderAreaResolver(self.repository)
+        self.order_service = OrderService(
+            self.repository,
+            self.id_generator,
+            self.delivery_order_area_resolver,
+        )
         self.specification_service = SpecificationService(
             self.repository,
             self.validator,
@@ -79,7 +87,8 @@ class ManualDispatchService:
             self.validator,
         )
         self.delivery_workspace_board_service = DeliveryWorkspaceBoardService(
-            self.repository
+            self.repository,
+            self.delivery_order_area_resolver,
         )
         self.opshop_workspace_board_service = OpShopWorkspaceBoardService(
             self.repository,
@@ -122,6 +131,15 @@ class ManualDispatchService:
 
     def get_delivery_workspace_board(self, dispatch_date):
         return self.delivery_application_service.get_delivery_workspace_board(dispatch_date)
+
+    def classify_delivery_area(self, request):
+        return self.delivery_application_service.classify_delivery_area(request)
+
+    def update_delivery_order_area(self, order_id, request):
+        return self.delivery_application_service.update_delivery_order_area(
+            order_id,
+            request,
+        )
 
     def get_delivery_trip_summary_board(self, delivery_date):
         return self.delivery_application_service.get_delivery_trip_summary_board(delivery_date)
@@ -259,6 +277,12 @@ class ManualDispatchService:
 
     def _record_order_event(self, action, order):
         return self.delivery_event_recorder._record_order_event(action, order)
+
+    def _record_delivery_order_area_change(self, before, after):
+        return self.delivery_event_recorder.record_delivery_order_area_change(
+            before,
+            after,
+        )
 
     def _record_delivery_assignment_change(
         self,

@@ -43,6 +43,16 @@ CREATE TABLE IF NOT EXISTS order_product_lines (
         ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS delivery_order_area_overrides (
+    order_id TEXT PRIMARY KEY,
+    delivery_area TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    updated_by TEXT,
+    CHECK(delivery_area IN ('SOUTHEAST', 'LOCAL')),
+    FOREIGN KEY(order_id) REFERENCES manual_orders(order_id)
+        ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS manual_drivers (
     driver_id TEXT PRIMARY KEY,
     name TEXT NOT NULL,

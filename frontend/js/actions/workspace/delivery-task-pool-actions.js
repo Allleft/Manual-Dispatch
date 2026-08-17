@@ -1,7 +1,20 @@
 import { updateDeliveryTaskPoolFilteredContent } from "../../render/delivery/delivery-task-pool-renderer.js";
-import { captureWindowScroll, restoreWindowScroll } from "../../utils/scroll-utils.js";
+import {
+  captureElementScroll,
+  captureWindowScroll,
+  restoreElementScroll,
+  restoreWindowScroll,
+} from "../../utils/scroll-utils.js";
 
 let deliveryProductLineDraftSequence = 0;
+const VALID_DELIVERY_AREAS = new Set(["LOCAL", "SOUTHEAST"]);
+const DELIVERY_AREA_FIELDS = [
+  "auto_delivery_region",
+  "auto_delivery_area",
+  "delivery_area_override",
+  "delivery_area",
+  "delivery_area_source",
+];
 
 function nextDeliveryProductLineDraftId() {
   deliveryProductLineDraftSequence += 1;
@@ -119,6 +132,76 @@ export function createDeliveryTaskPoolActions(context) {
       ...(state.deliveryOrderForm || {}),
       [field]: value,
     };
+    if (field === "suburb" || field === "postcode") {
+      state.deliveryOrderForm = {
+        ...state.deliveryOrderForm,
+        delivery_area_selection: "",
+        delivery_area_known: null,
+        delivery_area_classification_pending: true,
+        delivery_area_classification_error: "",
+      };
+    } else if (field === "delivery_area_selection") {
+      renderWorkspacePreservingModalScroll();
+    }
+  }
+
+  async function classifyDeliveryOrderForm() {
+    const current = state.deliveryOrderForm || {};
+    const suburb = String(current.suburb || "");
+    const postcode = String(current.postcode || "");
+    const requestVersion = ++context.deliveryOrderAreaClassificationVersion;
+    if (!suburb.trim()) {
+      state.deliveryOrderForm = {
+        ...current,
+        auto_delivery_region: null,
+        auto_delivery_area: null,
+        delivery_area_override: null,
+        delivery_area: null,
+        delivery_area_source: "AUTO",
+        delivery_area_known: false,
+        delivery_area_classification_pending: false,
+        delivery_area_classification_error: "",
+      };
+      renderWorkspacePreservingModalScroll();
+      return;
+    }
+    try {
+      const classification = await api.classifyDeliveryArea(suburb, postcode);
+      const latest = state.deliveryOrderForm || {};
+      if (
+        requestVersion !== context.deliveryOrderAreaClassificationVersion
+        || String(latest.suburb || "") !== suburb
+        || String(latest.postcode || "") !== postcode
+      ) {
+        return;
+      }
+      state.deliveryOrderForm = {
+        ...latest,
+        auto_delivery_region: classification.auto_delivery_region ?? null,
+        auto_delivery_area: classification.auto_delivery_area ?? null,
+        delivery_area_override: null,
+        delivery_area: classification.delivery_area ?? null,
+        delivery_area_source: "AUTO",
+        delivery_area_known: Boolean(classification.known),
+        delivery_area_selection: classification.known
+          ? ""
+          : latest.delivery_area_selection || "",
+        delivery_area_classification_pending: false,
+        delivery_area_classification_error: "",
+      };
+    } catch (error) {
+      if (requestVersion !== context.deliveryOrderAreaClassificationVersion) {
+        return;
+      }
+      state.deliveryOrderForm = {
+        ...(state.deliveryOrderForm || {}),
+        delivery_area_known: null,
+        delivery_area_classification_pending: false,
+        delivery_area_classification_error:
+          `Unable to classify Delivery Area. ${error.message}`,
+      };
+    }
+    renderWorkspacePreservingModalScroll();
   }
 
   function addDeliveryOrderProductLine() {
@@ -178,7 +261,24 @@ export function createDeliveryTaskPoolActions(context) {
   async function saveDeliveryOrderForm() {
     const mode = state.deliveryOrderFormMode;
     const orderId = state.deliveryOrderDetailId;
-    const payload = deliveryOrderPayload(state.deliveryOrderForm || {});
+    const form = state.deliveryOrderForm || {};
+    if (form.delivery_area_classification_pending) {
+      state.deliveryOrderModalError = "Wait for Delivery Area classification to finish.";
+      renderWorkspacePreservingModalScroll();
+      return;
+    }
+    if (form.delivery_area_classification_error) {
+      state.deliveryOrderModalError = form.delivery_area_classification_error;
+      renderWorkspacePreservingModalScroll();
+      return;
+    }
+    if (mode === "add" && form.delivery_area_known === false && !form.delivery_area_selection) {
+      state.deliveryOrderModalError =
+        "Delivery Area could not be determined. Choose South East or Local before creating the Order.";
+      renderWorkspacePreservingModalScroll();
+      return;
+    }
+    const payload = deliveryOrderPayload(form, { includeDeliveryArea: mode === "add" });
     const actionKey = mode === "edit"
       ? `delivery-order-edit:${orderId}`
       : "delivery-order-add";
@@ -326,6 +426,90 @@ export function createDeliveryTaskPoolActions(context) {
     );
   }
 
+  async function moveDeliveryOrderToArea(orderId, targetArea) {
+    const normalizedTarget = String(targetArea || "").trim().toUpperCase();
+    if (!VALID_DELIVERY_AREAS.has(normalizedTarget)) {
+      return;
+    }
+    const order = findDeliveryOrder(orderId);
+    if (!order || order.delivery_area === normalizedTarget) {
+      return;
+    }
+    await persistDeliveryOrderArea(order, normalizedTarget, {
+      failureMessage:
+        `Unable to move Delivery Order to ${formatDeliveryAreaLabel(normalizedTarget)}. `
+        + "The previous area has been restored.",
+    });
+  }
+
+  async function resetDeliveryOrderArea(orderId) {
+    const order = findDeliveryOrder(orderId);
+    if (!order || !order.delivery_area_override) {
+      return;
+    }
+    await persistDeliveryOrderArea(order, null, {
+      failureMessage:
+        "Unable to reset Delivery Order to automatic classification. "
+        + "The previous area has been restored.",
+    });
+  }
+
+  async function persistDeliveryOrderArea(order, targetArea, { failureMessage }) {
+    const orderId = order.order_id;
+    const previous = Object.fromEntries(
+      DELIVERY_AREA_FIELDS.map((field) => [field, order[field] ?? null]),
+    );
+    const version = (context.deliveryAreaMutationVersions[orderId] || 0) + 1;
+    context.deliveryAreaMutationVersions[orderId] = version;
+    if (targetArea === null) {
+      order.delivery_area_override = null;
+      order.delivery_area = order.auto_delivery_area ?? null;
+      order.delivery_area_source = "AUTO";
+    } else {
+      order.delivery_area_override = targetArea;
+      order.delivery_area = targetArea;
+      order.delivery_area_source = "MANUAL";
+    }
+    await runDeliveryAction(`delivery-area:${orderId}`, async (mutationContext) => {
+      try {
+        const updated = await api.updateDeliveryOrderArea(orderId, targetArea);
+        if (
+          !isDeliveryMutationCurrent(mutationContext)
+          || context.deliveryAreaMutationVersions[orderId] !== version
+        ) {
+          return;
+        }
+        DELIVERY_AREA_FIELDS.forEach((field) => {
+          if (Object.prototype.hasOwnProperty.call(updated || {}, field)) {
+            order[field] = updated[field];
+          }
+        });
+      } catch (error) {
+        if (
+          isDeliveryMutationCurrent(mutationContext)
+          && context.deliveryAreaMutationVersions[orderId] === version
+        ) {
+          Object.assign(order, previous);
+          renderDeliveryWorkspacePreservingScroll();
+        }
+        throw error;
+      }
+    }, () => {
+      if (context.deliveryAreaMutationVersions[orderId] !== version) {
+        return;
+      }
+      state.deliveryActionError = failureMessage;
+    }, { preserveScroll: true });
+  }
+
+  function renderWorkspacePreservingModalScroll() {
+    const snapshot = typeof document === "undefined"
+      ? null
+      : captureElementScroll(".workspace-modal-body");
+    renderWorkspace();
+    restoreElementScroll(snapshot);
+  }
+
   function pruneDeliveryDrafts() {
     const orderIds = new Set((state.deliveryBoard?.orders || []).map((order) => order.order_id));
     state.deliveryAssignmentDrafts = Object.fromEntries(
@@ -397,6 +581,15 @@ export function createDeliveryTaskPoolActions(context) {
       loose_bags_quantity: String(order.loose_bags_quantity ?? 0),
       carton_quantity: String(order.carton_quantity ?? 0),
       note: order.note || "",
+      auto_delivery_region: order.auto_delivery_region ?? null,
+      auto_delivery_area: order.auto_delivery_area ?? null,
+      delivery_area_override: order.delivery_area_override ?? null,
+      delivery_area: order.delivery_area ?? null,
+      delivery_area_source: order.delivery_area_source || "AUTO",
+      delivery_area_known: order.order_id ? Boolean(order.auto_delivery_area) : null,
+      delivery_area_selection: "",
+      delivery_area_classification_pending: false,
+      delivery_area_classification_error: "",
       product_lines: (order.product_lines || []).map((line) => ({
         _draft_id: nextDeliveryProductLineDraftId(),
         product_code: line.product_code || "",
@@ -413,8 +606,8 @@ export function createDeliveryTaskPoolActions(context) {
     return defaultDeliveryOrderForm(order);
   }
 
-  function deliveryOrderPayload(form) {
-    return {
+  function deliveryOrderPayload(form, { includeDeliveryArea = false } = {}) {
+    const payload = {
       invoice_number: form.invoice_number || null,
       invoice_date: form.invoice_date || null,
       order_no: form.order_no || null,
@@ -446,6 +639,14 @@ export function createDeliveryTaskPoolActions(context) {
         package_unit: line.package_unit || null,
       })),
     };
+    if (includeDeliveryArea) {
+      payload.delivery_area = form.delivery_area_selection || null;
+    }
+    return payload;
+  }
+
+  function formatDeliveryAreaLabel(area) {
+    return area === "SOUTHEAST" ? "South East" : "Local";
   }
 
   return {
@@ -457,6 +658,7 @@ export function createDeliveryTaskPoolActions(context) {
     startEditDeliveryOrder,
     cancelDeliveryOrderEdit,
     updateDeliveryOrderForm,
+    classifyDeliveryOrderForm,
     addDeliveryOrderProductLine,
     updateDeliveryOrderProductLine,
     removeDeliveryOrderProductLine,
@@ -466,6 +668,8 @@ export function createDeliveryTaskPoolActions(context) {
     applyDeliveryOrderAssignment,
     moveDeliveryOrderToTrip,
     unassignDeliveryOrder,
+    moveDeliveryOrderToArea,
+    resetDeliveryOrderArea,
     getDeliveryAssignmentDraft,
     findDeliveryAssignment,
     findDeliveryOrder,

@@ -33,6 +33,13 @@ def _file_evidence(path):
     return stat.st_size, stat.st_mtime_ns, digest.hexdigest()
 
 
+def _stat_evidence(path):
+    if not path.exists():
+        return None
+    stat = path.stat()
+    return stat.st_size, stat.st_mtime_ns
+
+
 def _directory_evidence(path):
     if not path.exists():
         return None
@@ -47,11 +54,11 @@ def _directory_evidence(path):
 
 class AutomatedTestDatabaseIsolationTest(unittest.TestCase):
     def setUp(self):
-        self.default_db_before = _file_evidence(DEFAULT_DB_PATH)
+        self.default_db_before = _stat_evidence(DEFAULT_DB_PATH)
         self.default_logbook_before = _directory_evidence(DEFAULT_LOGBOOK_DIR)
 
     def tearDown(self):
-        self.assertEqual(self.default_db_before, _file_evidence(DEFAULT_DB_PATH))
+        self.assertEqual(self.default_db_before, _stat_evidence(DEFAULT_DB_PATH))
         self.assertEqual(
             self.default_logbook_before,
             _directory_evidence(DEFAULT_LOGBOOK_DIR),
@@ -116,6 +123,40 @@ class AutomatedTestDatabaseIsolationTest(unittest.TestCase):
                 raise AssertionError("default Logbook did not fail closed")
             """,
         )
+
+    def test_focused_delivery_area_module_isolates_logbook_without_environment(self):
+        environment = os.environ.copy()
+        environment["PYTHONDONTWRITEBYTECODE"] = "1"
+        environment.pop(TEST_MODE_ENV, None)
+        environment.pop(LOGBOOK_DIR_ENV, None)
+        environment.pop(DB_PATH_ENV, None)
+        before = _directory_evidence(DEFAULT_LOGBOOK_DIR)
+
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "unittest",
+                "discover",
+                "-s",
+                "tests",
+                "-p",
+                "test_delivery_area_classification.py",
+                "-v",
+            ],
+            cwd=PROJECT_ROOT,
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(
+            0,
+            completed.returncode,
+            msg=f"stdout:\n{completed.stdout}\nstderr:\n{completed.stderr}",
+        )
+        self.assertEqual(before, _directory_evidence(DEFAULT_LOGBOOK_DIR))
 
     def test_api_import_with_explicit_test_database_is_lazy(self):
         with tempfile.TemporaryDirectory(prefix="manual-dispatch-api-import-") as root:

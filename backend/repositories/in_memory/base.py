@@ -70,6 +70,7 @@ class InMemoryRepositoryBase:
                 note=None,
             ),
         ]
+        self.delivery_order_area_overrides = {}
         self.drivers = [
             Driver(
                 driver_id="D001",

@@ -4,6 +4,10 @@ import {
   formatProductDetailLine,
   formatOptional,
 } from "../../utils/format-utils.js";
+import {
+  formatDeliveryAreaLabel,
+  formatDeliveryRegionLabel,
+} from "../../utils/delivery-area-utils.js";
 
 import {
   createWorkspaceModal,
@@ -320,6 +324,8 @@ export function createDeliveryDocketReviewRow(row, importState, actions) {
     createInlineMeta("Order", row.order_no),
     createInlineMeta("Customer", row.company_name),
     createInlineMeta("Suburb", row.suburb),
+    createInlineMeta("Delivery Area", formatDeliveryAreaLabel(row.delivery_area)),
+    createInlineMeta("Region", formatDeliveryRegionLabel(row.auto_delivery_region)),
     createInlineMeta("Delivery Date", row.delivery_date),
     createInlineMeta(
       "Load",
@@ -381,6 +387,7 @@ export function createDeliveryDocketExpandedEditor(row, actions) {
 function docketActionAdapter(actions) {
   return {
     updateDeliveryAttacheImportRow: actions.updateDeliveryDocketImportRow,
+    classifyDeliveryAttacheImportRow: actions.classifyDeliveryDocketImportRow,
     updateDeliveryAttacheImportProductLine: actions.updateDeliveryDocketImportProductLine,
     addDeliveryAttacheImportProductLine: actions.addDeliveryDocketImportProductLine,
     removeDeliveryAttacheImportProductLine: actions.removeDeliveryDocketImportProductLine,
@@ -604,6 +611,8 @@ export function createAttacheReviewRow(row, importState, actions) {
     createInlineMeta("Order", row.order_no),
     createInlineMeta("Customer", row.company_name),
     createInlineMeta("Suburb", row.suburb),
+    createInlineMeta("Delivery Area", formatDeliveryAreaLabel(row.delivery_area)),
+    createInlineMeta("Region", formatDeliveryRegionLabel(row.auto_delivery_region)),
     createInlineMeta("Delivery Date", row.delivery_date),
     createInlineMeta(
       "Load",
@@ -621,8 +630,11 @@ export function createAttacheReviewRow(row, importState, actions) {
     const scrollBody = card.closest(".workspace-modal-body");
     const scrollTop = scrollBody?.scrollTop || 0;
     const nextImportState = actions.toggleDeliveryAttacheImportExpanded(row.row_id);
+    const currentRow = (nextImportState?.rows || []).find(
+      (candidate) => candidate.row_id === row.row_id,
+    ) || row;
     const replacement = createAttacheReviewRow(
-      row,
+      currentRow,
       nextImportState || importState,
       actions,
     );
@@ -657,8 +669,18 @@ export function createAttacheExpandedEditor(row, actions) {
     ]),
     createFormSection("Delivery Details", [
       createInlineField("Delivery Address", createInlineInput(row.delivery_address, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "delivery_address", value))),
-      createInlineField("Suburb", createInlineInput(row.suburb, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "suburb", value))),
-      createInlineField("Postcode", createInlineInput(row.postcode, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "postcode", value))),
+      createInlineField("Suburb", createInlineInput(
+        row.suburb,
+        (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "suburb", value),
+        "text",
+        { onChange: () => actions.classifyDeliveryAttacheImportRow(row.row_id) },
+      )),
+      createInlineField("Postcode", createInlineInput(
+        row.postcode,
+        (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "postcode", value),
+        "text",
+        { onChange: () => actions.classifyDeliveryAttacheImportRow(row.row_id) },
+      )),
       createInlineField("Delivery Date", createInlineInput(row.delivery_date, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "delivery_date", value), "date")),
       createInlineField("Start Time", createInlineInput(row.start_time, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "start_time", value), "time")),
       createInlineField("End Time", createInlineInput(row.end_time, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "end_time", value), "time")),
@@ -666,6 +688,14 @@ export function createAttacheExpandedEditor(row, actions) {
         { value: "Normal", label: "Normal" },
         { value: "Urgent", label: "Urgent" },
       ], (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "urgency", value))),
+    ]),
+    createFormSection("Delivery Area", [
+      createInlineMeta("Effective Area", formatDeliveryAreaLabel(row.delivery_area)),
+      createInlineMeta("Region", formatDeliveryRegionLabel(row.auto_delivery_region)),
+      createInlineMeta(
+        "Source",
+        row.delivery_area_source === "MANUAL" ? "Manual Override" : "Automatic",
+      ),
     ]),
     createFormSection("Load", [
       createInlineField("Pallet Quantity", createInlineInput(row.pallet_quantity, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "pallet_quantity", Number(value || 0)), "number")),

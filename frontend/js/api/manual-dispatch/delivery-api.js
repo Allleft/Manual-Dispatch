@@ -17,6 +17,13 @@ export async function apiGetDeliverySpecifications() {
   return requestJson("/api/manual-dispatch/delivery/specifications");
 }
 
+export async function apiClassifyDeliveryArea(suburb, postcode) {
+  return requestJson("/api/manual-dispatch/delivery/area-classification", {
+    method: "POST",
+    body: { suburb, postcode },
+  });
+}
+
 export async function apiListDeliveryRunSheets(dispatchDate, status = "") {
   return requestJson("/api/manual-dispatch/delivery/run-sheets", {
     query: { dispatch_date: dispatchDate, status },
@@ -156,6 +163,16 @@ export async function apiCommitDeliveryAttacheInvoices(payload) {
     {
       method: "POST",
       body: payload,
+    },
+  );
+}
+
+export async function apiUpdateDeliveryOrderArea(orderId, deliveryArea) {
+  return requestJson(
+    `/api/manual-dispatch/delivery/orders/${encodeURIComponent(orderId)}/delivery-area`,
+    {
+      method: "PATCH",
+      body: { delivery_area: deliveryArea },
     },
   );
 }

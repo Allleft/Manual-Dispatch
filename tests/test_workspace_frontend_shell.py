@@ -335,7 +335,8 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             "Pickup workspace date",
             "Dispatch board date",
             "No Regular pickups are visible for this dispatch date.",
-            "No unassigned Delivery Orders are available.",
+            "No Orders in this area match the current filters.",
+            "No unassigned ${title} Orders.",
         ):
             self.assertIn(retained, source)
 
@@ -2469,6 +2470,8 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
               "Order",
               "Customer",
               "Suburb",
+              "Delivery Area",
+              "Region",
               "Delivery Date",
               "Load",
             ];
@@ -2534,12 +2537,14 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             "function createDeliveryTaskPool", 1
         )[1].split("function createDeliveryTaskPoolPanel", 1)[0]
         self.assertIn("sortDeliveryTaskPoolOrders(", task_pool_block)
-        self.assertIn("filterDeliveryTaskPoolOrders(unassignedOrders", task_pool_block)
+        self.assertIn("const filteredOrders = filterDeliveryTaskPoolOrders(", task_pool_block)
         self.assertIn(
-            "const filteredOrders = sortDeliveryTaskPoolOrders(\n"
-            "    filterDeliveryTaskPoolOrders(unassignedOrders",
+            "Object.entries(groups).map(([area, items]) => [\n"
+            "      area,\n"
+            "      sortDeliveryTaskPoolOrders(items)",
             task_pool_block,
         )
+        self.assertNotIn("const filteredOrders = sortDeliveryTaskPoolOrders(", task_pool_block)
         self.assertIn("normalizeDeliveryOrderUrgency(order.urgency)", self.delivery_renderer)
         self.assertIn("normalizeDeliveryOrderUrgency(urgency)", self.delivery_renderer)
         self.assertIn('card.classList.toggle("workspace-order-card-urgent", isUrgent)', self.delivery_renderer)
