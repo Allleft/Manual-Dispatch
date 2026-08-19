@@ -637,6 +637,34 @@ class SQLiteSnapshotRepositoryMixin:
             ).fetchall()
         return [self._row_to_opshop_pickup_collection(row) for row in rows]
 
+    def list_opshop_pickup_collection_reservations_for_task_ids(
+        self,
+        pickup_task_ids,
+    ):
+        requested_ids = sorted(
+            {task_id for task_id in pickup_task_ids if task_id}
+        )
+        if not requested_ids:
+            return []
+        placeholders = ", ".join("?" for _ in requested_ids)
+        with connect(self.db_path) as connection:
+            rows = connection.execute(
+                f"""
+                SELECT DISTINCT collection.*
+                FROM opshop_pickup_collections AS collection
+                JOIN opshop_pickup_collection_rows AS collection_row
+                    ON collection_row.collection_id = collection.collection_id
+                WHERE collection.status IN ('GENERATED', 'SAVED')
+                    AND collection_row.pickup_task_id_snapshot IN ({placeholders})
+                ORDER BY
+                    collection.pickup_date DESC,
+                    collection.generated_at DESC,
+                    collection.collection_id
+                """,
+                requested_ids,
+            ).fetchall()
+        return [self._row_to_opshop_pickup_collection(row) for row in rows]
+
     def list_saved_opshop_pickup_dates_by_opshop_ids(
         self,
         opshop_ids,

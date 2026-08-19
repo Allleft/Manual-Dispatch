@@ -167,6 +167,87 @@ class OpShopPickupCollectionGenerationTest(unittest.TestCase):
         self.assertEqual("SAVED", saved.json()["status"])
         self.assertEqual(409, self._post_generate("D001").status_code)
 
+    def test_generated_reservation_uses_task_identity_across_dispatch_dates(self):
+        self.dispatch_date = "2026-08-17"
+        self.pickup_date = "2026-08-18"
+        task_id = "CROSS-DISPATCH-PICKUP"
+        self._seed_pickup(
+            task_id,
+            driver_id="D001",
+            assignment_dispatch_date=self.dispatch_date,
+        )
+
+        generated = self._post_generate("D001")
+        self.assertEqual(200, generated.status_code, generated.text)
+        generated_body = generated.json()
+        self.assertEqual(self.dispatch_date, generated_body["dispatch_date"])
+        self.assertEqual(self.pickup_date, generated_body["pickup_date"])
+        self.assertEqual(
+            [generated_body["collection_id"]],
+            [
+                collection.collection_id
+                for collection in self.repository.list_opshop_pickup_collection_reservations_for_task_ids(
+                    {task_id}
+                )
+            ],
+        )
+
+        for board_date in (self.dispatch_date, self.pickup_date):
+            with self.subTest(board_date=board_date):
+                item = self._board_pickup(task_id, board_date)
+                self.assertEqual("D001", item["driver_id"])
+                self.assertEqual("D001", item["assigned_driver_id"])
+                self.assertEqual("John Georgiadis", item["assigned_driver_name"])
+                self.assertTrue(item["assigned_to_locked"])
+                self.assertEqual(
+                    "Already generated to John Georgiadis",
+                    item["assignment_lock_reason"],
+                )
+
+        reloaded_service = ManualDispatchService(
+            SQLiteManualDispatchRepository(self.db_path)
+        )
+        reloaded_item = next(
+            item
+            for item in reloaded_service.get_opshop_workspace_board(
+                self.pickup_date
+            ).opshop_pickups
+            if item.pickup_task_id == task_id
+        )
+        self.assertTrue(reloaded_item.assigned_to_locked)
+        self.assertEqual("John Georgiadis", reloaded_item.assigned_driver_name)
+
+        cancelled = self.client.post(
+            "/api/manual-dispatch/opshop/pickup-collections/"
+            f"{generated_body['collection_id']}/cancel-generated"
+        )
+        self.assertEqual({"cancelled": True}, cancelled.json())
+        for board_date in (self.dispatch_date, self.pickup_date):
+            released = self._board_pickup(task_id, board_date)
+            self.assertFalse(released["assigned_to_locked"])
+            self.assertIsNone(released["assignment_lock_reason"])
+            self.assertEqual("D001", released["assigned_driver_id"])
+
+        regenerated = self._post_generate("D001")
+        self.assertEqual(200, regenerated.status_code, regenerated.text)
+        saved = self.client.post(
+            "/api/manual-dispatch/opshop/pickup-collections/"
+            f"{regenerated.json()['collection_id']}/save",
+            json={
+                "saved_by_account_name": self.account.account_name,
+                "saved_by_account_id": self.account.account_id,
+            },
+        )
+        self.assertEqual(200, saved.status_code, saved.text)
+        for board_date in (self.dispatch_date, self.pickup_date):
+            self.assertNotIn(
+                task_id,
+                {
+                    pickup["pickup_task_id"]
+                    for pickup in self._get_board(board_date)["opshop_pickups"]
+                },
+            )
+
     def test_missing_assignment_is_not_rendered_as_assigned_or_collectable(self):
         self._seed_pickup(
             "MISSING-ASSIGNMENT",
@@ -290,6 +371,16 @@ class OpShopPickupCollectionGenerationTest(unittest.TestCase):
                 "D001",
             ),
         )
+        self.assertEqual(
+            ["MEMORY-PICKUP"],
+            [
+                row.pickup_task_id_snapshot
+                for collection in repository.list_opshop_pickup_collection_reservations_for_task_ids(
+                    {"MEMORY-PICKUP", "NOT-CAPTURED"}
+                )
+                for row in collection.pickups
+            ],
+        )
 
     def _seed_template(
         self,
@@ -403,13 +494,20 @@ class OpShopPickupCollectionGenerationTest(unittest.TestCase):
             },
         )
 
-    def _get_board(self):
+    def _get_board(self, dispatch_date=None):
         response = self.client.get(
             "/api/manual-dispatch/opshop/board",
-            params={"dispatch_date": self.dispatch_date},
+            params={"dispatch_date": dispatch_date or self.dispatch_date},
         )
         self.assertEqual(200, response.status_code)
         return response.json()
+
+    def _board_pickup(self, task_id, dispatch_date):
+        return next(
+            pickup
+            for pickup in self._get_board(dispatch_date)["opshop_pickups"]
+            if pickup["pickup_task_id"] == task_id
+        )
 
     def _visible_pickups(self, board, driver_id):
         return [

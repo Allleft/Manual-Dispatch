@@ -31,11 +31,6 @@ class OpShopWorkspaceBoardService:
         oncall_start_date = (
             date.fromisoformat(dispatch_date) - timedelta(days=14)
         ).isoformat()
-        collections = self.repository.list_opshop_pickup_collections(dispatch_date)
-        saved_task_ids = self._reserved_task_ids(collections, {"SAVED"})
-        generated_collections_by_task_id = (
-            self._generated_collections_by_task_id(collections)
-        )
 
         pickup_lists = [
             self.repository.list_scheduled_opshop_pickup_board_items_for_window(
@@ -46,16 +41,29 @@ class OpShopWorkspaceBoardService:
             self.repository.list_countryside_opshop_pickup_board_items(dispatch_date),
             self.repository.list_assigned_opshop_pickup_board_items(dispatch_date),
         ]
-        pickups_by_id = {}
+        candidate_pickups_by_id = {}
         for pickups in pickup_lists:
             for pickup in pickups:
-                if pickup.pickup_task_id in saved_task_ids:
-                    continue
-                pickup.assigned_to_locked = (
-                    pickup.pickup_task_id in generated_collections_by_task_id
-                    or pickup.pickup_date < dispatch_date
-                )
-                pickups_by_id[pickup.pickup_task_id] = pickup
+                candidate_pickups_by_id[pickup.pickup_task_id] = pickup
+
+        collections = (
+            self.repository.list_opshop_pickup_collection_reservations_for_task_ids(
+                candidate_pickups_by_id
+            )
+        )
+        saved_task_ids = self._reserved_task_ids(collections, {"SAVED"})
+        generated_collections_by_task_id = (
+            self._generated_collections_by_task_id(collections)
+        )
+        pickups_by_id = {}
+        for pickup_task_id, pickup in candidate_pickups_by_id.items():
+            if pickup_task_id in saved_task_ids:
+                continue
+            pickup.assigned_to_locked = (
+                pickup_task_id in generated_collections_by_task_id
+                or pickup.pickup_date < dispatch_date
+            )
+            pickups_by_id[pickup_task_id] = pickup
 
         collectable_task_ids = self._collectable_task_ids(
             pickups_by_id.values()

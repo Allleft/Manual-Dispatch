@@ -388,6 +388,23 @@ class InMemorySnapshotRepositoryMixin:
             and (not status or collection.status == status)
         ]
 
+    def list_opshop_pickup_collection_reservations_for_task_ids(
+        self,
+        pickup_task_ids,
+    ):
+        requested_ids = {task_id for task_id in pickup_task_ids if task_id}
+        if not requested_ids:
+            return []
+        return [
+            collection
+            for collection in self.opshop_pickup_collections
+            if collection.status in {"GENERATED", "SAVED"}
+            and any(
+                row.pickup_task_id_snapshot in requested_ids
+                for row in collection.pickups
+            )
+        ]
+
     def list_saved_opshop_pickup_dates_by_opshop_ids(
         self,
         opshop_ids,

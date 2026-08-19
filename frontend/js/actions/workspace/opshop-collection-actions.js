@@ -212,6 +212,7 @@ export function createOpShopCollectionActions(context) {
       `opshop-generate:${candidate.pickup_date}:${candidate.driver_id}`,
       async (context) => {
         await api.createGeneratedOpShopPickupCollection({
+          dispatch_date: candidate.dispatch_date || state.dispatchDate,
           pickup_date: candidate.pickup_date,
           driver_id: candidate.driver_id,
         });

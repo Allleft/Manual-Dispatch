@@ -3619,12 +3619,13 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
 
             const opshopGate = deferred();
             let opshopCalls = 0;
+            let opshopPayload = null;
             const opshopState = {
               isLoggedIn: true,
               workspaceRoute: "opshop/trip-summary",
               activeWorkspace: "opshop",
-              dispatchDate: "2026-07-06",
-              opshopTripSummaryDate: "2026-07-06",
+              dispatchDate: "2026-08-17",
+              opshopTripSummaryDate: "2026-08-18",
               opshopBoard: { opshop_pickups: [], countryside_route_groups: [] },
               opshopPickupCollections: [],
               opshopActionError: "", opshopBusyActionKeys: {},
@@ -3636,8 +3637,9 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
               state: opshopState,
               renderWorkspace: () => {},
               api: {
-                createGeneratedOpShopPickupCollection: async () => {
+                createGeneratedOpShopPickupCollection: async (payload) => {
                   opshopCalls += 1;
+                  opshopPayload = payload;
                   return opshopGate.promise;
                 },
                 getOpShopWorkspaceBoard: async () => opshopState.opshopBoard,
@@ -3647,11 +3649,11 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             const pickups = Array.from({ length: 5 }, (_, index) => ({
               pickup_task_id: `P-${index + 1}`,
               opshop_name: `Regular ${index + 1}`,
-              pickup_date: "2026-07-06",
+              pickup_date: "2026-08-18",
               run_type: "REGULAR",
             }));
             const opshopCandidate = {
-              pickup_date: "2026-07-06", driver_id: "D003",
+              pickup_date: "2026-08-18", driver_id: "D003",
               driver_name: "John Georgiadis", pickups,
               regular_count: 5, oncall_count: 0, countryside_count: 0,
             };
@@ -3668,6 +3670,11 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             const secondOpShopConfirm = opshopActions.confirmGenerateOpShopPickupCollection();
             if (opshopCalls !== 1) {
               throw new Error(`OP SHOP rapid confirm made ${opshopCalls} API calls`);
+            }
+            if (opshopPayload.dispatch_date !== "2026-08-17"
+                || opshopPayload.pickup_date !== "2026-08-18"
+                || opshopPayload.driver_id !== "D003") {
+              throw new Error(`OP SHOP Generate payload lost Dispatch Date: ${JSON.stringify(opshopPayload)}`);
             }
             opshopActions.closeOpShopGenerationConfirmation();
             if (!opshopState.opshopGenerationConfirmation) {
@@ -6220,6 +6227,36 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             }}
             if (utils.changedOpShopAssignments([locked], state).length !== 0) {{
               throw new Error("Generated pickup remained eligible for bulk assignment");
+            }}
+
+            const unlocked = {{
+              ...locked,
+              pickup_task_id: "PICKUP-UNLOCKED",
+              assigned_to_locked: false,
+              assignment_lock_reason: null,
+            }};
+            const unlockedRegular = module.createRegularPickupRow(
+              {{ ...unlocked, run_type: "REGULAR" }},
+              state,
+              actions,
+            );
+            if (unlockedRegular.querySelector("select").disabled
+                || unlockedRegular.querySelectorAll("button")
+                  .find((button) => button.textContent === "Edit").disabled
+                || unlockedRegular.querySelectorAll("button")
+                  .find((button) => button.textContent === "Delete").disabled
+                || unlockedRegular.textContent.includes(lockText)) {{
+              throw new Error("Unlocked Regular pickup controls remained locked");
+            }}
+            const unlockedOncall = oncall.createOncallPickupRow(unlocked, state, actions);
+            if (unlockedOncall.querySelector("select").disabled) {{
+              throw new Error("Unlocked Oncall assignment remained disabled");
+            }}
+            for (const label of ["Edit", "Delete", "Unassign now"]) {{
+              if (unlockedOncall.querySelectorAll("button")
+                .find((button) => button.textContent === label)?.disabled) {{
+                throw new Error(`Unlocked Oncall pickup left ${{label}} disabled`);
+              }}
             }}
             """,
             setup="""

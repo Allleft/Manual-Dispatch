@@ -143,9 +143,13 @@ class RefactorContractBaselineTest(unittest.TestCase):
         )
 
         self.assertEqual(sqlite_methods, in_memory_methods)
-        self.assertEqual(115, len(sqlite_methods))
+        self.assertEqual(116, len(sqlite_methods))
         self.assertIn(
             "list_saved_opshop_pickup_dates_by_opshop_ids",
+            {method["name"] for method in sqlite_methods},
+        )
+        self.assertIn(
+            "list_opshop_pickup_collection_reservations_for_task_ids",
             {method["name"] for method in sqlite_methods},
         )
         self.assertTrue(
@@ -156,7 +160,7 @@ class RefactorContractBaselineTest(unittest.TestCase):
             }.issubset({method["name"] for method in sqlite_methods})
         )
         self.assertEqual(
-            "295a6b27e1aac5284e36db3eda3946bf46bc4fbdd78591c0750fd6c298c94c23",
+            "048d01513b170d3cbc3cc5c8e4769794f3030baf257119b50c0b08907d51907a",
             self._contract_digest(sqlite_methods),
         )
 
