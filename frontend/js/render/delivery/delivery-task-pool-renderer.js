@@ -1,4 +1,5 @@
 import { createIcon } from "../../utils/icon-utils.js";
+import { deliveryOrderDragAutoScroll } from "../../utils/delivery-drag-auto-scroll.js";
 
 import {
   formatOptional,
@@ -210,6 +211,7 @@ function installDeliveryAreaDropZone(section, area, actions) {
   });
   section.addEventListener("drop", (event) => {
     event.preventDefault();
+    deliveryOrderDragAutoScroll.stop();
     section.classList.remove("workspace-delivery-area-drop-active");
     const orderId = event.dataTransfer?.getData("application/x-manual-dispatch-order")
       || event.dataTransfer?.getData("text/plain");
@@ -410,9 +412,11 @@ function createOrderAreaMoveControls(order, card, state, actions) {
       event.dataTransfer.effectAllowed = "move";
       event.dataTransfer.setData("application/x-manual-dispatch-order", order.order_id);
       event.dataTransfer.setData("text/plain", order.order_id);
+      deliveryOrderDragAutoScroll.start();
     }
   });
   handle.addEventListener("dragend", () => {
+    deliveryOrderDragAutoScroll.stop();
     card.classList.remove("workspace-order-card-dragging");
     document.querySelectorAll(".workspace-delivery-area-drop-active").forEach(
       (item) => item.classList.remove("workspace-delivery-area-drop-active"),
