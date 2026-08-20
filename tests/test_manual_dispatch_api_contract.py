@@ -43,6 +43,10 @@ class ManualDispatchApiContractTest(unittest.TestCase):
             ("POST", "/api/manual-dispatch/orders"),
             ("POST", "/api/manual-dispatch/orders/import-attache-pdf-preview"),
             ("POST", "/api/manual-dispatch/orders/import-attache-pdf-commit"),
+            (
+                "POST",
+                "/api/manual-dispatch/delivery/orders/import-attache-direct-preview",
+            ),
             ("POST", "/api/manual-dispatch/delivery/orders/import-delivery-docket-docx-preview"),
             ("POST", "/api/manual-dispatch/delivery/orders/import-delivery-docket-docx-commit"),
             ("POST", "/api/manual-dispatch/delivery/area-classification"),
@@ -90,7 +94,7 @@ class ManualDispatchApiContractTest(unittest.TestCase):
             for method in route.methods
         }
 
-        self.assertEqual(99, len(routes))
+        self.assertEqual(100, len(routes))
         self.assertEqual(
             {
                 ("POST", "/api/manual-dispatch/auth/login"),
@@ -100,7 +104,7 @@ class ManualDispatchApiContractTest(unittest.TestCase):
             public_routes,
         )
         protected_routes = [route for route in routes if route.dependant.dependencies]
-        self.assertEqual(96, len(protected_routes))
+        self.assertEqual(97, len(protected_routes))
         for route in protected_routes:
             dependency_names = {
                 getattr(dependency.call, "__name__", "")

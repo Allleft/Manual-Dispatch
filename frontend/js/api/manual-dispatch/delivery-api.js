@@ -157,6 +157,16 @@ export async function apiPreviewDeliveryAttacheInvoices(files) {
   );
 }
 
+export async function apiPreviewDirectAttacheInvoice(invoiceNumber) {
+  return requestJson(
+    "/api/manual-dispatch/delivery/orders/import-attache-direct-preview",
+    {
+      method: "POST",
+      body: { invoice_number: invoiceNumber },
+    },
+  );
+}
+
 export async function apiCommitDeliveryAttacheInvoices(payload) {
   return requestJson(
     "/api/manual-dispatch/delivery/orders/import-attache-pdf-commit",

@@ -50,6 +50,9 @@ export function createDeliveryAttacheImportModal(state, actions) {
       actions,
     );
   }
+  if (source === "attache-direct") {
+    return createDeliveryDirectAttacheImportModal(importState, actions);
+  }
   const modal = createWorkspaceModal(
     "Import Attaché Invoices",
     actions.closeDeliveryAttacheImport,
@@ -67,7 +70,10 @@ export function createDeliveryAttacheImportModal(state, actions) {
   if (importState.success) {
     body.append(createStatus(importState.success, "loading"));
   }
-  if ((importState.step || "files") === "review") {
+  if (
+    (importState.step || "files") === "review"
+    && (importState.reviewSource || "attache") === "attache"
+  ) {
     body.append(createDeliveryAttachePreview(importState, actions));
   } else {
     body.append(createDeliveryAttacheFileStep(importState, actions));
@@ -80,22 +86,28 @@ export function createDeliveryImportSourceChooser(actions) {
   section.className = "workspace-modal-section workspace-import-source-step";
   section.append(createSectionHeading(
     "Select document source",
-    "Each source uses its own parser and keeps its own upload draft.",
+    "Each source keeps its own draft and uses the matching review workflow.",
   ));
   const choices = document.createElement("div");
   choices.className = "workspace-import-source-grid";
   choices.append(
     createImportSourceChoice(
-      "Attaché Invoice",
-      "Import Attaché PDF invoices.",
+      "Import Attaché PDF",
+      "Upload one or more Attaché PDF invoices.",
       "document",
       () => actions.chooseDeliveryImportSource("attache"),
     ),
     createImportSourceChoice(
-      "Delivery Docket",
+      "Import Delivery Docket",
       "Import Delivery Docket DOCX files.",
       "cloud-upload",
       () => actions.chooseDeliveryImportSource("docket"),
+    ),
+    createImportSourceChoice(
+      "Import from Attaché",
+      "Find one invoice through the read-only Attaché bridge.",
+      "view",
+      () => actions.chooseDeliveryImportSource("attache-direct"),
     ),
   );
   const footer = document.createElement("footer");
@@ -121,6 +133,99 @@ function createImportSourceChoice(titleText, description, iconName, onSelect) {
   button.append(icon, copy);
   button.addEventListener("click", onSelect);
   return button;
+}
+
+export function createDeliveryDirectAttacheImportModal(importState, actions) {
+  const modal = createWorkspaceModal(
+    "Import from Attaché",
+    actions.closeDeliveryAttacheImport,
+    {
+      eyebrow: "Delivery Order Import",
+      subtitle: "Find an invoice, review the returned values, then confirm the import.",
+      iconName: "view",
+      width: "import",
+    },
+  );
+  const body = modal.querySelector(".workspace-modal-body");
+  if (
+    (importState.step || "files") === "review"
+    && importState.reviewSource === "attache-direct"
+  ) {
+    if (importState.error) {
+      body.append(createStatus(importState.error, "error"));
+    }
+    if (importState.success) {
+      body.append(createStatus(importState.success, "loading"));
+    }
+    body.append(createDeliveryAttachePreview(importState, actions));
+    return modal;
+  }
+  body.append(createDeliveryDirectAttacheLookupStep(importState, actions));
+  return modal;
+}
+
+export function createDeliveryDirectAttacheLookupStep(importState, actions) {
+  const section = document.createElement("section");
+  section.className = "workspace-modal-section workspace-attache-direct-step";
+  section.append(createSectionHeading(
+    "Find Attaché invoice",
+    "Enter the invoice number exactly as shown in Attaché.",
+  ));
+
+  const lookupRow = document.createElement("div");
+  lookupRow.className = "workspace-attache-direct-lookup";
+  const field = document.createElement("label");
+  field.className = "workspace-field workspace-attache-direct-field";
+  const fieldLabel = document.createElement("span");
+  fieldLabel.textContent = "Invoice Number";
+  const input = document.createElement("input");
+  input.type = "text";
+  input.inputMode = "numeric";
+  input.pattern = "[0-9]*";
+  input.autocomplete = "off";
+  input.placeholder = "e.g. 123456";
+  input.value = importState.directInvoiceNumber || "";
+  input.disabled = Boolean(importState.isDirectLookupPending);
+  input.addEventListener("input", () => {
+    actions.updateDeliveryDirectAttacheInvoiceNumber(input.value);
+  });
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !importState.isDirectLookupPending) {
+      event.preventDefault();
+      actions.lookupDeliveryDirectAttacheInvoice();
+    }
+  });
+  field.append(fieldLabel, input);
+  const lookupButton = createActionButton(
+    importState.isDirectLookupPending ? "Looking up invoice..." : "Find Invoice",
+    actions.lookupDeliveryDirectAttacheInvoice,
+    {
+      primary: true,
+      iconName: "view",
+      disabled: Boolean(importState.isDirectLookupPending),
+    },
+  );
+  lookupRow.append(field, lookupButton);
+  section.append(lookupRow);
+
+  if (importState.isDirectLookupPending) {
+    section.append(createStatus("Looking up invoice...", "loading"));
+  }
+  if (importState.directLookupError) {
+    section.append(createStatus(importState.directLookupError, "error"));
+  }
+  const fallback = document.createElement("p");
+  fallback.className = "workspace-muted";
+  fallback.textContent = "If lookup is unavailable, go back and use Import Attaché PDF.";
+
+  const footer = document.createElement("footer");
+  footer.className = "workspace-modal-footer";
+  footer.append(
+    createActionButton("Back", actions.backDeliveryImportToSources),
+    createActionButton("Cancel", actions.closeDeliveryAttacheImport),
+  );
+  section.append(fallback, footer);
+  return section;
 }
 
 export function createDeliveryDocketImportModal(importState, actions) {
@@ -549,8 +654,11 @@ export function createDeliveryAttachePreview(importState, actions) {
   const selectedCount = rows.filter((row) => row.selected && row.importable && !row.is_duplicate).length;
   const footer = document.createElement("footer");
   footer.className = "workspace-modal-footer workspace-modal-footer-sticky";
+  const backLabel = importState.reviewSource === "attache-direct"
+    ? "Back to lookup"
+    : "Back to files";
   footer.append(
-    createActionButton("Back to files", actions.backDeliveryAttacheImportToFiles),
+    createActionButton(backLabel, actions.backDeliveryAttacheImportToFiles),
     createActionButton("Cancel", actions.closeDeliveryAttacheImport),
     createActionButton(`Confirm Import (${selectedCount} selected)`, actions.commitDeliveryAttacheImport, {
       disabled: importState.isCommitting || selectedCount === 0,

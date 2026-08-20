@@ -1,5 +1,6 @@
 from dataclasses import replace
 from datetime import date, datetime, timedelta
+from decimal import Decimal, InvalidOperation
 from hashlib import sha1
 from io import BytesIO
 import re
@@ -171,7 +172,7 @@ def parse_attache_invoice_text(text, source_filename="invoice.txt", import_date=
         order_no=order_no,
         time_instruction=time_instruction,
     )
-    warnings = _build_warnings(
+    warnings = build_attache_preview_warnings(
         invoice_number=invoice_number,
         company_name=company_name,
         delivery_date=delivery_date,
@@ -180,7 +181,7 @@ def parse_attache_invoice_text(text, source_filename="invoice.txt", import_date=
     )
 
     return AttacheInvoicePdfPreviewItem(
-        row_id=_row_id(source_filename, invoice_number),
+        row_id=attache_preview_row_id(source_filename, invoice_number),
         source_filename=source_filename,
         invoice_number=invoice_number,
         invoice_date=invoice_date.isoformat() if invoice_date else None,
@@ -218,6 +219,26 @@ def with_duplicate_warning(item):
         is_duplicate=True,
         importable=False,
         selected=False,
+    )
+
+
+def attache_preview_row_id(source_name, invoice_number):
+    return _row_id(source_name, invoice_number)
+
+
+def build_attache_preview_warnings(
+    invoice_number,
+    company_name,
+    delivery_date,
+    suburb,
+    product_result,
+):
+    return _build_warnings(
+        invoice_number,
+        company_name,
+        delivery_date,
+        suburb,
+        product_result,
     )
 
 
@@ -683,6 +704,10 @@ def _split_address(value):
 
 
 def _parse_product_lines(lines):
+    return normalize_attache_classified_rows(_line_item_rows(lines))
+
+
+def normalize_attache_classified_rows(classified_rows):
     products = []
     warnings = []
     pallet_quantity = 0
@@ -692,7 +717,7 @@ def _parse_product_lines(lines):
     preceding_product = None
     pending_packet = None
 
-    for line, classification in _line_item_rows(lines):
+    for line, classification in classified_rows:
         category = classification["category"]
         if pending_packet is not None and category != "PACKET_SUMMARY":
             _apply_packet_packaging(pending_packet, None, warnings)
@@ -760,6 +785,91 @@ def _parse_product_lines(lines):
         "product_lines": products,
         "warnings": list(dict.fromkeys(warnings)),
     }
+
+
+def normalize_attache_structured_product_rows(rows):
+    classified_rows = []
+    for row in rows or []:
+        if not isinstance(row, dict):
+            raise ValueError("Attaché product line response is invalid.")
+        code = str(row.get("code") or "").strip().upper()
+        description = str(row.get("description") or "").strip()
+        display_line = " ".join(value for value in (code, description) if value)
+        quantity = _structured_positive_integer(row.get("quantity_invoiced"))
+        upper_description = description.upper()
+
+        if _is_charge_row(code, description):
+            classification = {"category": "CHARGE"}
+        elif (
+            PACKAGING_CODE_PATTERN.fullmatch(code)
+            and "PLASTIC BAG" in upper_description
+            and quantity is not None
+        ):
+            classification = {
+                "category": "PACKAGING",
+                "quantity": quantity,
+                "unit": code,
+            }
+        elif code == "PAL" and "PALLET" in upper_description and quantity is not None:
+            classification = {
+                "category": "LOAD",
+                "load_kind": "PALLET",
+                "quantity": quantity,
+            }
+        elif code == "CTN" and (
+            "CARTON" in upper_description or "CTN" in upper_description
+        ) and quantity is not None:
+            classification = {
+                "category": "LOAD",
+                "load_kind": "CARTON",
+                "quantity": quantity,
+            }
+        elif code in {"LBAG", "LOOSEBAG", "LOOSE-BAG"} and quantity is not None:
+            classification = {
+                "category": "LOAD",
+                "load_kind": "LOOSE_BAG",
+                "quantity": quantity,
+            }
+        elif (
+            PRODUCT_CODE_PATTERN.fullmatch(code)
+            and code not in CHARGE_CODES
+            and not PACKAGING_CODE_PATTERN.fullmatch(code)
+            and code not in {"PAL", "CTN", "LBAG", "LOOSEBAG", "LOOSE-BAG"}
+            and description
+            and quantity is not None
+        ):
+            classification = {
+                "category": "PRODUCT",
+                "product": _product_line(
+                    code,
+                    description,
+                    quantity,
+                    row.get("unit") or "EACH",
+                ),
+            }
+        else:
+            classification = {"category": "UNKNOWN"}
+        classified_rows.append(
+            (display_line or "Attaché product line", classification)
+        )
+
+    return normalize_attache_classified_rows(classified_rows)
+
+
+def _structured_positive_integer(value):
+    if value in (None, "") or isinstance(value, bool):
+        return None
+    try:
+        number = Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        return None
+    if (
+        not number.is_finite()
+        or number <= 0
+        or number != number.to_integral_value()
+    ):
+        return None
+    return int(number)
 
 
 def _line_item_rows(lines):

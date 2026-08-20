@@ -1,0 +1,239 @@
+ATTACHE BRIDGE WINDOWS X64 - REMOTE DESKTOP SMOKE TEST
+=====================================================
+
+PURPOSE
+-------
+Run the portable read-only Attaché Bridge on the Windows Remote Desktop without
+Python, pip, a virtual environment, source checkout, or administrator rights.
+Keep the first real test on 127.0.0.1 only.
+
+VERIFIED RESULT - PASS (2026-08-20)
+-----------------------------------
+The frozen Windows x64 Bridge completed an authorized localhost lookup through
+real FairCom Attaché ODBC for invoice 185479. The request returned HTTP 200 in
+549 ms with the correct historical delivery street, raw suburb and delivery
+postcode, plus six raw product lines. The verified Bridge query path remained
+SELECT-only. No credential values are recorded in this runbook.
+
+REQUIRED FILES
+--------------
+attache-bridge.exe
+REMOTE-SMOKE-TEST.txt
+SHA256.txt
+
+PRECONDITIONS
+-------------
+1. Run under the same Windows account that owns the 64-bit User DSN named:
+   Manual Dispatch - Attache Test
+2. The Attaché Server ODBC Driver 64 and DSN must already exist.
+3. Use only current, authorized, read-only ODBC credentials.
+4. Do not modify the DSN, ODBC configuration, firewall, registry, Attaché data,
+   or Attaché permissions.
+5. Do not continue if AppLocker, SmartScreen, Defender, or enterprise policy
+   blocks the unsigned executable. Record the exact error and ask IT whether
+   approval or code signing is required. Do not bypass security controls.
+
+1. OPEN POWERSHELL IN THE COPIED FOLDER
+---------------------------------------
+Set-Location "<folder containing the three copied files>"
+
+2. VERIFY THE SHA-256
+---------------------
+$hashLines = @(Get-Content -LiteralPath ".\SHA256.txt")
+
+if ($hashLines.Count -ne 2 -or $hashLines[0].Trim() -ne "attache-bridge.exe") {
+    throw "SHA256.txt has an unexpected format."
+}
+
+$expectedHash = $hashLines[1].Trim()
+$actualHash = (Get-FileHash -LiteralPath ".\attache-bridge.exe" -Algorithm SHA256).Hash
+
+if ($actualHash -ne $expectedHash) {
+    throw "attache-bridge.exe SHA-256 verification failed. Stop and obtain a new package."
+}
+
+Write-Host "SHA-256 verified."
+
+3. SET CURRENT-POWERSHELL-SESSION CREDENTIALS
+---------------------------------------------
+$cred = Get-Credential -Message "Enter Attaché ODBC credentials"
+$ptr = [IntPtr]::Zero
+
+try {
+    $ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($cred.Password)
+    $pwd = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr)
+
+    $env:ATTACHE_ODBC_CONNECTION_STRING =
+        "DSN=Manual Dispatch - Attache Test;UID=$($cred.UserName);PWD=$pwd"
+}
+finally {
+    if ($ptr -ne [IntPtr]::Zero) {
+        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr)
+    }
+    Remove-Variable pwd -ErrorAction SilentlyContinue
+}
+
+$env:ATTACHE_BRIDGE_API_TOKEN =
+    ([guid]::NewGuid().ToString("N") + [guid]::NewGuid().ToString("N"))
+$env:ATTACHE_BRIDGE_CONNECTION_TIMEOUT_SECONDS = "10"
+$env:ATTACHE_BRIDGE_QUERY_TIMEOUT_SECONDS = "15"
+
+Do not print the connection string or token. Do not save them in a file.
+
+4. START THE LOOPBACK-ONLY BRIDGE
+---------------------------------
+$bridge = Start-Process `
+    -FilePath ".\attache-bridge.exe" `
+    -ArgumentList "--host", "127.0.0.1", "--port", "8787" `
+    -NoNewWindow `
+    -PassThru
+
+Start-Sleep -Seconds 2
+$bridge.Refresh()
+
+if ($bridge.HasExited) {
+    throw "Attaché Bridge exited immediately with code $($bridge.ExitCode). Record the safe console error and stop."
+}
+
+5. HEALTH CHECK
+---------------
+$health = Invoke-RestMethod -Uri "http://127.0.0.1:8787/health"
+$health | Select-Object status, configured
+
+Expected:
+status     = ok
+configured = true
+
+If configured is false, stop before invoice testing. The child process did not
+receive the required current-session environment configuration.
+
+6. AUTHENTICATION CHECK (NO ODBC QUERY)
+---------------------------------------
+$wrongTokenRejected = $false
+
+try {
+    Invoke-RestMethod `
+        -Uri "http://127.0.0.1:8787/v1/invoices/185479" `
+        -Headers @{ "X-Attache-Bridge-Token" = "INTENTIONALLY_WRONG_TOKEN" }
+}
+catch {
+    if ($_.Exception.Response -and [int]$_.Exception.Response.StatusCode -eq 401) {
+        $wrongTokenRejected = $true
+        Write-Host "Expected HTTP 401 received."
+    }
+    else {
+        throw
+    }
+}
+
+if (-not $wrongTokenRejected) {
+    throw "Wrong-token request was not rejected. Stop before invoice testing."
+}
+
+The expected 401 is not a Bridge failure and occurs before ODBC access.
+
+7. AUTHORIZED REAL READ-ONLY LOOKUP
+-----------------------------------
+$headers = @{
+    "X-Attache-Bridge-Token" = $env:ATTACHE_BRIDGE_API_TOKEN
+}
+
+$result = Invoke-RestMethod `
+    -Uri "http://127.0.0.1:8787/v1/invoices/185479" `
+    -Headers $headers
+
+Display only the safe validation fields:
+
+$result | Select-Object `
+    invoice_number, `
+    invoice_date, `
+    customer_code, `
+    customer_name, `
+    order_reference
+
+$result.lines | Select-Object `
+    line_number, `
+    code, `
+    description, `
+    quantity_invoiced, `
+    unit
+
+Expected header values:
+invoice_number  = 185479
+invoice_date    = 2026-08-10
+customer_code   = ROTTHO
+customer_name   = ROTARY TOOLS
+order_reference = 45954
+
+Expected six raw rows, in line order:
+RWORK   WORKSHOP MIX #29                   300
+BAG10   PLASTIC BAG 10 kg                   30
+RWCOTT  WHITE COTTON #1                    200
+BAG10   PLASTIC BAG 10 kg                   20
+PAL     PALLET                                1
+DEL     DELIVERY /FUEL LEVY CHARGE            1
+
+The identity query is internally restricted to Customer Invoice doctype 1 and
+selects only doctype, internaldocnum, and docnum from admin.invoiceheader. The
+resolved identity loads the historical snapshot from admin.invoice_header,
+optional delivery postcode/address-line-2 enrichment from the two extension
+tables, and product detail from admin.invoicedetailproduct. Those internal
+identifiers are intentionally not exposed by the safe public Bridge response.
+DEL, BAG10, and PAL are expected raw rows; Manual Dispatch applies its existing
+shared normalization later.
+
+If the authorized request fails, inspect the first Bridge console window for a
+single structured line shaped like:
+
+Attaché ODBC failure stage=<stage> elapsed_ms=<integer> exception_class=<class> sqlstate=<five-characters-or-unknown> native_code=<integer-or-unknown>
+
+Record that line, the HTTP status/code, and the separately measured total lookup
+milliseconds. The stage identifies connection open, timeout configuration,
+metadata execution/description, the actual zero-based candidate index, identity
+resolution, historical header, either extension query, or detail execution.
+Candidate stage count is generated from the reported metadata width; do not
+assume there will always be four.
+
+This safe line never contains the connection string, DSN credentials, Bridge
+token, authorization header, customer address, SQL text, or raw exception text.
+Do not copy environment values or add raw exception printing while diagnosing.
+
+Do not execute manual SQL, test writes, or use any arbitrary-query tool.
+
+8. STOP ONLY THIS BRIDGE PROCESS
+--------------------------------
+if ($bridge) {
+    $bridge.Refresh()
+    if (-not $bridge.HasExited) {
+        Stop-Process -Id $bridge.Id
+        Wait-Process -Id $bridge.Id -ErrorAction SilentlyContinue
+    }
+}
+
+$remainingListener = Get-NetTCPConnection `
+    -LocalPort 8787 `
+    -State Listen `
+    -ErrorAction SilentlyContinue
+
+if ($remainingListener) {
+    Write-Warning "Port 8787 is still listening. Do not terminate unrelated processes; report the PID to IT."
+}
+else {
+    Write-Host "Port 8787 is clear."
+}
+
+9. CLEAR CURRENT-SESSION SECRETS
+--------------------------------
+Remove-Item Env:ATTACHE_ODBC_CONNECTION_STRING -ErrorAction SilentlyContinue
+Remove-Item Env:ATTACHE_BRIDGE_API_TOKEN -ErrorAction SilentlyContinue
+Remove-Item Env:ATTACHE_BRIDGE_CONNECTION_TIMEOUT_SECONDS -ErrorAction SilentlyContinue
+Remove-Item Env:ATTACHE_BRIDGE_QUERY_TIMEOUT_SECONDS -ErrorAction SilentlyContinue
+Remove-Variable cred, ptr, expectedHash, actualHash, headers, result -ErrorAction SilentlyContinue
+
+NETWORK AND SECURITY BOUNDARY
+-----------------------------
+This test is localhost-only. Do not bind 0.0.0.0, expose port 8787, create a
+firewall/NAT rule, alter Remote Desktop networking, disable security controls,
+or rename the executable to evade policy. The 2026-08-20 real localhost smoke
+test has passed. NAS-to-Remote-Bridge networking remains a later, separately
+authorized task.

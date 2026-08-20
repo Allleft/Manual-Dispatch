@@ -7005,8 +7005,23 @@ select:disabled {
 
 .workspace-import-source-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.9rem;
+}
+
+.workspace-attache-direct-step {
+  gap: 1rem;
+}
+
+.workspace-attache-direct-lookup {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 0.75rem;
+}
+
+.workspace-attache-direct-field {
+  max-width: 24rem;
 }
 
 .workspace-import-source-card {
@@ -7646,6 +7661,10 @@ select:disabled {
 
 @media (max-width: 640px) {
   .workspace-import-source-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .workspace-attache-direct-lookup {
     grid-template-columns: minmax(0, 1fr);
   }
 

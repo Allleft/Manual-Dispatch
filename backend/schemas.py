@@ -1001,6 +1001,11 @@ class AttacheInvoicePdfPreviewResponse:
 
 
 @dataclass
+class DirectAttacheInvoicePreviewRequest:
+    invoice_number: Optional[str] = None
+
+
+@dataclass
 class CommitAttacheInvoicePdfImportRow:
     row_id: Optional[str] = None
     source_filename: Optional[str] = None

@@ -1,4 +1,5 @@
 from collections.abc import Callable
+import logging
 from typing import List
 from fastapi import (
     APIRouter,
@@ -12,7 +13,19 @@ from backend.schemas import (
     AttacheInvoicePdfPreviewResponse,
     CommitAttacheInvoicePdfImportRequest,
     CreateOrderRequest,
+    DirectAttacheInvoicePreviewRequest,
     to_dict,
+)
+from backend.integrations.attache_bridge_client import (
+    AttacheBridgeAmbiguousInvoiceError,
+    AttacheBridgeConfigurationError,
+    AttacheBridgeInvoiceTooLargeError,
+    AttacheBridgeInvoiceNotFoundError,
+    AttacheBridgeMalformedResponseError,
+    AttacheBridgeTimeoutError,
+    AttacheBridgeUnavailableError,
+    create_attache_bridge_client,
+    normalize_attache_invoice_number,
 )
 from backend.services.manual_dispatch_service import ManualDispatchService
 from backend.services.manual_dispatch.workspace_migration_readiness_service import WorkspaceMigrationRequiredError
@@ -20,6 +33,10 @@ from backend.services.manual_dispatch.attache_invoice_pdf_parser import (
     current_melbourne_business_date,
     parse_attache_invoice_pdf_bytes,
     with_duplicate_warning,
+)
+from backend.services.manual_dispatch.attache_direct_invoice_normalizer import (
+    AttacheDirectInvoicePayloadError,
+    normalize_direct_attache_invoice,
 )
 from backend.services.manual_dispatch.delivery_suburb_region_service import (
     apply_delivery_area_preview,
@@ -39,6 +56,7 @@ SUPPORTED_ATTACHE_PDF_CONTENT_TYPES = {
     "application/x-pdf",
     "application/octet-stream",
 }
+LOGGER = logging.getLogger(__name__)
 
 
 def create_attache_router(
@@ -119,6 +137,14 @@ def create_attache_router(
             if order.invoice_number
         }
 
+    def _prepare_attache_preview_item(item, existing_invoice_numbers):
+        if (
+            item.invoice_number
+            and item.invoice_number in existing_invoice_numbers
+        ):
+            item = with_duplicate_warning(item)
+        return apply_delivery_area_preview(item)
+
     async def _preview_attache_invoice_pdf_import(files):
         if not files:
             raise HTTPException(status_code=400, detail="At least one PDF file is required.")
@@ -157,9 +183,12 @@ def create_attache_router(
                     source_filename=filename,
                     import_date=import_date,
                 )
-                if parsed.invoice_number and parsed.invoice_number in existing_invoice_numbers:
-                    parsed = with_duplicate_warning(parsed)
-                rows.append(apply_delivery_area_preview(parsed))
+                rows.append(
+                    _prepare_attache_preview_item(
+                        parsed,
+                        existing_invoice_numbers,
+                    )
+                )
             except ValueError as error:
                 raise HTTPException(
                     status_code=400,
@@ -169,6 +198,91 @@ def create_attache_router(
                 await uploaded_file.close()
 
         return AttacheInvoicePdfPreviewResponse(rows=rows)
+
+    @router.post("/delivery/orders/import-attache-direct-preview")
+    def preview_delivery_attache_invoice_direct_import(
+        request: DirectAttacheInvoicePreviewRequest,
+    ):
+        invoice_number = str(request.invoice_number or "").strip()
+        if not invoice_number:
+            raise _direct_preview_http_error(
+                400,
+                "invalid_invoice_number",
+                "Invoice number is required.",
+            )
+        try:
+            invoice_number = normalize_attache_invoice_number(invoice_number)
+        except ValueError as error:
+            raise _direct_preview_http_error(
+                400,
+                "invalid_invoice_number",
+                str(error),
+            ) from error
+        LOGGER.info("Attaché lookup started")
+        try:
+            payload = create_attache_bridge_client().lookup_invoice(
+                invoice_number
+            )
+            parsed = normalize_direct_attache_invoice(
+                payload,
+                expected_invoice_number=invoice_number,
+                import_date=current_melbourne_business_date(),
+            )
+            row = _prepare_attache_preview_item(
+                parsed,
+                _existing_invoice_numbers(),
+            )
+        except (
+            AttacheBridgeMalformedResponseError,
+            AttacheDirectInvoicePayloadError,
+        ) as error:
+            LOGGER.warning("Attaché bridge returned malformed data")
+            raise _direct_preview_http_error(
+                502,
+                "bridge_invalid_response",
+                "Attaché lookup returned an invalid response. "
+                "You can still use Import Attaché PDF.",
+            ) from error
+        except AttacheBridgeInvoiceNotFoundError as error:
+            LOGGER.info("Attaché invoice not found")
+            raise _direct_preview_http_error(
+                404,
+                "invoice_not_found",
+                str(error),
+            ) from error
+        except AttacheBridgeAmbiguousInvoiceError as error:
+            raise _direct_preview_http_error(
+                409,
+                "multiple_invoice_matches",
+                str(error),
+            ) from error
+        except AttacheBridgeInvoiceTooLargeError as error:
+            raise _direct_preview_http_error(
+                422,
+                "invoice_too_large",
+                str(error),
+            ) from error
+        except AttacheBridgeTimeoutError as error:
+            LOGGER.warning("Attaché bridge timeout")
+            raise _direct_preview_http_error(
+                504,
+                "bridge_timeout",
+                "Attaché lookup timed out. "
+                "You can still use Import Attaché PDF.",
+            ) from error
+        except (
+            AttacheBridgeConfigurationError,
+            AttacheBridgeUnavailableError,
+        ) as error:
+            LOGGER.warning("Attaché bridge unavailable")
+            raise _direct_preview_http_error(
+                503,
+                "bridge_unavailable",
+                "Attaché lookup is currently unavailable. "
+                "You can still use Import Attaché PDF.",
+            ) from error
+        LOGGER.info("Attaché lookup succeeded")
+        return to_dict(AttacheInvoicePdfPreviewResponse(rows=[row]))
 
     def _validate_attache_upload_type(uploaded_file, filename):
         content_type = (uploaded_file.content_type or "").split(";", 1)[0].strip().lower()
@@ -230,3 +344,10 @@ def create_attache_router(
         )
 
     return router
+
+
+def _direct_preview_http_error(status_code, code, message):
+    return HTTPException(
+        status_code=status_code,
+        detail={"code": code, "message": message},
+    )

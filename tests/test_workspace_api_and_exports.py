@@ -101,6 +101,10 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             ("POST", "/api/manual-dispatch/delivery/orders/{order_id}/cancel"),
             ("POST", "/api/manual-dispatch/delivery/orders/import-attache-pdf-preview"),
             ("POST", "/api/manual-dispatch/delivery/orders/import-attache-pdf-commit"),
+            (
+                "POST",
+                "/api/manual-dispatch/delivery/orders/import-attache-direct-preview",
+            ),
             ("POST", "/api/manual-dispatch/delivery/run-sheets/generated"),
             ("GET", "/api/manual-dispatch/delivery/trip-summary"),
             ("GET", "/api/manual-dispatch/delivery/run-sheets"),

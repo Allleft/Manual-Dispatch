@@ -17,8 +17,8 @@ class DeliveryDocketFrontendTest(unittest.TestCase):
 
         self.assertIn("Import Delivery Document", task_pool)
         self.assertIn("Import Delivery Document", renderer)
-        self.assertIn("Attaché Invoice", renderer)
-        self.assertIn("Delivery Docket", renderer)
+        self.assertIn("Import Attaché PDF", renderer)
+        self.assertIn("Import Delivery Docket", renderer)
         self.assertIn("Import Delivery Docket DOCX files.", renderer)
         self.assertIn("createDeliveryDocketReviewRow", renderer)
         self.assertIn('createInlineMeta("Docket", row.docket_number)', renderer)

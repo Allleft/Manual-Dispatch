@@ -22,6 +22,7 @@ export function createDeliveryAttacheActions(context) {
 
   function openDeliveryAttacheImport() {
     invalidateDeliveryAttachePreview();
+    invalidateDeliveryAttacheDirectLookup();
     context.actions.invalidateDeliveryDocketPreview?.();
     state.deliveryAttacheImportState = {
       ...defaultDeliveryAttacheImportState(),
@@ -45,6 +46,7 @@ export function createDeliveryAttacheActions(context) {
       return;
     }
     invalidateDeliveryAttachePreview();
+    invalidateDeliveryAttacheDirectLookup();
     context.actions.invalidateDeliveryDocketPreview?.();
     state.deliveryAttacheImportState = defaultDeliveryAttacheImportState();
     state.deliveryDocumentImportState = {
@@ -57,9 +59,10 @@ export function createDeliveryAttacheActions(context) {
   }
 
   function chooseDeliveryImportSource(source) {
-    if (!["attache", "docket"].includes(source)) {
+    if (!["attache", "docket", "attache-direct"].includes(source)) {
       return;
     }
+    invalidateDeliveryAttacheDirectLookup();
     state.deliveryDocumentImportState = {
       isOpen: true,
       source,
@@ -69,6 +72,7 @@ export function createDeliveryAttacheActions(context) {
 
   function backDeliveryImportToSources() {
     invalidateDeliveryAttachePreview();
+    invalidateDeliveryAttacheDirectLookup();
     context.actions.invalidateDeliveryDocketPreview?.();
     state.deliveryDocumentImportState = {
       isOpen: true,
@@ -158,6 +162,7 @@ export function createDeliveryAttacheActions(context) {
       state.deliveryAttacheImportState = {
         ...state.deliveryAttacheImportState,
         step: "review",
+        reviewSource: "attache",
         rows: (response.rows || []).map((row) => ({
           ...row,
           selected: Boolean(row.selected && row.importable && !row.is_duplicate),
@@ -183,8 +188,87 @@ export function createDeliveryAttacheActions(context) {
     }
   }
 
+  function updateDeliveryDirectAttacheInvoiceNumber(value) {
+    state.deliveryAttacheImportState = {
+      ...(state.deliveryAttacheImportState || defaultDeliveryAttacheImportState()),
+      directInvoiceNumber: String(value || ""),
+      directLookupError: "",
+    };
+  }
+
+  async function lookupDeliveryDirectAttacheInvoice() {
+    const importState = state.deliveryAttacheImportState
+      || defaultDeliveryAttacheImportState();
+    if (importState.isDirectLookupPending) {
+      return;
+    }
+    const invoiceNumber = String(importState.directInvoiceNumber || "").trim();
+    if (!/^\d{1,20}$/.test(invoiceNumber)) {
+      state.deliveryAttacheImportState = {
+        ...importState,
+        directLookupError: invoiceNumber
+          ? "Invoice number must contain digits only."
+          : "Invoice number is required.",
+      };
+      renderWorkspace();
+      return;
+    }
+
+    const mutationContext = captureMutationContext();
+    const requestVersion = ++context.deliveryAttacheDirectLookupRequestVersion;
+    const isCurrent = () =>
+      isDeliveryMutationCurrent(mutationContext)
+      && state.workspaceRoute === "delivery/task-pool"
+      && state.deliveryAttacheImportState?.isOpen
+      && state.deliveryDocumentImportState?.source === "attache-direct"
+      && requestVersion === context.deliveryAttacheDirectLookupRequestVersion;
+    state.deliveryAttacheImportState = {
+      ...importState,
+      directInvoiceNumber: invoiceNumber,
+      isDirectLookupPending: true,
+      directLookupError: "",
+    };
+    renderWorkspace();
+    try {
+      const response = await api.previewDirectAttacheInvoice(invoiceNumber);
+      if (!isCurrent()) {
+        return;
+      }
+      state.deliveryAttacheImportState = {
+        ...state.deliveryAttacheImportState,
+        step: "review",
+        reviewSource: "attache-direct",
+        rows: (response.rows || []).map((row) => ({
+          ...row,
+          selected: Boolean(row.selected && row.importable && !row.is_duplicate),
+        })),
+        expandedRowIds: {},
+        error: "",
+        success: "",
+        directLookupError: "",
+      };
+    } catch (error) {
+      if (!isCurrent()) {
+        return;
+      }
+      state.deliveryAttacheImportState = {
+        ...state.deliveryAttacheImportState,
+        directLookupError: `Unable to find Attaché invoice. ${error.message}`,
+      };
+    } finally {
+      if (isCurrent()) {
+        state.deliveryAttacheImportState = {
+          ...state.deliveryAttacheImportState,
+          isDirectLookupPending: false,
+        };
+        renderWorkspace();
+      }
+    }
+  }
+
   function backDeliveryAttacheImportToFiles() {
     invalidateDeliveryAttachePreview();
+    invalidateDeliveryAttacheDirectLookup();
     const current = state.deliveryAttacheImportState || {};
     state.deliveryAttacheImportState = {
       ...current,
@@ -393,7 +477,11 @@ export function createDeliveryAttacheActions(context) {
     return Boolean(
       current.isOpen &&
       !current.success &&
-      ((current.files || []).length || (current.rows || []).length),
+      (
+        (current.files || []).length
+        || (current.rows || []).length
+        || String(current.directInvoiceNumber || "").trim()
+      ),
     );
   }
 
@@ -401,14 +489,29 @@ export function createDeliveryAttacheActions(context) {
     context.deliveryAttachePreviewRequestVersion += 1;
   }
 
+  function invalidateDeliveryAttacheDirectLookup() {
+    context.deliveryAttacheDirectLookupRequestVersion =
+      Number(context.deliveryAttacheDirectLookupRequestVersion || 0) + 1;
+    if (state.deliveryAttacheImportState?.isDirectLookupPending) {
+      state.deliveryAttacheImportState = {
+        ...state.deliveryAttacheImportState,
+        isDirectLookupPending: false,
+      };
+    }
+  }
+
   function defaultDeliveryAttacheImportState() {
     return {
       isOpen: false,
       isPreviewing: false,
       isCommitting: false,
+      isDirectLookupPending: false,
       step: "files",
+      reviewSource: "attache",
       files: [],
       rows: [],
+      directInvoiceNumber: "",
+      directLookupError: "",
       expandedRowIds: {},
       search: "",
       filter: "ALL",
@@ -460,7 +563,9 @@ export function createDeliveryAttacheActions(context) {
       return isDeliveryMutationCurrent(mutationContext)
         && state.workspaceRoute === "delivery/task-pool"
         && state.deliveryAttacheImportState?.isOpen
-        && state.deliveryDocumentImportState?.source === "attache"
+        && ["attache", "attache-direct"].includes(
+          state.deliveryDocumentImportState?.source,
+        )
         && versions[rowId] === requestVersion
         && String(latest?.suburb || "") === suburb
         && String(latest?.postcode || "") === postcode;
@@ -514,6 +619,8 @@ export function createDeliveryAttacheActions(context) {
     updateDeliveryAttacheImportFiles,
     removeDeliveryAttacheImportFile,
     previewDeliveryAttacheImport,
+    updateDeliveryDirectAttacheInvoiceNumber,
+    lookupDeliveryDirectAttacheInvoice,
     backDeliveryAttacheImportToFiles,
     updateDeliveryAttacheImportRow,
     classifyDeliveryAttacheImportRow,
@@ -529,6 +636,7 @@ export function createDeliveryAttacheActions(context) {
     commitDeliveryAttacheImport,
     hasDeliveryAttacheDraft,
     invalidateDeliveryAttachePreview,
+    invalidateDeliveryAttacheDirectLookup,
     defaultDeliveryAttacheImportState,
     isPdfFile,
   };

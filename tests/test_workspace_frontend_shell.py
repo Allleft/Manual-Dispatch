@@ -183,6 +183,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             "/api/manual-dispatch/delivery/orders",
             "/api/manual-dispatch/delivery/orders/import-attache-pdf-preview",
             "/api/manual-dispatch/delivery/orders/import-attache-pdf-commit",
+            "/api/manual-dispatch/delivery/orders/import-attache-direct-preview",
             "/api/manual-dispatch/delivery/run-sheets/generated",
             "/api/manual-dispatch/opshop/pickups/assignments/apply",
             "/api/manual-dispatch/opshop/pickups/assignments/unassign",

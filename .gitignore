@@ -26,6 +26,8 @@ pnpm-debug.log*
 # Build and cache output
 dist/
 build/
+/release/attache-bridge-windows-x64/
+/release/attache-bridge-windows-x64.zip
 .cache/
 coverage/
 outputs/
