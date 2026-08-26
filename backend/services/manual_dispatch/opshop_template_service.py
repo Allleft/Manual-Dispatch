@@ -224,7 +224,11 @@ class OpShopTemplateService:
             existing_schedule=existing_schedule,
             existing_location=existing_location,
         )
-        template = self._upsert_active_template(values)
+        template = self._upsert_active_template(
+            values,
+            preferred_location=existing_location,
+            preferred_schedule=existing_schedule,
+        )
         if template.schedule_id != existing_schedule.schedule_id:
             self._disable_schedule(existing_schedule)
         return template
@@ -236,9 +240,15 @@ class OpShopTemplateService:
         self._disable_schedule(schedule)
         return self._get_template(schedule_id, include_inactive=True)
 
-    def _upsert_active_template(self, values):
+    def _upsert_active_template(
+        self,
+        values,
+        *,
+        preferred_location=None,
+        preferred_schedule=None,
+    ):
         now = _timestamp()
-        existing_location = self._find_location(values)
+        existing_location = preferred_location or self._find_location(values)
         opshop_id = (
             existing_location.opshop_id
             if existing_location
@@ -269,7 +279,14 @@ class OpShopTemplateService:
             **values,
             "opshop_id": opshop_id,
         }
-        existing_schedule = self._find_schedule(schedule_values)
+        requested_schedule_key = _schedule_key(schedule_values)
+        existing_schedule = (
+            preferred_schedule
+            if preferred_schedule
+            and _schedule_key(_schedule_identity_values(preferred_schedule))
+            == requested_schedule_key
+            else self._find_schedule(schedule_values)
+        )
         schedule_id = (
             existing_schedule.schedule_id
             if existing_schedule
@@ -421,18 +438,7 @@ class OpShopTemplateService:
             (
                 schedule
                 for schedule in self.repository.list_opshop_pickup_schedules()
-                if _schedule_key(
-                    {
-                        "opshop_id": schedule.opshop_id,
-                        "run_day": schedule.run_day,
-                        "run_type": schedule.run_type,
-                        "pickup_frequency": schedule.pickup_frequency,
-                        "time_window": schedule.time_window,
-                        "pickup_category": schedule.pickup_category,
-                        "route_group_id": schedule.route_group_id,
-                    }
-                )
-                == key
+                if _schedule_key(_schedule_identity_values(schedule)) == key
             ),
             None,
         )
@@ -532,6 +538,18 @@ def _schedule_key(values):
     if values.get("pickup_category") == "COUNTRYSIDE":
         parts.extend(["COUNTRYSIDE", values.get("route_group_id") or ""])
     return "|".join(parts)
+
+
+def _schedule_identity_values(schedule):
+    return {
+        "opshop_id": schedule.opshop_id,
+        "run_day": schedule.run_day,
+        "run_type": schedule.run_type,
+        "pickup_frequency": schedule.pickup_frequency,
+        "time_window": schedule.time_window,
+        "pickup_category": schedule.pickup_category,
+        "route_group_id": schedule.route_group_id,
+    }
 
 
 def _deterministic_id(prefix, key):

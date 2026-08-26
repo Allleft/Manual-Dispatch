@@ -1,5 +1,6 @@
 from io import BytesIO
 from datetime import datetime
+import math
 import re
 
 from openpyxl import Workbook
@@ -22,6 +23,23 @@ COLLECTION_HEADERS = [
     "SHOE BAGS",
 ]
 MIN_PICKUP_ROWS = 11
+MIN_PICKUP_ROW_HEIGHT = 25.5
+PICKUP_ROW_LINE_HEIGHT = 15
+MAX_PICKUP_ROW_HEIGHT = 100.5
+COLLECTION_COLUMN_WIDTHS = {
+    "A": 30.71,
+    "B": 14.14,
+    "C": 12.86,
+    "D": 12,
+    "E": 7.71,
+    "F": 7.57,
+    "G": 8.43,
+    "H": 8.29,
+    "I": 9.57,
+    "J": 13,
+    "K": 10.71,
+    "L": 9,
+}
 _INVALID_SHEET_NAME_CHARACTERS = re.compile(r"[\\/*?:\[\]]")
 
 
@@ -76,21 +94,7 @@ def _configure_worksheet(worksheet):
         header=0.2,
         footer=0.2,
     )
-    widths = {
-        "A": 30.71,
-        "B": 14.14,
-        "C": 12.86,
-        "D": 12,
-        "E": 7.71,
-        "F": 7.57,
-        "G": 8.43,
-        "H": 8.29,
-        "I": 9.57,
-        "J": 13,
-        "K": 10.71,
-        "L": 9,
-    }
-    for column_letter, width in widths.items():
+    for column_letter, width in COLLECTION_COLUMN_WIDTHS.items():
         worksheet.column_dimensions[column_letter].width = width
 
 
@@ -195,7 +199,15 @@ def _write_pickup_row(worksheet, row_index, pickup, border):
             vertical="center",
             wrap_text=column_index in {1, 2},
         )
-    worksheet.row_dimensions[row_index].height = 25.5
+    wrapped_lines = max(
+        _wrapped_line_count(values[0], COLLECTION_COLUMN_WIDTHS["A"]),
+        _wrapped_line_count(values[1], COLLECTION_COLUMN_WIDTHS["B"]),
+    )
+    worksheet.row_dimensions[row_index].height = min(
+        MAX_PICKUP_ROW_HEIGHT,
+        MIN_PICKUP_ROW_HEIGHT
+        + PICKUP_ROW_LINE_HEIGHT * max(wrapped_lines - 1, 0),
+    )
 
 
 def _write_empty_pickup_row(worksheet, row_index, border):
@@ -205,7 +217,15 @@ def _write_empty_pickup_row(worksheet, row_index, border):
         if column_index in {3, 4}:
             cell.number_format = '0.## "KG"'
         cell.alignment = Alignment(horizontal="center" if column_index >= 3 else "left", vertical="center")
-    worksheet.row_dimensions[row_index].height = 25.5
+    worksheet.row_dimensions[row_index].height = MIN_PICKUP_ROW_HEIGHT
+
+
+def _wrapped_line_count(value, column_width):
+    usable_width = max(1, int(float(column_width)))
+    return sum(
+        max(1, math.ceil(len(line) / usable_width))
+        for line in str(value or "").split("\n")
+    )
 
 
 def _display_date(value):

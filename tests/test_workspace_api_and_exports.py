@@ -780,6 +780,49 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertEqual(21, worksheet.row_dimensions[5].height)
         self.assertEqual("REGO # ________________________", worksheet["A6"].value)
 
+    def test_opshop_collection_export_expands_long_wrapped_suburb_row(self):
+        collection_id = self._generate_and_save_collection(
+            self._weight_sheet_entry_payload()
+        )
+        collection = self.service.get_opshop_pickup_collection(collection_id)
+        source_row = collection.pickups[0]
+        short_row = replace(
+            source_row,
+            row_id="ROW-SHORT",
+            row_no=1,
+            suburb_snapshot="Coburg",
+        )
+        long_row = replace(
+            source_row,
+            row_id="ROW-LONG",
+            row_no=2,
+            suburb_snapshot="UPPER FERNTREE GULLY",
+        )
+        workbook = load_workbook(
+            BytesIO(
+                build_opshop_pickup_collection_excel(
+                    replace(collection, pickups=[short_row, long_row])
+                )
+            )
+        )
+        worksheet = workbook.active
+
+        self.assertEqual(25.5, worksheet.row_dimensions[12].height)
+        self.assertGreater(
+            worksheet.row_dimensions[13].height,
+            worksheet.row_dimensions[12].height,
+        )
+        self.assertTrue(worksheet["A12"].alignment.wrap_text)
+        self.assertTrue(worksheet["B12"].alignment.wrap_text)
+        self.assertTrue(worksheet["A13"].alignment.wrap_text)
+        self.assertTrue(worksheet["B13"].alignment.wrap_text)
+        self.assertEqual("UPPER FERNTREE GULLY", worksheet["B13"].value)
+        self.assertEqual("landscape", worksheet.page_setup.orientation)
+        self.assertEqual(str(worksheet.PAPERSIZE_A4), str(worksheet.page_setup.paperSize))
+        self.assertEqual(1, worksheet.page_setup.fitToWidth)
+        self.assertEqual(1, worksheet.page_setup.fitToHeight)
+        self.assertIn(f"$A$1:$L${worksheet.max_row}", worksheet.print_area)
+
     def test_opshop_daily_collection_export_uses_one_sheet_per_driver(self):
         saved_collection_id = self._generate_and_save_collection(
             self._weight_sheet_entry_payload()
