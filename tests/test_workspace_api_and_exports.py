@@ -27,16 +27,17 @@ from backend.schemas import (
     ProductDetailLine,
     RegisterOperatorAccountRequest,
 )
-from backend.services.manual_dispatch_service import ManualDispatchService
-from tests.manual_dispatch_api_test_helpers import authenticate_test_client
+from backend.services import delivery_run_sheet_excel_export_service as delivery_excel
 from backend.services.delivery_run_sheet_excel_export_service import (
     build_delivery_run_sheet_excel,
     build_delivery_run_sheets_excel,
     delivery_run_sheet_product_display,
 )
+from backend.services.manual_dispatch_service import ManualDispatchService
 from backend.services.opshop_pickup_collection_excel_export_service import (
     build_opshop_pickup_collection_excel,
 )
+from tests.manual_dispatch_api_test_helpers import authenticate_test_client
 
 try:
     from fastapi import FastAPI
@@ -951,6 +952,10 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertEqual(9, worksheet["A8"].font.sz)
         self.assertEqual(8.5, worksheet["B9"].font.sz)
         self.assertEqual(7.5, worksheet["E9"].font.sz)
+        self.assertEqual("PRODUCT", worksheet["E8"].value)
+        self.assertFalse(worksheet["E8"].font.bold)
+        self.assertTrue(worksheet["E9"].font.bold)
+        self.assertFalse(worksheet["B9"].font.bold)
         self.assertEqual(8.5, worksheet["B12"].font.sz)
         self.assertEqual(21, worksheet.row_dimensions[8].height)
         self.assertAlmostEqual(0.118, worksheet.page_margins.left, places=3)
@@ -1166,6 +1171,11 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             self.assertEqual(1, worksheet.page_setup.fitToHeight)
             self.assertEqual("$7:$8", worksheet.print_title_rows)
             self.assertEqual(expected_headers, [cell.value for cell in worksheet[8]])
+            self.assertEqual("PRODUCT", worksheet["E8"].value)
+            self.assertFalse(worksheet["E8"].font.bold)
+            self.assertTrue(worksheet["E9"].font.bold)
+            self.assertEqual(7.5, worksheet["E9"].font.sz)
+            self.assertFalse(worksheet["B9"].font.bold)
             self.assertEqual(14, worksheet.max_column)
             self.assertIn("$A$1:$N$28", worksheet.print_area)
             self.assertEqual("DAILY RUN SHEET", worksheet["A1"].value)
@@ -1318,6 +1328,293 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
 
         order.product_snapshot = "  "
         self.assertEqual("", delivery_run_sheet_product_display(order))
+
+    def test_delivery_run_sheet_line_weight_kg_uses_strict_precedence_and_formats(self):
+        def line(
+            *,
+            quantity=1,
+            unit="BAG",
+            product_code="ITEM",
+            package_quantity=None,
+            package_unit=None,
+        ):
+            return ProductDetailLine(
+                "Test product",
+                quantity,
+                unit,
+                product_code=product_code,
+                package_quantity=package_quantity,
+                package_unit=package_unit,
+            )
+
+        cases = [
+            ("direct KG", line(quantity=400, unit="KG"), 400),
+            ("direct KGS", line(quantity=125, unit="kgs"), 125),
+            (
+                "RSING10KG no double count",
+                line(product_code="RSING10KG", package_quantity=10, package_unit="BAG10"),
+                100,
+            ),
+            (
+                "RWORK10kg",
+                line(product_code="RWORK10kg", package_quantity=18, package_unit="BAG10"),
+                180,
+            ),
+            (
+                "RWTSHIRT150KG",
+                line(product_code="RWTSHIRT150KG", package_quantity=3, package_unit="BALE"),
+                450,
+            ),
+            (
+                "decimal code suffix",
+                line(product_code="ITEM2.5KG", package_quantity=4),
+                10,
+            ),
+            (
+                "RWBATH BAG10 fallback",
+                line(product_code="RWBATH", package_quantity=5, package_unit="BAG10"),
+                50,
+            ),
+            (
+                "BAG20 fallback",
+                line(package_quantity=8, package_unit="BAG 20"),
+                160,
+            ),
+            (
+                "BAG decimal fallback",
+                line(package_quantity=4, package_unit="bag2.5"),
+                10,
+            ),
+            (
+                "direct KG wins",
+                line(
+                    quantity=75,
+                    unit="KG",
+                    product_code="ITEM10KG",
+                    package_quantity=5,
+                    package_unit="BAG10",
+                ),
+                75,
+            ),
+            (
+                "product code wins over BAG unit",
+                line(
+                    product_code="ITEM10KG",
+                    package_quantity=5,
+                    package_unit="BAG20",
+                ),
+                50,
+            ),
+            (
+                "code missing package quantity",
+                line(product_code="ITEM10KG", package_quantity=None),
+                None,
+            ),
+            (
+                "BAG10 missing package quantity",
+                line(product_code="ITEM", package_quantity=None, package_unit="BAG10"),
+                None,
+            ),
+            (
+                "code zero package quantity",
+                line(product_code="ITEM10KG", package_quantity=0, package_unit="BAG10"),
+                None,
+            ),
+            (
+                "BAG10 zero package quantity",
+                line(product_code="ITEM", package_quantity=0, package_unit="BAG10"),
+                None,
+            ),
+        ]
+        for invalid_code in (
+            "ITEM10KGS",
+            "ITEM10KG-OLD",
+            "ITEM10KG2",
+            "ITEMKG",
+            "KGITEM10",
+        ):
+            cases.append(
+                (
+                    f"invalid code {invalid_code}",
+                    line(product_code=invalid_code, package_quantity=5, package_unit="BAG"),
+                    None,
+                )
+            )
+        for invalid_unit in (
+            "BAG",
+            "BAGS",
+            "BAG10OLD",
+            "PLASTIC10",
+            "CTN",
+            "CTN10",
+            "BALE",
+            "BALE150",
+            "PALLET10",
+            "PKT10",
+        ):
+            cases.append(
+                (
+                    f"invalid package unit {invalid_unit}",
+                    line(product_code="ITEM", package_quantity=5, package_unit=invalid_unit),
+                    None,
+                )
+            )
+
+        for label, product_line, expected in cases:
+            with self.subTest(label=label):
+                self.assertEqual(
+                    expected,
+                    delivery_excel._delivery_run_sheet_line_weight_kg(product_line),
+                )
+
+    def test_delivery_run_sheet_weight_total_sums_once_and_keeps_unknown_blank(self):
+        def line(code, package_quantity, package_unit, *, quantity=1, unit="BAG"):
+            return ProductDetailLine(
+                code,
+                quantity,
+                unit,
+                product_code=code,
+                package_quantity=package_quantity,
+                package_unit=package_unit,
+            )
+
+        multi = self._delivery_order_snapshot(
+            "WEIGHT-MULTI",
+            [
+                line("RSING10KG", 10, "BAG10"),
+                line("RWTSHIRT10KG", 10, "BAG10"),
+                line("RWORK10KG", 1, "BAG10"),
+            ],
+        )
+        mixed = self._delivery_order_snapshot(
+            "WEIGHT-MIXED",
+            [
+                line("DIRECT", None, None, quantity=100, unit="KG"),
+                line("RWORK10KG", 5, "BAG10"),
+                line("RWBATH", 5, "BAG10"),
+            ],
+        )
+        unknown = self._delivery_order_snapshot(
+            "WEIGHT-UNKNOWN",
+            [
+                line("FIN-HANDTOWEL", 2, "CTN"),
+                line("FIN-3PLY", 3, "BAG"),
+            ],
+        )
+
+        self.assertEqual(210, delivery_excel._delivery_run_sheet_weight_total(multi))
+        self.assertEqual(200, delivery_excel._delivery_run_sheet_weight_total(mixed))
+        self.assertEqual("", delivery_excel._delivery_run_sheet_weight_total(unknown))
+
+    def test_delivery_run_sheet_workbook_writes_derived_kg_numeric_and_unknown_blank(self):
+        derived = self._delivery_order_snapshot(
+            "WEIGHT-DERIVED",
+            [
+                ProductDetailLine(
+                    "WHITE BATH TOWEL",
+                    5,
+                    "BAG",
+                    product_code="RWBATH",
+                    package_quantity=5,
+                    package_unit="BAG10",
+                )
+            ],
+        )
+        unknown = self._delivery_order_snapshot(
+            "WEIGHT-UNKNOWN",
+            [
+                ProductDetailLine(
+                    "HAND TOWEL",
+                    2,
+                    "CTN",
+                    product_code="FIN-HANDTOWEL",
+                    package_quantity=2,
+                    package_unit="CTN",
+                ),
+                ProductDetailLine(
+                    "3PLY",
+                    3,
+                    "BAG",
+                    product_code="FIN-3PLY",
+                    package_quantity=3,
+                    package_unit="BAG",
+                ),
+            ],
+        )
+        decimal = self._delivery_order_snapshot(
+            "WEIGHT-DECIMAL",
+            [
+                ProductDetailLine(
+                    "DIRECT DECIMAL KG",
+                    10.5,
+                    "KG",
+                    product_code="DIRECT-DECIMAL",
+                )
+            ],
+        )
+        run_sheet = DeliveryRunSheet(
+            run_sheet_id="RUN-SHEET-WEIGHT",
+            dispatch_date=self.dispatch_date,
+            delivery_date=self.dispatch_date,
+            driver_id="D001",
+            driver_name_snapshot="John",
+            vehicle_id=None,
+            vehicle_rego_snapshot=None,
+            total_pallets=0,
+            total_loose_bags=0,
+            status="SAVED",
+            generated_at="2026-05-05T00:00:00+00:00",
+            saved_at="2026-05-05T00:00:00+00:00",
+            saved_by_account_name="Tester",
+            saved_by_account_id=1,
+            legacy_summary_id=None,
+            trips=[
+                DeliveryRunSheetTrip(
+                    trip_no="trip1",
+                    orders=[derived, unknown, decimal],
+                )
+            ],
+            total_cartons=0,
+        )
+
+        worksheet = load_workbook(
+            BytesIO(build_delivery_run_sheet_excel(run_sheet))
+        ).active
+
+        self.assertEqual(50, worksheet["F9"].value)
+        self.assertIsInstance(worksheet["F9"].value, (int, float))
+        self.assertIsNone(worksheet["F10"].value)
+        self.assertEqual(10.5, worksheet["F11"].value)
+        self.assertIsInstance(worksheet["F11"].value, (int, float))
+        self.assertEqual("RWBATH - 5 BAG10", worksheet["E9"].value)
+        self.assertEqual(
+            "FIN-HANDTOWEL - 2 CTN\nFIN-3PLY - 3 BAG",
+            worksheet["E10"].value,
+        )
+        self.assertFalse(worksheet["E8"].font.bold)
+        self.assertTrue(worksheet["E9"].font.bold)
+        self.assertEqual(7.5, worksheet["E9"].font.sz)
+        self.assertFalse(worksheet["B9"].font.bold)
+
+    def _delivery_order_snapshot(self, suffix, product_lines):
+        return DeliveryRunSheetOrderSnapshot(
+            row_id=f"ROW-{suffix}",
+            trip_no="trip1",
+            row_no=1,
+            task_type="ORDER",
+            task_id=f"ORDER-{suffix}",
+            order_id_snapshot=f"ORDER-{suffix}",
+            invoice_number_snapshot=f"INV-{suffix}",
+            order_no_snapshot=None,
+            company_name_snapshot="Customer",
+            suburb_snapshot="Suburb",
+            delivery_address_snapshot="Address",
+            product_snapshot=None,
+            pallet_quantity_snapshot=0,
+            loose_bags_quantity_snapshot=0,
+            note_snapshot=None,
+            product_lines_snapshot=product_lines,
+        )
 
     def test_delivery_export_keeps_all_compact_bag_and_packet_lines_on_one_page(self):
         def order_snapshot(row_no, company_name, product_lines):

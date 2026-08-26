@@ -50,6 +50,11 @@ COLUMN_WIDTHS = {
     "N": 7.71,
 }
 _INVALID_SHEET_NAME_CHARACTERS = re.compile(r"[\\/*?:\[\]]")
+_PRODUCT_CODE_KG_SUFFIX = re.compile(r"([0-9]+(?:\.[0-9]+)?)KG$", re.IGNORECASE)
+_PACKAGE_UNIT_BAG_WEIGHT = re.compile(
+    r"BAG\s*([0-9]+(?:\.[0-9]+)?)",
+    re.IGNORECASE,
+)
 
 
 def build_delivery_run_sheet_excel(run_sheet):
@@ -144,7 +149,7 @@ def _write_daily_run_sheet_form(worksheet, run_sheet, delivery_date):
     header_row = 8
     for column_index, header in enumerate(DAILY_RUN_SHEET_HEADERS, start=1):
         cell = worksheet.cell(row=header_row, column=column_index, value=header)
-        cell.font = Font(bold=True, size=9)
+        cell.font = Font(bold=column_index != 5, size=9)
         cell.border = border
         cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
     worksheet["N8"].fill = returned_pallets_fill
@@ -205,13 +210,45 @@ def delivery_run_sheet_product_display(order):
     return str(getattr(order, "product_snapshot", "") or "").strip()
 
 
-def _product_quantity_total(order, units):
+def _delivery_run_sheet_line_weight_kg(line):
+    unit = str(getattr(line, "unit", "") or "").strip().upper()
+    if unit in {"KG", "KGS"}:
+        return _numeric_value(getattr(line, "quantity", None))
+
+    package_quantity = _numeric_value(getattr(line, "package_quantity", None))
+    if package_quantity is None or package_quantity <= 0:
+        return None
+
+    product_code = str(getattr(line, "product_code", "") or "").strip()
+    code_match = _PRODUCT_CODE_KG_SUFFIX.search(product_code)
+    if code_match:
+        return float(code_match.group(1)) * package_quantity
+
+    package_unit = str(getattr(line, "package_unit", "") or "").strip()
+    package_match = _PACKAGE_UNIT_BAG_WEIGHT.fullmatch(package_unit)
+    if package_match:
+        weight_per_bag = float(package_match.group(1))
+        return weight_per_bag * package_quantity if weight_per_bag > 0 else None
+    return None
+
+
+def _delivery_run_sheet_weight_total(order):
     total = sum(
-        float(getattr(line, "quantity", 0) or 0)
+        weight
         for line in getattr(order, "product_lines_snapshot", None) or []
-        if str(getattr(line, "unit", "") or "").strip().upper() in units
+        if (weight := _delivery_run_sheet_line_weight_kg(line)) is not None
     )
     return "" if total == 0 else int(total) if total.is_integer() else total
+
+
+def _numeric_value(value):
+    if value is None or value == "":
+        return None
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return None
+    return numeric if math.isfinite(numeric) else None
 
 
 def _display_number(value):
@@ -255,7 +292,7 @@ def _write_order_row(worksheet, row_index, row_no, order, border):
         order.suburb_snapshot or "",
         order.invoice_number_snapshot or "",
         product_display,
-        _product_quantity_total(order, {"KG", "KGS"}),
+        _delivery_run_sheet_weight_total(order),
         _number_or_blank(order.pallet_quantity_snapshot),
         "",
         "",
@@ -268,7 +305,8 @@ def _write_order_row(worksheet, row_index, row_no, order, border):
     for column_index, value in enumerate(values, start=1):
         cell = worksheet.cell(row=row_index, column=column_index, value=value)
         cell.font = Font(
-            size=PRODUCT_FONT_SIZE if column_index == 5 else BODY_FONT_SIZE
+            bold=column_index == 5,
+            size=PRODUCT_FONT_SIZE if column_index == 5 else BODY_FONT_SIZE,
         )
         cell.border = border
         cell.alignment = Alignment(
