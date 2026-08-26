@@ -1,4 +1,5 @@
 import { applyDeliveryAreaClassification } from "../../utils/delivery-area-utils.js";
+import { revalidateDeliveryDocketRow } from "../../utils/delivery-docket-validation-utils.js";
 import {
   captureElementScroll,
   restoreElementScroll,
@@ -96,10 +97,7 @@ export function createDeliveryDocketActions(context) {
       state.deliveryDocketImportState = {
         ...state.deliveryDocketImportState,
         step: "review",
-        rows: (response.rows || []).map((row) => ({
-          ...row,
-          selected: Boolean(row.selected && row.importable && !row.is_duplicate),
-        })),
+        rows: (response.rows || []).map((row) => revalidateDeliveryDocketRow(row)),
         expandedRowIds: {},
       };
     } catch (error) {
@@ -135,14 +133,24 @@ export function createDeliveryDocketActions(context) {
     renderWorkspace();
   }
 
-  function updateDeliveryDocketImportRow(rowId, field, value) {
+  function updateDeliveryDocketImportRow(
+    rowId,
+    field,
+    value,
+    { render = false } = {},
+  ) {
     const current = state.deliveryDocketImportState || {};
     state.deliveryDocketImportState = {
       ...current,
       rows: (current.rows || []).map((row) =>
-        row.row_id === rowId ? { ...row, [field]: value } : row,
+        row.row_id === rowId
+          ? revalidateDeliveryDocketRow({ ...row, [field]: value })
+          : row,
       ),
     };
+    if (render) {
+      renderDeliveryDocketImportPreservingScroll();
+    }
   }
 
   async function classifyDeliveryDocketImportRow(rowId) {
@@ -185,7 +193,9 @@ export function createDeliveryDocketActions(context) {
         ...state.deliveryDocketImportState,
         rows: state.deliveryDocketImportState.rows.map((candidate) =>
           candidate.row_id === rowId
-            ? applyDeliveryAreaClassification(candidate, classification)
+            ? revalidateDeliveryDocketRow(
+              applyDeliveryAreaClassification(candidate, classification),
+            )
             : candidate,
         ),
         error: "",
@@ -210,7 +220,13 @@ export function createDeliveryDocketActions(context) {
     restoreElementScroll(snapshot);
   }
 
-  function updateDeliveryDocketImportProductLine(rowId, lineIndex, field, value) {
+  function updateDeliveryDocketImportProductLine(
+    rowId,
+    lineIndex,
+    field,
+    value,
+    { render = false } = {},
+  ) {
     const current = state.deliveryDocketImportState || {};
     state.deliveryDocketImportState = {
       ...current,
@@ -225,9 +241,12 @@ export function createDeliveryDocketActions(context) {
             ? (value === "" ? "" : Number(value))
             : value,
         };
-        return { ...row, product_lines: productLines };
+        return revalidateDeliveryDocketRow({ ...row, product_lines: productLines });
       }),
     };
+    if (render) {
+      renderDeliveryDocketImportPreservingScroll();
+    }
   }
 
   function addDeliveryDocketImportProductLine(rowId) {
@@ -235,7 +254,10 @@ export function createDeliveryDocketActions(context) {
     state.deliveryDocketImportState = {
       ...current,
       rows: (current.rows || []).map((row) => row.row_id === rowId
-        ? { ...row, product_lines: [...(row.product_lines || []), emptyProductLine()] }
+        ? revalidateDeliveryDocketRow({
+          ...row,
+          product_lines: [...(row.product_lines || []), emptyProductLine()],
+        })
         : row),
     };
     renderWorkspace();
@@ -246,10 +268,10 @@ export function createDeliveryDocketActions(context) {
     state.deliveryDocketImportState = {
       ...current,
       rows: (current.rows || []).map((row) => row.row_id === rowId
-        ? {
+        ? revalidateDeliveryDocketRow({
           ...row,
           product_lines: (row.product_lines || []).filter((_line, index) => index !== lineIndex),
-        }
+        })
         : row),
     };
     renderWorkspace();

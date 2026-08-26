@@ -1,4 +1,4 @@
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from hashlib import sha1
@@ -10,7 +10,11 @@ from backend.services.manual_dispatch.delivery_import_date import (
     current_melbourne_business_date,
     next_delivery_business_date,
 )
-from backend.services.manual_dispatch.normalization import clean_optional_text
+from backend.services.manual_dispatch.normalization import (
+    clean_optional_text,
+    normalize_product_detail_lines,
+    quantity_or_default,
+)
 
 
 DOCKET_HEADER_PATTERN = re.compile(r"^DELIVERY\s+DOCKET\s*:\s*(.+)$", re.IGNORECASE)
@@ -39,6 +43,33 @@ WINDOW_PATTERN = re.compile(
     re.IGNORECASE,
 )
 TIME_SLOT_PATTERN = re.compile(r"^TIME\s+SLOT\s*:\s*(.+)$", re.IGNORECASE)
+
+DELIVERY_DOCKET_REQUIRED_WARNINGS = (
+    ("docket_number", "Delivery Docket number was not found."),
+    ("company_name", "Customer company was not found."),
+    ("delivery_address", "Deliver To street address was not found."),
+    ("suburb", "Deliver To suburb was not found."),
+    ("delivery_date", "Delivery date was not resolved."),
+)
+DELIVERY_DOCKET_LOAD_WARNING = "No pallet, loose bag, or carton load was found."
+DELIVERY_DOCKET_INVALID_LOAD_WARNING = (
+    "Delivery load quantities must be whole non-negative numbers."
+)
+DELIVERY_DOCKET_DUPLICATE_WARNING = "Duplicate invoice number already exists."
+DELIVERY_DOCKET_FRACTIONAL_PRODUCT_WARNING_PREFIX = (
+    "Product actual quantity is fractional ("
+)
+DELIVERY_DOCKET_INVALID_PRODUCT_WARNING = (
+    "Product line data is invalid and must be corrected before import."
+)
+
+
+@dataclass(frozen=True)
+class DeliveryDocketValidationResult:
+    warnings: list[str]
+    blocking_warnings: list[str]
+    importable: bool
+    selected: bool
 
 
 def extract_delivery_docket_docx_text(docx_bytes):
@@ -114,7 +145,7 @@ def parse_delivery_docket_text(
     delivery_window = _find_delivery_window(deliver_block)
     start_time, end_time = _times_from_schedule(time_slot, delivery_window)
 
-    products, product_warnings, fractional_product = _parse_products(lines)
+    products, product_warnings, _fractional_product = _parse_products(lines)
     pallet_quantity = _parse_load_quantity(lines, "PALLET")
     carton_quantity = _parse_load_quantity(lines, "CARTON")
     explicit_loose_bags = _parse_loose_bags(lines)
@@ -134,23 +165,7 @@ def parse_delivery_docket_text(
     warnings = list(product_warnings)
     if not products:
         warnings.append("No product lines were found; review the docket before import.")
-    required_values = (
-        (docket_number, "Delivery Docket number was not found."),
-        (company_name, "Customer company was not found."),
-        (deliver_profile.get("delivery_address"), "Deliver To street address was not found."),
-        (deliver_profile.get("suburb"), "Deliver To suburb was not found."),
-        (delivery_date, "Delivery date was not resolved."),
-    )
-    missing_required = False
-    for value, warning in required_values:
-        if not value:
-            warnings.append(warning)
-            missing_required = True
-    if not any((pallet_quantity, loose_bags_quantity, carton_quantity)):
-        warnings.append("No pallet, loose bag, or carton load was found.")
-        missing_required = True
-
-    return DeliveryDocketDocxPreviewItem(
+    item = DeliveryDocketDocxPreviewItem(
         row_id=_row_id(source_filename, docket_number),
         source_filename=source_filename,
         docket_number=docket_number,
@@ -176,21 +191,141 @@ def parse_delivery_docket_text(
         note=note,
         product_lines=products,
         warnings=list(dict.fromkeys(warnings)),
-        importable=not (fractional_product or missing_required),
-        selected=not (fractional_product or missing_required),
+        importable=True,
+        selected=True,
+    )
+    return apply_delivery_docket_validation(item)
+
+
+def validate_delivery_docket_import_row(row):
+    product_warnings = _delivery_docket_product_warnings(
+        _delivery_docket_row_value(row, "product_lines", [])
+    )
+    required_warnings = [
+        warning
+        for field_name, warning in DELIVERY_DOCKET_REQUIRED_WARNINGS
+        if not clean_optional_text(_delivery_docket_row_value(row, field_name))
+    ]
+    load_warnings = _delivery_docket_load_warnings(row)
+    duplicate_warnings = (
+        [DELIVERY_DOCKET_DUPLICATE_WARNING]
+        if bool(_delivery_docket_row_value(row, "is_duplicate", False))
+        else []
+    )
+    blocking_warnings = list(dict.fromkeys([
+        *product_warnings,
+        *required_warnings,
+        *load_warnings,
+        *duplicate_warnings,
+    ]))
+    unmanaged_warnings = [
+        warning
+        for warning in list(_delivery_docket_row_value(row, "warnings", []) or [])
+        if not _is_delivery_docket_validation_warning(warning)
+    ]
+    warnings = list(dict.fromkeys([
+        *product_warnings,
+        *unmanaged_warnings,
+        *required_warnings,
+        *load_warnings,
+        *duplicate_warnings,
+    ]))
+    importable = not blocking_warnings
+    return DeliveryDocketValidationResult(
+        warnings=warnings,
+        blocking_warnings=blocking_warnings,
+        importable=importable,
+        selected=bool(_delivery_docket_row_value(row, "selected", False)) and importable,
     )
 
 
+def apply_delivery_docket_validation(item):
+    validation = validate_delivery_docket_import_row(item)
+    item.warnings = validation.warnings
+    item.importable = validation.importable
+    item.selected = validation.selected
+    return item
+
+
 def with_duplicate_warning(item):
-    warnings = list(item.warnings)
-    if "Duplicate invoice number already exists." not in warnings:
-        warnings.append("Duplicate invoice number already exists.")
-    return replace(
+    duplicate = replace(
         item,
-        warnings=warnings,
         is_duplicate=True,
-        importable=False,
-        selected=False,
+    )
+    return apply_delivery_docket_validation(duplicate)
+
+
+def _delivery_docket_row_value(row, field_name, default=None):
+    if isinstance(row, dict):
+        return row.get(field_name, default)
+    return getattr(row, field_name, default)
+
+
+def _delivery_docket_load_warnings(row):
+    quantities = []
+    try:
+        for field_name in (
+            "pallet_quantity",
+            "loose_bags_quantity",
+            "carton_quantity",
+        ):
+            quantities.append(quantity_or_default(
+                _delivery_docket_row_value(row, field_name),
+                field_name,
+            ))
+    except ValueError:
+        return [DELIVERY_DOCKET_INVALID_LOAD_WARNING]
+    if not any(quantity > 0 for quantity in quantities):
+        return [DELIVERY_DOCKET_LOAD_WARNING]
+    return []
+
+
+def _delivery_docket_product_warnings(product_lines):
+    fractional_warnings = []
+    if isinstance(product_lines, list):
+        for line in product_lines:
+            if not isinstance(line, dict):
+                continue
+            quantity = _decimal_or_none(line.get("quantity"))
+            if quantity is None or quantity == quantity.to_integral_value():
+                continue
+            quantity_label = format(quantity.normalize(), "f")
+            fractional_warnings.append(
+                f"{DELIVERY_DOCKET_FRACTIONAL_PRODUCT_WARNING_PREFIX}"
+                f"{quantity_label} KG) and cannot be imported safely."
+            )
+    try:
+        normalize_product_detail_lines(product_lines)
+    except ValueError as error:
+        if not (
+            fractional_warnings
+            and "quantity must be a whole number" in str(error)
+        ):
+            return [*fractional_warnings, DELIVERY_DOCKET_INVALID_PRODUCT_WARNING]
+    return fractional_warnings
+
+
+def _decimal_or_none(value):
+    if value in (None, "") or isinstance(value, bool):
+        return None
+    try:
+        quantity = Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        return None
+    return quantity if quantity.is_finite() else None
+
+
+def _is_delivery_docket_validation_warning(warning):
+    text = str(warning or "")
+    return bool(
+        text in {
+            *(item[1] for item in DELIVERY_DOCKET_REQUIRED_WARNINGS),
+            DELIVERY_DOCKET_LOAD_WARNING,
+            DELIVERY_DOCKET_INVALID_LOAD_WARNING,
+            DELIVERY_DOCKET_DUPLICATE_WARNING,
+            DELIVERY_DOCKET_INVALID_PRODUCT_WARNING,
+        }
+        or text.startswith(DELIVERY_DOCKET_FRACTIONAL_PRODUCT_WARNING_PREFIX)
     )
 
 

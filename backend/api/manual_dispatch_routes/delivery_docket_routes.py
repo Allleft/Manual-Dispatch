@@ -12,6 +12,7 @@ from backend.schemas import (
 from backend.services.manual_dispatch.delivery_docket_docx_parser import (
     current_melbourne_business_date,
     parse_delivery_docket_docx_bytes,
+    validate_delivery_docket_import_row,
     with_duplicate_warning,
 )
 from backend.services.manual_dispatch.delivery_suburb_region_service import (
@@ -120,13 +121,23 @@ def create_delivery_docket_router(
             if not row.selected:
                 skipped_rows.append({"row_id": row_id, "reason": "Row was not selected for import."})
                 continue
-            if not row.importable or row.is_duplicate:
-                skipped_rows.append({"row_id": row_id, "reason": "Row is not importable."})
+            if row.is_duplicate:
+                skipped_rows.append({
+                    "row_id": row_id,
+                    "reason": "Duplicate invoice number already exists.",
+                })
                 continue
             if row.invoice_number and row.invoice_number in existing_invoice_numbers:
                 skipped_rows.append({
                     "row_id": row_id,
                     "reason": "Duplicate invoice number already exists.",
+                })
+                continue
+            validation = validate_delivery_docket_import_row(row)
+            if not validation.importable:
+                skipped_rows.append({
+                    "row_id": row_id,
+                    "reason": "; ".join(validation.blocking_warnings),
                 })
                 continue
             try:

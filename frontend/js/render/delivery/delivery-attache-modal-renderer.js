@@ -492,8 +492,18 @@ export function createDeliveryDocketExpandedEditor(row, actions) {
 function docketActionAdapter(actions) {
   return {
     updateDeliveryAttacheImportRow: actions.updateDeliveryDocketImportRow,
+    refreshDeliveryAttacheImportRow: (rowId, field, value) =>
+      actions.updateDeliveryDocketImportRow(rowId, field, value, { render: true }),
     classifyDeliveryAttacheImportRow: actions.classifyDeliveryDocketImportRow,
     updateDeliveryAttacheImportProductLine: actions.updateDeliveryDocketImportProductLine,
+    refreshDeliveryAttacheImportProductLine: (rowId, lineIndex, field, value) =>
+      actions.updateDeliveryDocketImportProductLine(
+        rowId,
+        lineIndex,
+        field,
+        value,
+        { render: true },
+      ),
     addDeliveryAttacheImportProductLine: actions.addDeliveryDocketImportProductLine,
     removeDeliveryAttacheImportProductLine: actions.removeDeliveryDocketImportProductLine,
   };
@@ -772,11 +782,21 @@ export function createAttacheExpandedEditor(row, actions) {
       createInlineField("Invoice Number", createInlineInput(row.invoice_number, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "invoice_number", value))),
       createInlineField("Invoice Date", createInlineInput(row.invoice_date, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "invoice_date", value), "date")),
       createInlineField("Order Number", createInlineInput(row.order_no, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "order_no", value))),
-      createInlineField("Company Name", createInlineInput(row.company_name, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "company_name", value))),
+      createInlineField("Company Name", createInlineInput(
+        row.company_name,
+        (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "company_name", value),
+        "text",
+        deliveryDocketRowRefreshOptions(actions, row.row_id, "company_name"),
+      )),
       createInlineField("Phone", createInlineInput(row.phone, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "phone", value))),
     ]),
     createFormSection("Delivery Details", [
-      createInlineField("Delivery Address", createInlineInput(row.delivery_address, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "delivery_address", value))),
+      createInlineField("Delivery Address", createInlineInput(
+        row.delivery_address,
+        (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "delivery_address", value),
+        "text",
+        deliveryDocketRowRefreshOptions(actions, row.row_id, "delivery_address"),
+      )),
       createInlineField("Suburb", createInlineInput(
         row.suburb,
         (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "suburb", value),
@@ -789,7 +809,12 @@ export function createAttacheExpandedEditor(row, actions) {
         "text",
         { onChange: () => actions.classifyDeliveryAttacheImportRow(row.row_id) },
       )),
-      createInlineField("Delivery Date", createInlineInput(row.delivery_date, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "delivery_date", value), "date")),
+      createInlineField("Delivery Date", createInlineInput(
+        row.delivery_date,
+        (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "delivery_date", value),
+        "date",
+        deliveryDocketRowRefreshOptions(actions, row.row_id, "delivery_date"),
+      )),
       createInlineField("Start Time", createInlineInput(row.start_time, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "start_time", value), "time")),
       createInlineField("End Time", createInlineInput(row.end_time, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "end_time", value), "time")),
       createInlineField("Urgency", createInlineSelect(row.urgency || "Normal", [
@@ -806,9 +831,24 @@ export function createAttacheExpandedEditor(row, actions) {
       ),
     ]),
     createFormSection("Load", [
-      createInlineField("Pallet Quantity", createInlineInput(row.pallet_quantity, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "pallet_quantity", Number(value || 0)), "number")),
-      createInlineField("Loose Bags Quantity", createInlineInput(row.loose_bags_quantity, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "loose_bags_quantity", Number(value || 0)), "number")),
-      createInlineField("Carton Quantity", createInlineInput(row.carton_quantity, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "carton_quantity", Number(value || 0)), "number")),
+      createInlineField("Pallet Quantity", createInlineInput(
+        row.pallet_quantity,
+        (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "pallet_quantity", Number(value || 0)),
+        "number",
+        deliveryDocketRowRefreshOptions(actions, row.row_id, "pallet_quantity", (value) => Number(value || 0)),
+      )),
+      createInlineField("Loose Bags Quantity", createInlineInput(
+        row.loose_bags_quantity,
+        (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "loose_bags_quantity", Number(value || 0)),
+        "number",
+        deliveryDocketRowRefreshOptions(actions, row.row_id, "loose_bags_quantity", (value) => Number(value || 0)),
+      )),
+      createInlineField("Carton Quantity", createInlineInput(
+        row.carton_quantity,
+        (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "carton_quantity", Number(value || 0)),
+        "number",
+        deliveryDocketRowRefreshOptions(actions, row.row_id, "carton_quantity", (value) => Number(value || 0)),
+      )),
     ]),
     createFormSection("Product Lines", [createAttacheProductLineEditor(row, actions)]),
     (row.warnings || []).length
@@ -817,6 +857,23 @@ export function createAttacheExpandedEditor(row, actions) {
     createFormSection("Notes", [createInlineField("Notes", createInlineTextarea(row.note, (value) => actions.updateDeliveryAttacheImportRow(row.row_id, "note", value)))]),
   );
   return wrapper;
+}
+
+function deliveryDocketRowRefreshOptions(
+  actions,
+  rowId,
+  field,
+  normalizeValue = (value) => value,
+) {
+  const refresh = typeof actions.refreshDeliveryAttacheImportRow === "function"
+    ? actions.refreshDeliveryAttacheImportRow
+    : null;
+  if (!refresh) {
+    return {};
+  }
+  return {
+    onChange: (value) => refresh(rowId, field, normalizeValue(value)),
+  };
 }
 
 export function attacheRowStatus(row) {
@@ -953,17 +1010,23 @@ export function createAttacheProductLineEditor(row, actions) {
     lineRow.className = "workspace-attache-product-row";
     lineRow.append(
       createInlineField("Product Code", createInlineInput(line.product_code, (value) =>
-        actions.updateDeliveryAttacheImportProductLine(row.row_id, index, "product_code", value))),
+        actions.updateDeliveryAttacheImportProductLine(row.row_id, index, "product_code", value), "text",
+        deliveryDocketProductRefreshOptions(actions, row.row_id, index, "product_code"))),
       createInlineField("Product Name", createInlineInput(line.product_name, (value) =>
-        actions.updateDeliveryAttacheImportProductLine(row.row_id, index, "product_name", value))),
+        actions.updateDeliveryAttacheImportProductLine(row.row_id, index, "product_name", value), "text",
+        deliveryDocketProductRefreshOptions(actions, row.row_id, index, "product_name"))),
       createInlineField("Actual Quantity", createInlineInput(line.quantity, (value) =>
-        actions.updateDeliveryAttacheImportProductLine(row.row_id, index, "quantity", value), "number")),
+        actions.updateDeliveryAttacheImportProductLine(row.row_id, index, "quantity", value), "number",
+        deliveryDocketProductRefreshOptions(actions, row.row_id, index, "quantity"))),
       createInlineField("Actual Unit", createInlineInput(line.unit || "KG", (value) =>
-        actions.updateDeliveryAttacheImportProductLine(row.row_id, index, "unit", value))),
+        actions.updateDeliveryAttacheImportProductLine(row.row_id, index, "unit", value), "text",
+        deliveryDocketProductRefreshOptions(actions, row.row_id, index, "unit"))),
       createInlineField("Packaging Quantity", createInlineInput(line.package_quantity, (value) =>
-        actions.updateDeliveryAttacheImportProductLine(row.row_id, index, "package_quantity", value), "number")),
+        actions.updateDeliveryAttacheImportProductLine(row.row_id, index, "package_quantity", value), "number",
+        deliveryDocketProductRefreshOptions(actions, row.row_id, index, "package_quantity"))),
       createInlineField("Packaging Unit", createInlineInput(line.package_unit, (value) =>
-        actions.updateDeliveryAttacheImportProductLine(row.row_id, index, "package_unit", value))),
+        actions.updateDeliveryAttacheImportProductLine(row.row_id, index, "package_unit", value), "text",
+        deliveryDocketProductRefreshOptions(actions, row.row_id, index, "package_unit"))),
       createActionButton("Remove", () =>
         actions.removeDeliveryAttacheImportProductLine(row.row_id, index)),
     );
@@ -978,6 +1041,20 @@ export function createAttacheProductLineEditor(row, actions) {
   wrapper.append(createActionButton("Add Product Line", () =>
     actions.addDeliveryAttacheImportProductLine(row.row_id)));
   return wrapper;
+}
+
+function deliveryDocketProductRefreshOptions(actions, rowId, lineIndex, field) {
+  if (typeof actions.refreshDeliveryAttacheImportProductLine !== "function") {
+    return {};
+  }
+  return {
+    onChange: (value) => actions.refreshDeliveryAttacheImportProductLine(
+      rowId,
+      lineIndex,
+      field,
+      value,
+    ),
+  };
 }
 
 export function productLineSummary(row) {

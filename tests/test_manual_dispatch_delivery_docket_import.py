@@ -289,6 +289,75 @@ class ManualDispatchDeliveryDocketImportTest(unittest.TestCase):
             self.assertFalse(duplicate["importable"])
             self.assertFalse(duplicate["selected"])
 
+    def test_commit_revalidates_rows_instead_of_trusting_client_importable_flag(self):
+        lines = [
+            "DELIVERY DOCKET: 4391/185816",
+            "DATED: 25/08/2026",
+            "DELIVER TO:",
+            "UNITED FASTENERS",
+            "1 TEST ROAD",
+            "SUNSHINE NORTH",
+            "ORDER NUMBER: 40041845",
+            "1 PALLET",
+        ]
+        preview = self.client.post(
+            "/api/manual-dispatch/delivery/orders/import-delivery-docket-docx-preview",
+            files=[(
+                "files",
+                ("docket-4391.docx", _docx_bytes(lines), DOCX_CONTENT_TYPE),
+            )],
+        )
+        self.assertEqual(200, preview.status_code, preview.text)
+        valid_row = preview.json()["rows"][0]
+        self.assertTrue(valid_row["importable"])
+        before_count = len(self.repository.list_orders())
+
+        invalid_rows = [
+            {
+                **valid_row,
+                "row_id": "DOCKET-MISSING-COMPANY",
+                "invoice_number": "198101",
+                "company_name": "",
+                "selected": True,
+                "importable": True,
+                "is_duplicate": False,
+            },
+            {
+                **valid_row,
+                "row_id": "DOCKET-MISSING-ADDRESS",
+                "invoice_number": "198102",
+                "delivery_address": "",
+                "selected": True,
+                "importable": True,
+                "is_duplicate": False,
+            },
+            {
+                **valid_row,
+                "row_id": "DOCKET-ZERO-LOAD",
+                "invoice_number": "198103",
+                "pallet_quantity": 0,
+                "loose_bags_quantity": 0,
+                "carton_quantity": 0,
+                "selected": True,
+                "importable": True,
+                "is_duplicate": False,
+            },
+        ]
+        response = self.client.post(
+            "/api/manual-dispatch/delivery/orders/import-delivery-docket-docx-commit",
+            json={"rows": invalid_rows},
+        )
+
+        self.assertEqual(200, response.status_code, response.text)
+        payload = response.json()
+        self.assertEqual(0, payload["imported_count"])
+        self.assertEqual(3, payload["skipped_count"])
+        self.assertEqual(before_count, len(self.repository.list_orders()))
+        reasons = {row["row_id"]: row["reason"] for row in payload["skipped_rows"]}
+        self.assertIn("Customer company was not found.", reasons["DOCKET-MISSING-COMPANY"])
+        self.assertIn("Deliver To street address was not found.", reasons["DOCKET-MISSING-ADDRESS"])
+        self.assertIn("No pallet, loose bag, or carton load was found.", reasons["DOCKET-ZERO-LOAD"])
+
     def test_batch_limits_accept_30_and_reject_31_for_preview_and_commit(self):
         payload = _docx_bytes(
             [

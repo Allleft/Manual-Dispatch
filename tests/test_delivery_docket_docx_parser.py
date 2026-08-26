@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import date
 from io import BytesIO
 import unittest
@@ -5,9 +6,13 @@ import unittest
 from docx import Document
 
 from backend.services.manual_dispatch.delivery_docket_docx_parser import (
+    apply_delivery_docket_validation,
     extract_delivery_docket_docx_text,
     parse_delivery_docket_docx_bytes,
     parse_delivery_docket_text,
+)
+from backend.services.manual_dispatch.delivery_suburb_region_service import (
+    UNKNOWN_DELIVERY_AREA_WARNING,
 )
 
 
@@ -358,6 +363,125 @@ class DeliveryDocketDocxParserTest(unittest.TestCase):
 
         self.assertFalse(parsed.importable)
         self.assertTrue(any("fractional" in warning.lower() for warning in parsed.warnings))
+
+    def test_manual_corrections_revalidate_required_fields_without_clearing_review_warnings(self):
+        parsed = parse_delivery_docket_text(
+            """
+            DELIVERY DOCKET: 4391/185816
+            DATED: 25/08/2026
+            DELIVER TO:
+            UNITED FASTENERS
+            1 TEST ROAD
+            SUNSHINE NORTH
+            ORDER NUMBER: 40041845
+            1 PALLET
+            """,
+            source_filename="docket-4391.docx",
+            import_date=date(2026, 8, 25),
+        )
+        unrelated_warning = "Informational docket warning."
+        repaired = replace(
+            parsed,
+            company_name=None,
+            delivery_address=None,
+            suburb=None,
+            warnings=[
+                "Customer company was not found.",
+                "Deliver To street address was not found.",
+                "Deliver To suburb was not found.",
+                unrelated_warning,
+                UNKNOWN_DELIVERY_AREA_WARNING,
+            ],
+            importable=False,
+            selected=False,
+        )
+
+        repaired.company_name = "UNITED FASTENERS"
+        apply_delivery_docket_validation(repaired)
+        self.assertFalse(repaired.importable)
+        self.assertNotIn("Customer company was not found.", repaired.warnings)
+        self.assertIn("Deliver To street address was not found.", repaired.warnings)
+        self.assertIn("Deliver To suburb was not found.", repaired.warnings)
+
+        repaired.suburb = "SUNSHINE NORTH"
+        apply_delivery_docket_validation(repaired)
+        self.assertFalse(repaired.importable)
+        self.assertNotIn("Deliver To suburb was not found.", repaired.warnings)
+
+        repaired.delivery_address = "1 TEST ROAD"
+        apply_delivery_docket_validation(repaired)
+        self.assertTrue(repaired.importable)
+        self.assertFalse(repaired.selected)
+        self.assertEqual(
+            [unrelated_warning, UNKNOWN_DELIVERY_AREA_WARNING],
+            repaired.warnings,
+        )
+
+        repaired.selected = True
+        repaired.suburb = ""
+        apply_delivery_docket_validation(repaired)
+        self.assertFalse(repaired.importable)
+        self.assertFalse(repaired.selected)
+        self.assertIn("Deliver To suburb was not found.", repaired.warnings)
+
+    def test_revalidation_preserves_load_duplicate_and_product_blockers(self):
+        parsed = parse_delivery_docket_text(
+            """
+            DELIVERY DOCKET: 4391/185816
+            DATED: 25/08/2026
+            DELIVER TO:
+            UNITED FASTENERS
+            1 TEST ROAD
+            SUNSHINE NORTH
+            1 PALLET
+            """,
+            source_filename="docket-4391.docx",
+            import_date=date(2026, 8, 25),
+        )
+        parsed.warnings.append(UNKNOWN_DELIVERY_AREA_WARNING)
+        apply_delivery_docket_validation(parsed)
+        self.assertTrue(parsed.importable)
+
+        no_load = replace(
+            parsed,
+            pallet_quantity=0,
+            loose_bags_quantity=0,
+            carton_quantity=0,
+            warnings=list(parsed.warnings),
+        )
+        apply_delivery_docket_validation(no_load)
+        self.assertFalse(no_load.importable)
+        self.assertIn("No pallet, loose bag, or carton load was found.", no_load.warnings)
+
+        duplicate = replace(
+            parsed,
+            is_duplicate=True,
+            warnings=[*parsed.warnings, "Duplicate invoice number already exists."],
+        )
+        apply_delivery_docket_validation(duplicate)
+        self.assertFalse(duplicate.importable)
+        self.assertFalse(duplicate.selected)
+        self.assertIn("Duplicate invoice number already exists.", duplicate.warnings)
+
+        fractional = replace(
+            parsed,
+            product_lines=[{
+                "product_name": "SAMPLE RAGS",
+                "quantity": 4.5,
+                "unit": "KG",
+                "package_quantity": 3,
+                "package_unit": "BAG1.5",
+            }],
+            warnings=list(parsed.warnings),
+        )
+        apply_delivery_docket_validation(fractional)
+        self.assertFalse(fractional.importable)
+        self.assertTrue(any("fractional" in warning.lower() for warning in fractional.warnings))
+
+        fractional.product_lines[0]["quantity"] = 5
+        apply_delivery_docket_validation(fractional)
+        self.assertTrue(fractional.importable)
+        self.assertFalse(any("fractional" in warning.lower() for warning in fractional.warnings))
 
 
 if __name__ == "__main__":
