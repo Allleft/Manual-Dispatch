@@ -473,6 +473,7 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
         self.assertIn("opshop_countryside_route_groups", final_summary_opshop_tables)
         self.assertIn("pickup_category", opshop_schedule_columns)
         self.assertIn("route_group_id", opshop_schedule_columns)
+        self.assertIn("regular_route_sequence", opshop_schedule_columns)
         self.assertIn("pickup_category_snapshot", final_summary_opshop_columns)
         self.assertIn("route_group_id_snapshot", final_summary_opshop_columns)
         self.assertIn("route_group_name_snapshot", final_summary_opshop_columns)
@@ -490,6 +491,74 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
             legacy_row,
         )
         self.assertEqual([], foreign_key_errors)
+
+    def test_existing_opshop_schedule_receives_route_sequence_column_additively(self):
+        legacy_path = self.temp_dir / "legacy_opshop_schedule.sqlite3"
+        with sqlite3.connect(legacy_path) as connection:
+            connection.executescript(
+                """
+                CREATE TABLE opshop_pickup_schedules (
+                    schedule_id TEXT PRIMARY KEY,
+                    opshop_id TEXT NOT NULL,
+                    run_day TEXT,
+                    run_type TEXT NOT NULL,
+                    pickup_category TEXT NOT NULL DEFAULT 'NORMAL',
+                    route_group_id TEXT,
+                    pickup_frequency TEXT,
+                    time_window TEXT,
+                    call_before_arrival INTEGER NOT NULL DEFAULT 0,
+                    call_timing TEXT,
+                    status TEXT NOT NULL DEFAULT 'Active',
+                    active_flag INTEGER NOT NULL DEFAULT 1,
+                    fortnight_group TEXT,
+                    review_required INTEGER NOT NULL DEFAULT 0,
+                    review_reason TEXT,
+                    default_driver_id TEXT,
+                    default_driver_alias TEXT,
+                    default_driver_name_snapshot TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                INSERT INTO opshop_pickup_schedules (
+                    schedule_id, opshop_id, run_day, run_type, pickup_category,
+                    pickup_frequency, status, active_flag, created_at, updated_at
+                ) VALUES (
+                    'LEGACY-SCHEDULE', 'LEGACY-OPSHOP', 'MONDAY', 'REGULAR',
+                    'NORMAL', 'Weekly', 'Active', 1,
+                    '2026-01-01T00:00:00+00:00', '2026-01-01T00:00:00+00:00'
+                );
+                """
+            )
+            before = connection.execute(
+                "SELECT * FROM opshop_pickup_schedules"
+            ).fetchone()
+
+        SQLiteManualDispatchRepository(legacy_path)
+
+        with sqlite3.connect(legacy_path) as connection:
+            columns = [
+                row[1]
+                for row in connection.execute(
+                    "PRAGMA table_info(opshop_pickup_schedules)"
+                )
+            ]
+            business_values = connection.execute(
+                """
+                SELECT schedule_id, opshop_id, run_day, run_type, pickup_category,
+                       route_group_id, pickup_frequency, time_window,
+                       call_before_arrival, call_timing, status, active_flag,
+                       fortnight_group, review_required, review_reason,
+                       default_driver_id, default_driver_alias,
+                       default_driver_name_snapshot, created_at, updated_at
+                FROM opshop_pickup_schedules
+                """
+            ).fetchone()
+            sequence = connection.execute(
+                "SELECT regular_route_sequence FROM opshop_pickup_schedules"
+            ).fetchone()[0]
+        self.assertIn("regular_route_sequence", columns)
+        self.assertEqual(before, business_values)
+        self.assertIsNone(sequence)
 
     def test_existing_opshop_summary_row_without_category_route_values_loads_safely(self):
         with sqlite3.connect(self.db_path) as connection:

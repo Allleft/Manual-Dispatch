@@ -217,6 +217,7 @@ class SQLiteOpShopRepositoryMixin:
                     schedule.default_driver_id,
                     schedule.default_driver_alias,
                     schedule.default_driver_name_snapshot AS default_driver_name,
+                    schedule.regular_route_sequence,
                     COALESCE(schedule.pickup_category, 'NORMAL') AS pickup_category,
                     schedule.route_group_id,
                     route_group.route_group_name
@@ -255,6 +256,7 @@ class SQLiteOpShopRepositoryMixin:
                     schedule.default_driver_id,
                     schedule.default_driver_alias,
                     schedule.default_driver_name_snapshot AS default_driver_name,
+                    schedule.regular_route_sequence,
                     COALESCE(schedule.pickup_category, 'NORMAL') AS pickup_category,
                     schedule.route_group_id,
                     route_group.route_group_name
@@ -293,6 +295,7 @@ class SQLiteOpShopRepositoryMixin:
                     schedule.default_driver_id,
                     schedule.default_driver_alias,
                     schedule.default_driver_name_snapshot AS default_driver_name,
+                    schedule.regular_route_sequence,
                     COALESCE(schedule.pickup_category, 'NORMAL') AS pickup_category,
                     schedule.route_group_id,
                     route_group.route_group_name
@@ -397,9 +400,10 @@ class SQLiteOpShopRepositoryMixin:
                     default_driver_id,
                     default_driver_alias,
                     default_driver_name_snapshot,
+                    regular_route_sequence,
                     created_at,
                     updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(schedule_id)
                 DO UPDATE SET
                     opshop_id = excluded.opshop_id,
@@ -419,6 +423,7 @@ class SQLiteOpShopRepositoryMixin:
                     default_driver_id = excluded.default_driver_id,
                     default_driver_alias = excluded.default_driver_alias,
                     default_driver_name_snapshot = excluded.default_driver_name_snapshot,
+                    regular_route_sequence = excluded.regular_route_sequence,
                     updated_at = excluded.updated_at
                 """,
                 (
@@ -440,6 +445,7 @@ class SQLiteOpShopRepositoryMixin:
                     schedule.default_driver_id,
                     schedule.default_driver_alias,
                     schedule.default_driver_name_snapshot,
+                    schedule.regular_route_sequence,
                     schedule.created_at,
                     schedule.updated_at,
                 ),
@@ -508,6 +514,7 @@ class SQLiteOpShopRepositoryMixin:
                     schedule.default_driver_id,
                     schedule.default_driver_alias,
                     schedule.default_driver_name_snapshot AS default_driver_name,
+                    schedule.regular_route_sequence,
                     assigned_driver.name AS assigned_driver_name
                 FROM opshop_pickup_tasks task
                 LEFT JOIN opshop_locations location
@@ -565,6 +572,7 @@ class SQLiteOpShopRepositoryMixin:
                     schedule.default_driver_id,
                     schedule.default_driver_alias,
                     schedule.default_driver_name_snapshot AS default_driver_name,
+                    schedule.regular_route_sequence,
                     COALESCE(schedule.pickup_category, 'NORMAL') AS pickup_category,
                     schedule.route_group_id,
                     route_group.route_group_name,
@@ -631,6 +639,7 @@ class SQLiteOpShopRepositoryMixin:
                     schedule.default_driver_id,
                     schedule.default_driver_alias,
                     schedule.default_driver_name_snapshot AS default_driver_name,
+                    schedule.regular_route_sequence,
                     COALESCE(schedule.pickup_category, 'NORMAL') AS pickup_category,
                     schedule.route_group_id,
                     route_group.route_group_name,
@@ -700,6 +709,7 @@ class SQLiteOpShopRepositoryMixin:
                     schedule.default_driver_id,
                     schedule.default_driver_alias,
                     schedule.default_driver_name_snapshot AS default_driver_name,
+                    schedule.regular_route_sequence,
                     COALESCE(schedule.pickup_category, 'NORMAL') AS pickup_category,
                     schedule.route_group_id,
                     route_group.route_group_name,

@@ -4317,6 +4317,79 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             """,
         )
 
+    def test_regular_route_sequence_orders_task_pool_and_trip_summary_without_assigning_defaults(self):
+        utils_uri = (
+            FRONTEND_ROOT / "js/render/opshop/opshop-renderer-utils.js"
+        ).as_uri()
+        trip_renderer = self._read(
+            "js/render/opshop/opshop-trip-summary-renderer.js"
+        )
+        collection_renderer = self._read(
+            "js/render/opshop/opshop-collection-renderer.js"
+        )
+        self.assertIn(
+            "pickups.filter(isRegularPickup).sort(compareRegularRouteSequence)",
+            trip_renderer,
+        )
+        self.assertNotIn(
+            "pickups.filter(isOncallPickup).sort",
+            trip_renderer,
+        )
+        self.assertIn("(collection.pickups || []).forEach", collection_renderer)
+        self.assertNotRegex(
+            collection_renderer,
+            r"collection\.pickups[^;]+\.sort\(",
+        )
+        self._run_frontend_module_script(
+            "js/render/opshop/opshop-regular-renderer.js",
+            f"""
+            const utils = await import({utils_uri!r});
+            const state = {{
+              opshopBoard: {{
+                drivers: [
+                  {{ driver_id: "D1", name: "Alpha Driver" }},
+                  {{ driver_id: "D2", name: "Beta Driver" }},
+                ],
+              }},
+              opshopAssignmentDrafts: {{
+                "DRAFTED": "D2",
+                "ST-JAMES": "",
+              }},
+            }};
+            const pickups = [
+              {{ pickup_task_id: "ROUTE-2", opshop_name: "A Shop", suburb: "A", default_driver_id: "D1", regular_route_sequence: 2 }},
+              {{ pickup_task_id: "ROUTE-1", opshop_name: "Z Shop", suburb: "Z", default_driver_id: "D1", regular_route_sequence: 1 }},
+              {{ pickup_task_id: "ST-JAMES", opshop_name: "ST JAMES OP SHOP", suburb: "MALVERN", default_driver_id: "D1", regular_route_sequence: null }},
+              {{ pickup_task_id: "D2-ACTUAL", opshop_name: "Driver Two First", suburb: "Z", assigned_driver_id: "D2", driver_id: "D2", regular_route_sequence: 1 }},
+              {{ pickup_task_id: "DRAFTED", opshop_name: "Drafted To Two", suburb: "A", assigned_driver_id: "D1", driver_id: "D1", default_driver_id: "D1", regular_route_sequence: 2 }},
+            ];
+            const ordered = [...pickups]
+              .sort((left, right) => module.compareRegularPickups(left, right, state))
+              .map((pickup) => pickup.pickup_task_id);
+            const expected = ["ROUTE-1", "ROUTE-2", "ST-JAMES", "D2-ACTUAL", "DRAFTED"];
+            if (ordered.join(",") !== expected.join(",")) {{
+              throw new Error(`Unexpected Task Pool route order: ${{ordered.join(",")}}`);
+            }}
+            const unassigned = pickups.find((pickup) => pickup.pickup_task_id === "ROUTE-1");
+            if (utils.selectedOpShopDriverId(unassigned, state) !== ""
+                || utils.currentDriverId(unassigned) !== ""
+                || utils.effectiveRegularRouteDriverName(unassigned, state) !== "Alpha Driver") {{
+              throw new Error("default sorting driver changed visible assignment state");
+            }}
+            const explicitUnassign = pickups.find((pickup) => pickup.pickup_task_id === "ST-JAMES");
+            if (utils.selectedOpShopDriverId(explicitUnassign, state) !== ""
+                || utils.effectiveRegularRouteDriverName(explicitUnassign, state) !== "Alpha Driver") {{
+              throw new Error("unassigned draft did not retain fallback route grouping");
+            }}
+            const tripRegular = [pickups[0], pickups[1], pickups[2]]
+              .sort(utils.compareRegularRouteSequence)
+              .map((pickup) => pickup.pickup_task_id);
+            if (tripRegular.join(",") !== "ROUTE-1,ROUTE-2,ST-JAMES") {{
+              throw new Error(`Unexpected Trip Summary Regular order: ${{tripRegular.join(",")}}`);
+            }}
+            """,
+        )
+
     def test_regular_rows_render_last_pickup_date_badge_after_pickup_date(self):
         regular_renderer = self._read("js/render/opshop/opshop-regular-renderer.js")
         oncall_renderer = self._read("js/render/opshop/opshop-oncall-renderer.js")
@@ -4862,7 +4935,11 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn('field.textContent = "Pickup date"', self.opshop_renderer)
         self.assertIn("actions.updateOpShopTripSummaryDate(input.value)", self.opshop_renderer)
         self.assertIn("assignedOpShopPickupsForDriver", self.opshop_renderer)
-        self.assertIn('createOpShopPickupGroup("Regular"', self.opshop_renderer)
+        self.assertIn('"Regular",', self.opshop_renderer)
+        self.assertIn(
+            "pickups.filter(isRegularPickup).sort(compareRegularRouteSequence)",
+            self.opshop_renderer,
+        )
         self.assertIn('createOpShopPickupGroup("Oncall"', self.opshop_renderer)
         self.assertIn('createOpShopPickupGroup("Countryside"', self.opshop_renderer)
         self.assertIn("pickup.route_group_name", self.opshop_renderer)

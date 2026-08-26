@@ -3,10 +3,12 @@ import os
 import shutil
 import unittest
 import uuid
+from io import BytesIO
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from openpyxl import load_workbook
 
 from backend.repositories.in_memory_manual_dispatch_repository import (
     InMemoryManualDispatchRepository,
@@ -23,6 +25,9 @@ from backend.schemas import (
     RegisterOperatorAccountRequest,
 )
 from backend.services.manual_dispatch_service import ManualDispatchService
+from backend.services.opshop_pickup_collection_excel_export_service import (
+    build_opshop_pickup_collection_excel,
+)
 from tests.manual_dispatch_api_test_helpers import authenticate_test_client
 
 
@@ -382,6 +387,158 @@ class OpShopPickupCollectionGenerationTest(unittest.TestCase):
             ],
         )
 
+    def test_sqlite_and_in_memory_collection_route_order_match(self):
+        in_memory = InMemoryManualDispatchRepository()
+        if not in_memory.get_driver("D001"):
+            in_memory.create_driver(
+                Driver(
+                    driver_id="D001",
+                    name="John Georgiadis",
+                    start_time="07:00",
+                    end_time="15:00",
+                    is_available=True,
+                    preferred_zone=None,
+                    pallet_only=False,
+                )
+            )
+        expected = ["ROUTE-1", "ROUTE-2", "ROUTE-NULL", "ONCALL"]
+        for repository in (self.repository, in_memory):
+            self._seed_pickup(
+                "ROUTE-2",
+                "D001",
+                self.dispatch_date,
+                repository=repository,
+                suburb="AAAA",
+                regular_route_sequence=2,
+            )
+            self._seed_pickup(
+                "ROUTE-1",
+                "D001",
+                self.dispatch_date,
+                repository=repository,
+                suburb="ZZZZ",
+                regular_route_sequence=1,
+            )
+            self._seed_pickup(
+                "ROUTE-NULL",
+                "D001",
+                self.dispatch_date,
+                repository=repository,
+                suburb="AAAA",
+            )
+            self._seed_pickup(
+                "ONCALL",
+                "D001",
+                self.dispatch_date,
+                run_type="ON_CALL",
+                repository=repository,
+                suburb="AAAA",
+            )
+            collection = ManualDispatchService(
+                repository
+            ).create_generated_opshop_pickup_collection(
+                GenerateOpShopPickupCollectionRequest(
+                    dispatch_date=self.dispatch_date,
+                    pickup_date=self.pickup_date,
+                    driver_id="D001",
+                )
+            )
+            self.assertEqual(
+                expected,
+                [row.pickup_task_id_snapshot for row in collection.pickups],
+            )
+
+    def test_route_sequence_becomes_immutable_collection_and_excel_row_order(self):
+        first_schedule = self._seed_pickup(
+            "POSH-FIRST",
+            driver_id="D001",
+            assignment_dispatch_date=self.dispatch_date,
+            opshop_name="POSH OPP SHOPPE",
+            suburb="GLENHUNTLY",
+            regular_route_sequence=1,
+        )
+        second_schedule = self._seed_pickup(
+            "POSH-SECOND",
+            driver_id="D001",
+            assignment_dispatch_date=self.dispatch_date,
+            opshop_name="POSH OPP SHOPPE",
+            suburb="ELSTERNWICK",
+            regular_route_sequence=2,
+        )
+        st_james_schedule = self._seed_pickup(
+            "ST-JAMES",
+            driver_id="D001",
+            assignment_dispatch_date=self.dispatch_date,
+            opshop_name="ST JAMES OP SHOP",
+            suburb="MALVERN",
+        )
+        self._seed_pickup(
+            "ONCALL-FIRST-ALPHABETICALLY",
+            driver_id="D001",
+            assignment_dispatch_date=self.dispatch_date,
+            run_type="ON_CALL",
+            opshop_name="AAA ONCALL OP SHOP",
+            suburb="AAAA",
+        )
+
+        generated = self._post_generate("D001")
+        self.assertEqual(200, generated.status_code, generated.text)
+        expected_task_ids = [
+            "POSH-FIRST",
+            "POSH-SECOND",
+            "ST-JAMES",
+            "ONCALL-FIRST-ALPHABETICALLY",
+        ]
+        self.assertEqual(
+            expected_task_ids,
+            [row["pickup_task_id_snapshot"] for row in generated.json()["pickups"]],
+        )
+        self.assertEqual([1, 2, 3, 4], [row["row_no"] for row in generated.json()["pickups"]])
+
+        for schedule_id, sequence in (
+            (first_schedule, 20),
+            (second_schedule, 10),
+            (st_james_schedule, 5),
+        ):
+            schedule = self.repository.get_opshop_pickup_schedule(schedule_id)
+            schedule.regular_route_sequence = sequence
+            self.repository.upsert_opshop_pickup_schedule(schedule)
+
+        collection_id = generated.json()["collection_id"]
+        persisted = self.client.get(
+            f"/api/manual-dispatch/opshop/pickup-collections/{collection_id}"
+        ).json()
+        self.assertEqual(
+            expected_task_ids,
+            [row["pickup_task_id_snapshot"] for row in persisted["pickups"]],
+        )
+
+        saved = self.client.post(
+            f"/api/manual-dispatch/opshop/pickup-collections/{collection_id}/save",
+            json={
+                "saved_by_account_name": self.account.account_name,
+                "saved_by_account_id": self.account.account_id,
+            },
+        )
+        self.assertEqual(200, saved.status_code, saved.text)
+        saved_collection = self.service.get_opshop_pickup_collection(collection_id)
+        self.assertEqual(
+            expected_task_ids,
+            [row.pickup_task_id_snapshot for row in saved_collection.pickups],
+        )
+        worksheet = load_workbook(
+            BytesIO(build_opshop_pickup_collection_excel(saved_collection))
+        ).active
+        self.assertEqual(
+            [
+                "POSH OPP SHOPPE",
+                "POSH OPP SHOPPE",
+                "ST JAMES OP SHOP",
+                "AAA ONCALL OP SHOP",
+            ],
+            [worksheet.cell(row=row, column=1).value for row in range(12, 16)],
+        )
+
     def _seed_template(
         self,
         suffix,
@@ -389,6 +546,9 @@ class OpShopPickupCollectionGenerationTest(unittest.TestCase):
         pickup_category,
         default_driver_id=None,
         repository=None,
+        opshop_name=None,
+        suburb="MELBOURNE",
+        regular_route_sequence=None,
     ):
         repository = repository or self.repository
         opshop_id = f"OPSHOP-{suffix}"
@@ -396,8 +556,8 @@ class OpShopPickupCollectionGenerationTest(unittest.TestCase):
         repository.upsert_opshop_location(
             OpShopLocation(
                 opshop_id=opshop_id,
-                name=f"QA OP SHOP {suffix}",
-                suburb="MELBOURNE",
+                name=opshop_name or f"QA OP SHOP {suffix}",
+                suburb=suburb,
                 street_address=f"{suffix} TEST STREET",
                 area_region="QA",
                 primary_contact="QA Contact",
@@ -438,6 +598,7 @@ class OpShopPickupCollectionGenerationTest(unittest.TestCase):
                 ),
                 pickup_category=pickup_category,
                 route_group_id=None,
+                regular_route_sequence=regular_route_sequence,
             )
         )
         return schedule_id, opshop_id
@@ -450,6 +611,9 @@ class OpShopPickupCollectionGenerationTest(unittest.TestCase):
         run_type="REGULAR",
         pickup_category="NORMAL",
         repository=None,
+        opshop_name=None,
+        suburb="MELBOURNE",
+        regular_route_sequence=None,
     ):
         repository = repository or self.repository
         schedule_id, opshop_id = self._seed_template(
@@ -457,6 +621,9 @@ class OpShopPickupCollectionGenerationTest(unittest.TestCase):
             run_type,
             pickup_category,
             repository=repository,
+            opshop_name=opshop_name,
+            suburb=suburb,
+            regular_route_sequence=regular_route_sequence,
         )
         repository.upsert_opshop_pickup_task(
             OpShopPickupTask(
@@ -483,6 +650,7 @@ class OpShopPickupCollectionGenerationTest(unittest.TestCase):
                 driver_id,
                 "trip1",
             )
+        return schedule_id
 
     def _post_generate(self, driver_id):
         return self.client.post(

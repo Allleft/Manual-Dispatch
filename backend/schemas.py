@@ -145,6 +145,7 @@ class OpShopPickupSchedule:
     default_driver_name_snapshot: Optional[str] = None
     pickup_category: str = "NORMAL"
     route_group_id: Optional[str] = None
+    regular_route_sequence: Optional[int] = None
 
 
 @dataclass
@@ -225,6 +226,7 @@ class OpShopPickupBoardItem:
     pickup_category: str = "NORMAL"
     route_group_id: Optional[str] = None
     route_group_name: Optional[str] = None
+    regular_route_sequence: Optional[int] = None
 
 
 @dataclass
@@ -269,6 +271,7 @@ class OpShopWorkspacePickupItem:
     route_group_name: Optional[str]
     last_pickup_date: Optional[str] = None
     assignment_lock_reason: Optional[str] = None
+    regular_route_sequence: Optional[int] = None
 
 
 @dataclass
@@ -288,6 +291,7 @@ class OpShopPickupScheduleCandidate:
     pickup_category: str = "NORMAL"
     route_group_id: Optional[str] = None
     route_group_name: Optional[str] = None
+    regular_route_sequence: Optional[int] = None
 
 
 @dataclass
@@ -320,6 +324,7 @@ class OpShopTemplate:
     pickup_category: str = "NORMAL"
     route_group_id: Optional[str] = None
     route_group_name: Optional[str] = None
+    regular_route_sequence: Optional[int] = None
 
 
 @dataclass

@@ -281,4 +281,5 @@ class OpShopWorkspaceBoardService:
             route_group_name=pickup.route_group_name,
             last_pickup_date=last_pickup_date,
             assignment_lock_reason=assignment_lock_reason,
+            regular_route_sequence=pickup.regular_route_sequence,
         )

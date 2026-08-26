@@ -121,6 +121,7 @@ class InMemoryOpShopRepositoryMixin:
                     pickup_category=schedule.pickup_category,
                     route_group_id=schedule.route_group_id,
                     route_group_name=None,
+                    regular_route_sequence=schedule.regular_route_sequence,
                 )
             )
         return sorted(
@@ -161,6 +162,7 @@ class InMemoryOpShopRepositoryMixin:
                     pickup_category=schedule.pickup_category,
                     route_group_id=schedule.route_group_id,
                     route_group_name=None,
+                    regular_route_sequence=schedule.regular_route_sequence,
                 )
             )
         return sorted(
@@ -204,6 +206,7 @@ class InMemoryOpShopRepositoryMixin:
                     pickup_category=schedule.pickup_category,
                     route_group_id=schedule.route_group_id,
                     route_group_name=route_group.route_group_name,
+                    regular_route_sequence=schedule.regular_route_sequence,
                 )
             )
         return sorted(
@@ -259,6 +262,7 @@ class InMemoryOpShopRepositoryMixin:
                     pickup_category=schedule.pickup_category,
                     route_group_id=schedule.route_group_id,
                     route_group_name=route_group.route_group_name if route_group else None,
+                    regular_route_sequence=schedule.regular_route_sequence,
                 )
             )
         return sorted(
@@ -504,6 +508,9 @@ class InMemoryOpShopRepositoryMixin:
             pickup_category=schedule.pickup_category if schedule else "NORMAL",
             route_group_id=schedule.route_group_id if schedule else None,
             route_group_name=self.get_countryside_route_group(schedule.route_group_id).route_group_name if schedule and schedule.route_group_id and self.get_countryside_route_group(schedule.route_group_id) else None,
+            regular_route_sequence=(
+                schedule.regular_route_sequence if schedule else None
+            ),
         )
 
 

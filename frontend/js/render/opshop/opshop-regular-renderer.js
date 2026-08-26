@@ -6,6 +6,8 @@ import { createOpShopDateGroupList } from "../opshop-date-group-list-renderer.js
 
 import {
   compareText,
+  compareRegularRouteSequence,
+  effectiveRegularRouteDriverName,
   selectedOpShopDriverId,
   currentDriverId,
   defaultDriverHint,
@@ -137,8 +139,8 @@ export function currentOpShopDriverName(pickup, state) {
 }
 
 export function compareRegularPickups(left, right, state) {
-  const leftDriver = selectedOpShopDriverName(left, state);
-  const rightDriver = selectedOpShopDriverName(right, state);
+  const leftDriver = effectiveRegularRouteDriverName(left, state);
+  const rightDriver = effectiveRegularRouteDriverName(right, state);
   if (leftDriver && !rightDriver) {
     return -1;
   }
@@ -146,9 +148,7 @@ export function compareRegularPickups(left, right, state) {
     return 1;
   }
   return compareText(leftDriver, rightDriver)
-    || compareText(left.suburb, right.suburb)
-    || compareText(left.opshop_name, right.opshop_name)
-    || compareText(left.pickup_task_id, right.pickup_task_id);
+    || compareRegularRouteSequence(left, right);
 }
 
 export function selectedOpShopDriverName(pickup, state) {

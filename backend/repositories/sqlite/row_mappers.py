@@ -463,6 +463,7 @@ class SQLiteRowMapperMixin:
             default_driver_name_snapshot=row["default_driver_name_snapshot"],
             pickup_category=_row_value(row, "pickup_category", "NORMAL") or "NORMAL",
             route_group_id=_row_value(row, "route_group_id"),
+            regular_route_sequence=_row_value(row, "regular_route_sequence"),
         )
 
     def _row_to_opshop_pickup_schedule_candidate(self, row):
@@ -482,6 +483,7 @@ class SQLiteRowMapperMixin:
             pickup_category=_row_value(row, "pickup_category", "NORMAL") or "NORMAL",
             route_group_id=_row_value(row, "route_group_id"),
             route_group_name=_row_value(row, "route_group_name"),
+            regular_route_sequence=_row_value(row, "regular_route_sequence"),
         )
 
     def _row_to_opshop_template(self, row):
@@ -514,6 +516,7 @@ class SQLiteRowMapperMixin:
             pickup_category=_row_value(row, "pickup_category", "NORMAL") or "NORMAL",
             route_group_id=_row_value(row, "route_group_id"),
             route_group_name=_row_value(row, "route_group_name"),
+            regular_route_sequence=_row_value(row, "regular_route_sequence"),
         )
 
     def _row_to_opshop_pickup_task(self, row):
@@ -573,6 +576,7 @@ class SQLiteRowMapperMixin:
             pickup_category=_row_value(row, "pickup_category", "NORMAL") or "NORMAL",
             route_group_id=_row_value(row, "route_group_id"),
             route_group_name=_row_value(row, "route_group_name"),
+            regular_route_sequence=_row_value(row, "regular_route_sequence"),
         )
 
 

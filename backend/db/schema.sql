@@ -166,6 +166,7 @@ CREATE TABLE IF NOT EXISTS opshop_pickup_schedules (
     default_driver_id TEXT,
     default_driver_alias TEXT,
     default_driver_name_snapshot TEXT,
+    regular_route_sequence INTEGER,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     CHECK(run_type IN ('STANDARD', 'REGULAR', 'ON_CALL')),
@@ -176,6 +177,7 @@ CREATE TABLE IF NOT EXISTS opshop_pickup_schedules (
     ),
     CHECK(run_day IS NOT NULL OR run_type = 'ON_CALL' OR review_required = 1),
     CHECK(fortnight_group IS NULL OR fortnight_group IN ('A', 'B')),
+    CHECK(regular_route_sequence IS NULL OR regular_route_sequence > 0),
     FOREIGN KEY(opshop_id) REFERENCES opshop_locations(opshop_id),
     FOREIGN KEY(route_group_id) REFERENCES opshop_countryside_route_groups(route_group_id)
 );

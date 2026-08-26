@@ -296,6 +296,11 @@ class OpShopTemplateService:
             default_driver_name_snapshot=driver_name,
             pickup_category=values["pickup_category"],
             route_group_id=values["route_group_id"],
+            regular_route_sequence=(
+                existing_schedule.regular_route_sequence
+                if existing_schedule
+                else None
+            ),
         )
         self.repository.upsert_opshop_pickup_schedule(schedule)
         return self._get_template(schedule.schedule_id)

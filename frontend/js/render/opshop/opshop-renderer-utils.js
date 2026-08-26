@@ -8,6 +8,23 @@ export function compareText(left, right) {
   });
 }
 
+export function compareRegularRouteSequence(left, right) {
+  const leftSequence = positiveRouteSequence(left.regular_route_sequence);
+  const rightSequence = positiveRouteSequence(right.regular_route_sequence);
+  if (leftSequence !== null && rightSequence === null) {
+    return -1;
+  }
+  if (leftSequence === null && rightSequence !== null) {
+    return 1;
+  }
+  if (leftSequence !== null && rightSequence !== null && leftSequence !== rightSequence) {
+    return leftSequence - rightSequence;
+  }
+  return compareText(left.suburb, right.suburb)
+    || compareText(left.opshop_name, right.opshop_name)
+    || compareText(left.pickup_task_id, right.pickup_task_id);
+}
+
 export function readyPickupCollectionCandidates(board, collections) {
   const reservedKeys = new Set(
     (collections || [])
@@ -122,8 +139,34 @@ export function selectedOpShopDriverId(pickup, state) {
   return currentDriverId(pickup);
 }
 
+export function effectiveRegularRouteDriverName(pickup, state) {
+  const hasDraft = Object.prototype.hasOwnProperty.call(
+    state.opshopAssignmentDrafts || {},
+    pickup.pickup_task_id,
+  );
+  const draftDriverId = hasDraft
+    ? state.opshopAssignmentDrafts[pickup.pickup_task_id]
+    : "";
+  const driverId = draftDriverId || (!hasDraft ? currentDriverId(pickup) : "")
+    || pickup.default_driver_id
+    || "";
+  const driver = (state.opshopBoard?.drivers || []).find(
+    (item) => item.driver_id === driverId,
+  );
+  return driver?.name
+    || driverId
+    || pickup.default_driver_name
+    || pickup.default_driver_alias
+    || "";
+}
+
 export function currentDriverId(pickup) {
   return pickup?.assigned_driver_id || pickup?.driver_id || "";
+}
+
+function positiveRouteSequence(value) {
+  const sequence = Number(value);
+  return Number.isInteger(sequence) && sequence > 0 ? sequence : null;
 }
 
 export function defaultDriverHint(pickup, state) {

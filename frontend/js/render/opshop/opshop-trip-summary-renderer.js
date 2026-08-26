@@ -9,6 +9,7 @@ import {
   isRegularPickup,
   isOncallPickup,
   pickupCategoryLabel,
+  compareRegularRouteSequence,
   currentDriverId,
   createActionButton,
   createMetricGrid,
@@ -132,7 +133,14 @@ export function createOpShopDriverSummaryCard(
   }
 
   card.append(
-    createOpShopPickupGroup("Regular", pickups.filter(isRegularPickup), isLocked, state, actions, onOpenPickupDetail),
+    createOpShopPickupGroup(
+      "Regular",
+      pickups.filter(isRegularPickup).sort(compareRegularRouteSequence),
+      isLocked,
+      state,
+      actions,
+      onOpenPickupDetail,
+    ),
     createOpShopPickupGroup("Oncall", pickups.filter(isOncallPickup), isLocked, state, actions, onOpenPickupDetail),
     createOpShopPickupGroup("Countryside", pickups.filter(isCountrysidePickup), isLocked, state, actions, onOpenPickupDetail),
   );

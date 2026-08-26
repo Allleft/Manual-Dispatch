@@ -212,6 +212,7 @@ class OpShopPickupCollectionService:
             pickup_date,
             driver_id,
         )
+        items = sorted(items, key=_pickup_collection_sort_key)
         return [
             OpShopPickupCollectionRowSnapshot(
                 row_id=f"OPCR-{uuid4().hex.upper()}",
@@ -242,6 +243,24 @@ class OpShopPickupCollectionService:
             )
             for row_no, pickup in enumerate(items, start=1)
         ]
+
+
+def _pickup_collection_sort_key(pickup):
+    fallback = (
+        str(pickup.suburb or "").casefold(),
+        str(pickup.opshop_name or "").casefold(),
+        str(pickup.pickup_task_id or ""),
+    )
+    is_regular = (
+        pickup.run_type == "REGULAR"
+        and pickup.pickup_category != "COUNTRYSIDE"
+    )
+    if not is_regular:
+        return (1, 0, 0, *fallback)
+    sequence = pickup.regular_route_sequence
+    if isinstance(sequence, int) and not isinstance(sequence, bool) and sequence > 0:
+        return (0, 0, sequence, *fallback)
+    return (0, 1, 0, *fallback)
 
 
 _ENTRY_TIME_PATTERN = re.compile(r"(?:[01]\d|2[0-3]):[0-5]\d")

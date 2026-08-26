@@ -210,6 +210,7 @@ class OpShopBoardPayloadTest(unittest.TestCase):
                 default_driver_id="D001",
                 default_driver_alias="John G",
                 default_driver_name_snapshot="John Georgiadis",
+                regular_route_sequence=4,
             )
         )
 
@@ -237,6 +238,7 @@ class OpShopBoardPayloadTest(unittest.TestCase):
         self.assertEqual("D001", item.default_driver_id)
         self.assertEqual("John G", item.default_driver_alias)
         self.assertEqual("John Georgiadis", item.default_driver_name)
+        self.assertEqual(4, item.regular_route_sequence)
         self.assertEqual("D001", item.assigned_driver_id)
         self.assertEqual("John", item.assigned_driver_name)
         assignment = self.repository.find_assignment_for_task(
@@ -541,6 +543,7 @@ class OpShopBoardPayloadTest(unittest.TestCase):
         default_driver_name_snapshot=None,
         pickup_category="NORMAL",
         route_group_id=None,
+        regular_route_sequence=None,
     ):
         return OpShopPickupSchedule(
             schedule_id=schedule_id,
@@ -563,6 +566,7 @@ class OpShopBoardPayloadTest(unittest.TestCase):
             default_driver_name_snapshot=default_driver_name_snapshot,
             pickup_category=pickup_category,
             route_group_id=route_group_id,
+            regular_route_sequence=regular_route_sequence,
         )
 
     def _task(

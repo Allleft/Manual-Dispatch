@@ -411,6 +411,12 @@ def _ensure_manual_dispatch_columns(connection):
         "TEXT NOT NULL DEFAULT 'NORMAL'",
     )
     _ensure_column(connection, "opshop_pickup_schedules", "route_group_id", "TEXT")
+    _ensure_column(
+        connection,
+        "opshop_pickup_schedules",
+        "regular_route_sequence",
+        "INTEGER",
+    )
     connection.execute(
         """
         UPDATE opshop_pickup_schedules

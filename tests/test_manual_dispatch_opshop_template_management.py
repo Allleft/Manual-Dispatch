@@ -71,6 +71,11 @@ class OpShopTemplateManagementTest(unittest.TestCase):
 
     def test_update_non_identity_fields_keeps_schedule_and_updates_location_and_driver(self):
         original = self.service.create_opshop_template(self._regular_request())
+        original_schedule = self.repository.get_opshop_pickup_schedule(
+            original.schedule_id
+        )
+        original_schedule.regular_route_sequence = 4
+        self.repository.upsert_opshop_pickup_schedule(original_schedule)
 
         updated = self.service.update_opshop_template(
             original.schedule_id,
@@ -82,9 +87,15 @@ class OpShopTemplateManagementTest(unittest.TestCase):
         self.assertEqual("Side gate", updated.access_type)
         self.assertEqual("D001", updated.default_driver_id)
         self.assertEqual("John", updated.default_driver_name)
+        self.assertEqual(4, updated.regular_route_sequence)
 
     def test_update_identity_fields_creates_active_target_and_preserves_old_task_source(self):
         original = self.service.create_opshop_template(self._regular_request())
+        original_schedule = self.repository.get_opshop_pickup_schedule(
+            original.schedule_id
+        )
+        original_schedule.regular_route_sequence = 3
+        self.repository.upsert_opshop_pickup_schedule(original_schedule)
         task = self._task("TASK-001", original)
         self.repository.upsert_opshop_pickup_task(task)
 
@@ -98,6 +109,8 @@ class OpShopTemplateManagementTest(unittest.TestCase):
         self.assertEqual("TUESDAY", updated.run_day)
         self.assertFalse(old_schedule.active_flag)
         self.assertEqual("On_Hold", old_schedule.status)
+        self.assertEqual(3, old_schedule.regular_route_sequence)
+        self.assertIsNone(updated.regular_route_sequence)
         self.assertEqual(original.schedule_id, self.repository.get_opshop_pickup_task("TASK-001").schedule_id)
 
     def test_disable_soft_disables_template_without_deleting_tasks_or_candidates_history(self):
