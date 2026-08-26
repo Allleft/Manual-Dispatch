@@ -10,15 +10,24 @@ from backend.services.manual_dispatch.suburb_distance_service import (
 from backend.services.manual_dispatch.delivery_suburb_region_service import (
     DeliveryOrderAreaResolver,
 )
+from backend.services.manual_dispatch.delivery_order_date_rollover_service import (
+    DeliveryOrderDateRolloverService,
+)
 
 
 class DeliveryWorkspaceBoardService:
-    def __init__(self, repository, area_resolver=None):
+    def __init__(self, repository, area_resolver=None, rollover_service=None):
         self.repository = repository
         self.area_resolver = area_resolver or DeliveryOrderAreaResolver(repository)
+        self.rollover_service = rollover_service or DeliveryOrderDateRolloverService(
+            repository
+        )
 
-    def get_board(self, dispatch_date):
+    def get_board(self, dispatch_date, rollover_events=None):
         dispatch_date = clean_required_iso_date(dispatch_date, "dispatch_date")
+        self.rollover_service.roll_forward_eligible_unassigned_delivery_orders(
+            rollover_events
+        )
         run_sheets = self.repository.list_delivery_run_sheets(dispatch_date)
         reserved_task_ids = self.repository.list_reserved_delivery_order_ids()
 

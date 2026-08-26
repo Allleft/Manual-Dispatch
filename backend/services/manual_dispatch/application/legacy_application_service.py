@@ -23,13 +23,14 @@ class LegacyApplicationService(FacadeApplicationService):
         return self.auth_service.reset_operator_password(request)
 
     def assign_task(self, request):
+        rollover_events = []
         before = self._assignment_snapshot(
             request.dispatch_date,
             request.task_type,
             request.task_id,
         )
         try:
-            board = self.assignment_service.assign_task(request)
+            board = self.assignment_service.assign_task(request, rollover_events)
         except Exception as error:
             self._record_failed_assignment(request, before, error)
             raise
@@ -39,6 +40,7 @@ class LegacyApplicationService(FacadeApplicationService):
             request.task_id,
         )
         if request.task_type == "ORDER":
+            self._record_delivery_order_date_rollovers(rollover_events)
             self._record_delivery_assignment_change(
                 request.dispatch_date,
                 request.task_id,
@@ -55,13 +57,14 @@ class LegacyApplicationService(FacadeApplicationService):
         return board
 
     def unassign_task(self, request):
+        rollover_events = []
         before = self._assignment_snapshot(
             request.dispatch_date,
             request.task_type,
             request.task_id,
         )
         try:
-            board = self.assignment_service.unassign_task(request)
+            board = self.assignment_service.unassign_task(request, rollover_events)
         except Exception as error:
             self._record_failed_assignment(request, before, error, unassign=True)
             raise
@@ -72,6 +75,9 @@ class LegacyApplicationService(FacadeApplicationService):
                 before,
                 None,
             )
+            self._record_delivery_order_date_rollovers(rollover_events)
+        elif request.task_type == "ORDER":
+            self._record_delivery_order_date_rollovers(rollover_events)
         elif before and request.task_type == "OPSHOP_PICKUP":
             self._record_opshop_assignment_change(
                 request.dispatch_date,

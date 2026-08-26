@@ -16,6 +16,10 @@ class FullSuitePersistenceIsolationTest(unittest.TestCase):
         configured_logbook = Path(os.environ["MANUAL_DISPATCH_LOGBOOK_DIR"]).resolve()
 
         self.assertEqual("1", os.environ["MANUAL_DISPATCH_TEST_MODE"])
+        self.assertEqual(
+            "2000-01-03",
+            os.environ["MANUAL_DISPATCH_TEST_BUSINESS_DATE"],
+        )
         self.assertEqual(Path(tempfile.gettempdir()).resolve(), temp_root.parent)
         self.assertEqual(temp_root, configured_db.parent)
         self.assertEqual(temp_root, configured_logbook.parent)

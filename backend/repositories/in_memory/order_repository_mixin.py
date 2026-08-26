@@ -39,6 +39,37 @@ class InMemoryOrderRepositoryMixin:
         order.status = "CANCELLED"
         return order
 
+    def roll_forward_unassigned_delivery_order_dates(
+        self,
+        current_date,
+        target_date,
+        order_id=None,
+    ):
+        assigned_order_ids = self.list_globally_assigned_delivery_order_ids()
+        reserved_order_ids = self.list_reserved_delivery_order_ids()
+        changes = []
+        for order in sorted(self.orders, key=lambda item: item.order_id):
+            if (
+                order.status != "ACTIVE"
+                or order.delivery_date > current_date
+                or (order_id is not None and order.order_id != order_id)
+                or order.order_id in assigned_order_ids
+                or order.order_id in reserved_order_ids
+            ):
+                continue
+            previous_delivery_date = order.delivery_date
+            order.delivery_date = target_date
+            changes.append(
+                {
+                    "order_id": order.order_id,
+                    "invoice_number": order.invoice_number,
+                    "order_no": order.order_no,
+                    "previous_delivery_date": previous_delivery_date,
+                    "new_delivery_date": target_date,
+                }
+            )
+        return changes
+
     def get_delivery_order_area_override(self, order_id):
         record = self.delivery_order_area_overrides.get(order_id)
         return record["delivery_area"] if record else None

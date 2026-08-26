@@ -158,6 +158,102 @@ class SQLiteOrderRepositoryMixin:
             raise ValueError(f"Order does not exist: {order_id}")
         return self.get_order(order_id)
 
+    def roll_forward_unassigned_delivery_order_dates(
+        self,
+        current_date,
+        target_date,
+        order_id=None,
+    ):
+        with connect(self.db_path) as connection:
+            candidates = connection.execute(
+                """
+                SELECT
+                    manual_order.order_id,
+                    manual_order.invoice_number,
+                    manual_order.order_no,
+                    manual_order.delivery_date
+                FROM manual_orders AS manual_order
+                WHERE manual_order.status = 'ACTIVE'
+                    AND manual_order.delivery_date <= ?
+                    AND (? IS NULL OR manual_order.order_id = ?)
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM manual_dispatch_assignments AS assignment
+                        WHERE assignment.task_type = 'ORDER'
+                            AND assignment.task_id = manual_order.order_id
+                    )
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM delivery_run_sheet_rows AS run_sheet_row
+                        JOIN delivery_run_sheets AS run_sheet
+                            ON run_sheet.run_sheet_id = run_sheet_row.run_sheet_id
+                        WHERE run_sheet_row.task_type = 'ORDER'
+                            AND run_sheet_row.task_id = manual_order.order_id
+                            AND (
+                                run_sheet.status = 'GENERATED'
+                                OR (
+                                    run_sheet.status = 'SAVED'
+                                    AND COALESCE(run_sheet.execution_status, 'OPEN') = 'OPEN'
+                                )
+                            )
+                    )
+                ORDER BY manual_order.order_id
+                """,
+                (current_date, order_id, order_id),
+            ).fetchall()
+            changes = []
+            for candidate in candidates:
+                cursor = connection.execute(
+                    """
+                    UPDATE manual_orders
+                    SET delivery_date = ?
+                    WHERE order_id = ?
+                        AND status = 'ACTIVE'
+                        AND delivery_date = ?
+                        AND delivery_date <= ?
+                        AND NOT EXISTS (
+                            SELECT 1
+                            FROM manual_dispatch_assignments AS assignment
+                            WHERE assignment.task_type = 'ORDER'
+                                AND assignment.task_id = manual_orders.order_id
+                        )
+                        AND NOT EXISTS (
+                            SELECT 1
+                            FROM delivery_run_sheet_rows AS run_sheet_row
+                            JOIN delivery_run_sheets AS run_sheet
+                                ON run_sheet.run_sheet_id = run_sheet_row.run_sheet_id
+                            WHERE run_sheet_row.task_type = 'ORDER'
+                                AND run_sheet_row.task_id = manual_orders.order_id
+                                AND (
+                                    run_sheet.status = 'GENERATED'
+                                    OR (
+                                        run_sheet.status = 'SAVED'
+                                        AND COALESCE(run_sheet.execution_status, 'OPEN') = 'OPEN'
+                                    )
+                                )
+                        )
+                    """,
+                    (
+                        target_date,
+                        candidate["order_id"],
+                        candidate["delivery_date"],
+                        current_date,
+                    ),
+                )
+                if cursor.rowcount != 1:
+                    continue
+                changes.append(
+                    {
+                        "order_id": candidate["order_id"],
+                        "invoice_number": candidate["invoice_number"],
+                        "order_no": candidate["order_no"],
+                        "previous_delivery_date": candidate["delivery_date"],
+                        "new_delivery_date": target_date,
+                    }
+                )
+            connection.commit()
+        return changes
+
     def get_delivery_order_area_override(self, order_id):
         with connect(self.db_path) as connection:
             row = connection.execute(

@@ -8,6 +8,7 @@ from pathlib import Path
 TEST_MODE_ENV = "MANUAL_DISPATCH_TEST_MODE"
 DB_PATH_ENV = "MANUAL_DISPATCH_DB_PATH"
 LOGBOOK_DIR_ENV = "MANUAL_DISPATCH_LOGBOOK_DIR"
+TEST_BUSINESS_DATE_ENV = "MANUAL_DISPATCH_TEST_BUSINESS_DATE"
 _TEMP_PREFIX = "manual-dispatch-tests-"
 _state = None
 
@@ -23,6 +24,7 @@ def configure_test_environment():
         raise RuntimeError("Automated-test isolation escaped the OS temp directory")
 
     os.environ[TEST_MODE_ENV] = "1"
+    os.environ[TEST_BUSINESS_DATE_ENV] = "2000-01-03"
     os.environ[DB_PATH_ENV] = str(temp_root / "manual_dispatch.sqlite3")
     os.environ[LOGBOOK_DIR_ENV] = str(temp_root / "logbook")
     _state = {

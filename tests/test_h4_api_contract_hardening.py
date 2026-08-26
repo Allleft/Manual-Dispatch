@@ -224,9 +224,13 @@ class H4PartialPatchServiceContractTest(unittest.TestCase):
                     callback()
 
     def test_delivery_dispatch_date_is_provenance_not_run_sheet_identity(self):
+        self.service.update_order(
+            "ORD-001",
+            UpdateOrderRequest(delivery_date="2099-05-05"),
+        )
         self.service.assign_delivery_workspace_order(
             DeliveryWorkspaceAssignOrderRequest(
-                dispatch_date="2026-05-01",
+                dispatch_date="2099-05-01",
                 order_id="ORD-001",
                 driver_id="D001",
                 trip_no="trip1",
@@ -234,19 +238,19 @@ class H4PartialPatchServiceContractTest(unittest.TestCase):
         )
         generated = self.service.create_generated_delivery_run_sheet(
             GenerateDeliveryRunSheetRequest(
-                dispatch_date="2026-05-01",
-                delivery_date="2026-05-05",
+                dispatch_date="2099-05-01",
+                delivery_date="2099-05-05",
                 driver_id="D001",
             )
         )
 
-        self.assertEqual("2026-05-01", generated.dispatch_date)
-        self.assertEqual("2026-05-05", generated.delivery_date)
+        self.assertEqual("2099-05-01", generated.dispatch_date)
+        self.assertEqual("2099-05-05", generated.delivery_date)
         with self.assertRaisesRegex(StateChangedConflictError, "already exists"):
             self.service.create_generated_delivery_run_sheet(
                 GenerateDeliveryRunSheetRequest(
-                    dispatch_date="2026-05-02",
-                    delivery_date="2026-05-05",
+                    dispatch_date="2099-05-02",
+                    delivery_date="2099-05-05",
                     driver_id="D001",
                 )
             )

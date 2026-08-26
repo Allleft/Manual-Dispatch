@@ -103,6 +103,9 @@ class ManualDispatchDeliveryDocketImportTest(unittest.TestCase):
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_multi_docx_preview_edit_commit_reload_board_and_run_sheet(self):
+        self.service.delivery_order_date_rollover_service.today_provider = (
+            lambda: date(2026, 8, 21)
+        )
         cases = [
             (
                 "docket-4373.docx",
@@ -203,6 +206,9 @@ class ManualDispatchDeliveryDocketImportTest(unittest.TestCase):
 
         reloaded_service = ManualDispatchService(
             SQLiteManualDispatchRepository(self.db_path)
+        )
+        reloaded_service.delivery_order_date_rollover_service.today_provider = (
+            lambda: date(2026, 8, 21)
         )
         reloaded = reloaded_service.get_delivery_workspace_board("2026-08-24")
         persisted = next(order for order in reloaded.orders if order.invoice_number == "185504")

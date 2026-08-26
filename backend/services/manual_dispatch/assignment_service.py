@@ -14,16 +14,22 @@ from backend.services.manual_dispatch.normalization import (
     clean_required_text,
 )
 from backend.services.manual_dispatch.transaction import immediate_transactional
+from backend.services.manual_dispatch.delivery_order_date_rollover_service import (
+    DeliveryOrderDateRolloverService,
+)
 
 
 class AssignmentService:
-    def __init__(self, repository, validator, board_service):
+    def __init__(self, repository, validator, board_service, rollover_service=None):
         self.repository = repository
         self.validator = validator
         self.board_service = board_service
+        self.rollover_service = rollover_service or DeliveryOrderDateRolloverService(
+            repository
+        )
 
     @immediate_transactional
-    def assign_task(self, request):
+    def assign_task(self, request, rollover_events=None):
         request.dispatch_date = clean_required_iso_date(
             request.dispatch_date,
             "dispatch_date",
@@ -32,6 +38,11 @@ class AssignmentService:
         self.validator.validate_task_exists(request.task_type, request.task_id)
         self.validator.validate_driver_exists(request.driver_id)
         self.validator.validate_trip_no(request.trip_no)
+        if request.task_type == "ORDER":
+            self.rollover_service.roll_forward_eligible_unassigned_delivery_order(
+                request.task_id,
+                rollover_events,
+            )
         delivery_date = self._get_task_delivery_date(request.task_type, request.task_id)
         ensure_driver_delivery_date_not_finalized(
             self.repository,
@@ -74,7 +85,7 @@ class AssignmentService:
         return assignment
 
     @immediate_transactional
-    def unassign_task(self, request):
+    def unassign_task(self, request, rollover_events=None):
         request.dispatch_date = clean_required_iso_date(
             request.dispatch_date,
             "dispatch_date",
@@ -107,6 +118,11 @@ class AssignmentService:
             task_type=request.task_type,
             task_id=request.task_id,
         )
+        if request.task_type == "ORDER":
+            self.rollover_service.roll_forward_eligible_unassigned_delivery_order(
+                request.task_id,
+                rollover_events,
+            )
         if request.task_type == "OPSHOP_PICKUP":
             self.repository.update_opshop_pickup_task_assignment_status(
                 request.task_id,

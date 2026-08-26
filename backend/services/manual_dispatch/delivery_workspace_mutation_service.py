@@ -8,17 +8,27 @@ from backend.services.manual_dispatch.normalization import (
     clean_required_iso_date,
     clean_required_text,
 )
+from backend.services.manual_dispatch.delivery_order_date_rollover_service import (
+    DeliveryOrderDateRolloverService,
+)
 from backend.services.manual_dispatch.transaction import immediate_transactional
 
 
 class DeliveryWorkspaceMutationService:
-    def __init__(self, repository, validator, board_service):
+    def __init__(self, repository, validator, board_service, rollover_service=None):
         self.repository = repository
         self.validator = validator
         self.board_service = board_service
+        self.rollover_service = rollover_service or DeliveryOrderDateRolloverService(
+            repository
+        )
 
     @immediate_transactional
-    def assign_order(self, request):
+    def assign_order(self, request, rollover_events=None):
+        self.rollover_service.roll_forward_eligible_unassigned_delivery_order(
+            request.order_id,
+            rollover_events,
+        )
         order = self._active_order(request.order_id)
         request_dispatch_date = clean_optional_iso_date(
             request.dispatch_date,
@@ -59,10 +69,11 @@ class DeliveryWorkspaceMutationService:
             request_dispatch_date,
             dispatch_date,
             order.delivery_date,
+            rollover_events,
         )
 
     @immediate_transactional
-    def unassign_order(self, request):
+    def unassign_order(self, request, rollover_events=None):
         order = self._active_order(request.order_id)
         request_dispatch_date = clean_optional_iso_date(
             request.dispatch_date,
@@ -85,10 +96,16 @@ class DeliveryWorkspaceMutationService:
                 "ORDER",
                 order.order_id,
             )
+        self.rollover_service.roll_forward_eligible_unassigned_delivery_order(
+            order.order_id,
+            rollover_events,
+        )
+        order = self._active_order(order.order_id)
         return self._response_board(
             request_dispatch_date,
             dispatch_date,
             order.delivery_date,
+            rollover_events,
         )
 
     @immediate_transactional
@@ -159,9 +176,15 @@ class DeliveryWorkspaceMutationService:
             delivery_date,
         )
 
-    def _response_board(self, request_dispatch_date, dispatch_date, delivery_date):
+    def _response_board(
+        self,
+        request_dispatch_date,
+        dispatch_date,
+        delivery_date,
+        rollover_events=None,
+    ):
         if request_dispatch_date:
-            return self.board_service.get_board(dispatch_date)
+            return self.board_service.get_board(dispatch_date, rollover_events)
         return self.board_service.get_trip_summary_board(delivery_date)
 
     def _active_order(self, order_id):

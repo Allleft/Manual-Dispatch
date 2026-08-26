@@ -7,7 +7,13 @@ class DeliveryApplicationService(FacadeApplicationService):
 
     def get_delivery_workspace_board(self, dispatch_date):
         self._ensure_workspace_ready("delivery")
-        return self.delivery_workspace_board_service.get_board(dispatch_date)
+        rollover_events = []
+        board = self.delivery_workspace_board_service.get_board(
+            dispatch_date,
+            rollover_events,
+        )
+        self._record_delivery_order_date_rollovers(rollover_events)
+        return board
 
     def classify_delivery_area(self, request):
         self._ensure_workspace_ready("delivery")
@@ -24,13 +30,17 @@ class DeliveryApplicationService(FacadeApplicationService):
 
     def assign_delivery_workspace_order(self, request):
         self._ensure_workspace_ready("delivery")
+        rollover_events = []
         before = self._assignment_snapshot(
             request.dispatch_date,
             "ORDER",
             request.order_id,
         )
         try:
-            board = self.delivery_workspace_mutation_service.assign_order(request)
+            board = self.delivery_workspace_mutation_service.assign_order(
+                request,
+                rollover_events,
+            )
         except Exception as error:
             self._record_failed_logbook(
                 workspace="DELIVERY",
@@ -52,6 +62,7 @@ class DeliveryApplicationService(FacadeApplicationService):
             "ORDER",
             request.order_id,
         )
+        self._record_delivery_order_date_rollovers(rollover_events)
         self._record_delivery_assignment_change(
             request.dispatch_date,
             request.order_id,
@@ -62,13 +73,17 @@ class DeliveryApplicationService(FacadeApplicationService):
 
     def unassign_delivery_workspace_order(self, request):
         self._ensure_workspace_ready("delivery")
+        rollover_events = []
         before = self._assignment_snapshot(
             request.dispatch_date,
             "ORDER",
             request.order_id,
         )
         try:
-            board = self.delivery_workspace_mutation_service.unassign_order(request)
+            board = self.delivery_workspace_mutation_service.unassign_order(
+                request,
+                rollover_events,
+            )
         except Exception as error:
             self._record_failed_logbook(
                 workspace="DELIVERY",
@@ -92,6 +107,7 @@ class DeliveryApplicationService(FacadeApplicationService):
                 before,
                 None,
             )
+        self._record_delivery_order_date_rollovers(rollover_events)
         return board
 
     def assign_delivery_workspace_vehicle(self, request):

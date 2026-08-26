@@ -32,6 +32,38 @@ class DeliveryEventRecorder(FacadeAuditRecorder):
             },
         )
 
+    def record_delivery_order_date_rollovers(self, rollovers):
+        for change in rollovers or []:
+            order_id = change["order_id"]
+            label = (
+                change.get("invoice_number")
+                or change.get("order_no")
+                or order_id
+            )
+            previous_date = change["previous_delivery_date"]
+            new_date = change["new_delivery_date"]
+            self._record_logbook(
+                result="SUCCESS",
+                workspace="DELIVERY",
+                actor="System",
+                action="ORDER_DELIVERY_DATE_ROLLED_FORWARD",
+                entity_type="ORDER",
+                entity_id=label,
+                summary=(
+                    f"Order {label} Delivery Date was automatically rolled forward "
+                    f"from {previous_date} to {new_date}."
+                ),
+                delivery_date=new_date,
+                metadata={
+                    "order_id": order_id,
+                    "invoice_number": change.get("invoice_number"),
+                    "order_no": change.get("order_no"),
+                    "previous_delivery_date": previous_date,
+                    "new_delivery_date": new_date,
+                    "reason": "unassigned_daily_rollover",
+                },
+            )
+
     def record_delivery_order_area_change(self, before, order):
         if not order:
             return

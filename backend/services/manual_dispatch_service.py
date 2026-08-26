@@ -5,6 +5,9 @@ from backend.services.manual_dispatch.auth_service import OperatorAuthService
 from backend.services.manual_dispatch.board_service import BoardService
 from backend.services.manual_dispatch.delivery_run_sheet_service import DeliveryRunSheetService
 from backend.services.manual_dispatch.delivery_workspace_board_service import DeliveryWorkspaceBoardService
+from backend.services.manual_dispatch.delivery_order_date_rollover_service import (
+    DeliveryOrderDateRolloverService,
+)
 from backend.services.manual_dispatch.delivery_suburb_region_service import (
     DeliveryOrderAreaResolver,
 )
@@ -57,10 +60,14 @@ class ManualDispatchService:
         )
         self.id_generator = ManualDispatchIdGenerator(self.repository)
         self.auth_service = OperatorAuthService(self.repository)
+        self.delivery_order_date_rollover_service = DeliveryOrderDateRolloverService(
+            self.repository,
+        )
         self.assignment_service = AssignmentService(
             self.repository,
             self.validator,
             self.board_service,
+            self.delivery_order_date_rollover_service,
         )
         self.delivery_order_area_resolver = DeliveryOrderAreaResolver(self.repository)
         self.order_service = OrderService(
@@ -89,6 +96,7 @@ class ManualDispatchService:
         self.delivery_workspace_board_service = DeliveryWorkspaceBoardService(
             self.repository,
             self.delivery_order_area_resolver,
+            self.delivery_order_date_rollover_service,
         )
         self.opshop_workspace_board_service = OpShopWorkspaceBoardService(
             self.repository,
@@ -98,6 +106,7 @@ class ManualDispatchService:
             self.repository,
             self.validator,
             self.delivery_workspace_board_service,
+            self.delivery_order_date_rollover_service,
         )
         self.opshop_workspace_mutation_service = OpShopWorkspaceMutationService(
             self.repository,
@@ -282,6 +291,11 @@ class ManualDispatchService:
         return self.delivery_event_recorder.record_delivery_order_area_change(
             before,
             after,
+        )
+
+    def _record_delivery_order_date_rollovers(self, rollovers):
+        return self.delivery_event_recorder.record_delivery_order_date_rollovers(
+            rollovers
         )
 
     def _record_delivery_assignment_change(
