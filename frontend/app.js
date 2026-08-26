@@ -99,6 +99,8 @@ async function loadBoard(dispatchDate = state.dispatchDate, options = {}) {
   if (dispatchDateChanged) {
     state.collapsedRegularOpShopPickupDates = {};
     state.collapsedOncallOpShopPickupDates = {};
+    state.collapsedCountrysideOpShopPickupDates = {};
+    state.collapsedCountrysideOpShopPickupRouteGroups = {};
   }
   state.isLoading = true;
   state.errorMessage = "";
@@ -355,6 +357,7 @@ function renderWorkspace() {
       startNewCountrysideRouteGroup: countrysideOpShopPickupActions.startNewRouteGroup,
       startRemoveCountrysideRouteTemplate: countrysideOpShopPickupActions.startRemoveRouteTemplate,
       startRenameCountrysideRouteGroup: countrysideOpShopPickupActions.startRenameRouteGroup,
+      toggleCountrysideTemplateRouteGroup: countrysideOpShopPickupActions.toggleCountrysideTemplateRouteGroup,
       updateCountrysideRouteGroupForm: countrysideOpShopPickupActions.updateRouteGroupForm,
       updateCountrysideRouteTemplateForm: countrysideOpShopPickupActions.updateRouteTemplateForm,
       openOpShopPickupDetail,
@@ -578,6 +581,7 @@ function renderCountrysideOpShopPickupListModal() {
     onStartNewRouteGroup: countrysideOpShopPickupActions.startNewRouteGroup,
     onStartRemoveRouteTemplate: countrysideOpShopPickupActions.startRemoveRouteTemplate,
     onStartRenameRouteGroup: countrysideOpShopPickupActions.startRenameRouteGroup,
+    onToggleRouteGroup: countrysideOpShopPickupActions.toggleCountrysideTemplateRouteGroup,
     onUpdateAssignedDriver: countrysideOpShopPickupActions.updateAssignedDriverSelection,
     onUpdateForm: countrysideOpShopPickupActions.updatePickupTaskForm,
     onUpdatePickup: countrysideOpShopPickupActions.handleUpdatePickupTask,
@@ -1307,6 +1311,7 @@ const countrysideOpShopPickupActions = createCountrysideOpShopPickupActions({
 
 const opShopTemplateActions = createOpShopTemplateActions({
   loadBoard,
+  loadCountrysideManagementData: countrysideOpShopPickupActions.loadManagementData,
   refreshScopedBoard: () => workspaceActions.loadWorkspaceRoute(state.workspaceRoute),
   reloadCountrysideCandidates: countrysideOpShopPickupActions.loadScheduleCandidates,
   reloadOncallCandidates: oncallOpShopPickupActions.loadScheduleCandidates,

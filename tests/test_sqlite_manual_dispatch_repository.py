@@ -455,6 +455,12 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
                     "PRAGMA table_info(opshop_pickup_schedules)"
                 ).fetchall()
             }
+            opshop_task_columns = {
+                row[1]
+                for row in connection.execute(
+                    "PRAGMA table_info(opshop_pickup_tasks)"
+                ).fetchall()
+            }
 
         self.assertIn("invoice_number", order_columns)
         self.assertIn("invoice_date", order_columns)
@@ -474,6 +480,7 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
         self.assertIn("pickup_category", opshop_schedule_columns)
         self.assertIn("route_group_id", opshop_schedule_columns)
         self.assertIn("regular_route_sequence", opshop_schedule_columns)
+        self.assertIn("trip_sequence", opshop_task_columns)
         self.assertIn("pickup_category_snapshot", final_summary_opshop_columns)
         self.assertIn("route_group_id_snapshot", final_summary_opshop_columns)
         self.assertIn("route_group_name_snapshot", final_summary_opshop_columns)
@@ -557,6 +564,68 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
                 "SELECT regular_route_sequence FROM opshop_pickup_schedules"
             ).fetchone()[0]
         self.assertIn("regular_route_sequence", columns)
+        self.assertEqual(before, business_values)
+        self.assertIsNone(sequence)
+
+    def test_existing_opshop_task_receives_trip_sequence_column_additively(self):
+        legacy_path = self.temp_dir / "legacy_opshop_task.sqlite3"
+        with sqlite3.connect(legacy_path) as connection:
+            connection.executescript(
+                """
+                CREATE TABLE opshop_pickup_tasks (
+                    pickup_task_id TEXT PRIMARY KEY,
+                    schedule_id TEXT,
+                    opshop_id TEXT NOT NULL,
+                    pickup_date TEXT NOT NULL,
+                    task_type TEXT NOT NULL DEFAULT 'OPSHOP_PICKUP',
+                    generated_from TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'ACTIVE',
+                    dispatch_date TEXT,
+                    driver_id TEXT,
+                    trip_no TEXT,
+                    notes TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                INSERT INTO opshop_pickup_tasks (
+                    pickup_task_id, schedule_id, opshop_id, pickup_date,
+                    task_type, generated_from, status, dispatch_date,
+                    driver_id, trip_no, notes, created_at, updated_at
+                ) VALUES (
+                    'LEGACY-TASK', 'LEGACY-SCHEDULE', 'LEGACY-OPSHOP',
+                    '2026-09-07', 'OPSHOP_PICKUP', 'ON_CALL', 'ASSIGNED',
+                    '2026-09-07', 'D001', 'trip1', 'Preserve me',
+                    '2026-01-01T00:00:00+00:00',
+                    '2026-01-01T00:00:00+00:00'
+                );
+                """
+            )
+            before = connection.execute(
+                "SELECT * FROM opshop_pickup_tasks"
+            ).fetchone()
+
+        SQLiteManualDispatchRepository(legacy_path)
+        SQLiteManualDispatchRepository(legacy_path)
+
+        with sqlite3.connect(legacy_path) as connection:
+            columns = [
+                row[1]
+                for row in connection.execute(
+                    "PRAGMA table_info(opshop_pickup_tasks)"
+                )
+            ]
+            business_values = connection.execute(
+                """
+                SELECT pickup_task_id, schedule_id, opshop_id, pickup_date,
+                       task_type, generated_from, status, dispatch_date,
+                       driver_id, trip_no, notes, created_at, updated_at
+                FROM opshop_pickup_tasks
+                """
+            ).fetchone()
+            sequence = connection.execute(
+                "SELECT trip_sequence FROM opshop_pickup_tasks"
+            ).fetchone()[0]
+        self.assertEqual(1, columns.count("trip_sequence"))
         self.assertEqual(before, business_values)
         self.assertIsNone(sequence)
 

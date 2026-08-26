@@ -1,5 +1,8 @@
 import { toggleCollapsedPickupDateGroup } from "../../utils/opshop-date-group-utils.js";
+import { getCountrysidePickupRouteGroupCollapseKey } from "../../utils/opshop-countryside-accordion-utils.js";
 import { captureWindowScroll, restoreWindowScroll } from "../../utils/scroll-utils.js";
+
+export { getCountrysidePickupRouteGroupCollapseKey };
 
 export function createOpShopWorkspaceActions(context) {
   const {
@@ -49,6 +52,30 @@ export function createOpShopWorkspaceActions(context) {
     restoreWindowScroll(scrollSnapshot);
   }
 
+  function toggleCountrysideOpShopDateGroup(pickupDate) {
+    const scrollSnapshot = captureWindowScroll();
+    state.collapsedCountrysideOpShopPickupDates = toggleCollapsedPickupDateGroup(
+      state.collapsedCountrysideOpShopPickupDates || {},
+      pickupDate,
+      state.dispatchDate,
+    );
+    renderWorkspace();
+    restoreWindowScroll(scrollSnapshot);
+  }
+
+  function toggleCountrysideOpShopPickupRouteGroup(pickupDate, routeGroupId) {
+    const scrollSnapshot = captureWindowScroll();
+    const collapseKey = getCountrysidePickupRouteGroupCollapseKey(pickupDate, routeGroupId);
+    const currentState = state.collapsedCountrysideOpShopPickupRouteGroups || {};
+    const isCollapsed = currentState[collapseKey] !== false;
+    state.collapsedCountrysideOpShopPickupRouteGroups = {
+      ...currentState,
+      [collapseKey]: !isCollapsed,
+    };
+    renderWorkspace();
+    restoreWindowScroll(scrollSnapshot);
+  }
+
   function renderOpShopWorkspacePreservingScroll() {
     const scrollSnapshot = captureWindowScroll();
     renderWorkspace();
@@ -86,6 +113,8 @@ export function createOpShopWorkspaceActions(context) {
     updateOpShopTaskPoolView,
     toggleRegularOpShopDateGroup,
     toggleOncallOpShopDateGroup,
+    toggleCountrysideOpShopDateGroup,
+    toggleCountrysideOpShopPickupRouteGroup,
     renderOpShopWorkspacePreservingScroll,
     pruneOpShopDrafts,
   };

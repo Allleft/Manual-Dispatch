@@ -1,3 +1,6 @@
+import { getNextBusinessDayLocalDateString } from "../../utils/date-utils.js";
+
+
 export function createOpShopTaskPoolActions(context) {
   const {
     api,
@@ -79,7 +82,7 @@ export function createOpShopTaskPoolActions(context) {
   function updateCountrysideRouteGroupDraft(routeGroupId, field, value) {
     const currentPickupDate = (
       state.countrysideRouteGroupDrafts[routeGroupId]?.pickup_date
-      || state.dispatchDate
+      || getNextBusinessDayLocalDateString()
     );
     if (lockedCountrysidePickup(routeGroupId, currentPickupDate)) {
       return;
@@ -88,7 +91,7 @@ export function createOpShopTaskPoolActions(context) {
     state.countrysideRouteGroupDrafts = {
       ...state.countrysideRouteGroupDrafts,
       [routeGroupId]: {
-        pickup_date: state.dispatchDate,
+        pickup_date: getNextBusinessDayLocalDateString(),
         assigned_driver_id: "",
         notes: "",
         ...current,
@@ -100,7 +103,7 @@ export function createOpShopTaskPoolActions(context) {
 
   async function assignCountrysideRouteGroup(routeGroupId) {
     const draft = {
-      pickup_date: state.dispatchDate,
+      pickup_date: getNextBusinessDayLocalDateString(),
       assigned_driver_id: "",
       notes: "",
       ...(state.countrysideRouteGroupDrafts[routeGroupId] || {}),

@@ -406,6 +406,11 @@ class OpShopPickupService:
             task,
             pickup_date=next_pickup_date,
             dispatch_date=next_pickup_date,
+            trip_sequence=(
+                task.trip_sequence
+                if next_pickup_date == task.pickup_date
+                else None
+            ),
             notes=(
                 (_clean_text(request.notes) or None)
                 if "notes" in fields
@@ -446,6 +451,7 @@ class OpShopPickupService:
             status="CANCELLED",
             driver_id=None,
             trip_no=None,
+            trip_sequence=None,
             updated_at=_timestamp(),
         )
         return self.repository.upsert_opshop_pickup_task(cancelled)
@@ -802,6 +808,7 @@ class OpShopPickupService:
                     status="ACTIVE",
                     driver_id=None,
                     trip_no=None,
+                    trip_sequence=None,
                     dispatch_date=pickup_date,
                     notes=notes,
                     generated_from="ON_CALL",

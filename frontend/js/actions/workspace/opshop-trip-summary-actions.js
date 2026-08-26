@@ -11,6 +11,8 @@ export function createOpShopTripSummaryActions(context) {
   } = context;
 
   const loadOpShopRoute = (...args) => context.actions.loadOpShopRoute(...args);
+  const runOpShopAction = (...args) => context.actions.runOpShopAction(...args);
+  const isOpShopMutationCurrent = (...args) => context.actions.isOpShopMutationCurrent(...args);
 
   async function loadOpShopTripSummaryData(
     route = state.workspaceRoute,
@@ -54,8 +56,32 @@ export function createOpShopTripSummaryActions(context) {
     renderWorkspace();
   }
 
+  async function reorderCountrysidePickups({
+    pickupDate,
+    driverId,
+    orderedPickupTaskIds,
+  }) {
+    await runOpShopAction(
+      `opshop-countryside-order:${pickupDate}:${driverId}`,
+      async (mutationContext) => {
+        const updatedBoard = await api.reorderOpShopCountrysidePickups({
+          pickup_date: pickupDate,
+          driver_id: driverId,
+          ordered_pickup_task_ids: orderedPickupTaskIds,
+        });
+        if (
+          isOpShopMutationCurrent(mutationContext)
+          && state.opshopTripSummaryDate === pickupDate
+        ) {
+          state.opshopTripSummaryBoard = updatedBoard;
+        }
+      },
+    );
+  }
+
   return {
     loadOpShopTripSummaryData,
+    reorderCountrysidePickups,
     updateOpShopTripSummaryDate,
   };
 }

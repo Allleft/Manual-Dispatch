@@ -72,17 +72,29 @@ export function createOpShopTemplateManagementPanel({
   onStartEdit,
   onToggleIncludeInactive,
   onUpdateForm,
-}, { showAddButton = true } = {}) {
+}, { showAddButton = true, countrysidePanel = null } = {}) {
   const panel = document.createElement("section");
   panel.className = "opshop-template-management-panel";
-  if (showAddButton) {
+  const isCountrysideTab = (
+    state.opshopTemplateActiveTab === "COUNTRYSIDE"
+    && Boolean(countrysidePanel)
+  );
+  if (showAddButton && !isCountrysideTab) {
     const actions = document.createElement("div");
     actions.className = "detail-actions opshop-template-page-actions";
     actions.append(createAddTemplateButton(onStartAdd));
     panel.append(actions);
   }
+  panel.append(createTabs(
+    onSelectTab,
+    onToggleIncludeInactive,
+    Boolean(countrysidePanel),
+  ));
+  if (isCountrysideTab) {
+    panel.append(createError(), countrysidePanel);
+    return panel;
+  }
   panel.append(
-    createTabs(onSelectTab, onToggleIncludeInactive),
     createError(),
     createActiveForm({ onCancelForm, onConfirmDisable, onSave, onUpdateForm }),
     createTemplateList({ onStartDisable, onStartEdit }),
@@ -125,12 +137,19 @@ function createAddTemplateButton(onStartAdd) {
 }
 
 
-function createTabs(onSelectTab, onToggleIncludeInactive) {
+function createTabs(onSelectTab, onToggleIncludeInactive, includeCountryside = false) {
   const bar = document.createElement("div");
   bar.className = "opshop-template-toolbar";
   const tabs = document.createElement("div");
   tabs.className = "spec-tabs";
-  [["REGULAR", "Regular Templates"], ["ON_CALL", "Oncall Templates"]].forEach(([value, label]) => {
+  const tabDefinitions = [
+    ["REGULAR", "Regular Templates"],
+    ["ON_CALL", "Oncall Templates"],
+  ];
+  if (includeCountryside) {
+    tabDefinitions.push(["COUNTRYSIDE", "Countryside Templates"]);
+  }
+  tabDefinitions.forEach(([value, label]) => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = state.opshopTemplateActiveTab === value ? "active" : "";
@@ -145,7 +164,10 @@ function createTabs(onSelectTab, onToggleIncludeInactive) {
   checkbox.checked = state.opshopTemplateIncludeInactive;
   checkbox.addEventListener("change", () => onToggleIncludeInactive(checkbox.checked));
   inactive.append(checkbox, document.createTextNode(" Show disabled templates"));
-  bar.append(tabs, inactive);
+  bar.append(tabs);
+  if (state.opshopTemplateActiveTab !== "COUNTRYSIDE") {
+    bar.append(inactive);
+  }
   return bar;
 }
 

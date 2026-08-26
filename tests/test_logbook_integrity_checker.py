@@ -62,7 +62,7 @@ class LogbookIntegrityCheckerTest(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def test_contract_registry_contains_expected_actions_only(self):
-        self.assertEqual(57, len(KNOWN_ACTIONS))
+        self.assertEqual(58, len(KNOWN_ACTIONS))
         self.assertEqual(
             {
                 "LOGBOOK_TEST_DATA_ANNOTATED",
@@ -128,7 +128,7 @@ class LogbookIntegrityCheckerTest(unittest.TestCase):
 
         result = self._check_records(records)
 
-        self.assertEqual(57, result.records_checked)
+        self.assertEqual(58, result.records_checked)
         self.assertEqual(0, result.error_count)
         self.assertEqual(0, result.warning_count)
 

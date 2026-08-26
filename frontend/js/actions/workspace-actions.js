@@ -114,6 +114,7 @@ export function createWorkspaceActions({
     removeDeliveryDocketImportProductLine,
     removeDeliveryDocketImportFile,
     resetDeliveryOrderArea,
+    reorderCountrysidePickups,
     saveDeliveryRunSheet,
     saveDeliveryDriver,
     saveDeliveryOrderForm,
@@ -169,6 +170,8 @@ export function createWorkspaceActions({
     updateOpShopTripSummaryDate,
     toggleRegularOpShopDateGroup,
     toggleOncallOpShopDateGroup,
+    toggleCountrysideOpShopDateGroup,
+    toggleCountrysideOpShopPickupRouteGroup,
   } = context.actions;
 
   return {
@@ -223,6 +226,7 @@ export function createWorkspaceActions({
     classifyDeliveryAttacheImportRow,
     classifyDeliveryDocketImportRow,
     resetDeliveryVehicleTransientState: clearDeliveryVehicleTransientState,
+    reorderCountrysidePickups,
     removeDeliveryOrderProductLine,
     removeDeliveryAttacheImportProductLine,
     removeDeliveryAttacheImportFile,
@@ -284,5 +288,7 @@ export function createWorkspaceActions({
     updateOpShopTripSummaryDate,
     toggleRegularOpShopDateGroup,
     toggleOncallOpShopDateGroup,
+    toggleCountrysideOpShopDateGroup,
+    toggleCountrysideOpShopPickupRouteGroup,
   };
 }

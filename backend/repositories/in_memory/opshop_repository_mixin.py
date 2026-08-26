@@ -462,6 +462,13 @@ class InMemoryOpShopRepositoryMixin:
         task = self.get_opshop_pickup_task(pickup_task_id)
         if not task:
             return None
+        same_scope = (
+            status == "ASSIGNED"
+            and task.status == "ASSIGNED"
+            and task.driver_id == driver_id
+        )
+        if not same_scope:
+            task.trip_sequence = None
         task.status = status
         task.driver_id = driver_id
         task.trip_no = trip_no
@@ -511,6 +518,7 @@ class InMemoryOpShopRepositoryMixin:
             regular_route_sequence=(
                 schedule.regular_route_sequence if schedule else None
             ),
+            trip_sequence=task.trip_sequence,
         )
 
 

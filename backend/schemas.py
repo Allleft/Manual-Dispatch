@@ -163,6 +163,7 @@ class OpShopPickupTask:
     notes: Optional[str]
     created_at: str
     updated_at: str
+    trip_sequence: Optional[int] = None
 
 
 @dataclass
@@ -227,6 +228,7 @@ class OpShopPickupBoardItem:
     route_group_id: Optional[str] = None
     route_group_name: Optional[str] = None
     regular_route_sequence: Optional[int] = None
+    trip_sequence: Optional[int] = None
 
 
 @dataclass
@@ -272,6 +274,7 @@ class OpShopWorkspacePickupItem:
     last_pickup_date: Optional[str] = None
     assignment_lock_reason: Optional[str] = None
     regular_route_sequence: Optional[int] = None
+    trip_sequence: Optional[int] = None
 
 
 @dataclass
@@ -567,6 +570,13 @@ class OpShopWorkspaceAssignmentBatchRequest:
 class OpShopWorkspaceUnassignPickupRequest:
     dispatch_date: Optional[str] = None
     pickup_task_id: Optional[str] = None
+
+
+@dataclass
+class OpShopCountrysideReorderRequest:
+    pickup_date: Optional[str] = None
+    driver_id: Optional[str] = None
+    ordered_pickup_task_ids: List[str] = field(default_factory=list)
 
 
 @dataclass

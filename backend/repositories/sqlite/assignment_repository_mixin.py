@@ -73,6 +73,7 @@ class SQLiteAssignmentRepositoryMixin:
                     task.notes AS task_notes,
                     assignment.driver_id AS driver_id,
                     assignment.trip_no AS trip_no,
+                    task.trip_sequence,
                     location.name AS opshop_name,
                     location.suburb,
                     location.street_address,
@@ -161,6 +162,7 @@ class SQLiteAssignmentRepositoryMixin:
                     task.notes AS task_notes,
                     assignment.driver_id AS driver_id,
                     assignment.trip_no AS trip_no,
+                    task.trip_sequence,
                     location.name AS opshop_name,
                     location.suburb,
                     location.street_address,
@@ -240,6 +242,7 @@ class SQLiteAssignmentRepositoryMixin:
                     task.notes AS task_notes,
                     task.driver_id,
                     task.trip_no,
+                    task.trip_sequence,
                     location.name AS opshop_name,
                     location.suburb,
                     location.street_address,
@@ -377,8 +380,8 @@ class SQLiteAssignmentRepositoryMixin:
                     INSERT INTO opshop_pickup_tasks (
                         pickup_task_id, schedule_id, opshop_id, pickup_date,
                         task_type, generated_from, status, dispatch_date,
-                        driver_id, trip_no, notes, created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        driver_id, trip_no, notes, trip_sequence, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(pickup_task_id)
                     DO UPDATE SET
                         schedule_id = excluded.schedule_id,
@@ -391,6 +394,7 @@ class SQLiteAssignmentRepositoryMixin:
                         driver_id = excluded.driver_id,
                         trip_no = excluded.trip_no,
                         notes = excluded.notes,
+                        trip_sequence = excluded.trip_sequence,
                         updated_at = excluded.updated_at
                     """,
                     (
@@ -405,6 +409,7 @@ class SQLiteAssignmentRepositoryMixin:
                         task.driver_id,
                         task.trip_no,
                         task.notes,
+                        task.trip_sequence,
                         task.created_at,
                         task.updated_at,
                     ),
@@ -462,6 +467,27 @@ class SQLiteAssignmentRepositoryMixin:
                     )
             connection.commit()
         return [self.get_opshop_pickup_task(task.pickup_task_id) for task in tasks]
+
+    def update_countryside_pickup_trip_sequences(self, ordered_pickup_task_ids):
+        with connect(self.db_path) as connection:
+            timestamp = self._timestamp()
+            for sequence, pickup_task_id in enumerate(
+                ordered_pickup_task_ids,
+                start=1,
+            ):
+                cursor = connection.execute(
+                    """
+                    UPDATE opshop_pickup_tasks
+                    SET trip_sequence = ?, updated_at = ?
+                    WHERE pickup_task_id = ?
+                    """,
+                    (sequence, timestamp, pickup_task_id),
+                )
+                if cursor.rowcount != 1:
+                    raise ValueError(
+                        "OP SHOP pickup task does not exist: "
+                        f"{pickup_task_id}"
+                    )
 
     def has_assignment_for_task(self, task_type, task_id):
         with connect(self.db_path) as connection:

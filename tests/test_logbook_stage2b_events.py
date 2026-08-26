@@ -11,6 +11,7 @@ from unittest.mock import patch
 from backend.repositories.sqlite_manual_dispatch_repository import (
     SQLiteManualDispatchRepository,
 )
+from backend.schemas import Driver
 from backend.services.manual_dispatch_service import ManualDispatchService
 from tests.manual_dispatch_api_test_helpers import authenticate_test_client
 
@@ -490,6 +491,77 @@ class LogbookStage2BEventsTest(unittest.TestCase):
             "COUNTRYSIDE_MEMBERSHIP_REMOVED",
         ):
             self.assertEqual("Stage 2B Operator", self._only_entry(action)["actor"])
+
+    def test_countryside_pickup_reorder_logs_change_but_not_identical_noop(self):
+        self.repository.create_driver(
+            Driver(
+                driver_id="D001",
+                name="Driver One",
+                start_time="07:00",
+                end_time="15:00",
+                is_available=True,
+                preferred_zone=None,
+                pallet_only=False,
+            )
+        )
+        route_group_id = self._create_route_group("Reorder Route")
+        for index, name in enumerate(("Country A", "Country B", "Country C"), start=1):
+            added = self.client.post(
+                f"/api/manual-dispatch/opshop-countryside-route-groups/{route_group_id}/memberships",
+                json={
+                    "name": name,
+                    "suburb": f"Country Suburb {index}",
+                    "street_address": f"{index} Country Road",
+                },
+            )
+            self.assertEqual(200, added.status_code)
+
+        pickup_date = "2026-09-07"
+        assigned = self.client.post(
+            f"/api/manual-dispatch/opshop/countryside-route-groups/{route_group_id}/assign",
+            json={
+                "dispatch_date": pickup_date,
+                "pickup_date": pickup_date,
+                "assigned_driver_id": "D001",
+            },
+        )
+        self.assertEqual(200, assigned.status_code)
+        pickup_ids = [
+            item["pickup_task_id"]
+            for item in assigned.json()["opshop_pickups"]
+            if item["route_group_id"] == route_group_id
+        ]
+        self.assertEqual(3, len(pickup_ids))
+        ordered_ids = list(reversed(pickup_ids))
+        payload = {
+            "pickup_date": pickup_date,
+            "driver_id": "D001",
+            "ordered_pickup_task_ids": ordered_ids,
+        }
+
+        changed = self.client.post(
+            "/api/manual-dispatch/opshop/pickups/countryside-order",
+            json=payload,
+        )
+        self.assertEqual(200, changed.status_code)
+        entry = self._only_entry("COUNTRYSIDE_PICKUP_ORDER_UPDATED")
+        self.assertEqual("Stage 2B Operator", entry["actor"])
+        self.assertEqual("SUCCESS", entry["result"])
+        self.assertEqual(pickup_date, entry["metadata"]["pickup_date"])
+        self.assertEqual("D001", entry["metadata"]["driver_id"])
+        self.assertEqual(ordered_ids, entry["metadata"]["ordered_pickup_task_ids"])
+        self.assertEqual(3, entry["metadata"]["count"])
+
+        before_noop = len(self._entries_for("COUNTRYSIDE_PICKUP_ORDER_UPDATED"))
+        noop = self.client.post(
+            "/api/manual-dispatch/opshop/pickups/countryside-order",
+            json=payload,
+        )
+        self.assertEqual(200, noop.status_code)
+        self.assertEqual(
+            before_noop,
+            len(self._entries_for("COUNTRYSIDE_PICKUP_ORDER_UPDATED")),
+        )
 
     def _create_template(self, run_type, name, run_day=None):
         response = self.client.post(

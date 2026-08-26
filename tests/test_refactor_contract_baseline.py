@@ -57,7 +57,14 @@ class RefactorContractBaselineTest(unittest.TestCase):
             if getattr(route, "path", None)
         )
 
-        self.assertEqual(100, len(routes))
+        self.assertEqual(101, len(routes))
+        self.assertIn(
+            (
+                "/api/manual-dispatch/opshop/pickups/countryside-order",
+                ("POST",),
+            ),
+            routes,
+        )
         self.assertIn(
             (
                 "/api/manual-dispatch/delivery/orders/import-attache-direct-preview",
@@ -94,7 +101,7 @@ class RefactorContractBaselineTest(unittest.TestCase):
             routes,
         )
         self.assertEqual(
-            "bf71c9c111929b3b1a659c757d7495ccd91e41459e1a3381bf77a51130e4877e",
+            "297c864ae23b1681b63dfb64421a7204146ef2153a0c906601a639d120e935a4",
             self._contract_digest(routes),
         )
 
@@ -132,14 +139,18 @@ class RefactorContractBaselineTest(unittest.TestCase):
         )
 
         public_methods = self._public_methods(ManualDispatchService)
-        self.assertEqual(97, len(public_methods))
+        self.assertEqual(98, len(public_methods))
         self.assertTrue(
-            {"classify_delivery_area", "update_delivery_order_area"}.issubset(
+            {
+                "classify_delivery_area",
+                "reorder_countryside_pickup_order",
+                "update_delivery_order_area",
+            }.issubset(
                 {method["name"] for method in public_methods}
             )
         )
         self.assertEqual(
-            "e6f559b2d64e3a525ad82ef77dc589c90c65742e99663e05dd9449332b2b9220",
+            "adb8cd90b4285ef425ba96e9100583b44fafce201357e56a0fe865ec7d4d2f76",
             self._contract_digest(public_methods),
         )
 
@@ -150,7 +161,7 @@ class RefactorContractBaselineTest(unittest.TestCase):
         )
 
         self.assertEqual(sqlite_methods, in_memory_methods)
-        self.assertEqual(116, len(sqlite_methods))
+        self.assertEqual(118, len(sqlite_methods))
         self.assertIn(
             "list_saved_opshop_pickup_dates_by_opshop_ids",
             {method["name"] for method in sqlite_methods},
@@ -164,10 +175,12 @@ class RefactorContractBaselineTest(unittest.TestCase):
                 "get_delivery_order_area_override",
                 "set_delivery_order_area_override",
                 "clear_delivery_order_area_override",
+                "roll_forward_unassigned_delivery_order_dates",
+                "update_countryside_pickup_trip_sequences",
             }.issubset({method["name"] for method in sqlite_methods})
         )
         self.assertEqual(
-            "048d01513b170d3cbc3cc5c8e4769794f3030baf257119b50c0b08907d51907a",
+            "02116dee69e13de9f443c87d486778df994ee8edea7f8352d5cf5a24256f4ab0",
             self._contract_digest(sqlite_methods),
         )
 
@@ -242,21 +255,26 @@ class RefactorContractBaselineTest(unittest.TestCase):
         contract = json.loads(completed.stdout)
 
         self.assertEqual(["function", "function"], contract["rendererTypes"])
-        self.assertEqual(105, len(contract["apiExportNames"]))
+        self.assertEqual(106, len(contract["apiExportNames"]))
         self.assertIn("apiPreviewDirectAttacheInvoice", contract["apiExportNames"])
         self.assertIn("apiPreviewDeliveryDockets", contract["apiExportNames"])
         self.assertIn("apiCommitDeliveryDockets", contract["apiExportNames"])
         self.assertIn("apiClassifyDeliveryArea", contract["apiExportNames"])
         self.assertIn("apiUpdateDeliveryOrderArea", contract["apiExportNames"])
+        self.assertIn(
+            "apiReorderOpShopCountrysidePickups",
+            contract["apiExportNames"],
+        )
         self.assertEqual(
-            "6b1b411e21ed07e56bffc47d6fd1b2f24e0548690aa6118e1b9a9c01cf8527b0",
+            "d936c3da8cb913d815d52e08e4516d55793449e8ba045d74c7eb361f683a1235",
             self._contract_digest(contract["apiExportNames"]),
         )
-        self.assertEqual(112, len(contract["actionNames"]))
+        self.assertEqual(115, len(contract["actionNames"]))
         self.assertIn("lookupDeliveryDirectAttacheInvoice", contract["actionNames"])
         self.assertIn("updateDeliveryDirectAttacheInvoiceNumber", contract["actionNames"])
         self.assertIn("previewDeliveryDocketImport", contract["actionNames"])
         self.assertIn("commitDeliveryDocketImport", contract["actionNames"])
+        self.assertIn("reorderCountrysidePickups", contract["actionNames"])
         self.assertTrue(
             {
                 "classifyDeliveryOrderForm",
@@ -267,14 +285,14 @@ class RefactorContractBaselineTest(unittest.TestCase):
             }.issubset(contract["actionNames"])
         )
         self.assertEqual(
-            "275979cdbf0031f502879425427dc828d16b73e37eee315af602d85c1eb21ef4",
+            "eab798ec78a413cff1772e3484c07fd44a6500a10e5f761cf2513f0dbb02ea6c",
             self._contract_digest(contract["actionNames"]),
         )
-        self.assertEqual(190, len(contract["stateFields"]))
+        self.assertEqual(192, len(contract["stateFields"]))
         self.assertIn("deliveryDocumentImportState", contract["stateFields"])
         self.assertIn("deliveryDocketImportState", contract["stateFields"])
         self.assertEqual(
-            "eb1a9f7fe296ff6e34a3226bb735708f4aad110f6d2a3238e1a44b0b9e55ff2f",
+            "39433ee4978eae37ae07080250888a409b74a06753e407f8718bfb518f19682e",
             self._contract_digest(contract["stateFields"]),
         )
 

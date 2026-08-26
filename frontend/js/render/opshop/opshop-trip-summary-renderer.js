@@ -10,6 +10,7 @@ import {
   isOncallPickup,
   pickupCategoryLabel,
   compareRegularRouteSequence,
+  compareCountrysideTripSequence,
   currentDriverId,
   createActionButton,
   createMetricGrid,
@@ -142,7 +143,19 @@ export function createOpShopDriverSummaryCard(
       onOpenPickupDetail,
     ),
     createOpShopPickupGroup("Oncall", pickups.filter(isOncallPickup), isLocked, state, actions, onOpenPickupDetail),
-    createOpShopPickupGroup("Countryside", pickups.filter(isCountrysidePickup), isLocked, state, actions, onOpenPickupDetail),
+    createOpShopPickupGroup(
+      "Countryside",
+      pickups.filter(isCountrysidePickup).sort(compareCountrysideTripSequence),
+      isLocked,
+      state,
+      actions,
+      onOpenPickupDetail,
+      {
+        countrysideSortable: true,
+        pickupDate,
+        driverId: driver.driver_id,
+      },
+    ),
   );
 
   const actionsRow = document.createElement("div");
@@ -168,7 +181,15 @@ export function createOpShopDriverSummaryCard(
   return card;
 }
 
-export function createOpShopPickupGroup(titleText, pickups, isLocked, state, actions, onOpenPickupDetail) {
+export function createOpShopPickupGroup(
+  titleText,
+  pickups,
+  isLocked,
+  state,
+  actions,
+  onOpenPickupDetail,
+  options = {},
+) {
   const section = document.createElement("section");
   section.className = "workspace-trip-panel workspace-opshop-trip-group";
   const title = document.createElement("h4");
@@ -178,17 +199,85 @@ export function createOpShopPickupGroup(titleText, pickups, isLocked, state, act
     section.append(createEmptyState(`No ${titleText} pickups assigned`, "store"));
     return section;
   }
+  let draggingPickupId = "";
   pickups.forEach((pickup) => {
-    section.append(createOpShopTripPickupRow(pickup, isLocked, state, actions, onOpenPickupDetail));
+    const dragContext = options.countrysideSortable
+      ? {
+          driverId: options.driverId,
+          onDragEnd: () => {
+            draggingPickupId = "";
+            section.classList.remove("workspace-opshop-trip-dragging");
+          },
+          onDragStart: (event) => {
+            draggingPickupId = pickup.pickup_task_id;
+            section.classList.add("workspace-opshop-trip-dragging");
+            event.dataTransfer.effectAllowed = "move";
+            event.dataTransfer.setData(
+              "application/x-manual-dispatch-countryside-pickup",
+              JSON.stringify({
+                pickupTaskId: pickup.pickup_task_id,
+                pickupDate: options.pickupDate,
+                driverId: options.driverId,
+              }),
+            );
+          },
+          pickupDate: options.pickupDate,
+        }
+      : null;
+    const row = createOpShopTripPickupRow(
+      pickup,
+      isLocked,
+      state,
+      actions,
+      onOpenPickupDetail,
+      dragContext,
+    );
+    if (dragContext && !isLocked) {
+      configureCountrysideDropTarget({
+        actions,
+        dragContext,
+        getDraggingPickupId: () => draggingPickupId,
+        pickups,
+        row,
+        targetPickup: pickup,
+      });
+    }
+    section.append(row);
   });
   return section;
 }
 
-export function createOpShopTripPickupRow(pickup, isLocked, state, actions, onOpenPickupDetail) {
+export function createOpShopTripPickupRow(
+  pickup,
+  isLocked,
+  state,
+  actions,
+  onOpenPickupDetail,
+  dragContext = null,
+) {
   const row = document.createElement("article");
   row.className = "workspace-record-card workspace-opshop-trip-pickup-row";
   const summary = document.createElement("div");
   summary.className = "workspace-opshop-trip-pickup-summary";
+  if (dragContext) {
+    const handle = document.createElement("button");
+    handle.type = "button";
+    handle.className = "workspace-opshop-trip-drag-handle";
+    handle.textContent = "⋮⋮";
+    handle.setAttribute("aria-label", `Drag ${formatOptional(pickup.opshop_name)} to reorder`);
+    handle.draggable = !isLocked;
+    handle.disabled = isLocked;
+    handle.addEventListener("click", (event) => event.preventDefault());
+    handle.addEventListener("dragstart", (event) => {
+      if (isLocked) {
+        event.preventDefault();
+        return;
+      }
+      dragContext.onDragStart(event);
+    });
+    handle.addEventListener("dragend", dragContext.onDragEnd);
+    summary.append(handle);
+  }
   const trigger = document.createElement("button");
   trigger.type = "button";
   trigger.className = "workspace-opshop-trip-pickup-trigger";
@@ -226,4 +315,76 @@ export function createOpShopTripPickupRow(pickup, isLocked, state, actions, onOp
   summary.append(trigger, button);
   row.append(summary);
   return row;
+}
+
+function configureCountrysideDropTarget({
+  actions,
+  dragContext,
+  getDraggingPickupId,
+  pickups,
+  row,
+  targetPickup,
+}) {
+  row.addEventListener("dragover", (event) => {
+    if (!getDraggingPickupId()) {
+      return;
+    }
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    row.classList.add("workspace-opshop-trip-drop-target");
+  });
+  row.addEventListener("dragleave", () => {
+    row.classList.remove("workspace-opshop-trip-drop-target");
+  });
+  row.addEventListener("drop", (event) => {
+    event.preventDefault();
+    row.classList.remove("workspace-opshop-trip-drop-target");
+    const payload = readCountrysideDragPayload(event.dataTransfer);
+    const draggingPickupId = getDraggingPickupId();
+    if (
+      !payload
+      || payload.pickupTaskId !== draggingPickupId
+      || payload.pickupDate !== dragContext.pickupDate
+      || payload.driverId !== dragContext.driverId
+    ) {
+      return;
+    }
+    const orderedPickupTaskIds = pickups.map((item) => item.pickup_task_id);
+    const sourceIndex = orderedPickupTaskIds.indexOf(draggingPickupId);
+    if (sourceIndex < 0) {
+      return;
+    }
+    orderedPickupTaskIds.splice(sourceIndex, 1);
+    const targetIndex = orderedPickupTaskIds.indexOf(targetPickup.pickup_task_id);
+    if (targetIndex < 0) {
+      return;
+    }
+    const bounds = row.getBoundingClientRect();
+    const insertAfter = event.clientY > bounds.top + bounds.height / 2;
+    orderedPickupTaskIds.splice(targetIndex + (insertAfter ? 1 : 0), 0, draggingPickupId);
+    if (
+      orderedPickupTaskIds.every(
+        (pickupTaskId, index) => pickupTaskId === pickups[index].pickup_task_id,
+      )
+    ) {
+      return;
+    }
+    actions.reorderCountrysidePickups({
+      pickupDate: dragContext.pickupDate,
+      driverId: dragContext.driverId,
+      orderedPickupTaskIds,
+    });
+  });
+}
+
+function readCountrysideDragPayload(dataTransfer) {
+  try {
+    return JSON.parse(
+      dataTransfer.getData(
+        "application/x-manual-dispatch-countryside-pickup",
+      ),
+    );
+  } catch (_error) {
+    return null;
+  }
 }

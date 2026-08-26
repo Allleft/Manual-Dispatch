@@ -534,6 +534,7 @@ class SQLiteRowMapperMixin:
             notes=row["notes"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
+            trip_sequence=_row_value(row, "trip_sequence"),
         )
 
     def _row_to_opshop_pickup_board_item(self, row):
@@ -577,6 +578,7 @@ class SQLiteRowMapperMixin:
             route_group_id=_row_value(row, "route_group_id"),
             route_group_name=_row_value(row, "route_group_name"),
             regular_route_sequence=_row_value(row, "regular_route_sequence"),
+            trip_sequence=_row_value(row, "trip_sequence"),
         )
 
 

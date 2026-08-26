@@ -58,6 +58,7 @@ function templateToForm(template) {
 
 export function createOpShopTemplateActions({
   loadBoard,
+  loadCountrysideManagementData = null,
   refreshScopedBoard = null,
   reloadCountrysideCandidates,
   reloadOncallCandidates,
@@ -91,9 +92,19 @@ export function createOpShopTemplateActions({
     state.opshopTemplateError = "";
     renderBoard();
     try {
-      state.opshopTemplates = await apiListOpShopTemplates(
+      if (state.opshopTemplateActiveTab === "COUNTRYSIDE") {
+        state.opshopTemplates = [];
+        if (typeof loadCountrysideManagementData === "function") {
+          await loadCountrysideManagementData();
+        }
+        return;
+      }
+      const templates = await apiListOpShopTemplates(
         state.opshopTemplateActiveTab,
         state.opshopTemplateIncludeInactive,
+      );
+      state.opshopTemplates = templates.filter(
+        (template) => template.pickup_category === "NORMAL" || !template.pickup_category,
       );
     } catch (error) {
       state.opshopTemplateError = `Unable to load OP SHOP templates. ${error.message}`;
@@ -117,6 +128,9 @@ export function createOpShopTemplateActions({
   }
 
   function startAddTemplate() {
+    if (state.opshopTemplateActiveTab === "COUNTRYSIDE") {
+      return;
+    }
     state.opshopTemplateFormMode = "add";
     state.opshopTemplateEditingScheduleId = "";
     state.opshopTemplateForm = emptyTemplateForm(state.opshopTemplateActiveTab);

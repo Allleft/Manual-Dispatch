@@ -12,6 +12,7 @@ import {
 } from "../utils/dom-utils.js";
 import { formatOptional, truncateText } from "../utils/format-utils.js";
 import { createIcon } from "../utils/icon-utils.js";
+import { getCountrysideTemplateRouteGroupPanelId } from "../utils/opshop-countryside-accordion-utils.js";
 
 export function renderCountrysideOpShopPickupListModal({
   onCancelForm,
@@ -39,6 +40,7 @@ export function renderCountrysideOpShopPickupListModal({
   onStartNewRouteGroup,
   onStartRemoveRouteTemplate,
   onStartRenameRouteGroup,
+  onToggleRouteGroup,
   onUpdateAssignedDriver,
   onUpdateForm,
   onUpdatePickup,
@@ -88,6 +90,7 @@ export function renderCountrysideOpShopPickupListModal({
       onStartNewRouteGroup,
       onStartRemoveRouteTemplate,
       onStartRenameRouteGroup,
+      onToggleRouteGroup,
       onUpdateRouteGroupForm,
       onUpdateRouteTemplateForm,
     }),
@@ -124,6 +127,7 @@ export function createCountrysideRouteManagementPanel({
   onStartNewRouteGroup,
   onStartRemoveRouteTemplate,
   onStartRenameRouteGroup,
+  onToggleRouteGroup,
   onUpdateRouteGroupForm,
   onUpdateRouteTemplateForm,
 }) {
@@ -135,6 +139,14 @@ export function createCountrysideRouteManagementPanel({
       onStartDisableRouteGroup,
       onStartNewRouteGroup,
       onStartRenameRouteGroup,
+    }),
+    createRouteGroupOverview({
+      onOpenRouteTemplateDetail,
+      onSelectRouteGroup,
+      onStartAddRouteTemplate,
+      onStartMoveRouteTemplate,
+      onStartRemoveRouteTemplate,
+      onToggleRouteGroup,
     }),
     createErrorMessage(),
     createRouteGroupForm({
@@ -152,12 +164,6 @@ export function createCountrysideRouteManagementPanel({
       onUpdateRouteTemplateForm,
     }),
     createRouteTemplateDetailPanel({ onCloseRouteTemplateDetail }),
-    createRouteTemplatesSection({
-      onOpenRouteTemplateDetail,
-      onStartAddRouteTemplate,
-      onStartMoveRouteTemplate,
-      onStartRemoveRouteTemplate,
-    }),
   );
   return panel;
 }
@@ -258,7 +264,7 @@ function createRouteGroupManagement({
   const actions = document.createElement("div");
   actions.className = "opshop-route-management-actions";
   actions.append(
-    createSmallActionButton("New Route", onStartNewRouteGroup),
+    createSmallActionButton("Add Route Group", onStartNewRouteGroup),
     createSmallActionButton("Rename", onStartRenameRouteGroup, {
       disabled: !state.selectedCountrysideRouteGroupId,
     }),
@@ -269,6 +275,149 @@ function createRouteGroupManagement({
 
   wrapper.append(label, actions);
   return wrapper;
+}
+
+function createRouteGroupOverview({
+  onOpenRouteTemplateDetail,
+  onSelectRouteGroup,
+  onStartAddRouteTemplate,
+  onStartMoveRouteTemplate,
+  onStartRemoveRouteTemplate,
+  onToggleRouteGroup,
+}) {
+  const section = document.createElement("section");
+  section.className = "opshop-list-section opshop-route-group-overview";
+  const title = document.createElement("h3");
+  title.className = "opshop-list-section-heading";
+  title.textContent = "Countryside Templates by Route Group";
+  section.append(title);
+
+  if (!state.countrysideRouteGroups.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty-board";
+    empty.textContent = "No active Countryside Route Groups.";
+    section.append(empty);
+    return section;
+  }
+
+  const accordion = document.createElement("div");
+  accordion.className = "opshop-route-group-accordion";
+  state.countrysideRouteGroups.forEach((routeGroup) => {
+    const candidates = state.countrysideOpShopPickupScheduleCandidates.filter(
+      (candidate) => candidate.route_group_id === routeGroup.route_group_id,
+    );
+    const isExpanded = Boolean(
+      state.expandedCountrysideTemplateRouteGroups?.[routeGroup.route_group_id],
+    );
+    const panelId = getCountrysideTemplateRouteGroupPanelId(routeGroup.route_group_id);
+    const item = document.createElement("article");
+    item.className = "opshop-route-group-accordion-item";
+    item.dataset.routeGroupId = routeGroup.route_group_id;
+    if (state.selectedCountrysideRouteGroupId === routeGroup.route_group_id) {
+      item.classList.add("selected");
+    }
+
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "opshop-route-group-accordion-toggle";
+    toggle.setAttribute("aria-expanded", String(isExpanded));
+    toggle.setAttribute("aria-controls", panelId);
+    toggle.addEventListener("click", () => onToggleRouteGroup(routeGroup.route_group_id));
+
+    const identity = document.createElement("span");
+    identity.className = "opshop-route-group-accordion-identity";
+    const name = document.createElement("strong");
+    name.textContent = routeGroup.route_group_name;
+    const count = document.createElement("span");
+    count.className = "opshop-route-group-accordion-count";
+    count.textContent = `${candidates.length} OP SHOP${candidates.length === 1 ? "" : "s"}`;
+    identity.append(name, count);
+    toggle.append(identity, createIcon(isExpanded ? "chevron-up" : "chevron-down"));
+
+    const body = document.createElement("div");
+    body.id = panelId;
+    body.className = "opshop-route-group-accordion-body";
+    body.hidden = !isExpanded;
+
+    const bodyActions = document.createElement("div");
+    bodyActions.className = "opshop-route-group-accordion-actions";
+    const addButton = createSmallActionButton(
+      "Add OP SHOP",
+      async () => {
+        if (state.selectedCountrysideRouteGroupId !== routeGroup.route_group_id) {
+          await onSelectRouteGroup(routeGroup.route_group_id);
+        }
+        onStartAddRouteTemplate();
+      },
+      { disabled: state.isCountrysideOpShopPickupListLoading },
+    );
+    bodyActions.append(addButton);
+    body.append(bodyActions);
+
+    if (!candidates.length) {
+      const empty = document.createElement("p");
+      empty.className = "hint-row";
+      empty.textContent = "No active OP SHOP memberships.";
+      body.append(empty);
+    } else {
+      const list = document.createElement("div");
+      list.className = "opshop-route-group-member-list";
+      candidates.forEach((candidate) => {
+        const template = {
+          ...candidate,
+          name: candidate.name || candidate.opshop_name,
+        };
+        list.append(createRouteGroupMemberRow(template, {
+          onOpenRouteTemplateDetail,
+          onSelectRouteGroup,
+          onStartMoveRouteTemplate,
+          onStartRemoveRouteTemplate,
+        }));
+      });
+      body.append(list);
+    }
+    item.append(toggle, body);
+    accordion.append(item);
+  });
+  section.append(accordion);
+  return section;
+}
+
+function createRouteGroupMemberRow(
+  template,
+  {
+    onOpenRouteTemplateDetail,
+    onSelectRouteGroup,
+    onStartMoveRouteTemplate,
+    onStartRemoveRouteTemplate,
+  },
+) {
+  const row = document.createElement("article");
+  row.className = "opshop-route-group-member-row";
+
+  const identity = document.createElement("div");
+  identity.className = "opshop-route-group-member-identity";
+  const name = document.createElement("strong");
+  name.textContent = template.name || template.schedule_id;
+  const suburb = document.createElement("span");
+  suburb.textContent = formatOptional(template.suburb);
+  identity.append(name, suburb);
+
+  const actions = document.createElement("div");
+  actions.className = "opshop-route-group-member-actions";
+  actions.append(
+    createSmallActionButton("View", async () => {
+      if (state.selectedCountrysideRouteGroupId !== template.route_group_id) {
+        await onSelectRouteGroup(template.route_group_id);
+      }
+      onOpenRouteTemplateDetail(template);
+    }),
+    createSmallActionButton("Move", () => onStartMoveRouteTemplate(template)),
+    createSmallActionButton("Remove", () => onStartRemoveRouteTemplate(template)),
+  );
+
+  row.append(identity, actions);
+  return row;
 }
 
 function createErrorMessage() {
@@ -426,6 +575,12 @@ function createRouteTemplateForm({
       "Secondary Phone",
       "secondary_phone",
       state.countrysideRouteTemplateForm.secondary_phone,
+      onUpdateRouteTemplateForm,
+    ),
+    createTextField(
+      "Pickup Frequency",
+      "pickup_frequency",
+      state.countrysideRouteTemplateForm.pickup_frequency,
       onUpdateRouteTemplateForm,
     ),
     createTextField("Time Window", "time_window", state.countrysideRouteTemplateForm.time_window, onUpdateRouteTemplateForm),

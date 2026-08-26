@@ -15,6 +15,7 @@ export function createOpShopDateGroupList({
   loadingMessage = "Loading OP SHOP pickups...",
   onToggleDateGroup,
   pickups,
+  renderGroup = null,
   renderPickup,
 }) {
   const container = document.createElement("div");
@@ -55,7 +56,11 @@ export function createOpShopDateGroupList({
       list.className = "opshop-date-card-list";
       list.id = listId;
       list.hidden = collapsed;
-      datePickups.forEach((pickup) => list.append(renderPickup(pickup)));
+      if (typeof renderGroup === "function") {
+        list.append(renderGroup(pickupDate, datePickups));
+      } else {
+        datePickups.forEach((pickup) => list.append(renderPickup(pickup)));
+      }
       section.append(heading, list);
       container.append(section);
     },

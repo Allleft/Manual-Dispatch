@@ -539,6 +539,111 @@ class OpShopPickupCollectionGenerationTest(unittest.TestCase):
             [worksheet.cell(row=row, column=1).value for row in range(12, 16)],
         )
 
+    def test_countryside_trip_sequence_becomes_immutable_row_and_excel_order(self):
+        self._seed_pickup(
+            "REGULAR-FIRST",
+            "D001",
+            self.dispatch_date,
+            opshop_name="Regular First",
+            suburb="ZZZZ",
+            regular_route_sequence=1,
+        )
+        self._seed_pickup(
+            "COUNTRY-A",
+            "D001",
+            self.dispatch_date,
+            run_type="ON_CALL",
+            pickup_category="COUNTRYSIDE",
+            opshop_name="Country A",
+            suburb="ZZZZ",
+            trip_sequence=2,
+        )
+        self._seed_pickup(
+            "COUNTRY-B",
+            "D001",
+            self.dispatch_date,
+            run_type="ON_CALL",
+            pickup_category="COUNTRYSIDE",
+            opshop_name="Country B",
+            suburb="AAAA",
+            trip_sequence=3,
+        )
+        self._seed_pickup(
+            "COUNTRY-C",
+            "D001",
+            self.dispatch_date,
+            run_type="ON_CALL",
+            pickup_category="COUNTRYSIDE",
+            opshop_name="Country C",
+            suburb="MMMM",
+            trip_sequence=1,
+        )
+        self._seed_pickup(
+            "ONCALL-MIDDLE",
+            "D001",
+            self.dispatch_date,
+            run_type="ON_CALL",
+            opshop_name="Oncall Middle",
+            suburb="HHHH",
+        )
+
+        trip_summary = self.service.get_opshop_trip_summary_board(self.pickup_date)
+        self.assertEqual(
+            ["COUNTRY-C", "COUNTRY-A", "COUNTRY-B"],
+            [
+                pickup.pickup_task_id
+                for pickup in trip_summary.opshop_pickups
+                if pickup.pickup_category == "COUNTRYSIDE"
+            ],
+        )
+
+        generated = self._post_generate("D001")
+        self.assertEqual(200, generated.status_code, generated.text)
+        expected_task_ids = [
+            "REGULAR-FIRST",
+            "COUNTRY-C",
+            "ONCALL-MIDDLE",
+            "COUNTRY-A",
+            "COUNTRY-B",
+        ]
+        self.assertEqual(
+            expected_task_ids,
+            [row["pickup_task_id_snapshot"] for row in generated.json()["pickups"]],
+        )
+        self.assertEqual(
+            [1, 2, 3, 4, 5],
+            [row["row_no"] for row in generated.json()["pickups"]],
+        )
+
+        for task_id, next_sequence in (
+            ("COUNTRY-A", 1),
+            ("COUNTRY-B", 2),
+            ("COUNTRY-C", 3),
+        ):
+            task = self.repository.get_opshop_pickup_task(task_id)
+            task.trip_sequence = next_sequence
+            self.repository.upsert_opshop_pickup_task(task)
+
+        collection_id = generated.json()["collection_id"]
+        persisted = self.service.get_opshop_pickup_collection(collection_id)
+        self.assertEqual(
+            expected_task_ids,
+            [row.pickup_task_id_snapshot for row in persisted.pickups],
+        )
+        worksheet = load_workbook(
+            BytesIO(build_opshop_pickup_collection_excel(persisted))
+        ).active
+        self.assertEqual(
+            [
+                "Regular First",
+                "Country C",
+                "Oncall Middle",
+                "Country A",
+                "Country B",
+            ],
+            [worksheet.cell(row=row, column=1).value for row in range(12, 17)],
+        )
+
     def _seed_template(
         self,
         suffix,
@@ -614,6 +719,7 @@ class OpShopPickupCollectionGenerationTest(unittest.TestCase):
         opshop_name=None,
         suburb="MELBOURNE",
         regular_route_sequence=None,
+        trip_sequence=None,
     ):
         repository = repository or self.repository
         schedule_id, opshop_id = self._seed_template(
@@ -640,6 +746,7 @@ class OpShopPickupCollectionGenerationTest(unittest.TestCase):
                 notes="Collection QA",
                 created_at="2026-07-05T00:00:00+00:00",
                 updated_at="2026-07-05T00:00:00+00:00",
+                trip_sequence=trip_sequence,
             )
         )
         if assignment_dispatch_date:

@@ -493,6 +493,7 @@ class SQLiteOpShopRepositoryMixin:
                     task.notes AS task_notes,
                     task.driver_id,
                     task.trip_no,
+                    task.trip_sequence,
                     location.name AS opshop_name,
                     location.suburb,
                     location.street_address,
@@ -551,6 +552,7 @@ class SQLiteOpShopRepositoryMixin:
                     task.notes AS task_notes,
                     task.driver_id,
                     task.trip_no,
+                    task.trip_sequence,
                     location.name AS opshop_name,
                     location.suburb,
                     location.street_address,
@@ -618,6 +620,7 @@ class SQLiteOpShopRepositoryMixin:
                     task.notes AS task_notes,
                     task.driver_id,
                     task.trip_no,
+                    task.trip_sequence,
                     location.name AS opshop_name,
                     location.suburb,
                     location.street_address,
@@ -688,6 +691,7 @@ class SQLiteOpShopRepositoryMixin:
                     task.notes AS task_notes,
                     task.driver_id,
                     task.trip_no,
+                    task.trip_sequence,
                     location.name AS opshop_name,
                     location.suburb,
                     location.street_address,
@@ -784,9 +788,10 @@ class SQLiteOpShopRepositoryMixin:
                     driver_id,
                     trip_no,
                     notes,
+                    trip_sequence,
                     created_at,
                     updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     task.pickup_task_id,
@@ -800,6 +805,7 @@ class SQLiteOpShopRepositoryMixin:
                     task.driver_id,
                     task.trip_no,
                     task.notes,
+                    task.trip_sequence,
                     task.created_at,
                     task.updated_at,
                 ),
@@ -823,9 +829,10 @@ class SQLiteOpShopRepositoryMixin:
                     driver_id,
                     trip_no,
                     notes,
+                    trip_sequence,
                     created_at,
                     updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(pickup_task_id)
                 DO UPDATE SET
                     schedule_id = excluded.schedule_id,
@@ -838,6 +845,7 @@ class SQLiteOpShopRepositoryMixin:
                     driver_id = excluded.driver_id,
                     trip_no = excluded.trip_no,
                     notes = excluded.notes,
+                    trip_sequence = excluded.trip_sequence,
                     updated_at = excluded.updated_at
                 """,
                 (
@@ -852,6 +860,7 @@ class SQLiteOpShopRepositoryMixin:
                     task.driver_id,
                     task.trip_no,
                     task.notes,
+                    task.trip_sequence,
                     task.created_at,
                     task.updated_at,
                 ),
@@ -870,13 +879,28 @@ class SQLiteOpShopRepositoryMixin:
             connection.execute(
                 """
                 UPDATE opshop_pickup_tasks
-                SET status = ?,
+                SET trip_sequence = CASE
+                        WHEN ? = 'ASSIGNED'
+                            AND status = 'ASSIGNED'
+                            AND driver_id = ?
+                        THEN trip_sequence
+                        ELSE NULL
+                    END,
+                    status = ?,
                     driver_id = ?,
                     trip_no = ?,
                     updated_at = ?
                 WHERE pickup_task_id = ?
                 """,
-                (status, driver_id, trip_no, self._timestamp(), pickup_task_id),
+                (
+                    status,
+                    driver_id,
+                    status,
+                    driver_id,
+                    trip_no,
+                    self._timestamp(),
+                    pickup_task_id,
+                ),
             )
             connection.commit()
         return self.get_opshop_pickup_task(pickup_task_id)

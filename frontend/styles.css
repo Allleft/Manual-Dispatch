@@ -993,6 +993,47 @@
   box-shadow: none;
 }
 
+.workspace-opshop-trip-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 34px;
+  min-height: 34px;
+  border: 1px solid rgba(39, 93, 69, 0.2);
+  border-radius: var(--radius-sm);
+  color: var(--accent-strong);
+  background: var(--panel);
+  cursor: grab;
+  user-select: none;
+}
+
+.workspace-opshop-trip-drag-handle:hover,
+.workspace-opshop-trip-drag-handle:focus-visible {
+  border-color: rgba(39, 93, 69, 0.48);
+  background: var(--accent-soft);
+}
+
+.workspace-opshop-trip-drag-handle:focus-visible {
+  outline: 3px solid rgba(39, 93, 69, 0.2);
+  outline-offset: 2px;
+}
+
+.workspace-opshop-trip-drag-handle:active {
+  cursor: grabbing;
+}
+
+.workspace-opshop-trip-drag-handle[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.workspace-opshop-trip-drop-target {
+  border-color: rgba(39, 93, 69, 0.58);
+  background: rgba(223, 238, 229, 0.5);
+  box-shadow: 0 0 0 3px rgba(39, 93, 69, 0.12);
+}
+
 .workspace-opshop-trip-pickup-summary {
   display: flex;
   align-items: flex-start;
@@ -2180,6 +2221,209 @@ h1 {
   gap: 0.65rem;
   border-top: 1px solid rgba(39, 93, 69, 0.14);
   padding-top: 0.85rem;
+}
+
+.opshop-route-group-accordion,
+.opshop-route-group-member-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.opshop-route-group-accordion-item {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgba(39, 93, 69, 0.16);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+}
+
+.opshop-route-group-accordion-item.selected {
+  border-color: rgba(39, 93, 69, 0.42);
+  box-shadow: 0 0 0 2px rgba(39, 93, 69, 0.08);
+}
+
+.opshop-route-group-accordion-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 0.75rem;
+  border: 0;
+  padding: 0.8rem 0.9rem;
+  background: rgba(223, 238, 229, 0.38);
+  color: var(--accent-strong);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.opshop-route-group-accordion-toggle:hover,
+.opshop-route-group-accordion-toggle:focus-visible {
+  background: rgba(223, 238, 229, 0.68);
+}
+
+.opshop-route-group-accordion-toggle:focus-visible {
+  outline: 3px solid rgba(39, 93, 69, 0.24);
+  outline-offset: -3px;
+}
+
+.opshop-route-group-accordion-identity {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  min-width: 0;
+  flex: 1 1 auto;
+  gap: 0.75rem;
+}
+
+.opshop-route-group-accordion-identity strong {
+  overflow-wrap: anywhere;
+}
+
+.opshop-route-group-accordion-count {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
+.opshop-route-group-accordion-toggle .ui-icon {
+  flex: 0 0 auto;
+  width: 1rem;
+  height: 1rem;
+}
+
+.opshop-route-group-accordion-body {
+  display: grid;
+  gap: 0.65rem;
+  border-top: 1px solid rgba(39, 93, 69, 0.12);
+  padding: 0.75rem 0.9rem 0.9rem;
+}
+
+.opshop-route-group-accordion-body[hidden] {
+  display: none;
+}
+
+.opshop-route-group-accordion-actions,
+.opshop-route-group-member-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+
+.opshop-route-group-member-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  border: 1px solid rgba(39, 93, 69, 0.12);
+  border-radius: 10px;
+  padding: 0.6rem 0.7rem;
+  background: rgba(250, 253, 251, 0.86);
+}
+
+.opshop-route-group-member-identity {
+  display: grid;
+  gap: 0.18rem;
+  min-width: 0;
+}
+
+.opshop-route-group-member-identity strong {
+  overflow-wrap: anywhere;
+}
+
+.opshop-route-group-member-identity span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.opshop-countryside-route-group-list,
+.opshop-countryside-route-group,
+.opshop-countryside-pickup-rows {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.opshop-countryside-route-group-heading {
+  margin: 0;
+}
+
+.opshop-countryside-route-group-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 0.75rem;
+  border: 1px solid rgba(39, 93, 69, 0.16);
+  border-radius: 10px;
+  padding: 0.58rem 0.72rem;
+  background: rgba(250, 253, 251, 0.92);
+  color: var(--accent-strong);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.opshop-countryside-route-group-toggle:hover,
+.opshop-countryside-route-group-toggle:focus-visible {
+  border-color: rgba(39, 93, 69, 0.36);
+  background: rgba(223, 238, 229, 0.45);
+}
+
+.opshop-countryside-route-group-toggle:focus-visible {
+  outline: 3px solid rgba(39, 93, 69, 0.2);
+  outline-offset: 2px;
+}
+
+.opshop-countryside-route-group-label {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  gap: 0.45rem;
+  font-weight: 850;
+  overflow-wrap: anywhere;
+}
+
+.opshop-countryside-route-group-label .ui-icon {
+  flex: 0 0 auto;
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+.opshop-countryside-route-group-count {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 750;
+}
+
+.opshop-countryside-pickup-rows[hidden] {
+  display: none;
+}
+
+@media (max-width: 700px) {
+  .opshop-route-group-accordion-identity {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+
+  .opshop-route-group-member-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .opshop-route-group-accordion-actions,
+  .opshop-route-group-member-actions {
+    justify-content: flex-start;
+  }
+
+  .opshop-countryside-route-group-toggle {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
 }
 
 .opshop-date-group-heading {

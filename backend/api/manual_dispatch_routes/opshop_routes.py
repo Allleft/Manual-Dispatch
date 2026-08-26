@@ -15,6 +15,7 @@ from backend.schemas import (
     CreateOpShopTemplateRequest,
     EnsureOpShopPickupTasksRequest,
     MoveCountrysideRouteMembershipRequest,
+    OpShopCountrysideReorderRequest,
     OpShopWorkspaceAssignmentBatchRequest,
     OpShopWorkspaceUnassignPickupRequest,
     UpdateOpShopCountrysideRouteGroupRequest,
@@ -91,6 +92,34 @@ def create_opshop_router(
                 service,
                 http_request,
                 lambda: to_dict(service.unassign_opshop_workspace_pickup(request)),
+            )
+        except ValueError as error:
+            raise to_http_exception(error) from error
+
+    @router.post("/opshop/pickups/countryside-order")
+    def reorder_countryside_pickup_order(
+        http_request: Request = None,
+        payload: dict = Body(...),
+    ):
+        service = get_service()
+        try:
+            reject_scoped_fields(
+                payload,
+                {"dispatch_date", "task_type", "trip_no"},
+            )
+            request = OpShopCountrysideReorderRequest(
+                pickup_date=payload.get("pickup_date"),
+                driver_id=payload.get("driver_id"),
+                ordered_pickup_task_ids=(
+                    payload.get("ordered_pickup_task_ids") or []
+                ),
+            )
+            return with_logbook_actor(
+                service,
+                http_request,
+                lambda: to_dict(
+                    service.reorder_countryside_pickup_order(request)
+                ),
             )
         except ValueError as error:
             raise to_http_exception(error) from error

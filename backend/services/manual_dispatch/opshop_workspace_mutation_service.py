@@ -170,6 +170,100 @@ class OpShopWorkspaceMutationService:
         )
         return self.board_service.get_board(dispatch_date)
 
+    @immediate_transactional
+    def reorder_countryside_pickup_order(self, request):
+        pickup_date = clean_required_iso_date(
+            request.pickup_date,
+            "pickup_date",
+        )
+        driver_id = clean_required_text(request.driver_id, "driver_id")
+        self.validator.validate_driver_exists(driver_id)
+        raw_task_ids = request.ordered_pickup_task_ids
+        if not isinstance(raw_task_ids, list) or not raw_task_ids:
+            raise ValueError("ordered_pickup_task_ids must be a non-empty list")
+        ordered_task_ids = [
+            clean_required_text(task_id, "ordered_pickup_task_ids")
+            for task_id in raw_task_ids
+        ]
+        if len(ordered_task_ids) != len(set(ordered_task_ids)):
+            raise ValueError("ordered_pickup_task_ids must not contain duplicates")
+
+        collections = self.repository.list_opshop_pickup_collections(
+            pickup_date=pickup_date
+        )
+        if any(
+            collection.driver_id == driver_id
+            and collection.status in {"GENERATED", "SAVED"}
+            for collection in collections
+        ):
+            raise ValueError(
+                "Generated or Saved OP SHOP Pickup Collection locks this "
+                "driver and pickup date."
+            )
+
+        assigned_items = (
+            self.repository.list_assigned_opshop_pickup_board_items_for_pickup_date(
+                pickup_date
+            )
+        )
+        current_items = [
+            pickup
+            for pickup in assigned_items
+            if pickup.driver_id == driver_id
+            and pickup.pickup_category == "COUNTRYSIDE"
+        ]
+        current_ids = {pickup.pickup_task_id for pickup in current_items}
+
+        for pickup_task_id in ordered_task_ids:
+            task = self.repository.get_opshop_pickup_task(pickup_task_id)
+            if not task:
+                raise ValueError(
+                    f"OP SHOP pickup task does not exist: {pickup_task_id}"
+                )
+            if task.task_type != "OPSHOP_PICKUP":
+                raise ValueError("Only OP SHOP pickup tasks can be reordered")
+            schedule = self.repository.get_opshop_pickup_schedule(task.schedule_id)
+            if not schedule or schedule.pickup_category != "COUNTRYSIDE":
+                raise ValueError("Only Countryside OP SHOP pickups can be reordered")
+            if task.status != "ASSIGNED":
+                raise ValueError("Only assigned Countryside pickups can be reordered")
+            if task.pickup_date != pickup_date:
+                raise ValueError("Countryside pickup date does not match request")
+            assignment = self.repository.find_assignment_for_task(
+                "OPSHOP_PICKUP",
+                pickup_task_id,
+            )
+            if not assignment or assignment.driver_id != driver_id:
+                raise ValueError(
+                    "Countryside pickup is not assigned to the requested driver"
+                )
+
+        submitted_ids = set(ordered_task_ids)
+        if submitted_ids != current_ids:
+            missing_ids = sorted(current_ids - submitted_ids)
+            extra_ids = sorted(submitted_ids - current_ids)
+            details = []
+            if missing_ids:
+                details.append(f"missing: {', '.join(missing_ids)}")
+            if extra_ids:
+                details.append(f"extra: {', '.join(extra_ids)}")
+            raise ValueError(
+                "ordered_pickup_task_ids must contain the complete Countryside "
+                f"set for this driver and pickup date ({'; '.join(details)})"
+            )
+
+        effective_ids = [
+            pickup.pickup_task_id
+            for pickup in sorted(current_items, key=_countryside_trip_sort_key)
+        ]
+        if ordered_task_ids == effective_ids:
+            return self.board_service.get_trip_summary_board(pickup_date), False
+
+        self.repository.update_countryside_pickup_trip_sequences(
+            ordered_task_ids
+        )
+        return self.board_service.get_trip_summary_board(pickup_date), True
+
     def _mutable_pickup(self, dispatch_date, pickup_task_id):
         task = self.repository.get_opshop_pickup_task(pickup_task_id)
         if not task or task.status not in {"ACTIVE", "ASSIGNED"}:
@@ -210,11 +304,13 @@ class OpShopWorkspaceMutationService:
 
     @staticmethod
     def _assignment_task(task, driver_id):
+        same_scope = bool(driver_id) and task.driver_id == driver_id
         return replace(
             task,
             status="ASSIGNED" if driver_id else "ACTIVE",
             driver_id=driver_id,
             trip_no="trip1" if driver_id else None,
+            trip_sequence=task.trip_sequence if same_scope else None,
             updated_at=_timestamp(),
         )
 
@@ -222,12 +318,19 @@ class OpShopWorkspaceMutationService:
     def _route_group_task(schedule, existing, pickup_date, notes, driver_id):
         timestamp = _timestamp()
         if existing:
+            same_scope = (
+                existing.pickup_date == pickup_date
+                and existing.driver_id == driver_id
+            )
             return replace(
                 existing,
                 status="ASSIGNED",
                 dispatch_date=pickup_date,
                 driver_id=driver_id,
                 trip_no="trip1",
+                trip_sequence=(
+                    existing.trip_sequence if same_scope else None
+                ),
                 notes=notes,
                 generated_from="ON_CALL",
                 updated_at=timestamp,
@@ -262,3 +365,16 @@ def _generated_task_id(schedule_id, pickup_date):
 
 def _timestamp():
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+def _countryside_trip_sort_key(pickup):
+    fallback = (
+        str(pickup.route_group_name or "").casefold(),
+        str(pickup.suburb or "").casefold(),
+        str(pickup.opshop_name or "").casefold(),
+        str(pickup.pickup_task_id or ""),
+    )
+    sequence = pickup.trip_sequence
+    if isinstance(sequence, int) and not isinstance(sequence, bool) and sequence > 0:
+        return (0, sequence, *fallback)
+    return (1, 0, *fallback)

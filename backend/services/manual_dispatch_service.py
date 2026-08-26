@@ -193,6 +193,11 @@ class ManualDispatchService:
     ):
         return self.opshop_application_service.assign_opshop_workspace_countryside_route_group(route_group_id, request)
 
+    def reorder_countryside_pickup_order(self, request):
+        return self.opshop_application_service.reorder_countryside_pickup_order(
+            request
+        )
+
     def create_generated_delivery_run_sheet(self, request):
         return self.delivery_application_service.create_generated_delivery_run_sheet(request)
 

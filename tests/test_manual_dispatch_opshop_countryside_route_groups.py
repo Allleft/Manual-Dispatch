@@ -847,6 +847,78 @@ class CountrysideRouteGroupRouteTest(unittest.TestCase):
         self.assertEqual(400, disabled.status_code)
         self.assertEqual([route_group_id], [item["route_group_id"] for item in inactive.json()])
 
+    def test_authenticated_countryside_reorder_endpoint_persists_complete_order(self):
+        group = self.client.post(
+            "/api/manual-dispatch/opshop-countryside-route-groups",
+            json={"route_group_name": "API Reorder Route"},
+        )
+        self.assertEqual(200, group.status_code)
+        route_group_id = group.json()["route_group_id"]
+        for index, name in enumerate(("Country A", "Country B", "Country C"), start=1):
+            membership = self.client.post(
+                f"/api/manual-dispatch/opshop-countryside-route-groups/{route_group_id}/memberships",
+                json={
+                    "name": name,
+                    "suburb": f"Country Suburb {index}",
+                    "street_address": f"{index} Country Road",
+                },
+            )
+            self.assertEqual(200, membership.status_code)
+
+        pickup_date = "2026-09-07"
+        assigned = self.client.post(
+            f"/api/manual-dispatch/opshop/countryside-route-groups/{route_group_id}/assign",
+            json={
+                "dispatch_date": pickup_date,
+                "pickup_date": pickup_date,
+                "assigned_driver_id": "D001",
+            },
+        )
+        self.assertEqual(200, assigned.status_code)
+        pickup_ids = [
+            item["pickup_task_id"]
+            for item in assigned.json()["opshop_pickups"]
+            if item["route_group_id"] == route_group_id
+        ]
+        self.assertEqual(3, len(pickup_ids))
+        ordered_ids = list(reversed(pickup_ids))
+
+        with TestClient(self.client.app) as unauthenticated:
+            blocked = unauthenticated.post(
+                "/api/manual-dispatch/opshop/pickups/countryside-order",
+                json={
+                    "pickup_date": pickup_date,
+                    "driver_id": "D001",
+                    "ordered_pickup_task_ids": ordered_ids,
+                },
+            )
+        self.assertEqual(401, blocked.status_code)
+
+        response = self.client.post(
+            "/api/manual-dispatch/opshop/pickups/countryside-order",
+            json={
+                "pickup_date": pickup_date,
+                "driver_id": "D001",
+                "ordered_pickup_task_ids": ordered_ids,
+            },
+        )
+        self.assertEqual(200, response.status_code)
+        response_ids = [
+            item["pickup_task_id"]
+            for item in response.json()["opshop_pickups"]
+            if item["pickup_category"] == "COUNTRYSIDE"
+            and item["pickup_date"] == pickup_date
+            and item["assigned_driver_id"] == "D001"
+        ]
+        self.assertEqual(ordered_ids, response_ids)
+        self.assertEqual(
+            list(range(1, len(ordered_ids) + 1)),
+            [
+                self.repository.get_opshop_pickup_task(task_id).trip_sequence
+                for task_id in ordered_ids
+            ],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

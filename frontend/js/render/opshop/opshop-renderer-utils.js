@@ -25,6 +25,24 @@ export function compareRegularRouteSequence(left, right) {
     || compareText(left.pickup_task_id, right.pickup_task_id);
 }
 
+export function compareCountrysideTripSequence(left, right) {
+  const leftSequence = positiveRouteSequence(left.trip_sequence);
+  const rightSequence = positiveRouteSequence(right.trip_sequence);
+  if (leftSequence !== null && rightSequence === null) {
+    return -1;
+  }
+  if (leftSequence === null && rightSequence !== null) {
+    return 1;
+  }
+  if (leftSequence !== null && rightSequence !== null && leftSequence !== rightSequence) {
+    return leftSequence - rightSequence;
+  }
+  return compareText(left.route_group_name, right.route_group_name)
+    || compareText(left.suburb, right.suburb)
+    || compareText(left.opshop_name, right.opshop_name)
+    || compareText(left.pickup_task_id, right.pickup_task_id);
+}
+
 export function readyPickupCollectionCandidates(board, collections) {
   const reservedKeys = new Set(
     (collections || [])

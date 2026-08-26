@@ -168,6 +168,60 @@ class OpShopApplicationService(FacadeApplicationService):
         )
         return board
 
+    def reorder_countryside_pickup_order(self, request):
+        self._ensure_workspace_ready("opshop")
+        try:
+            board, changed = (
+                self.opshop_workspace_mutation_service.reorder_countryside_pickup_order(
+                    request
+                )
+            )
+        except Exception as error:
+            self._record_failed_logbook(
+                workspace="OPSHOP",
+                action="COUNTRYSIDE_PICKUP_ORDER_UPDATED",
+                entity_type="OPSHOP_PICKUP_ORDER",
+                entity_id=None,
+                summary="Countryside OP SHOP pickup order update failed.",
+                dispatch_date=request.pickup_date,
+                pickup_date=request.pickup_date,
+                driver=self._driver_name(request.driver_id),
+                metadata={
+                    "failure_reason": str(error),
+                    "pickup_date": request.pickup_date,
+                    "driver_id": request.driver_id,
+                    "ordered_pickup_task_ids": list(
+                        request.ordered_pickup_task_ids or []
+                    ),
+                    "count": len(request.ordered_pickup_task_ids or []),
+                },
+            )
+            raise
+        if changed:
+            ordered_ids = list(request.ordered_pickup_task_ids or [])
+            self._record_logbook(
+                result="SUCCESS",
+                workspace="OPSHOP",
+                action="COUNTRYSIDE_PICKUP_ORDER_UPDATED",
+                entity_type="OPSHOP_PICKUP_ORDER",
+                entity_id=f"{request.pickup_date}:{request.driver_id}",
+                summary=(
+                    "Countryside OP SHOP pickup order was updated for "
+                    f"{self._driver_name(request.driver_id)} on "
+                    f"{request.pickup_date}."
+                ),
+                dispatch_date=request.pickup_date,
+                pickup_date=request.pickup_date,
+                driver=self._driver_name(request.driver_id),
+                metadata={
+                    "pickup_date": request.pickup_date,
+                    "driver_id": request.driver_id,
+                    "ordered_pickup_task_ids": ordered_ids,
+                    "count": len(ordered_ids),
+                },
+            )
+        return board
+
     def create_generated_opshop_pickup_collection(self, request):
         self._ensure_workspace_ready("opshop")
         try:

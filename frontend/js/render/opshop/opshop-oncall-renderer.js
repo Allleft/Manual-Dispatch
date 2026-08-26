@@ -38,9 +38,12 @@ export function createOncallPickupDateGroups(pickups, state, actions) {
   return section;
 }
 
-export function createOncallPickupRow(pickup, state, actions) {
+export function createOncallPickupRow(pickup, state, actions, options = {}) {
   const row = document.createElement("article");
   row.className = "opshop-list-item workspace-regular-pickup-row workspace-oncall-pickup-row";
+  if (options.rowClassName) {
+    row.classList.add(options.rowClassName);
+  }
 
   const icon = document.createElement("span");
   icon.className = "opshop-list-item-icon";
@@ -54,14 +57,19 @@ export function createOncallPickupRow(pickup, state, actions) {
   meta.className = "opshop-list-item-meta";
   const suburb = document.createElement("span");
   suburb.className = "opshop-list-item-suburb";
-  suburb.textContent = formatOptional(pickup.suburb);
+  suburb.textContent = options.showStreetAddress
+    ? [pickup.suburb, pickup.street_address].filter(Boolean).join(" — ")
+    : formatOptional(pickup.suburb);
   const pickupDate = document.createElement("span");
   pickupDate.className = "opshop-list-item-date";
   pickupDate.append(
     createIcon("calendar"),
     document.createTextNode(`Pickup Date: ${formatOptional(pickup.pickup_date)}`),
   );
-  meta.append(suburb, pickupDate);
+  meta.append(suburb);
+  if (options.showPickupDate !== false) {
+    meta.append(pickupDate);
+  }
   const currentAssignee = document.createElement("p");
   currentAssignee.className = "workspace-regular-current-assignee workspace-oncall-current-assignee";
   currentAssignee.textContent = `Current Assignee: ${currentOpShopDriverName(pickup, state)}`;

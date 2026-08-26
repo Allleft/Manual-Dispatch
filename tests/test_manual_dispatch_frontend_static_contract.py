@@ -1195,7 +1195,7 @@ class ManualDispatchFrontendStaticContractTest(unittest.TestCase):
         self.assertNotIn("Manage Countryside Routes", task_pool_renderer)
         self.assertIn("Countryside OP SHOP Pickup List", modal_renderer)
         self.assertIn("Route Group", modal_renderer)
-        self.assertIn("New Route", modal_renderer)
+        self.assertIn("Add Route Group", modal_renderer)
         self.assertIn("Rename", modal_renderer)
         self.assertIn("Disable", modal_renderer)
         self.assertIn("Pickup Tasks", modal_renderer)

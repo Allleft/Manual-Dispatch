@@ -809,6 +809,116 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             """
         )
 
+    def test_countryside_new_forms_use_next_weekday_and_preserve_manual_or_persisted_dates(self):
+        date_utils_uri = (FRONTEND_ROOT / "js/utils/date-utils.js").as_uri()
+        self._run_frontend_module_script(
+            "js/actions/opshop-countryside-pickup-actions.js",
+            f"""
+            const dateUtils = await import({date_utils_uri!r});
+            const expected = dateUtils.getNextBusinessDayLocalDateString();
+            let renders = 0;
+            const state = {{
+              dispatchDate: "1999-01-01",
+              selectedCountrysideRouteGroupId: "ROUTE-1",
+              countrysideOpShopPickupAssignedDriverSelections: {{}},
+              countrysideOpShopPickupForm: {{}},
+              countrysideOpShopPickupFormMode: "",
+              countrysideOpShopPickupEditingTaskId: "",
+              countrysideOpShopPickupListError: "",
+              countrysideRouteManagementError: "",
+              isCountrysideOpShopPickupSaving: false,
+              isCountrysideRouteTemplateSaving: false,
+            }};
+            const actions = module.createCountrysideOpShopPickupActions({{
+              loadBoard: async () => {{}},
+              renderBoard: () => {{ renders += 1; }},
+              state,
+            }});
+
+            actions.startAddPickupTask();
+            if (state.countrysideOpShopPickupForm.pickup_date !== expected) {{
+              throw new Error("Add Pickup did not default to next weekday");
+            }}
+            actions.updatePickupTaskForm("pickup_date", "2030-04-11");
+            actions.updatePickupTaskForm("assigned_driver_id", "D001");
+            if (state.countrysideOpShopPickupForm.pickup_date !== "2030-04-11") {{
+              throw new Error("manual Add Pickup date was overwritten on rerender");
+            }}
+
+            actions.startCreatePickupFromRouteTemplate({{
+              schedule_id: "SCHEDULE-1",
+              route_group_id: "ROUTE-1",
+              default_driver_id: "D001",
+            }});
+            if (state.countrysideOpShopPickupForm.pickup_date !== expected) {{
+              throw new Error("route-template Create Pickup did not default to next weekday");
+            }}
+
+            actions.startEditPickupTask({{
+              pickup_task_id: "TASK-1",
+              pickup_date: "2031-05-12",
+              assigned_driver_id: "D001",
+              task_notes: "Existing",
+            }});
+            if (state.countrysideOpShopPickupForm.pickup_date !== "2031-05-12") {{
+              throw new Error("editing did not preserve persisted pickup_date");
+            }}
+            if (renders < 4) {{
+              throw new Error("form actions did not exercise rerenders");
+            }}
+            """,
+            setup='globalThis.window = { location: { protocol: "http:" } };',
+        )
+
+        self._run_workspace_actions_script(
+            f"""
+            const dateUtils = await import({date_utils_uri!r});
+            const expected = dateUtils.getNextBusinessDayLocalDateString();
+            const state = {{
+              countrysideRouteGroupDrafts: {{}},
+              opshopBoard: {{ opshop_pickups: [] }},
+            }};
+            const actions = createWorkspaceActions({{
+              state,
+              renderWorkspace: () => {{}},
+              api: {{}},
+            }});
+            actions.updateCountrysideRouteGroupDraft(
+              "ROUTE-1",
+              "assigned_driver_id",
+              "D001",
+            );
+            if (state.countrysideRouteGroupDrafts["ROUTE-1"].pickup_date !== expected) {{
+              throw new Error("workspace Route Group draft did not use next weekday");
+            }}
+            actions.updateCountrysideRouteGroupDraft(
+              "ROUTE-1",
+              "pickup_date",
+              "2032-06-14",
+            );
+            actions.updateCountrysideRouteGroupDraft("ROUTE-1", "notes", "Keep date");
+            if (state.countrysideRouteGroupDrafts["ROUTE-1"].pickup_date !== "2032-06-14") {{
+              throw new Error("workspace manual pickup date was overwritten");
+            }}
+            """,
+        )
+
+        countryside_actions = self._read(
+            "js/actions/opshop-countryside-pickup-actions.js"
+        )
+        countryside_renderer = self._read(
+            "js/render/opshop/opshop-countryside-renderer.js"
+        )
+        workspace_task_actions = self._read(
+            "js/actions/workspace/opshop-task-pool-actions.js"
+        )
+        for source in (
+            countryside_actions,
+            countryside_renderer,
+            workspace_task_actions,
+        ):
+            self.assertIn("getNextBusinessDayLocalDateString", source)
+
     def test_attache_file_selection_accepts_30_and_rejects_31_without_preview(self):
         self._run_delivery_attache_actions_script(
             """
@@ -4335,6 +4445,10 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             "pickups.filter(isOncallPickup).sort",
             trip_renderer,
         )
+        self.assertIn(
+            "pickups.filter(isCountrysidePickup).sort(compareCountrysideTripSequence)",
+            trip_renderer,
+        )
         self.assertIn("(collection.pickups || []).forEach", collection_renderer)
         self.assertNotRegex(
             collection_renderer,
@@ -4785,6 +4899,13 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         )
 
     def test_opshop_templates_reuse_countryside_route_management(self):
+        template_page = self._read(
+            "js/render/opshop/opshop-template-page-renderer.js"
+        )
+        template_renderer = self._read(
+            "js/render/opshop-template-management-modal-renderer.js"
+        )
+        template_actions = self._read("js/actions/opshop-template-actions.js")
         countryside_renderer = self._read(
             "js/render/opshop-countryside-pickup-list-modal-renderer.js"
         )
@@ -4799,17 +4920,36 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             "export function createCountrysideRouteManagementPanel",
             countryside_renderer,
         )
-        self.assertIn("Countryside Route Management", self.opshop_renderer)
+        self.assertIn("Countryside Templates", template_renderer)
+        self.assertIn(
+            "countrysidePanel: createCountrysideRouteManagementPanel",
+            template_page,
+        )
+        self.assertNotIn(
+            'createSectionHeading(\n      "Countryside Route Management"',
+            template_page,
+        )
+        self.assertIn('state.opshopTemplateActiveTab === "COUNTRYSIDE"', template_renderer)
+        self.assertIn('state.opshopTemplateActiveTab === "COUNTRYSIDE"', template_actions)
+        self.assertIn("loadCountrysideManagementData", template_actions)
+        self.assertIn('template.pickup_category === "NORMAL"', template_actions)
         for label in (
-            "New Route",
+            "Add Route Group",
             "Rename",
             "Disable",
             "Add OP SHOP to this route",
+            "Add OP SHOP",
             "Move",
             "Remove",
             "Route Template Detail",
+            "Pickup Frequency",
         ):
             self.assertIn(label, countryside_renderer)
+        self.assertIn("createRouteGroupOverview", countryside_renderer)
+        self.assertIn(
+            "candidate.route_group_id === routeGroup.route_group_id",
+            countryside_renderer,
+        )
         for action in (
             "createCountrysideRouteGroup",
             "renameCountrysideRouteGroup",
@@ -4826,6 +4966,579 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertIn('state.opshopBoard?.drivers || []', countryside_renderer)
         self.assertNotIn("fetch(", countryside_renderer)
         self.assertIn(".opshop-countryside-management-panel", self.styles)
+
+    def test_countryside_template_tab_uses_shared_loader_without_oncall_duplication(self):
+        self._run_frontend_module_script(
+            "js/actions/opshop-template-actions.js",
+            """
+            let countrysideLoads = 0;
+            let genericBoardLoads = 0;
+            const state = {
+              opshopTemplateActiveTab: "REGULAR",
+              opshopTemplateIncludeInactive: false,
+              opshopTemplateFormMode: "",
+              opshopTemplateEditingScheduleId: "",
+              opshopTemplateForm: {},
+              opshopTemplateError: "",
+              opshopTemplates: [],
+              isOpShopTemplateLoading: false,
+            };
+            const actions = module.createOpShopTemplateActions({
+              loadBoard: async () => { genericBoardLoads += 1; },
+              loadCountrysideManagementData: async () => { countrysideLoads += 1; },
+              reloadOncallCandidates: async () => {},
+              reloadRegularCandidates: async () => {},
+              renderBoard: () => {},
+              state,
+            });
+
+            await actions.selectTab("COUNTRYSIDE");
+            if (state.opshopTemplateActiveTab !== "COUNTRYSIDE") {
+              throw new Error("Countryside Templates tab was not selected");
+            }
+            if (countrysideLoads !== 1) {
+              throw new Error("Countryside tab did not use shared Route Management loader");
+            }
+            if (genericBoardLoads !== 0) {
+              throw new Error("Countryside tab triggered generic board/template loading");
+            }
+            """,
+            setup='globalThis.window = { location: { protocol: "http:" } };',
+        )
+
+    def test_countryside_templates_and_task_pool_use_accessible_compact_accordions(self):
+        task_pool_renderer = self._read(
+            "js/render/opshop/opshop-task-pool-renderer.js"
+        )
+        countryside_renderer = self._read(
+            "js/render/opshop/opshop-countryside-renderer.js"
+        )
+        route_management_renderer = self._read(
+            "js/render/opshop-countryside-pickup-list-modal-renderer.js"
+        )
+        countryside_actions = self._read(
+            "js/actions/opshop-countryside-pickup-actions.js"
+        )
+        workspace_actions = self._read(
+            "js/actions/workspace/opshop-workspace-actions.js"
+        )
+
+        self.assertIn("expandedCountrysideTemplateRouteGroups", self.state)
+        self.assertIn("collapsedCountrysideOpShopPickupDates", self.state)
+        self.assertIn("collapsedCountrysideOpShopPickupRouteGroups", self.state)
+        self.assertIn("createCountrysidePickupDateGroups", task_pool_renderer)
+        countryside_branch = task_pool_renderer.split(
+            '} else if (route === "oncall") {', 1
+        )[1].split("return wrapper", 1)[0]
+        self.assertIn("createCountrysidePickupDateGroups", countryside_branch)
+        self.assertNotIn("createPickupCard", countryside_branch)
+        for token in (
+            "createOpShopDateGroupList",
+            "createOncallPickupRow",
+            "workspace-countryside-pickup-list",
+            "opshop-countryside-route-group-toggle",
+            "aria-expanded",
+            "aria-controls",
+            "Unassigned Route Group",
+            "route_group_id",
+        ):
+            self.assertIn(token, countryside_renderer)
+
+        self.assertIn("opshop-route-group-accordion", route_management_renderer)
+        self.assertIn("opshop-route-group-accordion-toggle", route_management_renderer)
+        self.assertIn("expandedCountrysideTemplateRouteGroups", route_management_renderer)
+        self.assertIn("aria-expanded", route_management_renderer)
+        self.assertIn("aria-controls", route_management_renderer)
+        self.assertIn("candidate.route_group_id === routeGroup.route_group_id", route_management_renderer)
+        self.assertNotIn("opshop-route-group-overview-grid", route_management_renderer)
+        self.assertNotIn("opshop-route-group-overview-card", route_management_renderer)
+        self.assertIn("toggleCountrysideTemplateRouteGroup", countryside_actions)
+        self.assertIn("toggleCountrysideOpShopDateGroup", workspace_actions)
+        self.assertIn("toggleCountrysideOpShopPickupRouteGroup", workspace_actions)
+        self.assertIn("opshop-route-group-accordion", self.styles)
+        self.assertIn("opshop-countryside-route-group-toggle", self.styles)
+
+    def test_countryside_accordion_state_is_scoped_and_survives_rerenders(self):
+        self._run_frontend_module_script(
+            "js/actions/workspace/opshop-workspace-actions.js",
+            r"""
+            const state = {
+              dispatchDate: "2026-08-26",
+              collapsedCountrysideOpShopPickupDates: {},
+              collapsedCountrysideOpShopPickupRouteGroups: {},
+              collapsedOncallOpShopPickupDates: { "2026-08-26": true },
+            };
+            let renders = 0;
+            const actions = module.createOpShopWorkspaceActions({
+              navigateWorkspaceRoute: () => {},
+              renderWorkspace: () => { renders += 1; },
+              state,
+            });
+
+            actions.toggleCountrysideOpShopDateGroup("2026-08-26");
+            if (state.collapsedCountrysideOpShopPickupDates["2026-08-26"] !== true) {
+              throw new Error("current Countryside date did not collapse independently");
+            }
+            actions.toggleCountrysideOpShopDateGroup("2026-08-26");
+            if (state.collapsedCountrysideOpShopPickupDates["2026-08-26"] !== false) {
+              throw new Error("Countryside date did not retain its second toggle");
+            }
+
+            actions.toggleCountrysideOpShopPickupRouteGroup("2026-08-26", "ROUTE-A");
+            const firstKey = module.getCountrysidePickupRouteGroupCollapseKey(
+              "2026-08-26",
+              "ROUTE-A",
+            );
+            if (state.collapsedCountrysideOpShopPickupRouteGroups[firstKey] !== false) {
+              throw new Error("default-collapsed Countryside route did not expand");
+            }
+            actions.toggleCountrysideOpShopPickupRouteGroup("2026-08-27", "ROUTE-A");
+            const secondDateKey = module.getCountrysidePickupRouteGroupCollapseKey(
+              "2026-08-27",
+              "ROUTE-A",
+            );
+            actions.toggleCountrysideOpShopPickupRouteGroup("2026-08-26", "ROUTE-B");
+            const secondRouteKey = module.getCountrysidePickupRouteGroupCollapseKey(
+              "2026-08-26",
+              "ROUTE-B",
+            );
+            if (firstKey === secondDateKey || firstKey === secondRouteKey
+                || state.collapsedCountrysideOpShopPickupRouteGroups[firstKey] !== false
+                || state.collapsedCountrysideOpShopPickupRouteGroups[secondDateKey] !== false
+                || state.collapsedCountrysideOpShopPickupRouteGroups[secondRouteKey] !== false) {
+              throw new Error("Countryside nested route collapse keys collided");
+            }
+            if (state.collapsedOncallOpShopPickupDates["2026-08-26"] !== true) {
+              throw new Error("Countryside toggles changed Oncall collapse state");
+            }
+            if (renders !== 5 || window.scrollX !== 7 || window.scrollY !== 320) {
+              throw new Error("Countryside toggles did not rerender with preserved scroll");
+            }
+            """,
+            setup=r"""
+            globalThis.window = {
+              scrollX: 7,
+              scrollY: 320,
+              scrollTo: (left, top) => {
+                window.scrollX = left;
+                window.scrollY = top;
+              },
+            };
+            globalThis.requestAnimationFrame = (callback) => {
+              callback();
+              return 1;
+            };
+            """,
+        )
+
+        self._run_frontend_module_script(
+            "js/actions/opshop-countryside-pickup-actions.js",
+            r"""
+            const state = { expandedCountrysideTemplateRouteGroups: {} };
+            let renders = 0;
+            const actions = module.createCountrysideOpShopPickupActions({
+              loadBoard: async () => {},
+              renderBoard: () => { renders += 1; },
+              state,
+            });
+            actions.toggleCountrysideTemplateRouteGroup("ROUTE-A");
+            if (state.expandedCountrysideTemplateRouteGroups["ROUTE-A"] !== true) {
+              throw new Error("Template Route Group did not expand");
+            }
+            actions.toggleCountrysideTemplateRouteGroup("ROUTE-B");
+            actions.toggleCountrysideTemplateRouteGroup("ROUTE-A");
+            if (state.expandedCountrysideTemplateRouteGroups["ROUTE-A"] !== false
+                || state.expandedCountrysideTemplateRouteGroups["ROUTE-B"] !== true
+                || renders !== 3) {
+              throw new Error("Template accordion state did not survive independent rerenders");
+            }
+            """,
+            setup=r"""
+            globalThis.window = {
+              location: { protocol: "http:" },
+              scrollX: 3,
+              scrollY: 180,
+              scrollTo: () => {},
+            };
+            globalThis.requestAnimationFrame = (callback) => {
+              callback();
+              return 1;
+            };
+            """,
+        )
+
+    def test_countryside_accordion_renderers_use_authoritative_route_ids(self):
+        fake_dom = r"""
+            class FakeNode {
+              constructor(tagName, text = "") {
+                this.tagName = tagName;
+                this.children = [];
+                this.attributes = {};
+                this.listeners = {};
+                this.dataset = {};
+                this.disabled = false;
+                this.hidden = false;
+                this.selected = false;
+                this.value = "";
+                this._text = text;
+                this._className = "";
+                this.classList = {
+                  add: (...tokens) => {
+                    const classes = new Set(this._className.split(/\s+/).filter(Boolean));
+                    tokens.forEach((token) => classes.add(token));
+                    this._className = [...classes].join(" ");
+                  },
+                  contains: (token) => this._className.split(/\s+/).includes(token),
+                  toggle: (token, enabled) => {
+                    const classes = new Set(this._className.split(/\s+/).filter(Boolean));
+                    enabled ? classes.add(token) : classes.delete(token);
+                    this._className = [...classes].join(" ");
+                    return enabled;
+                  },
+                };
+              }
+              get className() { return this._className; }
+              set className(value) { this._className = String(value || ""); }
+              get textContent() {
+                return this._text + this.children.map((child) => child.textContent || "").join("");
+              }
+              set textContent(value) { this._text = String(value ?? ""); }
+              append(...children) { this.children.push(...children); }
+              replaceChildren(...children) {
+                this.children = children;
+                this._text = "";
+              }
+              setAttribute(name, value) { this.attributes[name] = String(value); }
+              addEventListener(type, listener) {
+                (this.listeners[type] ||= []).push(listener);
+              }
+              querySelector(selector) { return this.querySelectorAll(selector)[0] || null; }
+              querySelectorAll(selector) {
+                const matches = [];
+                const visit = (node) => {
+                  if (selector.startsWith(".")
+                    ? node.classList?.contains(selector.slice(1))
+                    : node.tagName === selector) {
+                    matches.push(node);
+                  }
+                  node.children?.forEach(visit);
+                };
+                this.children.forEach(visit);
+                return matches;
+              }
+            }
+            globalThis.document = {
+              createElement: (tagName) => new FakeNode(tagName),
+              createElementNS: (_namespace, tagName) => new FakeNode(tagName),
+              createTextNode: (text) => new FakeNode("#text", String(text)),
+            };
+            globalThis.window = { location: { protocol: "http:" } };
+        """
+
+        self._run_frontend_module_script(
+            "js/render/opshop-countryside-pickup-list-modal-renderer.js",
+            r"""
+            const { state } = await import("./frontend/js/state/app-state.js");
+            Object.assign(state, {
+              activeCountrysideRouteTemplateDetailId: "",
+              countrysideOpShopPickupListError: "",
+              countrysideOpShopPickupScheduleCandidates: [
+                {
+                  schedule_id: "SHOP-A",
+                  route_group_id: "ROUTE-A",
+                  opshop_name: "Alpha OP SHOP",
+                  suburb: "ALPHA",
+                },
+                {
+                  schedule_id: "SHOP-B",
+                  route_group_id: "ROUTE-B",
+                  opshop_name: "Beta OP SHOP",
+                  suburb: "BETA",
+                },
+              ],
+              countrysideRouteFormMode: "",
+              countrysideRouteGroups: [
+                { route_group_id: "ROUTE-A", route_group_name: "Shared Name" },
+                { route_group_id: "ROUTE-B", route_group_name: "Shared Name" },
+              ],
+              countrysideRouteManagementError: "",
+              countrysideRouteMemberships: [],
+              countrysideRouteTemplateFormMode: "",
+              expandedCountrysideTemplateRouteGroups: {},
+              isCountrysideOpShopPickupListLoading: false,
+              isCountrysideOpShopPickupSaving: false,
+              isCountrysideRouteTemplateSaving: false,
+              selectedCountrysideRouteGroupId: "",
+            });
+            const selected = [];
+            const added = [];
+            const toggled = [];
+            const noop = () => {};
+            const callbacks = {
+              onAddRouteTemplate: noop,
+              onCancelRouteGroupForm: noop,
+              onCancelRouteTemplateForm: noop,
+              onCloseRouteTemplateDetail: noop,
+              onCreateRouteGroup: noop,
+              onDisableRouteGroup: noop,
+              onMoveRouteTemplate: noop,
+              onOpenRouteTemplateDetail: (template) => {
+                state.activeCountrysideRouteTemplateDetailId = template.schedule_id;
+              },
+              onRemoveRouteTemplate: noop,
+              onRenameRouteGroup: noop,
+              onSelectRouteGroup: (routeGroupId) => {
+                selected.push(routeGroupId);
+                state.selectedCountrysideRouteGroupId = routeGroupId;
+                state.countrysideRouteMemberships = state.countrysideOpShopPickupScheduleCandidates
+                  .filter((template) => template.route_group_id === routeGroupId)
+                  .map((template) => ({
+                    ...template,
+                    name: template.opshop_name,
+                  }));
+              },
+              onStartAddRouteTemplate: () => added.push(state.selectedCountrysideRouteGroupId),
+              onStartDisableRouteGroup: noop,
+              onStartMoveRouteTemplate: noop,
+              onStartNewRouteGroup: noop,
+              onStartRemoveRouteTemplate: noop,
+              onStartRenameRouteGroup: noop,
+              onToggleRouteGroup: (routeGroupId) => toggled.push(routeGroupId),
+              onUpdateRouteGroupForm: noop,
+              onUpdateRouteTemplateForm: noop,
+            };
+
+            const panel = module.createCountrysideRouteManagementPanel(callbacks);
+            const routeItems = panel.querySelectorAll(".opshop-route-group-accordion-item");
+            if (routeItems.length !== 2
+                || routeItems[0].dataset.routeGroupId !== "ROUTE-A"
+                || routeItems[1].dataset.routeGroupId !== "ROUTE-B") {
+              throw new Error("Template Route Groups were not rendered as one ID-backed row each");
+            }
+            const firstToggle = routeItems[0].querySelector(".opshop-route-group-accordion-toggle");
+            const secondToggle = routeItems[1].querySelector(".opshop-route-group-accordion-toggle");
+            const firstBody = routeItems[0].querySelector(".opshop-route-group-accordion-body");
+            const secondBody = routeItems[1].querySelector(".opshop-route-group-accordion-body");
+            if (firstToggle.attributes["aria-expanded"] !== "false"
+                || secondToggle.attributes["aria-expanded"] !== "false"
+                || firstToggle.attributes["aria-controls"] === secondToggle.attributes["aria-controls"]
+                || !firstBody.hidden || !secondBody.hidden) {
+              throw new Error("Template Route Groups did not default to separate collapsed panels");
+            }
+            if (!firstToggle.textContent.includes("Shared Name1 OP SHOP")
+                || !secondToggle.textContent.includes("Shared Name1 OP SHOP")
+                || !firstBody.textContent.includes("Alpha OP SHOP")
+                || firstBody.textContent.includes("Beta OP SHOP")
+                || !secondBody.textContent.includes("Beta OP SHOP")
+                || secondBody.textContent.includes("Alpha OP SHOP")) {
+              throw new Error("Template accordion membership or counts leaked across Route Group IDs");
+            }
+            firstToggle.listeners.click[0]();
+            if (toggled.join("|") !== "ROUTE-A") {
+              throw new Error("Template accordion toggle did not carry authoritative Route Group ID");
+            }
+            const secondView = secondBody.querySelectorAll("button")
+              .find((button) => button.textContent === "View");
+            secondView.listeners.click[0]({ preventDefault: noop, stopPropagation: noop });
+            await Promise.resolve();
+            await Promise.resolve();
+            const detailRender = module.createCountrysideRouteManagementPanel(callbacks);
+            if (state.selectedCountrysideRouteGroupId !== "ROUTE-B"
+                || state.activeCountrysideRouteTemplateDetailId !== "SHOP-B"
+                || !detailRender.querySelector(".opshop-route-template-detail-panel")
+                  ?.textContent.includes("Beta OP SHOP")) {
+              throw new Error("View did not select/load the membership before opening details");
+            }
+            const secondAdd = secondBody.querySelectorAll("button")
+              .find((button) => button.textContent === "Add OP SHOP");
+            secondAdd.listeners.click[0]({ preventDefault: noop, stopPropagation: noop });
+            await Promise.resolve();
+            if (selected.join("|") !== "ROUTE-B" || added.join("|") !== "ROUTE-B") {
+              throw new Error("Add OP SHOP did not select and use its expanded Route Group");
+            }
+            if (!panel.textContent.includes("Add Route Group")) {
+              throw new Error("Add Route Group action was removed");
+            }
+            for (const label of ["View", "Move", "Remove"]) {
+              if (!firstBody.querySelectorAll("button").some((button) => button.textContent === label)) {
+                throw new Error(`Template compact row lost ${label}`);
+              }
+            }
+
+            state.expandedCountrysideTemplateRouteGroups = { "ROUTE-B": true };
+            const rerendered = module.createCountrysideRouteManagementPanel(callbacks);
+            const rerenderedItems = rerendered.querySelectorAll(".opshop-route-group-accordion-item");
+            if (!rerenderedItems[0].querySelector(".opshop-route-group-accordion-body").hidden
+                || rerenderedItems[1].querySelector(".opshop-route-group-accordion-body").hidden
+                || rerenderedItems[1].querySelector("button").attributes["aria-expanded"] !== "true") {
+              throw new Error("Template expansion state did not survive ordinary rerender");
+            }
+            """,
+            setup=fake_dom,
+        )
+
+        self._run_frontend_module_script(
+            "js/render/opshop/opshop-countryside-renderer.js",
+            r"""
+            const { getCountrysidePickupRouteGroupCollapseKey } = await import(
+              "./frontend/js/utils/opshop-countryside-accordion-utils.js"
+            );
+            const dateOne = "2026-08-26";
+            const dateTwo = "2026-08-27";
+            const key = (date, route) => getCountrysidePickupRouteGroupCollapseKey(date, route);
+            const basePickup = {
+              assigned_driver_id: "DRIVER-1",
+              assigned_driver_name: "Driver One",
+              assigned_to_locked: false,
+              is_assigned: true,
+              status: "ACTIVE",
+            };
+            const pickups = [
+              {
+                ...basePickup,
+                pickup_task_id: "TASK-A",
+                pickup_date: dateOne,
+                route_group_id: "ROUTE-A",
+                opshop_name: "Alpha OP SHOP",
+                suburb: "ALPHA",
+                street_address: "1 Alpha Road",
+              },
+              {
+                ...basePickup,
+                pickup_task_id: "TASK-B",
+                pickup_date: dateOne,
+                route_group_id: "ROUTE-B",
+                opshop_name: "Beta OP SHOP",
+                suburb: "BETA",
+                street_address: "2 Beta Road",
+                assigned_to_locked: true,
+                assignment_lock_reason: "Generated pickup is locked.",
+              },
+              {
+                ...basePickup,
+                pickup_task_id: "TASK-U",
+                pickup_date: dateOne,
+                route_group_id: "",
+                opshop_name: "Fallback OP SHOP",
+                suburb: "NOWHERE",
+                street_address: "3 Unknown Road",
+                is_assigned: false,
+              },
+              {
+                ...basePickup,
+                pickup_task_id: "TASK-FUTURE",
+                pickup_date: dateTwo,
+                route_group_id: "ROUTE-A",
+                opshop_name: "Future Alpha OP SHOP",
+                suburb: "ALPHA",
+              },
+            ];
+            const state = {
+              dispatchDate: dateOne,
+              collapsedCountrysideOpShopPickupDates: {},
+              collapsedCountrysideOpShopPickupRouteGroups: {
+                [key(dateOne, "ROUTE-A")]: false,
+                [key(dateOne, "ROUTE-B")]: false,
+                [key(dateOne, "")]: false,
+              },
+              mutationBusyKeys: {},
+              opshopAssignmentDrafts: {},
+              opshopBoard: {
+                countryside_route_groups: [
+                  { route_group_id: "ROUTE-A", route_group_name: "Shared Name", display_order: 2 },
+                  { route_group_id: "ROUTE-B", route_group_name: "Shared Name", display_order: 1 },
+                ],
+                drivers: [{ driver_id: "DRIVER-1", name: "Driver One" }],
+              },
+            };
+            const toggles = [];
+            const noop = () => {};
+            const actions = {
+              openOpShopPickupDetail: noop,
+              startDeleteOpShopPickupTask: noop,
+              startEditOpShopPickupTask: noop,
+              toggleCountrysideOpShopDateGroup: noop,
+              toggleCountrysideOpShopPickupRouteGroup: (date, route) => toggles.push(`${date}:${route}`),
+              unassignOpShopPickup: noop,
+              updateOpShopAssignmentDraft: noop,
+            };
+
+            const output = module.createCountrysidePickupDateGroups(pickups, state, actions);
+            const dateGroups = output.querySelectorAll(".opshop-date-group");
+            if (dateGroups.length !== 2
+                || !dateGroups[0].children[0].textContent.includes("Wednesday 26/8(3 pickups)")
+                || !dateGroups[1].children[0].textContent.includes("Thursday 27/8(1 pickup)")) {
+              throw new Error("Countryside date groups or visible pickup counts are incorrect");
+            }
+            const firstDateRoutes = dateGroups[0]
+              .querySelectorAll(".opshop-countryside-route-group");
+            if (firstDateRoutes.length !== 3
+                || firstDateRoutes[0].dataset.routeGroupId !== "ROUTE-B"
+                || firstDateRoutes[1].dataset.routeGroupId !== "ROUTE-A"
+                || firstDateRoutes[2].dataset.routeGroupId !== "") {
+              throw new Error("Countryside routes did not use display order, IDs and fallback ordering");
+            }
+            const routeB = firstDateRoutes[0];
+            const routeA = firstDateRoutes[1];
+            const fallback = firstDateRoutes[2];
+            if (!routeB.children[0].textContent.includes("Shared Name1 pickup")
+                || !routeA.children[0].textContent.includes("Shared Name1 pickup")
+                || !fallback.children[0].textContent.includes("Unassigned Route Group1 pickup")) {
+              throw new Error("Countryside nested Route Group headings or counts are incorrect");
+            }
+            if (!routeA.children[1].textContent.includes("Alpha OP SHOP")
+                || routeA.children[1].textContent.includes("Beta OP SHOP")
+                || !routeB.children[1].textContent.includes("Beta OP SHOP")
+                || routeB.children[1].textContent.includes("Alpha OP SHOP")
+                || !fallback.children[1].textContent.includes("Fallback OP SHOP")) {
+              throw new Error("Countryside pickup rows leaked across authoritative Route Group IDs");
+            }
+            const alphaRow = routeA.querySelector(".workspace-countryside-pickup-row");
+            for (const expected of [
+              "Alpha OP SHOP",
+              "ALPHA — 1 Alpha Road",
+              "Current Assignee: Driver One",
+              "Assigned to",
+              "View details",
+              "Edit",
+              "Delete",
+              "Unassign now",
+            ]) {
+              if (!alphaRow.textContent.includes(expected)) {
+                throw new Error(`Compact Countryside row is missing ${expected}`);
+              }
+            }
+            if (alphaRow.textContent.includes("Pickup Date:")) {
+              throw new Error("Compact Countryside row redundantly repeated Pickup Date");
+            }
+            const lockedRow = routeB.querySelector(".workspace-countryside-pickup-row");
+            if (!lockedRow.querySelector("select").disabled
+                || !lockedRow.textContent.includes("Generated pickup is locked.")) {
+              throw new Error("Countryside compact row lost generated lock state");
+            }
+            for (const label of ["Edit", "Delete", "Unassign now"]) {
+              if (!lockedRow.querySelectorAll("button")
+                .find((button) => button.textContent === label)?.disabled) {
+                throw new Error(`Countryside locked row left ${label} enabled`);
+              }
+            }
+            const firstToggle = routeA.querySelector(".opshop-countryside-route-group-toggle");
+            firstToggle.listeners.click[0]();
+            if (toggles.join("|") !== `${dateOne}:ROUTE-A`
+                || firstToggle.attributes["aria-expanded"] !== "true"
+                || firstToggle.attributes["aria-controls"] !== routeA.children[1].id) {
+              throw new Error("Countryside nested accordion semantics lost date/ID identity");
+            }
+            const secondDateRoute = dateGroups[1]
+              .querySelector(".opshop-countryside-route-group");
+            if (secondDateRoute.dataset.routeGroupId !== "ROUTE-A"
+                || secondDateRoute.children[1].hidden !== true
+                || routeA.children[1].hidden !== false) {
+              throw new Error("Same Route Group did not retain independent date-scoped collapse state");
+            }
+            """,
+            setup=fake_dom,
+        )
 
     def test_opshop_task_pool_reuses_legacy_task_crud_without_assignment_apply(self):
         regular_actions = self._read("js/actions/opshop-pickup-actions.js")
@@ -4941,7 +5654,11 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             self.opshop_renderer,
         )
         self.assertIn('createOpShopPickupGroup("Oncall"', self.opshop_renderer)
-        self.assertIn('createOpShopPickupGroup("Countryside"', self.opshop_renderer)
+        self.assertIn('"Countryside",', self.opshop_renderer)
+        self.assertIn(
+            "pickups.filter(isCountrysidePickup).sort(compareCountrysideTripSequence)",
+            self.opshop_renderer,
+        )
         self.assertIn("pickup.route_group_name", self.opshop_renderer)
         self.assertIn("pickup.task_notes", self.opshop_renderer)
         self.assertIn("actions.unassignOpShopPickup(pickup.pickup_task_id)", self.opshop_renderer)
@@ -4963,6 +5680,132 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         )
         self.assertIn("state.opshopTripSummaryBoard = board", self.workspace_actions)
         self.assertNotIn("collection.dispatch_date === dispatchDate", self.opshop_renderer)
+
+    def test_countryside_trip_summary_drag_is_scoped_persistent_and_lock_aware(self):
+        renderer = self._read(
+            "js/render/opshop/opshop-trip-summary-renderer.js"
+        )
+        trip_actions = self._read(
+            "js/actions/workspace/opshop-trip-summary-actions.js"
+        )
+        api = self._read("js/api/manual-dispatch/opshop-api.js")
+
+        self.assertIn("compareCountrysideTripSequence", renderer)
+        self.assertIn("workspace-opshop-trip-drag-handle", renderer)
+        self.assertIn("handle.draggable = !isLocked", renderer)
+        self.assertIn("pickupDate", renderer)
+        self.assertIn("driverId", renderer)
+        self.assertIn("ordered_pickup_task_ids", api)
+        self.assertIn("/api/manual-dispatch/opshop/pickups/countryside-order", api)
+        self.assertIn("async function reorderCountrysidePickups", trip_actions)
+        self.assertIn("state.opshopTripSummaryBoard = updatedBoard", trip_actions)
+        self.assertNotIn("loadOpShopRoute", trip_actions.split(
+            "async function reorderCountrysidePickups", 1
+        )[1].split("return {", 1)[0])
+        self.assertNotIn("window.location.reload", trip_actions)
+
+        self._run_workspace_actions_script(
+            """
+            const originalBoard = {
+              pickup_date: "2026-09-07",
+              opshop_pickups: [{ pickup_task_id: "A" }],
+            };
+            const updatedBoard = {
+              pickup_date: "2026-09-07",
+              opshop_pickups: [{ pickup_task_id: "C" }, { pickup_task_id: "A" }],
+            };
+            let reorderPayload = null;
+            let renders = 0;
+            const state = {
+              isLoggedIn: true,
+              authSessionVersion: 1,
+              workspaceRoute: "opshop/trip-summary",
+              activeWorkspace: "opshop",
+              dispatchDate: "2026-09-07",
+              opshopTripSummaryDate: "2026-09-07",
+              opshopTripSummaryBoard: originalBoard,
+              opshopActionError: "",
+              opshopBusyActionKeys: {},
+            };
+            const api = {
+              reorderOpShopCountrysidePickups: async (payload) => {
+                reorderPayload = payload;
+                return updatedBoard;
+              },
+            };
+            const actions = createWorkspaceActions({
+              state,
+              renderWorkspace: () => { renders += 1; },
+              api,
+            });
+            await actions.reorderCountrysidePickups({
+              pickupDate: "2026-09-07",
+              driverId: "D001",
+              orderedPickupTaskIds: ["C", "A"],
+            });
+            if (JSON.stringify(reorderPayload) !== JSON.stringify({
+              pickup_date: "2026-09-07",
+              driver_id: "D001",
+              ordered_pickup_task_ids: ["C", "A"],
+            })) {
+              throw new Error("reorder API payload was not exact");
+            }
+            if (state.opshopTripSummaryBoard !== updatedBoard) {
+              throw new Error("successful reorder did not install authoritative board");
+            }
+
+            api.reorderOpShopCountrysidePickups = async () => {
+              throw new Error("reorder failed");
+            };
+            state.opshopTripSummaryBoard = originalBoard;
+            await actions.reorderCountrysidePickups({
+              pickupDate: "2026-09-07",
+              driverId: "D001",
+              orderedPickupTaskIds: ["A", "C"],
+            });
+            if (state.opshopTripSummaryBoard !== originalBoard) {
+              throw new Error("failed reorder changed Trip Summary state");
+            }
+            if (state.opshopActionError !== "reorder failed") {
+              throw new Error("failed reorder did not retain existing error behavior");
+            }
+            if (renders < 2) {
+              throw new Error("reorder actions did not rerender status/state");
+            }
+            """,
+        )
+
+    def test_countryside_delete_keeps_authoritative_refresh_and_restores_scroll(self):
+        actions = self._read("js/actions/opshop-countryside-pickup-actions.js")
+        delete_block = actions.split(
+            "async function handleDeletePickupTask", 1
+        )[1].split("function updateAssignedDriverSelection", 1)[0]
+
+        for token in (
+            'captureElementScroll("#opshop-countryside-pickup-list-root")',
+            "captureWindowScroll()",
+            "apiDeleteOpShopPickup",
+            "await refreshPickupBoard()",
+            "restoreElementScroll",
+            "restoreWindowScroll",
+        ):
+            self.assertIn(token, delete_block)
+        self.assertLess(
+            delete_block.index("captureElementScroll"),
+            delete_block.index("apiDeleteOpShopPickup"),
+        )
+        self.assertLess(
+            delete_block.index("captureWindowScroll"),
+            delete_block.index("apiDeleteOpShopPickup"),
+        )
+        self.assertLess(
+            delete_block.index("await refreshPickupBoard()"),
+            delete_block.index("restoreElementScroll"),
+        )
+        self.assertLess(
+            delete_block.index("renderBoard();", delete_block.index("finally")),
+            delete_block.index("restoreElementScroll"),
+        )
 
     def test_opshop_trip_summary_pickup_cards_open_read_only_detail_modal(self):
         row_block = self.opshop_renderer.split(
@@ -7054,8 +7897,8 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             }
 
             actions.updateCountrysideRouteGroupDraft("ROUTE-1", "assigned_driver_id", "DRIVER-2");
-            if (state.countrysideRouteGroupDrafts["ROUTE-1"].pickup_date !== "2026-06-25") {
-              throw new Error("Countryside route-group draft did not default to new dispatch date");
+            if (state.countrysideRouteGroupDrafts["ROUTE-1"].pickup_date === state.dispatchDate) {
+              throw new Error("Countryside route-group draft still defaulted from dispatch date");
             }
             """
         )

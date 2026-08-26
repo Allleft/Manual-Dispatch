@@ -213,6 +213,7 @@ class OpShopPickupCollectionService:
             driver_id,
         )
         items = sorted(items, key=_pickup_collection_sort_key)
+        items = _order_countryside_within_existing_slots(items)
         return [
             OpShopPickupCollectionRowSnapshot(
                 row_id=f"OPCR-{uuid4().hex.upper()}",
@@ -261,6 +262,35 @@ def _pickup_collection_sort_key(pickup):
     if isinstance(sequence, int) and not isinstance(sequence, bool) and sequence > 0:
         return (0, 0, sequence, *fallback)
     return (0, 1, 0, *fallback)
+
+
+def _order_countryside_within_existing_slots(pickups):
+    ordered = list(pickups)
+    countryside_indexes = [
+        index
+        for index, pickup in enumerate(ordered)
+        if pickup.pickup_category == "COUNTRYSIDE"
+    ]
+    countryside_pickups = sorted(
+        (ordered[index] for index in countryside_indexes),
+        key=_countryside_trip_sort_key,
+    )
+    for index, pickup in zip(countryside_indexes, countryside_pickups):
+        ordered[index] = pickup
+    return ordered
+
+
+def _countryside_trip_sort_key(pickup):
+    sequence = pickup.trip_sequence
+    fallback = (
+        str(pickup.route_group_name or "").casefold(),
+        str(pickup.suburb or "").casefold(),
+        str(pickup.opshop_name or "").casefold(),
+        str(pickup.pickup_task_id or ""),
+    )
+    if isinstance(sequence, int) and not isinstance(sequence, bool) and sequence > 0:
+        return (0, sequence, *fallback)
+    return (1, 0, *fallback)
 
 
 _ENTRY_TIME_PATTERN = re.compile(r"(?:[01]\d|2[0-3]):[0-5]\d")

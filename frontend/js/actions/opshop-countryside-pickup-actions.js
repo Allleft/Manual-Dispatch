@@ -14,9 +14,12 @@ import {
   apiUpdateOpShopPickup,
 } from "../api/manual-dispatch-api.js";
 import { isGeneratedTask } from "../state/selectors.js";
+import { getNextBusinessDayLocalDateString } from "../utils/date-utils.js";
 import {
   captureElementScroll,
+  captureWindowScroll,
   restoreElementScroll,
+  restoreWindowScroll,
 } from "../utils/scroll-utils.js";
 import { syncScopedOpShopModalState } from "../utils/opshop-workspace-modal-utils.js";
 
@@ -149,7 +152,7 @@ export function createCountrysideOpShopPickupActions({
     state.countrysideOpShopPickupEditingTaskId = "";
     state.countrysideOpShopPickupForm = {
       route_group_id: state.selectedCountrysideRouteGroupId || "",
-      pickup_date: state.dispatchDate || "",
+      pickup_date: getNextBusinessDayLocalDateString(),
       assigned_driver_id: "",
       notes: "",
     };
@@ -161,7 +164,7 @@ export function createCountrysideOpShopPickupActions({
     state.countrysideOpShopPickupFormMode = "edit";
     state.countrysideOpShopPickupEditingTaskId = pickup.pickup_task_id;
     state.countrysideOpShopPickupForm = {
-      pickup_date: pickup.pickup_date || state.dispatchDate,
+      pickup_date: pickup.pickup_date || getNextBusinessDayLocalDateString(),
       assigned_driver_id:
         state.countrysideOpShopPickupAssignedDriverSelections[pickup.pickup_task_id] ||
         pickup.assigned_driver_id ||
@@ -252,6 +255,8 @@ export function createCountrysideOpShopPickupActions({
     if (state.isCountrysideRouteTemplateSaving) {
       return;
     }
+    const listScrollSnapshot = captureElementScroll("#opshop-countryside-pickup-list-root");
+    const windowScrollSnapshot = captureWindowScroll();
     state.isCountrysideRouteTemplateSaving = true;
     state.countrysideRouteManagementError = "";
     renderBoard();
@@ -261,6 +266,10 @@ export function createCountrysideOpShopPickupActions({
         route_group_name: state.countrysideRouteForm.route_group_name,
       });
       state.selectedCountrysideRouteGroupId = routeGroup.route_group_id;
+      state.expandedCountrysideTemplateRouteGroups = {
+        ...(state.expandedCountrysideTemplateRouteGroups || {}),
+        [routeGroup.route_group_id]: true,
+      };
       resetRouteGroupForm();
       resetRouteTemplateForm();
       await refreshCountrysideRouteData();
@@ -269,6 +278,8 @@ export function createCountrysideOpShopPickupActions({
     } finally {
       state.isCountrysideRouteTemplateSaving = false;
       renderBoard();
+      restoreElementScroll(listScrollSnapshot);
+      restoreWindowScroll(windowScrollSnapshot);
     }
   }
 
@@ -341,7 +352,7 @@ export function createCountrysideOpShopPickupActions({
     state.countrysideOpShopPickupForm = {
       route_group_id: template.route_group_id || state.selectedCountrysideRouteGroupId || "",
       schedule_id: template.schedule_id,
-      pickup_date: "",
+      pickup_date: getNextBusinessDayLocalDateString(),
       assigned_driver_id: template.default_driver_id || "",
       notes: "",
     };
@@ -396,6 +407,20 @@ export function createCountrysideOpShopPickupActions({
     renderBoard();
   }
 
+  function toggleCountrysideTemplateRouteGroup(routeGroupId) {
+    if (!routeGroupId) {
+      return;
+    }
+    const windowScrollSnapshot = captureWindowScroll();
+    const currentState = state.expandedCountrysideTemplateRouteGroups || {};
+    state.expandedCountrysideTemplateRouteGroups = {
+      ...currentState,
+      [routeGroupId]: !Boolean(currentState[routeGroupId]),
+    };
+    renderBoard();
+    restoreWindowScroll(windowScrollSnapshot);
+  }
+
   function updateRouteTemplateForm(field, value) {
     if (field === "target_route_group_id") {
       state.countrysideRouteTemplateMoveTargetRouteGroupId = value;
@@ -412,15 +437,22 @@ export function createCountrysideOpShopPickupActions({
     if (state.isCountrysideRouteTemplateSaving || !state.selectedCountrysideRouteGroupId) {
       return;
     }
+    const listScrollSnapshot = captureElementScroll("#opshop-countryside-pickup-list-root");
+    const windowScrollSnapshot = captureWindowScroll();
+    const routeGroupId = state.selectedCountrysideRouteGroupId;
     state.isCountrysideRouteTemplateSaving = true;
     state.countrysideRouteManagementError = "";
     renderBoard();
 
     try {
       await apiAddCountrysideRouteMembership(
-        state.selectedCountrysideRouteGroupId,
+        routeGroupId,
         normalizeRouteTemplateForm(),
       );
+      state.expandedCountrysideTemplateRouteGroups = {
+        ...(state.expandedCountrysideTemplateRouteGroups || {}),
+        [routeGroupId]: true,
+      };
       resetRouteTemplateForm();
       await refreshCountrysideRouteData();
     } catch (error) {
@@ -428,6 +460,8 @@ export function createCountrysideOpShopPickupActions({
     } finally {
       state.isCountrysideRouteTemplateSaving = false;
       renderBoard();
+      restoreElementScroll(listScrollSnapshot);
+      restoreWindowScroll(windowScrollSnapshot);
     }
   }
 
@@ -575,6 +609,8 @@ export function createCountrysideOpShopPickupActions({
       return;
     }
 
+    const listScrollSnapshot = captureElementScroll("#opshop-countryside-pickup-list-root");
+    const windowScrollSnapshot = captureWindowScroll();
     state.isCountrysideOpShopPickupSaving = true;
     state.countrysideOpShopPickupListError = "";
     renderBoard();
@@ -591,6 +627,8 @@ export function createCountrysideOpShopPickupActions({
     } finally {
       state.isCountrysideOpShopPickupSaving = false;
       renderBoard();
+      restoreElementScroll(listScrollSnapshot);
+      restoreWindowScroll(windowScrollSnapshot);
     }
   }
 
@@ -604,12 +642,14 @@ export function createCountrysideOpShopPickupActions({
 
   async function setSelectedRouteGroup(routeGroupId) {
     const scrollSnapshot = captureElementScroll("#opshop-countryside-pickup-list-root");
+    const windowScrollSnapshot = captureWindowScroll();
     state.selectedCountrysideRouteGroupId = routeGroupId || "";
     resetRouteGroupForm();
     resetRouteTemplateForm();
     renderBoard();
     await loadRouteMemberships();
     restoreElementScroll(scrollSnapshot);
+    restoreWindowScroll(windowScrollSnapshot);
   }
 
   function initializeAssignedDriverSelections() {
@@ -732,6 +772,7 @@ export function createCountrysideOpShopPickupActions({
     startNewRouteGroup,
     startRemoveRouteTemplate,
     startRenameRouteGroup,
+    toggleCountrysideTemplateRouteGroup,
     updateAssignedDriverSelection,
     updatePickupTaskForm,
     updateRouteGroupForm,

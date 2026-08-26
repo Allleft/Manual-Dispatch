@@ -417,6 +417,7 @@ def _ensure_manual_dispatch_columns(connection):
         "regular_route_sequence",
         "INTEGER",
     )
+    _ensure_column(connection, "opshop_pickup_tasks", "trip_sequence", "INTEGER")
     connection.execute(
         """
         UPDATE opshop_pickup_schedules

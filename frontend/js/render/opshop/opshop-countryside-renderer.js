@@ -1,4 +1,13 @@
 import { createIcon } from "../../utils/icon-utils.js";
+import { getNextBusinessDayLocalDateString } from "../../utils/date-utils.js";
+import {
+  getCountrysidePickupRouteGroupCollapseKey,
+  getCountrysidePickupRouteGroupPanelId,
+} from "../../utils/opshop-countryside-accordion-utils.js";
+
+import { createOpShopDateGroupList } from "../opshop-date-group-list-renderer.js";
+
+import { createOncallPickupRow } from "./opshop-oncall-renderer.js";
 
 import {
   createSelect,
@@ -9,6 +18,182 @@ import {
   createEmptyState,
   isBusy,
 } from "./opshop-renderer-utils.js";
+
+
+export function createCountrysidePickupDateGroups(pickups, state, actions) {
+  const section = document.createElement("section");
+  section.className = "workspace-regular-pickup-list workspace-countryside-pickup-list";
+  section.append(
+    createOpShopDateGroupList({
+      collapsedDates: state.collapsedCountrysideOpShopPickupDates || {},
+      dispatchDate: state.dispatchDate,
+      emptyMessage: "No Countryside pickups are visible for this dispatch date.",
+      idPrefix: "workspace-countryside",
+      onToggleDateGroup: actions.toggleCountrysideOpShopDateGroup,
+      pickups,
+      renderGroup: (pickupDate, datePickups) => createCountrysideRouteGroupList(
+        pickupDate,
+        datePickups,
+        state,
+        actions,
+      ),
+    }),
+  );
+  return section;
+}
+
+
+export function createCountrysideRouteGroupList(
+  pickupDate,
+  pickups,
+  state,
+  actions,
+) {
+  const container = document.createElement("div");
+  container.className = "opshop-countryside-route-group-list";
+  groupCountrysidePickupsByRouteGroup(pickups, state).forEach(
+    ([routeGroupId, routePickups]) => {
+      container.append(createCountrysideRouteGroupSection(
+        pickupDate,
+        routeGroupId,
+        routePickups,
+        state,
+        actions,
+      ));
+    },
+  );
+  return container;
+}
+
+
+function createCountrysideRouteGroupSection(
+  pickupDate,
+  routeGroupId,
+  pickups,
+  state,
+  actions,
+) {
+  const section = document.createElement("section");
+  section.className = "opshop-countryside-route-group";
+  section.dataset.pickupDate = pickupDate || "";
+  section.dataset.routeGroupId = routeGroupId || "";
+
+  const collapseKey = getCountrysidePickupRouteGroupCollapseKey(
+    pickupDate,
+    routeGroupId,
+  );
+  const collapsedState = state.collapsedCountrysideOpShopPickupRouteGroups || {};
+  const collapsed = Object.prototype.hasOwnProperty.call(collapsedState, collapseKey)
+    ? Boolean(collapsedState[collapseKey])
+    : true;
+  const panelId = getCountrysidePickupRouteGroupPanelId(pickupDate, routeGroupId);
+
+  const heading = document.createElement("h4");
+  heading.className = "opshop-countryside-route-group-heading";
+  const toggle = document.createElement("button");
+  toggle.type = "button";
+  toggle.className = "opshop-countryside-route-group-toggle";
+  toggle.setAttribute("aria-controls", panelId);
+  toggle.setAttribute("aria-expanded", String(!collapsed));
+  toggle.addEventListener("click", () => {
+    actions.toggleCountrysideOpShopPickupRouteGroup(pickupDate, routeGroupId);
+  });
+
+  const label = document.createElement("span");
+  label.className = "opshop-countryside-route-group-label";
+  label.append(
+    createIcon(collapsed ? "chevron-down" : "chevron-up"),
+    document.createTextNode(getCountrysideRouteGroupName(routeGroupId, pickups, state)),
+  );
+  const count = document.createElement("span");
+  count.className = "opshop-countryside-route-group-count";
+  count.textContent = `${pickups.length} ${pickups.length === 1 ? "pickup" : "pickups"}`;
+  toggle.append(label, count);
+  heading.append(toggle);
+
+  const list = document.createElement("div");
+  list.className = "opshop-countryside-pickup-rows";
+  list.id = panelId;
+  list.hidden = collapsed;
+  pickups.forEach((pickup) => {
+    list.append(createOncallPickupRow(pickup, state, actions, {
+      rowClassName: "workspace-countryside-pickup-row",
+      showPickupDate: false,
+      showStreetAddress: true,
+    }));
+  });
+
+  section.append(heading, list);
+  return section;
+}
+
+
+function groupCountrysidePickupsByRouteGroup(pickups, state) {
+  const groups = new Map();
+  pickups.forEach((pickup) => {
+    const routeGroupId = pickup.route_group_id || "";
+    if (!groups.has(routeGroupId)) {
+      groups.set(routeGroupId, []);
+    }
+    groups.get(routeGroupId).push(pickup);
+  });
+  return [...groups.entries()].sort((left, right) => compareCountrysideRouteGroups(
+    left[0],
+    right[0],
+    left[1],
+    right[1],
+    state,
+  ));
+}
+
+
+function compareCountrysideRouteGroups(
+  leftId,
+  rightId,
+  leftPickups,
+  rightPickups,
+  state,
+) {
+  if (!leftId && rightId) {
+    return 1;
+  }
+  if (leftId && !rightId) {
+    return -1;
+  }
+  const routeGroups = state.opshopBoard?.countryside_route_groups || [];
+  const leftGroup = routeGroups.find((group) => group.route_group_id === leftId);
+  const rightGroup = routeGroups.find((group) => group.route_group_id === rightId);
+  const leftOrder = leftGroup?.display_order != null
+    && Number.isFinite(Number(leftGroup.display_order))
+    ? Number(leftGroup.display_order)
+    : Number.MAX_SAFE_INTEGER;
+  const rightOrder = rightGroup?.display_order != null
+    && Number.isFinite(Number(rightGroup.display_order))
+    ? Number(rightGroup.display_order)
+    : Number.MAX_SAFE_INTEGER;
+  return (
+    leftOrder - rightOrder
+    || getCountrysideRouteGroupName(leftId, leftPickups, state).localeCompare(
+      getCountrysideRouteGroupName(rightId, rightPickups, state),
+      undefined,
+      { sensitivity: "base" },
+    )
+    || String(leftId).localeCompare(String(rightId))
+  );
+}
+
+
+function getCountrysideRouteGroupName(routeGroupId, pickups, state) {
+  if (!routeGroupId) {
+    return "Unassigned Route Group";
+  }
+  const routeGroup = (state.opshopBoard?.countryside_route_groups || []).find(
+    (group) => group.route_group_id === routeGroupId,
+  );
+  return routeGroup?.route_group_name
+    || pickups.find((pickup) => pickup.route_group_name)?.route_group_name
+    || routeGroupId;
+}
 
 export function createRouteGroupContext(board, state, actions, onOpenRouteGroupDetail) {
   const section = document.createElement("section");
@@ -51,7 +236,7 @@ export function createRouteGroupAssignmentForm(
   row.className = "workspace-record-card workspace-route-group-card";
   const templateCount = (routeTemplates.get(group.route_group_id) || []).length;
   const draft = {
-    pickup_date: state.dispatchDate,
+    pickup_date: getNextBusinessDayLocalDateString(),
     assigned_driver_id: "",
     notes: "",
     ...(state.countrysideRouteGroupDrafts[group.route_group_id] || {}),

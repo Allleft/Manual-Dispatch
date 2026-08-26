@@ -54,6 +54,17 @@ export async function apiUnassignOpShopWorkspacePickup(payload) {
   });
 }
 
+export async function apiReorderOpShopCountrysidePickups(payload) {
+  return requestJson("/api/manual-dispatch/opshop/pickups/countryside-order", {
+    method: "POST",
+    body: {
+      pickup_date: payload.pickup_date,
+      driver_id: payload.driver_id,
+      ordered_pickup_task_ids: payload.ordered_pickup_task_ids,
+    },
+  });
+}
+
 export async function apiAssignOpShopWorkspaceCountrysideRouteGroup(
   routeGroupId,
   payload,

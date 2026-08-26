@@ -80,14 +80,7 @@ class OpShopWorkspaceBoardService:
                 )
                 for pickup in pickups_by_id.values()
             ),
-            key=lambda pickup: (
-                pickup.pickup_date,
-                pickup.pickup_category or "",
-                pickup.route_group_name or "",
-                pickup.suburb or "",
-                pickup.opshop_name or "",
-                pickup.pickup_task_id,
-            ),
+            key=_workspace_pickup_sort_key,
         )
         return OpShopWorkspaceBoardResponse(
             dispatch_date=dispatch_date,
@@ -126,14 +119,7 @@ class OpShopWorkspaceBoardService:
                 )
                 for pickup in pickups_by_id.values()
             ),
-            key=lambda pickup: (
-                pickup.pickup_date,
-                pickup.pickup_category or "",
-                pickup.route_group_name or "",
-                pickup.suburb or "",
-                pickup.opshop_name or "",
-                pickup.pickup_task_id,
-            ),
+            key=_workspace_pickup_sort_key,
         )
 
         return OpShopTripSummaryResponse(
@@ -282,4 +268,24 @@ class OpShopWorkspaceBoardService:
             last_pickup_date=last_pickup_date,
             assignment_lock_reason=assignment_lock_reason,
             regular_route_sequence=pickup.regular_route_sequence,
+            trip_sequence=pickup.trip_sequence,
         )
+
+
+def _workspace_pickup_sort_key(pickup):
+    prefix = (
+        pickup.pickup_date,
+        pickup.pickup_category or "",
+    )
+    fallback = (
+        pickup.route_group_name or "",
+        pickup.suburb or "",
+        pickup.opshop_name or "",
+        pickup.pickup_task_id,
+    )
+    if pickup.pickup_category != "COUNTRYSIDE":
+        return (*prefix, *fallback)
+    sequence = pickup.trip_sequence
+    if isinstance(sequence, int) and not isinstance(sequence, bool) and sequence > 0:
+        return (*prefix, 0, sequence, *fallback)
+    return (*prefix, 1, 0, *fallback)

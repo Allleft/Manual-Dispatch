@@ -94,7 +94,7 @@ class ManualDispatchApiContractTest(unittest.TestCase):
             for method in route.methods
         }
 
-        self.assertEqual(100, len(routes))
+        self.assertEqual(101, len(routes))
         self.assertEqual(
             {
                 ("POST", "/api/manual-dispatch/auth/login"),
@@ -104,7 +104,7 @@ class ManualDispatchApiContractTest(unittest.TestCase):
             public_routes,
         )
         protected_routes = [route for route in routes if route.dependant.dependencies]
-        self.assertEqual(97, len(protected_routes))
+        self.assertEqual(98, len(protected_routes))
         for route in protected_routes:
             dependency_names = {
                 getattr(dependency.call, "__name__", "")

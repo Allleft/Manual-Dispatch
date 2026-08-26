@@ -215,6 +215,25 @@ class InMemoryAssignmentRepositoryMixin:
             raise
         return [self.get_opshop_pickup_task(task.pickup_task_id) for task in tasks]
 
+    def update_countryside_pickup_trip_sequences(self, ordered_pickup_task_ids):
+        original_tasks = deepcopy(self.opshop_pickup_tasks)
+        try:
+            for sequence, pickup_task_id in enumerate(
+                ordered_pickup_task_ids,
+                start=1,
+            ):
+                task = self.get_opshop_pickup_task(pickup_task_id)
+                if not task:
+                    raise ValueError(
+                        "OP SHOP pickup task does not exist: "
+                        f"{pickup_task_id}"
+                    )
+                task.trip_sequence = sequence
+                task.updated_at = "2026-05-19T00:00:00+00:00"
+        except Exception:
+            self.opshop_pickup_tasks = original_tasks
+            raise
+
     def has_assignment_for_task(self, task_type, task_id):
         return any(
             assignment.task_type == task_type and assignment.task_id == task_id
