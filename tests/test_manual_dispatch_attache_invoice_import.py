@@ -153,7 +153,7 @@ class ManualDispatchAttacheInvoiceImportTest(unittest.TestCase):
             [assignment.task_id for assignment in board.assignments],
         )
 
-    def test_preview_commit_and_reopen_persist_true_invoice_and_import_delivery_dates(self):
+    def test_preview_commit_and_reopen_persist_invoice_and_next_business_delivery_dates(self):
         sanitized_text = """
         Invoice No 185517
         Date 11/08/26
@@ -178,7 +178,7 @@ class ManualDispatchAttacheInvoiceImportTest(unittest.TestCase):
             patch.object(manual_dispatch_api, "service", self.service),
             patch(
                 "backend.api.manual_dispatch_routes.attache_routes.current_melbourne_business_date",
-                return_value=date(2026, 8, 12),
+                return_value=date(2026, 8, 21),
             ),
             patch(
                 "backend.services.manual_dispatch.attache_invoice_pdf_parser.extract_pdf_text",
@@ -202,7 +202,7 @@ class ManualDispatchAttacheInvoiceImportTest(unittest.TestCase):
             self.assertEqual(200, preview_response.status_code, preview_response.text)
             preview_row = preview_response.json()["rows"][0]
             self.assertEqual("2026-08-11", preview_row["invoice_date"])
-            self.assertEqual("2026-08-13", preview_row["delivery_date"])
+            self.assertEqual("2026-08-24", preview_row["delivery_date"])
             self.assertEqual(5, preview_row["loose_bags_quantity"])
             self.assertEqual("SOUTHEAST", preview_row["auto_delivery_region"])
             self.assertEqual("SOUTHEAST", preview_row["auto_delivery_area"])
@@ -219,7 +219,7 @@ class ManualDispatchAttacheInvoiceImportTest(unittest.TestCase):
 
             board_response = self.client.get(
                 "/api/manual-dispatch/delivery/board",
-                params={"dispatch_date": "2026-08-13"},
+                params={"dispatch_date": "2026-08-24"},
             )
             self.assertEqual(200, board_response.status_code, board_response.text)
             api_order = next(
@@ -228,7 +228,7 @@ class ManualDispatchAttacheInvoiceImportTest(unittest.TestCase):
                 if order["invoice_number"] == "185517"
             )
             self.assertEqual("2026-08-11", api_order["invoice_date"])
-            self.assertEqual("2026-08-13", api_order["delivery_date"])
+            self.assertEqual("2026-08-24", api_order["delivery_date"])
             self.assertEqual("SOUTHEAST", api_order["auto_delivery_region"])
             self.assertEqual("SOUTHEAST", api_order["delivery_area"])
             self.assertEqual("AUTO", api_order["delivery_area_source"])
@@ -236,14 +236,14 @@ class ManualDispatchAttacheInvoiceImportTest(unittest.TestCase):
         reloaded_repository = SQLiteManualDispatchRepository(self.db_path)
         reloaded_board = ManualDispatchService(
             reloaded_repository
-        ).get_delivery_workspace_board("2026-08-13")
+        ).get_delivery_workspace_board("2026-08-24")
         persisted = next(
             order
             for order in reloaded_board.orders
             if order.invoice_number == "185517"
         )
         self.assertEqual("2026-08-11", persisted.invoice_date)
-        self.assertEqual("2026-08-13", persisted.delivery_date)
+        self.assertEqual("2026-08-24", persisted.delivery_date)
         self.assertEqual(5, persisted.loose_bags_quantity)
         self.assertEqual("SOUTHEAST", persisted.auto_delivery_region)
         self.assertEqual("SOUTHEAST", persisted.delivery_area)

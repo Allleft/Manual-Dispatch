@@ -304,7 +304,7 @@ class DeliveryDocketDocxParserTest(unittest.TestCase):
 
         self.assertEqual("DIRECT", parsed.delivery_mode)
         self.assertEqual("2026-08-21", parsed.invoice_date)
-        self.assertEqual("2026-08-21", parsed.delivery_date)
+        self.assertEqual("2026-08-14", parsed.delivery_date)
         self.assertEqual("09:00", parsed.start_time)
         self.assertIsNone(parsed.end_time)
         self.assertEqual("SRGS PTY LTD", parsed.company_name)
@@ -319,6 +319,27 @@ class DeliveryDocketDocxParserTest(unittest.TestCase):
         self.assertIn("Booking #: 2232671", parsed.note)
         self.assertIn("Time Slot: FRIDAY 21/08/26 @ 9AM", parsed.note)
         self.assertNotIn("03 9930 7700", parsed.note)
+
+    def test_time_slot_date_does_not_override_import_business_date(self):
+        parsed = parse_delivery_docket_text(
+            """
+            DELIVERY DOCKET: 4998/199998
+            DATED: 20/08/2026
+            DELIVER TO:
+            BUSINESS DATE CUSTOMER
+            1 EXAMPLE ROAD
+            RICHMOND 3121
+            TIME SLOT: MONDAY 10/08/26 @ 9AM
+            5 X 10KG SAMPLE RAGS
+            1 PALLET
+            """,
+            source_filename="business-date.docx",
+            import_date=date(2026, 8, 21),
+        )
+
+        self.assertEqual("2026-08-24", parsed.delivery_date)
+        self.assertEqual("09:00", parsed.start_time)
+        self.assertIn("Time Slot: MONDAY 10/08/26 @ 9AM", parsed.note)
 
     def test_fractional_actual_kg_is_warned_and_not_importable(self):
         parsed = parse_delivery_docket_text(

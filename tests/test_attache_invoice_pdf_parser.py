@@ -534,7 +534,7 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
         self.assertEqual("20032026", parsed.order_no)
         self.assert_order_number_not_in_note(parsed)
         self.assertEqual("SNAP PACK", parsed.company_name)
-        self.assertEqual("2026-03-21", parsed.delivery_date)
+        self.assertEqual("2026-03-23", parsed.delivery_date)
         self.assertEqual(0, parsed.pallet_quantity)
         self.assertEqual(15, parsed.loose_bags_quantity)
         self.assertEqual(0, parsed.carton_quantity)
@@ -1266,7 +1266,41 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
             parsed.warnings,
         )
 
-    def test_explicit_delivery_date_overrides_import_date_default(self):
+    def test_import_delivery_date_skips_weekends_for_each_import_day(self):
+        invoice_text = """
+        Invoice No 199002
+        Invoice Date 09/08/26
+        Invoice to:
+        WEEKDAY CUSTOMER
+        2 SANITIZED ROAD
+        RICHMOND 3121
+        Deliver to:
+        WEEKDAY CUSTOMER
+        2 SANITIZED ROAD
+        RICHMOND
+        3121
+        Tax Invoice
+        RSING 4.13 KG 25 COLOR TSHIRT RAGS 1.650 45.38 41.25
+        BAG5 0.00 5 PLASTIC BAG 5 kg 0.000 0.00 0.00
+        """
+        cases = (
+            (date(2026, 8, 20), "2026-08-21"),
+            (date(2026, 8, 21), "2026-08-24"),
+            (date(2026, 8, 22), "2026-08-24"),
+            (date(2026, 8, 23), "2026-08-24"),
+            (date(2026, 8, 24), "2026-08-25"),
+        )
+
+        for import_date, expected in cases:
+            with self.subTest(import_date=import_date):
+                parsed = parse_attache_invoice_text(
+                    invoice_text,
+                    source_filename=f"weekday-{import_date.isoformat()}.txt",
+                    import_date=import_date,
+                )
+                self.assertEqual(expected, parsed.delivery_date)
+
+    def test_source_delivery_date_does_not_override_import_business_date(self):
         parsed = parse_attache_invoice_text(
             """
             Invoice No 199003
@@ -1286,11 +1320,11 @@ class AttacheInvoicePdfParserTest(unittest.TestCase):
             BAG5 0.00 5 PLASTIC BAG 5 kg 0.000 0.00 0.00
             """,
             source_filename="explicit-delivery-date.txt",
-            import_date=date(2026, 8, 12),
+            import_date=date(2026, 8, 21),
         )
 
         self.assertEqual("2026-08-09", parsed.invoice_date)
-        self.assertEqual("2026-08-20", parsed.delivery_date)
+        self.assertEqual("2026-08-24", parsed.delivery_date)
 
 
 if __name__ == "__main__":

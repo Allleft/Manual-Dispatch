@@ -242,15 +242,17 @@ class AttacheBridgeClientTest(unittest.TestCase):
 
 class AttacheDirectInvoiceNormalizerTest(unittest.TestCase):
     def test_structured_invoice_reuses_pdf_product_packaging_and_load_rules(self):
+        payload = deepcopy(DIRECT_INVOICE_PAYLOAD)
+        payload["delivery_date"] = "2026-08-10"
         row = normalize_direct_attache_invoice(
-            deepcopy(DIRECT_INVOICE_PAYLOAD),
+            payload,
             expected_invoice_number="185479",
-            import_date=date(2026, 8, 19),
+            import_date=date(2026, 8, 21),
         )
 
         self.assertEqual("185479", row.invoice_number)
         self.assertEqual("2026-08-18", row.invoice_date)
-        self.assertEqual("2026-08-20", row.delivery_date)
+        self.assertEqual("2026-08-24", row.delivery_date)
         self.assertEqual("PO-185479", row.order_no)
         self.assertEqual("DIRECT LOOKUP CUSTOMER", row.company_name)
         self.assertEqual("1 TEST ROAD", row.delivery_address)
@@ -367,12 +369,14 @@ class AttacheDirectInvoiceApiTest(unittest.TestCase):
         )
 
     def test_direct_preview_is_authenticated_normalized_and_commits_through_existing_path(self):
+        payload = deepcopy(DIRECT_INVOICE_PAYLOAD)
+        payload["delivery_date"] = "2026-08-10"
         with (
             patch.object(manual_dispatch_api, "service", self.service),
-            self._lookup(deepcopy(DIRECT_INVOICE_PAYLOAD)),
+            self._lookup(payload),
             patch(
                 "backend.api.manual_dispatch_routes.attache_routes.current_melbourne_business_date",
-                return_value=date(2026, 8, 19),
+                return_value=date(2026, 8, 21),
             ),
         ):
             unauthenticated = self.client.post(
@@ -389,7 +393,7 @@ class AttacheDirectInvoiceApiTest(unittest.TestCase):
             self.assertEqual(200, preview.status_code, preview.text)
             row = preview.json()["rows"][0]
             self.assertEqual("Attaché Direct", row["source_filename"])
-            self.assertEqual("2026-08-20", row["delivery_date"])
+            self.assertEqual("2026-08-24", row["delivery_date"])
             self.assertEqual("SOUTHEAST", row["auto_delivery_region"])
             self.assertEqual("SOUTHEAST", row["delivery_area"])
             self.assertEqual("AUTO", row["delivery_area_source"])

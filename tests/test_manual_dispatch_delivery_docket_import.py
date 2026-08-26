@@ -148,7 +148,7 @@ class ManualDispatchDeliveryDocketImportTest(unittest.TestCase):
             patch.object(manual_dispatch_api, "service", self.service),
             patch(
                 "backend.api.manual_dispatch_routes.delivery_docket_routes.current_melbourne_business_date",
-                return_value=date(2026, 8, 13),
+                return_value=date(2026, 8, 21),
             ),
         ):
             preview_response = self.client.post(
@@ -158,7 +158,7 @@ class ManualDispatchDeliveryDocketImportTest(unittest.TestCase):
             self.assertEqual(200, preview_response.status_code, preview_response.text)
             rows = preview_response.json()["rows"]
             self.assertEqual(2, len(rows))
-            self.assertEqual(["2026-08-14", "2026-08-14"], [row["delivery_date"] for row in rows])
+            self.assertEqual(["2026-08-24", "2026-08-24"], [row["delivery_date"] for row in rows])
             self.assertEqual(["4373", "4375"], [row["docket_number"] for row in rows])
             self.assertEqual("WEST", rows[0]["auto_delivery_region"])
             self.assertEqual("LOCAL", rows[0]["auto_delivery_area"])
@@ -183,7 +183,7 @@ class ManualDispatchDeliveryDocketImportTest(unittest.TestCase):
 
             board_response = self.client.get(
                 "/api/manual-dispatch/delivery/board",
-                params={"dispatch_date": "2026-08-14"},
+                params={"dispatch_date": "2026-08-24"},
             )
             self.assertEqual(200, board_response.status_code, board_response.text)
             board_orders = board_response.json()["orders"]
@@ -204,7 +204,7 @@ class ManualDispatchDeliveryDocketImportTest(unittest.TestCase):
         reloaded_service = ManualDispatchService(
             SQLiteManualDispatchRepository(self.db_path)
         )
-        reloaded = reloaded_service.get_delivery_workspace_board("2026-08-14")
+        reloaded = reloaded_service.get_delivery_workspace_board("2026-08-24")
         persisted = next(order for order in reloaded.orders if order.invoice_number == "185504")
         self.assertEqual("EDITED FINAL CUSTOMER", persisted.company_name)
         self.assertEqual(360, persisted.product_lines[0].quantity)
@@ -226,7 +226,7 @@ class ManualDispatchDeliveryDocketImportTest(unittest.TestCase):
         )
         reloaded_service.assign_delivery_workspace_order(
             DeliveryWorkspaceAssignOrderRequest(
-                dispatch_date="2026-08-14",
+                dispatch_date="2026-08-24",
                 order_id=created[0]["order_id"],
                 driver_id="DOCKET-DRIVER",
                 trip_no="trip1",
@@ -234,8 +234,8 @@ class ManualDispatchDeliveryDocketImportTest(unittest.TestCase):
         )
         run_sheet = reloaded_service.create_generated_delivery_run_sheet(
             GenerateDeliveryRunSheetRequest(
-                dispatch_date="2026-08-14",
-                delivery_date="2026-08-14",
+                dispatch_date="2026-08-24",
+                delivery_date="2026-08-24",
                 driver_id="DOCKET-DRIVER",
             )
         )

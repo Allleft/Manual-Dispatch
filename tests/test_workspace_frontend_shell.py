@@ -2963,6 +2963,193 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             """
         )
 
+    def test_edit_delivery_order_restores_task_pool_scroll_after_authoritative_reload(self):
+        save_block = self.workspace_actions.split(
+            "async function saveDeliveryOrderForm", 1
+        )[1].split("async function cancelActiveDeliveryOrder", 1)[0]
+        self.assertIn("captureWindowScroll", save_block)
+        self.assertIn("restoreWindowScroll", save_block)
+        self.assertIn("await loadDeliveryRoute(context.route)", save_block)
+        self.assertIn('{ preserveScroll: mode === "edit" }', save_block)
+        self.assertNotIn("scrollTo(0", save_block)
+        self.assertNotIn("window.location.reload", save_block)
+
+        self._run_workspace_actions_script(
+            """
+            window.requestAnimationFrame = (callback) => callback();
+
+            function orderForm() {
+              return {
+                invoice_number: "185900",
+                invoice_date: "2026-08-20",
+                order_no: "PO-1",
+                company_name: "EDIT CUSTOMER",
+                phone: "",
+                delivery_address: "1 TEST ROAD",
+                suburb: "RICHMOND",
+                postcode: "3121",
+                delivery_date: "2026-08-24",
+                start_time: "",
+                end_time: "",
+                zone: "",
+                urgency: "Normal",
+                preferred_driver_id: "",
+                pallet_quantity: "1",
+                loose_bags_quantity: "0",
+                carton_quantity: "0",
+                note: "reviewed",
+                product_lines: [],
+                delivery_area_known: true,
+                delivery_area_selection: "LOCAL",
+                delivery_area_classification_pending: false,
+                delivery_area_classification_error: "",
+              };
+            }
+
+            function stateFor(mode) {
+              return {
+                isLoggedIn: true,
+                authSessionVersion: 7,
+                workspaceRoute: "delivery/task-pool",
+                activeWorkspace: "delivery",
+                dispatchDate: "2026-08-21",
+                deliveryTripSummaryDate: "2026-08-24",
+                deliveryBoard: {
+                  orders: [{ order_id: "ORDER-1", delivery_date: "2026-08-24" }],
+                  assignments: [], drivers: [], vehicles: [],
+                  driver_vehicle_assignments: [],
+                },
+                deliveryActionError: "",
+                deliveryBusyActionKeys: {},
+                deliveryAssignmentDrafts: {
+                  "ORDER-1": { driver_id: "DRIVER-A", trip_no: "trip1" },
+                },
+                deliveryVehicleDrafts: {}, deliveryVehicleClaims: {},
+                deliveryVehicleErrors: {}, deliveryVehiclePendingKeys: {},
+                deliveryOrderDetailId: mode === "edit" ? "ORDER-1" : "",
+                deliveryOrderDetailReadOnly: false,
+                deliveryOrderFormMode: mode,
+                deliveryOrderForm: orderForm(),
+                deliveryOrderModalError: "",
+                deliveryTaskPoolFilters: {
+                  search: "RICHMOND", delivery_date: "2026-08-24", urgency: "Normal",
+                },
+              };
+            }
+
+            const editState = stateFor("edit");
+            const editEvents = [];
+            let editWrites = 0;
+            let editBoardGets = 0;
+            window.scrollX = 18;
+            window.scrollY = 640;
+            window.scrollTo = (x, y) => {
+              window.scrollX = x;
+              window.scrollY = y;
+              editEvents.push(`scroll:${x},${y}`);
+            };
+            const editApi = {
+              updateDeliveryOrder: async () => {
+                editWrites += 1;
+                editEvents.push("patch");
+              },
+              getDeliveryWorkspaceBoard: async () => {
+                editBoardGets += 1;
+                editEvents.push("board-get");
+                return {
+                  ...editState.deliveryBoard,
+                  orders: [{ order_id: "ORDER-1", delivery_date: "2026-08-24" }],
+                };
+              },
+            };
+            const editActions = createWorkspaceActions({
+              state: editState,
+              api: editApi,
+              renderWorkspace: () => {
+                editEvents.push("render");
+                if (!editState.deliveryOrderFormMode) {
+                  window.scrollX = 0;
+                  window.scrollY = 0;
+                }
+              },
+            });
+
+            await editActions.saveDeliveryOrderForm();
+            if (editWrites !== 1 || editBoardGets !== 1) {
+              throw new Error("Edit save did not perform PATCH plus one authoritative board GET");
+            }
+            if (editState.deliveryOrderFormMode || editState.deliveryOrderDetailId) {
+              throw new Error("successful Edit save did not close the modal");
+            }
+            if (window.scrollX !== 18 || window.scrollY !== 640) {
+              throw new Error(`Edit save restored ${window.scrollX},${window.scrollY} instead of 18,640`);
+            }
+            if (editEvents.at(-1) !== "scroll:18,640") {
+              throw new Error(`Edit scroll restored before the final render: ${editEvents.join("|")}`);
+            }
+            if (editState.workspaceRoute !== "delivery/task-pool") {
+              throw new Error("Edit save changed workspace routing");
+            }
+            if (editState.deliveryTaskPoolFilters.search !== "RICHMOND") {
+              throw new Error("Edit save cleared Task Pool filters");
+            }
+            if (editState.deliveryAssignmentDrafts["ORDER-1"]?.driver_id !== "DRIVER-A") {
+              throw new Error("Edit save lost the current assignment draft");
+            }
+
+            const failureState = stateFor("edit");
+            let failureBoardGets = 0;
+            const failureActions = createWorkspaceActions({
+              state: failureState,
+              renderWorkspace: () => {},
+              api: {
+                updateDeliveryOrder: async () => { throw new Error("save failed"); },
+                getDeliveryWorkspaceBoard: async () => { failureBoardGets += 1; },
+              },
+            });
+            await failureActions.saveDeliveryOrderForm();
+            if (
+              failureState.deliveryOrderFormMode !== "edit"
+              || failureState.deliveryOrderDetailId !== "ORDER-1"
+              || failureState.deliveryOrderForm.company_name !== "EDIT CUSTOMER"
+            ) {
+              throw new Error("failed Edit save did not retain the modal and form");
+            }
+            if (!failureState.deliveryOrderModalError.includes("save failed")) {
+              throw new Error("failed Edit save did not retain the API error");
+            }
+            if (failureBoardGets !== 0) {
+              throw new Error("failed Edit save reloaded the Delivery board");
+            }
+
+            const addState = stateFor("add");
+            let addWrites = 0;
+            let addBoardGets = 0;
+            const addScrolls = [];
+            window.scrollX = 30;
+            window.scrollY = 800;
+            window.scrollTo = (x, y) => addScrolls.push([x, y]);
+            const addActions = createWorkspaceActions({
+              state: addState,
+              renderWorkspace: () => {},
+              api: {
+                createDeliveryOrder: async () => { addWrites += 1; },
+                getDeliveryWorkspaceBoard: async () => {
+                  addBoardGets += 1;
+                  return addState.deliveryBoard;
+                },
+              },
+            });
+            await addActions.saveDeliveryOrderForm();
+            if (addWrites !== 1 || addBoardGets !== 1 || addState.deliveryOrderFormMode) {
+              throw new Error("Add Order success semantics changed");
+            }
+            if (addScrolls.length) {
+              throw new Error("Add Order unexpectedly adopted Edit scroll restoration");
+            }
+            """
+        )
+
     def test_delivery_order_mutations_update_in_place_preserve_scroll_and_default_trip_one(self):
         self._run_workspace_actions_script(
             """

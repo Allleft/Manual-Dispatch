@@ -1,12 +1,14 @@
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 import re
 
 from backend.schemas import AttacheInvoicePdfPreviewItem
 from backend.services.manual_dispatch.attache_invoice_pdf_parser import (
     attache_preview_row_id,
     build_attache_preview_warnings,
-    current_melbourne_business_date,
     normalize_attache_structured_product_rows,
+)
+from backend.services.manual_dispatch.delivery_import_date import (
+    next_delivery_business_date,
 )
 from backend.services.manual_dispatch.normalization import clean_optional_text
 
@@ -52,12 +54,12 @@ def normalize_direct_attache_invoice(
         raise AttacheDirectInvoicePayloadError(str(error)) from error
 
     invoice_date = _optional_iso_date(payload.get("invoice_date"), "invoice_date")
-    delivery_date = _optional_iso_date(
-        payload.get("delivery_date"),
-        "delivery_date",
-    )
-    if not delivery_date:
-        delivery_date = (_resolve_import_date(import_date) + timedelta(days=1)).isoformat()
+    try:
+        delivery_date = next_delivery_business_date(import_date).isoformat()
+    except ValueError as error:
+        raise AttacheDirectInvoicePayloadError(
+            "Direct Attaché import date is invalid."
+        ) from error
 
     address_lines = payload.get("delivery_address_lines") or []
     if not isinstance(address_lines, (list, tuple)):
@@ -132,19 +134,4 @@ def _optional_iso_date(value, field_name):
     except ValueError as error:
         raise AttacheDirectInvoicePayloadError(
             f"Attaché lookup returned an invalid {field_name}."
-        ) from error
-
-
-def _resolve_import_date(value):
-    if value is None:
-        return current_melbourne_business_date()
-    if isinstance(value, datetime):
-        return value.date()
-    if isinstance(value, date):
-        return value
-    try:
-        return date.fromisoformat(str(value).strip())
-    except ValueError as error:
-        raise AttacheDirectInvoicePayloadError(
-            "Direct Attaché import date is invalid."
         ) from error

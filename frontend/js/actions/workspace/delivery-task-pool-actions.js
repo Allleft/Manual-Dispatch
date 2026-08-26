@@ -282,6 +282,8 @@ export function createDeliveryTaskPoolActions(context) {
     const actionKey = mode === "edit"
       ? `delivery-order-edit:${orderId}`
       : "delivery-order-add";
+    const editScrollSnapshot = mode === "edit" ? captureWindowScroll() : null;
+    let shouldRestoreEditScroll = false;
     await runDeliveryAction(actionKey, async (context) => {
       if (mode === "edit") {
         await api.updateDeliveryOrder(orderId, payload);
@@ -295,10 +297,14 @@ export function createDeliveryTaskPoolActions(context) {
         state.deliveryOrderForm = {};
         state.deliveryOrderModalError = "";
         await loadDeliveryRoute(context.route);
+        shouldRestoreEditScroll = mode === "edit";
       }
     }, (error) => {
       state.deliveryOrderModalError = `Unable to save Delivery Order. ${error.message}`;
-    });
+    }, { preserveScroll: mode === "edit" });
+    if (shouldRestoreEditScroll) {
+      restoreWindowScroll(editScrollSnapshot);
+    }
   }
 
   async function cancelActiveDeliveryOrder(orderId) {

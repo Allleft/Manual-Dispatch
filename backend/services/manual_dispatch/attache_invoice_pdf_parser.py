@@ -1,12 +1,14 @@
 from dataclasses import replace
-from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from hashlib import sha1
 from io import BytesIO
 import re
 
 from backend.schemas import AttacheInvoicePdfPreviewItem
-from backend.services.manual_dispatch.logbook_file_service import MELBOURNE_TIMEZONE
+from backend.services.manual_dispatch.delivery_import_date import (
+    current_melbourne_business_date,
+    next_delivery_business_date,
+)
 from backend.services.manual_dispatch.normalization import clean_optional_text
 
 
@@ -98,10 +100,6 @@ LINE_ITEM_FOOTER_PATTERN = re.compile(
 )
 
 
-def current_melbourne_business_date():
-    return datetime.now(MELBOURNE_TIMEZONE).date()
-
-
 def parse_attache_invoice_pdf_bytes(
     pdf_bytes,
     source_filename="invoice.pdf",
@@ -145,9 +143,7 @@ def parse_attache_invoice_text(text, source_filename="invoice.txt", import_date=
             r"(?:Invoice Date|Date)\s*[:#]?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}-\d{2}-\d{2})",
         )
     )
-    delivery_date = _parse_delivery_date(full_text)
-    if not delivery_date:
-        delivery_date = (_resolve_import_date(import_date) + timedelta(days=1)).isoformat()
+    delivery_date = next_delivery_business_date(import_date).isoformat()
 
     time_instruction, start_time, end_time = _parse_time_instruction(full_text)
     customer_code = _parse_customer_code(lines)
@@ -1195,19 +1191,6 @@ def _parse_inline_quantity_after_financials(tokens):
         if name:
             return int(match.group(1)), name
     return None
-
-
-def _resolve_import_date(value):
-    if value is None:
-        return current_melbourne_business_date()
-    if isinstance(value, datetime):
-        return value.date()
-    if isinstance(value, date):
-        return value
-    parsed = _parse_date(value)
-    if parsed is None:
-        raise ValueError("import_date must be a valid date")
-    return parsed
 
 
 def _strip_trailing_numeric_tokens(tokens):

@@ -1,12 +1,15 @@
 from dataclasses import replace
-from datetime import date, datetime, timedelta
+from datetime import date
 from decimal import Decimal, InvalidOperation
 from hashlib import sha1
 from io import BytesIO
 import re
 
 from backend.schemas import DeliveryDocketDocxPreviewItem
-from backend.services.manual_dispatch.logbook_file_service import MELBOURNE_TIMEZONE
+from backend.services.manual_dispatch.delivery_import_date import (
+    current_melbourne_business_date,
+    next_delivery_business_date,
+)
 from backend.services.manual_dispatch.normalization import clean_optional_text
 
 
@@ -36,10 +39,6 @@ WINDOW_PATTERN = re.compile(
     re.IGNORECASE,
 )
 TIME_SLOT_PATTERN = re.compile(r"^TIME\s+SLOT\s*:\s*(.+)$", re.IGNORECASE)
-
-
-def current_melbourne_business_date():
-    return datetime.now(MELBOURNE_TIMEZONE).date()
 
 
 def extract_delivery_docket_docx_text(docx_bytes):
@@ -111,9 +110,7 @@ def parse_delivery_docket_text(
     phone = on_forward_profile.get("phone") or deliver_profile.get("phone")
 
     time_slot = _find_time_slot(lines)
-    delivery_date = _date_from_time_slot(time_slot)
-    if not delivery_date:
-        delivery_date = (_resolve_import_date(import_date) + timedelta(days=1)).isoformat()
+    delivery_date = next_delivery_business_date(import_date).isoformat()
     delivery_window = _find_delivery_window(deliver_block)
     start_time, end_time = _times_from_schedule(time_slot, delivery_window)
 
@@ -560,16 +557,6 @@ def _before_supplier_footer(lines):
             break
         result.append(line)
     return result
-
-
-def _resolve_import_date(import_date):
-    if import_date is None:
-        return current_melbourne_business_date()
-    if isinstance(import_date, datetime):
-        return import_date.date()
-    if isinstance(import_date, date):
-        return import_date
-    return date.fromisoformat(str(import_date))
 
 
 def _row_id(source_filename, docket_number):
