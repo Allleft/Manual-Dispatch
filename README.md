@@ -1,543 +1,391 @@
-# Manual Dispatch Board
+# Manual Dispatch
 
-Manual Dispatch Board is a FastAPI, SQLite, and vanilla JavaScript application for office staff to manually coordinate **Order Delivery** and **OP SHOP Pickup** work.
+Manual Dispatch is an operational dispatch system for planning deliveries and
+OP SHOP pickups, allocating drivers and vehicles, and keeping run-sheet history.
+It combines a browser workspace, a FastAPI backend, SQLite-backed state, and
+optional read-only Attaché invoice integration.
 
-This is a manual operational system. It deliberately does **not** perform automatic dispatch, route optimisation, ETA calculation, geocoding, map integration, automatic driver or vehicle selection, automatic trip planning, or capacity/zone-based blocking.
+## Overview
 
-## What This Branch Delivers
+The application separates two business workspaces:
 
-The separated workspaces now include Delivery Run Sheet closeout so completed
-runs can finalize delivered Orders and return undelivered Orders to the Delivery
-Task Pool for a later date.
-
-| Area | Order Delivery | OP SHOP Pickup |
+| Workspace | Operational unit | Planning and history |
 | --- | --- | --- |
-| Task type | `ORDER` | `OPSHOP_PICKUP` |
-| Operational snapshot | Delivery Run Sheet | Pickup Collection |
-| Generated state | Reserves captured Delivery Orders and the selected vehicle target | Reserves captured pickup tasks |
-| Saved state | Open sheets reserve captured Orders; closed sheets retain immutable history without reserving them | Locks only OP SHOP pickup changes for the driver/date |
-| Export | Delivery-only workbook | OP SHOP-only workbook |
-| Totals | Pallets, loose bags, and vehicle capacity | No Delivery load or capacity totals |
+| Delivery | Customer delivery order | Delivery Task Pool, driver trips, Delivery Run Sheets and closeout |
+| OP SHOP | Pickup task from a schedule or manual request | Regular, Oncall and Countryside planning, Pickup Collections |
 
-A saved Delivery Run Sheet does not lock OP SHOP Pickup work. A saved Pickup Collection does not lock Delivery work. The same driver/date may therefore have one saved Delivery Run Sheet and one saved Pickup Collection.
+Operators review tasks, allocate work, generate documents and save historical
+snapshots. Delivery and pickup dates determine their respective Trip Summaries;
+these are not simply summaries of when a record was created.
 
-Legacy Final Trip Summary records remain available for history and migration compatibility, but new scoped work is performed through the two workspace flows below.
+## Key Features
 
-## Workspace Navigation
+### Delivery
 
-After login, Home provides the two workspace entry points and checks migration readiness before staff begin scoped work.
+- Create and edit orders, delivery details, urgency, product lines and load totals.
+- Filter the Delivery Task Pool and prioritize urgent orders.
+- Classify delivery areas as South East or Local from suburb/postcode data.
+  Unresolved locations remain visible in Needs Area Review.
+- Move orders between areas with a persistent manual override. Changing the
+  actual suburb/postcode clears that override; unrelated edits preserve it.
+- Assign and unassign orders to driver/date/trip allocations with vehicle details.
+- Generate Delivery Run Sheets, review them, save them, and reopen Saved History.
+- Export individual or daily/multi-driver run sheets to Excel.
+- View delivery-date-scoped Trip Summaries.
 
-### Order Delivery
+On Delivery board load, eligible ACTIVE, unassigned orders dated today or earlier
+roll forward to the next weekday after the Melbourne business date. Reserved
+orders are excluded. This is request-driven, not a midnight background scheduler;
+the weekday calculation does not include a public-holiday calendar.
 
-| Route | Purpose |
+#### Run-sheet lifecycle and closeout
+
+Generating a run sheet captures a document snapshot and reserves its orders.
+Saving retains that snapshot in history. Generated sheets can be cancelled;
+reserved work cannot be freely reassigned while the sheet remains active.
+
+A saved, open run sheet can be closed once with an outcome for every row:
+
+| Outcome | Effect on live work |
 | --- | --- |
-| `#delivery/task-pool` | Review active unassigned Delivery Orders, filter them, create/edit/cancel orders, import Attache invoices, and assign each order to a driver and trip. |
-| `#delivery/trip-summary` | Review Orders by driver and Delivery Date, move Orders between Trip 1 and Trip 2, assign vehicles, and generate a Delivery Run Sheet. |
-| `#delivery/run-sheet` | Review current Generated and Saved Delivery Run Sheets, cancel Generated sheets, save, close Saved/Open sheets, and export. |
-| `#delivery/history` | Search `SAVED` Delivery Run Sheets by actual Delivery Date, review immutable paper snapshots and read-only closeout outcomes, and re-export Excel. |
+| `DELIVERED` | Finalizes the order and removes its live assignment; a note is optional |
+| `RETURN_TO_POOL` | Returns the order to ACTIVE/unassigned status with a return reason and later delivery date |
 
-### OP SHOP Pickup
+The next delivery date must be later than the sheet's original date. The
+`OTHER` return reason requires a note. Closeout stores outcomes separately and
+does not rewrite the saved document rows. A closed sheet remains historical
+evidence, while its returned orders can be planned again.
 
-| Route | Purpose |
-| --- | --- |
-| `#opshop/task-pool/regular` | Review Regular pickup tasks generated from active Regular schedules and apply assignment drafts. |
-| `#opshop/task-pool/oncall` | Create and manage request-driven Oncall pickup tasks from active templates. |
-| `#opshop/task-pool/countryside` | Assign Countryside route groups, then manage their live pickup tasks and assignment drafts. |
-| `#opshop/templates` | Manage Regular/Oncall templates and Countryside route groups and memberships. |
-| `#opshop/trip-summary` | Review assigned pickups by driver and Pickup Date, then generate a Pickup Collection. |
-| `#opshop/collections` | Review Generated and Saved Pickup Collections, cancel Generated collections, save, and export. |
-| `#opshop/history` | Search `SAVED` Pickup Collections by actual Pickup Date, review their full immutable Weight Sheets across Dispatch Dates, and re-export Excel. |
+### OP SHOP
 
-Workspace navigation is hash-based. Browser refresh, copied links, Back, and Forward retain the active workspace route. Switching between Regular, Oncall, and Countryside preserves pending OP SHOP assignment drafts rather than silently applying or discarding them.
+- Regular pickup schedules with source weekday, frequency and route sequence.
+- Oncall pickup requests created when work is needed, not automatically recurring.
+- Countryside route groups and group-oriented assignment workflows.
+- Driver/date/trip planning and pickup-date-scoped Trip Summaries.
+- Pickup Collection generation, saving, Saved History and Excel export.
 
-## Dates and Scope
+Regular generation follows each schedule's source weekday. Weekly and twice-weekly
+rules use the available source schedule rows; monthly rules with a supported
+ordinal weekday generate on that occurrence. Missing or unknown frequency rules
+are skipped with warnings rather than guessed.
 
-- **Dispatch Date** controls Delivery and OP SHOP Task Pool operational views. Assignments and generated documents retain their original Dispatch Date as provenance metadata, but changing the current Dispatch Date does not filter Trip Summary, vehicles, locks, Run Sheets, Pickup Collections, or service-date exports.
-- **Delivery Date** is the sole business scope for Delivery Trip Summary, driver/trip grouping, vehicle assignment, Run Sheet candidates and locks, Run Sheets pages, Saved History, and Delivery date export.
-- **Pickup Date** is the sole business scope for OP SHOP Trip Summary, driver grouping, Pickup Collection candidates and locks, Collections pages, Saved History, and Pickup date export.
-- An assignment's business identity is `task_type + task_id`. Reassignment updates that record and preserves its original Dispatch Date provenance instead of creating a second assignment for another Dispatch Date.
-- Delivery Saved History queries `delivery_date + status=SAVED`; OP SHOP Saved History queries `pickup_date + status=SAVED`. Results may therefore include snapshots generated under different Dispatch Dates.
-- Delivery Orders, OP SHOP tasks, scoped snapshots, locks, histories, and Excel exports are intentionally separated.
+**Fortnight limitation:** current REGULAR schedules marked Fortnight remain
+visible every week, preserving their original frequency label. They are not
+automatically hidden on alternate weeks. Legacy STANDARD schedules have separate
+A/B fortnight handling; do not treat these two generation paths as equivalent.
 
-## Order Delivery Workflow
+Generated Pickup Collections reserve their tasks but allow operational entry
+updates: clothing/shoe weights, time in/out, trolley counts, toy counts and bag
+counts. Saving makes those entries read-only in history. Generated collections
+can be cancelled. This differs from Delivery closeout; a Pickup Collection is
+not a Delivery Run Sheet.
 
-1. Open **Order Delivery → Task Pool**.
-2. Add a Delivery Order manually, import text-based Attache invoice PDFs, or filter active unassigned Orders by search, urgency, or Delivery Date.
-3. Select a Driver and Trip 1 or Trip 2 for each Order and assign it manually.
-4. Assigned Orders leave the Task Pool globally and remain unavailable there until staff manually unassign them; Generated and Saved/Open Run Sheet snapshots also reserve captured Orders globally.
-5. Open **Trip Summary**, select the Delivery Date, review the driver trips, and select a vehicle where required.
-6. Select Generate for a driver/date and confirm the information in the confirmation modal.
-7. Generation creates an immutable `GENERATED` Delivery Run Sheet snapshot and reserves its captured Orders and vehicle target.
-8. From **Run Sheets**, either cancel an incorrect Generated sheet or save/export it. Cancel Generated removes only the snapshot reservation; the original Order assignments remain in Trip Summary until staff manually unassign them. Saving promotes the same snapshot to `SAVED`; it does not rebuild it from mutable live records.
-9. For a `SAVED` and `OPEN` sheet, select **Close Run Sheet**, explicitly mark every row `Delivered` or `Return to Delivery Task Pool`, and confirm the irreversible summary. Returned rows require an allowed reason and a next Delivery Date later than the original sheet date; `OTHER` also requires a note.
-10. Closeout is atomic. Delivered Orders become `FINALIZED`; returned Orders stay `ACTIVE`, lose their former assignment, move to the selected later Delivery Date, and reappear in that date's Delivery Task Pool. The original snapshot, trips, sequence, driver, vehicle, and Excel remain unchanged.
-11. Open **Saved History**, select the actual Delivery Date, and review or re-export the full immutable paper snapshots and per-order closeout outcomes. History remains read-only.
+### Import Workflows
 
-Closeout uses `POST /api/manual-dispatch/delivery/run-sheets/{run_sheet_id}/closeout`.
-The current workflow is irreversible and supports only `DELIVERED` and
-`RETURN_TO_POOL`; it does not support partial delivery or automatic midnight
-release.
+These are four separate workflows, not one combined parser:
 
-### Delivery Orders and Attache Invoice Import
+| Workflow | Input | Purpose |
+| --- | --- | --- |
+| Import Attaché PDF | Uploaded invoice PDFs | Extract and review invoice/order data before selected import |
+| Import Delivery Docket | Uploaded DOCX dockets | Parse delivery instructions, addresses, products and loads |
+| Import from Attaché | A single invoice number | Direct lookup through the configured read-only Bridge |
+| Import Today & Future Invoices | A date-scoped Bridge preview | Review and import eligible current/future invoices in a batch |
 
-Delivery Orders support manual add, edit, and soft-cancel operations. Delivery Task Pool cards are sorted Urgent-first and support search across identifiers, customer details, address, product, and notes.
+Preview and operator review precede import. Duplicate checks protect against
+re-importing existing invoice identities. Imports create Manual Dispatch records;
+they do not update the source invoice in Attaché.
 
-#### Delivery Area classification and manual override
+#### Today & Future Invoices
 
-Every active Delivery Order is classified independently of its existing `zone` into one of two Task Pool business areas: East, South, and South East regions map to **South East**; North, City, West, and South West regions map to **Local**. Classification first normalizes the existing supported suburb aliases and matches exact suburb + postcode; only when postcode is absent may a single verified suburb record be used as fallback. Unknown or postcode-conflicting locations remain **Needs Area Review** and never default to Local.
+The preview starts from the Melbourne business date and includes invoices dated
+on or after that date, with a maximum batch of **200 invoices**.
 
-The verified starter mapping is maintained in `backend/data/delivery_suburb_regions.json`. It is intentionally not a guessed or comprehensive postcode list; expand it only with business-approved suburb, postcode, and region records. Changing an Order's suburb or postcode recalculates the automatic area and clears any previous manual override. Add Order requires an explicit South East or Local choice when automatic classification is unknown, while Attaché and Delivery Docket imports may remain in Needs Area Review with a visible warning.
+Account Terms determine payment eligibility:
 
-Task Pool filters apply before Orders are grouped into South East, Local, and Needs Area Review sections. Staff can drag an unassigned Order by its dedicated handle or use the keyboard-accessible **Move area** select. A successful move persists only the manual area override and updates the current board in place; **Reset to Automatic** removes it. Generated or Saved/Open Run Sheet reservations continue to block Order changes.
+- `30 DAYS`: payment is not required for this import gate.
+- `C.O.D.` (including normalized `COD`): the invoice outstanding balance must
+  be paid in full. The implemented decimal tolerance is `0.005`; a balance at
+  or below it, including a credit balance, qualifies.
+- Unsupported terms or an unavailable/invalid required balance fail closed.
 
-- `POST /api/manual-dispatch/delivery/area-classification` previews suburb/postcode classification.
-- `PATCH /api/manual-dispatch/delivery/orders/{order_id}/delivery-area` sets `LOCAL` / `SOUTHEAST`, or clears an override with `null`.
+Preview rows distinguish Ready, Duplicate, Payment Required and Needs Review.
+Select all ready only selects eligible rows; payment-blocked and review-required
+rows are not made eligible by a browser checkbox.
 
-`Import Attache Invoices` supports one or more text-based Attache invoice PDFs:
+The server signs a 15-minute eligibility snapshot covering source, invoice
+number, customer code, terms, outstanding balance, preview/from date and timing.
+Commit verifies that proof, rechecks eligibility and local duplicates, and
+rejects missing, altered or expired proofs. Commit does not reconnect to
+Bridge/ODBC. The proof attests to the preview snapshot, not a fresh balance read
+at commit time. This gate is specific to Today & Future; it does not change
+PDF, Docket or single-invoice Direct import semantics.
 
-- Uploading a PDF only creates a preview; it does not write to SQLite.
-- Staff can correct parsed delivery fields before confirmation.
-- Existing invoice-number duplicates are surfaced and are not selected for import by default.
-- Confirmed rows use the standard Delivery Order creation path and appear in the Delivery Task Pool.
-- Product lines store product code, name, actual quantity/unit, and optional packaging quantity/unit. Units are not limited to Pallets, Bags, or Cartons.
-- Pallets, Loose Bags, and Cartons are independent order-level transport fields; they are never inferred from product quantities or units.
-- Imported product lines use delivery product fields only. DEL/FREIGHT and other charge rows, accounting totals, GST, and payment information are not imported as delivery items.
-- Generated and Saved Delivery Run Sheets capture immutable address, note, product, packaging, and transport snapshots. Run Sheet pages, history, and Excel exports read those snapshots rather than mutable live Orders.
-- Importing invoices does not change OP SHOP tasks, Pickup Collections, or OP SHOP locks.
+#### Delivery Docket Import
 
-### Delivery Run Sheet Locking
+The DOCX parser uses document structure rather than a list of customer-specific
+templates. It handles physical delivery/drop-off sections, ON FORWARD and final
+customer sections, inline address layouts, customer/contact extraction, and
+product/load information including pallets, bags and cartons.
 
-- Active Delivery Order assignments reserve those Orders globally from every Delivery Task Pool until staff manually unassign them.
-- `GENERATED` Delivery Run Sheets reserve captured Delivery Orders globally and reserve the selected driver/date vehicle target until cancelled or saved.
-- Cancelling a `GENERATED` Delivery Run Sheet releases only the snapshot reservation; still-assigned Orders remain hidden from Task Pool and return to their original Trip Summary assignment context.
-- `SAVED` + `OPEN` Delivery Run Sheets continue to reserve captured Orders and block Delivery assignment and vehicle changes for their driver/date.
-- `SAVED` + `CLOSED` Delivery Run Sheets remain queryable, auditable, and exportable but do not reserve Orders. A closed sheet cannot be closed or rewritten again.
-- Delivery locks are enforced by the scoped Delivery services and do not block OP SHOP work.
+Physical drop-off details are distinguished from the final customer's identity.
+Ambiguous or unsupported values are surfaced for review instead of silently
+inventing an address or quantity. Preview corrections remain subject to
+revalidation before import.
 
-## OP SHOP Pickup Workflow
+## Architecture
 
-1. Open **OP SHOP Pickup → Task Pool** and choose Regular, Oncall, or Countryside.
-2. Manage source templates from **Manage Templates** when required.
-3. Review or create live pickup tasks, select assignees, and use **Apply Assignment Changes** for pending assignment drafts.
-4. Open **Trip Summary**, select the Pickup Date, and review tasks grouped under each driver and category.
-5. Select Generate for a driver/date and confirm the Pickup Collection details in the confirmation modal.
-6. Generation creates an immutable `GENERATED` Pickup Collection and reserves the captured pickup tasks.
-7. From **Pickup Collections**, cancel an incorrect Generated collection or save/export it as a `SAVED` collection.
-8. Open **Saved History**, select the actual Pickup Date, and review or re-export the full immutable Weight Sheets from stored snapshot rows. History is read-only: it never offers Generate, Save, Cancel, assignment, or editing actions.
+```text
+Browser: HTML/CSS + JavaScript modules
+  -> FastAPI routes
+     -> Application/domain services
+        -> Repository interfaces and SQLite implementation
+           -> SQLite database
+        -> File-based operational Logbook
 
-### Regular Pickups
-
-- Regular tasks are ensured from active `REGULAR` schedules for the visible operational week.
-- Monday–Thursday Dispatch Dates show the current Monday–Friday pickup week.
-- Friday shows Friday plus the following Monday–Friday; weekend Dispatch Dates show the next Monday–Friday.
-- Past pickup-date groups are collapsed by default. Current and future date groups are expanded by default and can be toggled without losing the page position.
-- Every Regular row shows the most recent strictly earlier Pickup Date from a `SAVED` Pickup Collection for the same stable OP SHOP ID. When none exists it shows `No record`; the value is derived read-only and is not persisted.
-- Template default-driver information is materialised once when an eligible actual task is created or by the controlled source-driver backfill tool.
-- Later manual changes, including an explicit `Unassigned`, remain local drafts until Apply and are not overwritten by refresh or subtype navigation.
-
-### Oncall Pickups
-
-- Oncall templates are sources only; importing or creating a template does not automatically create a live pickup task.
-- Staff create a live Oncall task through **Add Pickup Task**.
-- Template search matches company name, suburb, and street address.
-- A weekday template can provide a matching default Pickup Date. A no-fixed-day template requires staff to select a date.
-- A source-backed default driver is applied once on task creation when eligible; ad-hoc or no-default tasks remain Unassigned.
-
-### Countryside Pickups
-
-Countryside is an OP SHOP subcategory, not a third dispatch product:
-
-| Field | Value |
-| --- | --- |
-| `task_type` | `OPSHOP_PICKUP` |
-| `run_type` | `ON_CALL` |
-| `pickup_category` | `COUNTRYSIDE` |
-
-- A Countryside workbook sheet represents a route group.
-- One OP SHOP location may belong to more than one route group.
-- Route groups and memberships are source/template data; importing them does not create live pickup tasks.
-- **Assign Route Group** creates or restores one live task for every active membership on the selected Pickup Date and assigns the selected driver.
-- Route create/rename/disable and membership add/move/remove operations are available from `#opshop/templates`.
-- Historical pickup tasks and saved snapshots are not deleted when route definitions change.
-
-### Pickup Collection Locking
-
-- `GENERATED` Pickup Collections reserve the captured OP SHOP tasks until cancelled or saved.
-- `SAVED` Pickup Collections block only OP SHOP pickup mutations for their driver/date.
-- Delivery Run Sheet locks and Pickup Collection locks are independent.
-- Saved collections are exported from immutable snapshot rows, not mutable live tasks.
-
-## Legacy Final Summary Compatibility and Migration
-
-The legacy Final Trip Summary routes, tables, history, and workbook behavior remain available for compatibility. They are not rewritten or deleted by this branch.
-
-Home performs a read-only workspace migration-readiness check:
-
-- Any legacy Final Summary with `status = GENERATED` blocks both scoped workspaces.
-- A legacy `SAVED` summary that does not have the required independent workspace record blocks only the affected workspace.
-- Normal application traffic never migrates records automatically.
-
-Use the migration tool during an approved maintenance window to copy legacy `SAVED` Final Summary snapshots into independent workspace history.
-
-```powershell
-# Dry run: read-only, no backup and no writes
-.\tmp\route-test-venv\Scripts\python.exe .\tools\migrate_legacy_final_summaries_to_workspaces.py `
-  --db-path "data\manual_dispatch.sqlite3"
-
-# Apply: explicit double confirmation, timestamped backup, one transaction
-.\tmp\route-test-venv\Scripts\python.exe .\tools\migrate_legacy_final_summaries_to_workspaces.py `
-  --db-path "data\manual_dispatch.sqlite3" `
-  --apply --yes
+Manual Dispatch backend
+  -> HTTP Bridge client
+     -> Attaché Bridge on Windows
+        -> ODBC
+           -> Attaché / FairCom (SELECT-only queries)
 ```
 
-The migration is additive and idempotent. It does not delete or rewrite legacy Final Summary headers, legacy rows, live Orders, live pickups, or assignments. See [the migration runbook](docs/separate-delivery-and-opshop-workspaces-migration.md) before applying it.
+- **Frontend:** same-origin static files served by FastAPI; API clients, actions,
+  state and render modules implement the workspaces without a frontend build step.
+- **API:** `backend/api/manual_dispatch.py` composes authentication and protected
+  route factories under `/api/manual-dispatch`.
+- **Services:** the service facade delegates business workflows, validation,
+  snapshots and audit recording to focused modules.
+- **Repositories:** SQLite persists application state; an in-memory implementation
+  supports isolated tests. Repository boundaries keep storage out of UI code.
+- **Bridge:** a separate process isolates Windows ODBC dependencies from the
+  Manual Dispatch application host. It is not bundled into the application image.
 
-## Data Model
-
-| Table | Responsibility |
-| --- | --- |
-| `manual_dispatch_assignments` | Assignment records keyed by `task_type + task_id`, supporting `ORDER` and `OPSHOP_PICKUP`. |
-| `opshop_locations` | Deduplicated OP SHOP location records. |
-| `opshop_pickup_schedules` | Regular schedules, Oncall templates, and Countryside route memberships. |
-| `opshop_pickup_tasks` | Actual dated OP SHOP pickup work. |
-| `opshop_countryside_route_groups` | Countryside route-group definitions. |
-| `delivery_run_sheets` / `delivery_run_sheet_rows` | Independent Generated/Saved Delivery Run Sheet snapshots. |
-| `delivery_run_sheet_outcomes` | Immutable per-row closeout outcomes, return reasons, later Delivery Dates, and trusted operator attribution. |
-| `opshop_pickup_collections` / `opshop_pickup_collection_rows` | Independent Generated/Saved OP SHOP Pickup Collection snapshots. |
-| `final_trip_summaries` and child tables | Legacy Final Summary compatibility/history data. |
-
-## Code Structure
+## Repository Structure
 
 ```text
 backend/
-  api/manual_dispatch.py                         # Stable router/service compatibility facade
-  api/manual_dispatch_routes/                   # Auth, Delivery, OP SHOP, snapshots, exports, Attache, and legacy routes
-  services/manual_dispatch_service.py           # Stable public service facade
-  services/manual_dispatch/application/         # Bounded application orchestration
-  services/manual_dispatch/audit/               # Audit context, Logbook adapter, and domain event recorders
-  services/manual_dispatch/                     # Domain boards, mutations, snapshots, locks, auth, and templates
-  repositories/
-    sqlite_manual_dispatch_repository.py        # Stable SQLite facade
-    in_memory_manual_dispatch_repository.py     # Stable in-memory facade
-    sqlite/                                     # SQLite persistence mixins and row mappers
-    in_memory/                                  # In-memory persistence mixins and seed/base helpers
-
+  api/manual_dispatch_routes/   HTTP route factories
+  services/manual_dispatch/    Business rules and application services
+  repositories/                SQLite and in-memory repositories
+  db/                          Schema and connection/upgrade helpers
+  integrations/                Server-side integration clients
+  data/                        Versioned reference data, not the live database
+attache_bridge/                Read-only invoice API, ODBC adapter and launcher
 frontend/
-  app.js                                        # Authenticated hash routing and composition
-  js/api/manual-dispatch-api.js                 # Stable API re-export barrel
-  js/api/manual-dispatch/                       # Shared, Delivery, OP SHOP, and legacy clients
-  js/actions/workspace-actions.js               # Stable createWorkspaceActions facade
-  js/actions/workspace/                         # Context, guards, loaders, and bounded workspace actions
-  js/render/delivery-workspace-renderer.js      # Stable Delivery renderer facade
-  js/render/delivery/                           # Delivery pages, modals, history, and utilities
-  js/render/opshop-workspace-renderer.js        # Stable OP SHOP renderer facade
-  js/render/opshop/                             # OP SHOP pages, collections, history, and utilities
-  js/state/                                     # Unchanged shared state shape and selectors
-
-tools/
-  migrate_legacy_final_summaries_to_workspaces.py
-  import_regular_opshop_pickups_to_db.py
-  import_oncall_opshop_pickups_to_db.py
-  import_countryside_opshop_pickups_to_db.py
-  backfill_opshop_source_driver_assignments.py
-  read_logbook.py
-
-tests/
-  test_refactor_contract_baseline.py            # Compatibility fingerprints
-  test_logbook_reader.py
-  test_workspace_*.py                           # Scoped workflow and frontend shell contracts
+  js/                          API, action, state, render and utility modules
+  styles.css                   Shared styling
+tests/                         Backend, integration and frontend contract tests
+tools/                         Migration, validation, audit and deployment helpers
+docs/                          Specifications and operational runbooks
+.github/workflows/             CI configuration
 ```
 
-Compatibility facades keep established imports and public entry points stable while implementation modules own bounded responsibilities. Render modules do not call `fetch`; network calls stay under `frontend/js/api/`. The top-level app-state shape remains unchanged.
+`Dockerfile`, `docker-compose.yml`, dependency files and
+`attache-bridge.spec` live at the repository root. Runtime `data/`, local
+workbooks, logs, databases, build outputs and temporary QA files are not source
+architecture and must not be committed.
 
-## Quick Start
+## Data and Persistence
 
-Examples below use Windows PowerShell from the repository root.
-Python 3.12 is the supported production runtime and matches CI and Docker.
+The default SQLite database is `data/manual_dispatch.sqlite3`, configurable
+with `MANUAL_DISPATCH_DB_PATH`. SQLite stores orders, pickups, assignments,
+operator accounts and document snapshots. Attaché integration is query-driven:
+selected imports become application records, not a wholesale copy of Attaché.
+
+Repository initialization creates the schema and applies compatibility upgrades.
+Existing database transitions also have explicit migration tools for legacy
+workspace separation and H5 invariants. Startup is not a substitute for a
+reviewed migration plan, and not every compatibility upgrade is purely additive.
+Back up and rehearse against a disposable copy before upgrading existing data.
+
+Connections enable foreign keys, WAL and a busy timeout. Mutating workflows use
+transactions, including immediate transactions where required, and report
+state-change conflicts rather than silently overwriting competing assignments.
+
+The Logbook is a separate append-oriented, monthly JSON-lines text audit trail.
+Its default directory is `data/logbook`, configurable with
+`MANUAL_DISPATCH_LOGBOOK_DIR`. Audit writes are best-effort and failures are
+logged; the Logbook is not a replacement for database backups.
+
+## Authentication and Security
+
+Business API routes require an authenticated operator. Registration/login and
+the public health endpoint have separate access rules. Operator passwords are
+stored as salted PBKDF2 hashes. Sessions use a signed, expiring HttpOnly cookie
+with SameSite=Lax; secure-cookie behavior is configurable.
+
+Set a stable, private `MANUAL_DISPATCH_AUTH_COOKIE_SECRET` for deployment.
+The process-local random fallback is for unconfigured development, not a
+production configuration: restarting changes the signing key and invalidates
+sessions and outstanding preview proofs.
+
+Registration is disabled by default. Password reset requires the separately
+configured `MANUAL_DISPATCH_ADMIN_RESET_CODE`. API documentation is disabled
+unless explicitly enabled. These controls do not replace TLS, network access
+restrictions or host security.
+
+The backend authenticates Bridge requests with a shared token. Invoice query
+paths are designed to be SELECT-only, and invalid authorization, ambiguous
+results or eligibility uncertainty fail closed.
+
+## Local Development
+
+Python **3.12** is used by CI and the Docker image. Node.js **20** is used for
+JavaScript validation, not for serving or building the frontend.
+
+From the repository root, in PowerShell:
 
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-python -m pip install -r requirements-dev.txt
-
-# Optional: use a safe local test database instead of the runtime database.
-$env:MANUAL_DISPATCH_DB_PATH="data\manual_dispatch_test.sqlite3"
-$env:MANUAL_DISPATCH_LOGBOOK_DIR="data\manual_dispatch_test_logbook"
-$env:MANUAL_DISPATCH_AUTH_COOKIE_SECRET="replace-with-a-strong-random-local-secret"
-$env:MANUAL_DISPATCH_ALLOW_REGISTRATION="false"
-$env:MANUAL_DISPATCH_SEED_DEMO_DATA="false"
-
-python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 ```
 
-Open:
-
-- Frontend: `http://127.0.0.1:8000/frontend/`
-- Health check: `http://127.0.0.1:8000/health`
-
-The frontend and API are served from the same FastAPI origin; cross-origin API
-requests are not enabled. Operational Manual Dispatch endpoints require the
-signed HttpOnly operator cookie. Registration defaults to disabled and can be
-temporarily enabled with `MANUAL_DISPATCH_ALLOW_REGISTRATION=true` for account
-setup. Set `MANUAL_DISPATCH_AUTH_COOKIE_SECRET` explicitly for every deployed
-instance. Set `MANUAL_DISPATCH_AUTH_COOKIE_SECURE=true` only when the browser
-reaches the app over HTTPS; local plain-HTTP development must leave it `false`.
-Generate a deployment secret with `python -c "import secrets; print(secrets.token_urlsafe(48))"`
-and keep it in the local deployment environment, never in Git.
-
-Every production deployment must explicitly configure these values:
-
-- `MANUAL_DISPATCH_AUTH_COOKIE_SECRET`: a strong, stable secret supplied outside Git.
-- `MANUAL_DISPATCH_ALLOW_REGISTRATION=false` after initial account setup.
-- `MANUAL_DISPATCH_SEED_DEMO_DATA=false`; missing also defaults to no demo seed.
-- `MANUAL_DISPATCH_ENABLE_LEGACY_MUTATIONS=false`; temporarily enable only for an audited compatibility operation.
-- `MANUAL_DISPATCH_ENABLE_API_DOCS=false`; explicitly enable only in a trusted diagnostic environment.
-- `MANUAL_DISPATCH_DB_PATH`: an explicit path on persistent storage.
-- `MANUAL_DISPATCH_LOGBOOK_DIR`: an explicit directory on persistent storage.
-
-The Docker Compose deployment binds `/app/data` to `./data`, so both the configured
-database and Logbook directory survive container replacement. Do not run the image
-for production without an equivalent persistent volume.
-
-For the office-trial configuration:
+Use disposable local storage, separate from any operational checkout:
 
 ```powershell
-.\tools\start_office_trial.ps1
+$DevRoot = Join-Path $env:TEMP "manual-dispatch-dev"
+$env:MANUAL_DISPATCH_DB_PATH = Join-Path $DevRoot "manual_dispatch.sqlite3"
+$env:MANUAL_DISPATCH_LOGBOOK_DIR = Join-Path $DevRoot "logbook"
+$env:MANUAL_DISPATCH_AUTH_COOKIE_SECRET = & .\.venv\Scripts\python.exe -c "import secrets; print(secrets.token_urlsafe(48))"
+$env:MANUAL_DISPATCH_SEED_DEMO_DATA = "false"
+$env:MANUAL_DISPATCH_ALLOW_REGISTRATION = "true"
+.\.venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
 ```
 
-## Import and Maintenance Tools
+Open [the local workspace](http://127.0.0.1:8000/frontend/), register the initial
+local operator and sign in. Stop the server, set
+`MANUAL_DISPATCH_ALLOW_REGISTRATION=false`, then restart with the same secret.
+The example secret is generated in memory; never print, commit or share its value.
 
-Real office workbooks are local inputs and must not be committed.
+Plain Uvicorn uses the command-line host/port above. The Docker launcher consumes
+`MANUAL_DISPATCH_HOST` and `MANUAL_DISPATCH_PORT` instead. Environment settings
+must be provided to the process; the plain Uvicorn command does not load a
+project `.env` automatically.
 
-### Regular and Oncall workbook imports
+Other supported application settings include:
+
+| Variable | Purpose |
+| --- | --- |
+| `MANUAL_DISPATCH_AUTH_COOKIE_SECURE` | Enable secure cookies behind HTTPS |
+| `MANUAL_DISPATCH_ADMIN_RESET_CODE` | Enable the operator password-reset code |
+| `MANUAL_DISPATCH_ENABLE_API_DOCS` | Opt in to API documentation |
+| `MANUAL_DISPATCH_ENABLE_LEGACY_MUTATIONS` | Opt in to legacy mutation endpoints |
+
+## Attaché Bridge Setup
+
+Direct and Today & Future imports require a separately configured Windows Bridge
+with compatible Python/ODBC architecture, the FairCom ODBC driver and an approved
+read-only connection configuration. PDF and DOCX upload parsing do not need ODBC.
+
+Configure these names through private environment configuration; no real values
+belong in source control:
+
+| Process | Environment variables |
+| --- | --- |
+| Manual Dispatch | `ATTACHE_BRIDGE_URL`, `ATTACHE_BRIDGE_API_TOKEN`, `ATTACHE_BRIDGE_TIMEOUT_SECONDS` |
+| Bridge | `ATTACHE_ODBC_CONNECTION_STRING`, `ATTACHE_BRIDGE_API_TOKEN`, `ATTACHE_BRIDGE_CONNECTION_TIMEOUT_SECONDS`, `ATTACHE_BRIDGE_QUERY_TIMEOUT_SECONDS` |
+
+The shared API token must agree on both sides. In a separate Windows environment,
+install and run the Bridge after configuring those variables:
 
 ```powershell
-.\tmp\route-test-venv\Scripts\python.exe .\tools\import_regular_opshop_pickups_to_db.py `
-  --file "<path-to-regular-opshop-workbook.xlsx>" `
-  --db-path "data\manual_dispatch.sqlite3"
-
-.\tmp\route-test-venv\Scripts\python.exe .\tools\import_oncall_opshop_pickups_to_db.py `
-  --file "<path-to-oncall-opshop-workbook.xlsx>" `
-  --db-path "data\manual_dispatch.sqlite3"
+python -m pip install -r attache_bridge/requirements.txt
+python -m attache_bridge.launcher --host 127.0.0.1 --port 8787
 ```
 
-These import/update source schedules and templates. They do not create all future live Oncall tasks automatically.
-
-### Countryside workbook import
+The tracked PyInstaller specification also supports a Windows executable build:
 
 ```powershell
-.\tmp\route-test-venv\Scripts\python.exe .\tools\import_countryside_opshop_pickups_to_db.py `
-  --file "<path-to-countryside-opshop-workbook.xlsx>" `
-  --db-path "data\manual_dispatch.sqlite3"
+python -m pip install -r attache_bridge/requirements-build.txt
+python -m PyInstaller attache-bridge.spec
 ```
 
-The importer manages workbook-backed route groups and memberships while preserving UI-created route groups and memberships.
+Keep the Bridge on an approved private network path; do not expose it publicly.
+See the [Attaché integration guide](docs/attache-direct-invoice-lookup.md) for
+configuration, packaging, controlled smoke tests and failure behavior.
 
-### Source-driver backfill
+**Schema validation boundary:** Current/Future SQL currently reads
+`admin.invoice_header.termsdescription`. A real SELECT-only discovery of
+`admin.InvoiceHeader.termsdescription` does not prove that the underscored object
+is equivalent. Validate the exact deployed object/column combination through an
+authorized SELECT-only smoke test before relying on this workflow operationally.
 
-`tools/backfill_opshop_source_driver_assignments.py` is a controlled maintenance tool for materialising approved source-driver defaults. Start with a dry run, resolve ambiguity or unknown alias reports, back up SQLite, and only then use its explicit apply mode.
+## Running Tests
 
-## System Logbook
+Use a disposable checkout with no business database or Logbook. Install
+`requirements-dev.txt` first. The full unittest discovery bootstraps isolated
+test storage; do not point tests at production data or a live Bridge.
 
-The System Logbook is file-based runtime audit data. There is no frontend Logbook page and no logbook database table. Files use JSON Lines format, with one valid JSON object per non-blank line.
-
-The default directory is `data/logbook/`, and monthly files are named `manual_dispatch_logbook_YYYY-MM.txt`. Set `MANUAL_DISPATCH_LOGBOOK_DIR` to override the directory. During normal application operation, these files are append-only. `data/logbook/` is gitignored, and logbook writing is best-effort so a logging failure does not block Delivery or OP SHOP business operations.
-
-Failed business events retain strict optional-date fields: `None`, empty and whitespace-only values are written as `null`; valid `YYYY-MM-DD` values remain unchanged; and malformed non-empty values are rejected from the structured date field without being guessed or copied into Logbook metadata. The metadata records only the rejected field names so the failed attempt remains auditable without creating another invalid date record.
-
-Logbook files may contain operational names, order identifiers, customer or company names, driver names, vehicle registrations, and OP SHOP information. Treat them as private runtime data: do not commit them, attach them to public issues, or share them without appropriate access controls.
-
-Current Delivery coverage includes order creation, update, cancellation and assignment; vehicle assignment changes; Run Sheet generation, cancellation, save and closeout; single and daily Run Sheet Excel exports; and Attaché confirmation batch summaries. Closeout records `DELIVERY_RUN_SHEET_CLOSED` plus per-order `DELIVERY_ORDER_DELIVERED` or `DELIVERY_ORDER_RETURNED_TO_POOL` events. `ATTACHE_IMPORT_CONFIRMED` is one summary event per attempted confirmation batch, while every successfully imported order continues to produce its existing `ORDER_CREATED` event.
-
-Current OP SHOP coverage includes Pickup Task creation, update, cancellation, assignment and Countryside assignment; Pickup Collection generation, cancellation and save; single and daily Pickup Collection Excel exports; Regular and Oncall template changes; Countryside route-group changes; and Countryside membership changes.
-
-An export event means the server successfully generated the workbook response. It does not prove that the browser completed or opened the download.
-
-### Maintenance Tool Logging
-
-Stage 2C.1 records one best-effort operational event for each attempted maintenance CLI invocation after argument parsing:
-
-- `REGULAR_WORKBOOK_IMPORT_COMPLETED`
-- `ONCALL_WORKBOOK_IMPORT_COMPLETED`
-- `COUNTRYSIDE_WORKBOOK_IMPORT_COMPLETED`
-- `SOURCE_DRIVER_BACKFILL_DRY_RUN`
-- `SOURCE_DRIVER_BACKFILL_APPLIED`
-- `LEGACY_WORKSPACE_MIGRATION_DRY_RUN`
-- `LEGACY_WORKSPACE_MIGRATION_APPLIED`
-
-The maintenance actor resolves in this order: an explicit `--actor` value, `MANUAL_DISPATCH_MAINTENANCE_ACTOR`, then `Unknown`. All five tools also accept an optional `--logbook-dir`; when omitted, the existing `MANUAL_DISPATCH_LOGBOOK_DIR` and `data/logbook/` resolution remains available. Actor values are trimmed.
-
-Safe examples:
+Focused parser regression suite:
 
 ```powershell
-$env:MANUAL_DISPATCH_MAINTENANCE_ACTOR="Albert"
-
-.\tmp\route-test-venv\Scripts\python.exe tools\import_regular_opshop_pickups_to_db.py `
-  --file "<regular-workbook.xlsx>" `
-  --db-path "data\manual_dispatch.sqlite3" `
-  --actor "Albert"
-
-.\tmp\route-test-venv\Scripts\python.exe tools\import_oncall_opshop_pickups_to_db.py `
-  --file "<oncall-workbook.xlsx>" `
-  --db-path "data\manual_dispatch.sqlite3" `
-  --actor "Albert"
-
-.\tmp\route-test-venv\Scripts\python.exe tools\import_countryside_opshop_pickups_to_db.py `
-  --file "<countryside-workbook.xlsx>" `
-  --db-path "data\manual_dispatch.sqlite3" `
-  --actor "Albert"
-
-.\tmp\route-test-venv\Scripts\python.exe tools\backfill_opshop_source_driver_assignments.py `
-  --regular-workbook "<regular-workbook.xlsx>" `
-  --oncall-workbook "<oncall-workbook.xlsx>" `
-  --db-path "data\manual_dispatch.sqlite3" `
-  --from-date "2026-07-14" `
-  --dry-run `
-  --report-path "tmp\source-driver-backfill-dry-run.json" `
-  --actor "Albert"
-
-.\tmp\route-test-venv\Scripts\python.exe tools\backfill_opshop_source_driver_assignments.py `
-  --regular-workbook "<regular-workbook.xlsx>" `
-  --oncall-workbook "<oncall-workbook.xlsx>" `
-  --db-path "data\manual_dispatch.sqlite3" `
-  --from-date "2026-07-14" `
-  --apply `
-  --report-path "tmp\source-driver-backfill-apply.json" `
-  --actor "Albert"
-
-.\tmp\route-test-venv\Scripts\python.exe tools\migrate_legacy_final_summaries_to_workspaces.py `
-  --db-path "data\manual_dispatch.sqlite3" `
-  --actor "Albert"
-
-.\tmp\route-test-venv\Scripts\python.exe tools\migrate_legacy_final_summaries_to_workspaces.py `
-  --db-path "data\manual_dispatch.sqlite3" `
-  --apply `
-  --yes `
-  --actor "Albert"
+.\.venv\Scripts\python.exe -m unittest discover -s tests -p "test_delivery_docket_docx_parser.py" -v
 ```
 
-Workbook importers and apply modes modify the target database, and their existing backup requirements remain mandatory. Backfill and migration dry-runs remain read-only for the target database, but now intentionally append one operational audit event; the backfill dry-run also writes its existing JSON report. Workbook, database, backup and report paths are reduced to basenames in logbook events. Maintenance events remain private runtime data. There is still no frontend Logbook page and no logbook database table.
-
-### Logbook Integrity Checking
-
-`tools/check_logbook_integrity.py` is the Stage 2C.2 read-only integrity checker. It never appends a Logbook event, repairs or rewrites a file, creates a correction record, or changes the database. Detected problems must be reviewed manually.
-
-The checker validates monthly filenames, strict UTF-8, JSON Lines structure, truncated final lines, final newlines, required fields, field types, timezone-aware timestamps, event/month placement, canonical results, workspaces, registered actions, optional business dates, and duplicate `LOGBOOK_TEST_DATA_ANNOTATED` or `LOGBOOK_INTEGRITY_INCIDENT_ANNOTATED` incident annotations. Diagnostics contain only safe filenames, line numbers, issue codes, and generic messages; raw Logbook lines and metadata are never printed.
-
-`LOGBOOK_INTEGRITY_INCIDENT_ANNOTATED` is an append-only operational note for a reviewed historical integrity incident. It does not repair, replace, suppress or make the original checker findings disappear; the original records remain unchanged and visible to the checker.
-
-Directory resolution remains `--logbook-dir`, then `MANUAL_DISPATCH_LOGBOOK_DIR`, then `data/logbook/`. The default output is concise text; `--format json` prints one machine-readable JSON object. `--strict` makes warnings fail the command.
-
-Exit codes are:
-
-- `0`: the checker ran and found no integrity errors; warnings are allowed unless `--strict` is set.
-- `1`: integrity errors were found, no Logbook files were found, or strict mode found warnings.
-- `2`: invalid arguments or a fatal directory/checker problem prevented a valid integrity result.
-
-Examples:
+Full suite and the static checks used by CI:
 
 ```powershell
-.\tmp\route-test-venv\Scripts\python.exe tools\check_logbook_integrity.py
-
-.\tmp\route-test-venv\Scripts\python.exe tools\check_logbook_integrity.py `
-  --logbook-dir "data\logbook"
-
-.\tmp\route-test-venv\Scripts\python.exe tools\check_logbook_integrity.py `
-  --format json
-
-.\tmp\route-test-venv\Scripts\python.exe tools\check_logbook_integrity.py `
-  --strict
-
-.\tmp\route-test-venv\Scripts\python.exe tools\check_logbook_integrity.py `
-  --format json `
-  > "tmp\logbook-integrity-report.json"
-```
-
-Do not redirect a report into `data/logbook/`: every matching file there is treated as private runtime Logbook data. Stage 2C.2 does not alter or repair that data and does not write a `LOGBOOK_INTEGRITY_CHECKED` self-audit event.
-
-Stage 2C.3 archive and retention work remains deferred; monthly archives, SHA-256 archive manifests, archive destination rules, retention policy, NAS backup instructions, restore verification, current-month protection, and approved deletion processes are not implemented here.
-
-`tools/read_logbook.py` is a read-only query tool. It resolves the directory from `--logbook-dir`, then `MANUAL_DISPATCH_LOGBOOK_DIR`, then `data/logbook/`. By default it reads all matching monthly files, returns matching entries in chronological order, applies no hidden result limit, and prints concise text. Use `--format jsonl` for JSON Lines output. Malformed lines produce a filename-and-line warning on stderr while the query continues.
-
-Available filters are `--date-from`, `--date-to`, `--workspace`, `--actor`, `--action`, `--result`, `--driver`, `--entity-id`, and `--search`; use `--limit` only when an explicit result cap is wanted. Date boundaries are inclusive. Run `tools\read_logbook.py --help` for the complete command reference.
-
-```powershell
-.\tmp\route-test-venv\Scripts\python.exe tools\read_logbook.py
-
-.\tmp\route-test-venv\Scripts\python.exe tools\read_logbook.py `
-  --workspace DELIVERY `
-  --actor "Office Operator"
-
-.\tmp\route-test-venv\Scripts\python.exe tools\read_logbook.py `
-  --date-from 2026-07-01 `
-  --date-to 2026-07-31 `
-  --entity-id 184068
-
-.\tmp\route-test-venv\Scripts\python.exe tools\read_logbook.py `
-  --action PICKUP_COLLECTION_SAVED `
-  --format jsonl
-```
-
-## Runtime Data and Repository Hygiene
-
-Never commit runtime or office data:
-
-- `.env` files;
-- `data/*.sqlite`, `data/*.sqlite3`, and SQLite `-wal` / `-shm` files;
-- backups and generated workbook outputs;
-- real customer or OP SHOP workbooks;
-- editor, cache, dependency, and temporary test files.
-
-`AGENTS.md` is a local-only agent instruction file. It is ignored by `.gitignore`, must not be committed, and must not be re-added merely to make documentation or worktrees look consistent. Shared architecture, testing, release, and SQLite safety guidance belongs in `README.md` and `docs/`. Personal `AGENT.md` scratch notes and one-off refactor handoff artifacts are also ignored.
-
-Before database imports, maintenance tools, NAS updates, or migration apply operations, create and verify a SQLite backup. Keep one application or maintenance process connected to the office SQLite database by default.
-
-## Validation
-
-Run the relevant focused checks during normal changes. For System Logbook changes, run:
-
-```powershell
-.\tmp\route-test-venv\Scripts\python.exe -m compileall backend tests tools
-.\tmp\route-test-venv\Scripts\python.exe -m unittest tests.test_logbook_integrity_checker -v
-.\tmp\route-test-venv\Scripts\python.exe -m unittest tests.test_logbook_file_service -v
-.\tmp\route-test-venv\Scripts\python.exe -m unittest tests.test_logbook_reader -v
-.\tmp\route-test-venv\Scripts\python.exe -m unittest tests.test_logbook_stage2b_events -v
-```
-
-Before a release or when requested, run the full local suite:
-
-```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+.\.venv\Scripts\python.exe -m compileall backend tests tools
+Get-ChildItem frontend -Recurse -Filter *.js | ForEach-Object {
+    node --check $_.FullName
+    if ($LASTEXITCODE -ne 0) { throw "JavaScript syntax check failed" }
+}
 git diff --check
-git diff --cached --check
-python -m compileall backend tests tools
-python -m unittest discover -s tests -v
-node --check frontend/app.js
-Get-ChildItem frontend -Recurse -Filter *.js | ForEach-Object { node --check $_.FullName }
 ```
 
-Key workspace coverage is in:
+The suite includes backend behavior, repository/integration tests and frontend
+contracts. Attaché-facing tests use fake/injected infrastructure; normal tests
+do not require live Attaché. Automated tests are distinct from a manual browser
+test, a frozen Bridge EXE test, or an authorized real ODBC smoke test.
 
-- `tests/test_workspace_api_and_exports.py`
-- `tests/test_workspace_services.py`
-- `tests/test_workspace_scoped_boards.py`
-- `tests/test_workspace_scoped_mutations.py`
-- `tests/test_workspace_snapshot_persistence.py`
-- `tests/test_workspace_legacy_migration.py`
-- `tests/test_workspace_safety_hardening.py`
-- `tests/test_workspace_frontend_shell.py`
-- `tests/test_delivery_area_classification.py`
-- `tests/test_delivery_area_api.py`
-- `tests/test_delivery_area_frontend.py`
-- `tests/test_opshop_pickup_collection_generation.py`
+## Deployment and Operational Safety
 
-Browser smoke testing remains necessary for route navigation, assignment drafts, confirmation modals, Generated → Saved lifecycle, saved history/export, and office data workflows.
+The Docker image runs FastAPI and serves the frontend. Compose provides the
+application service, persistent database/Logbook storage and backup mounts.
+The Bridge remains a separate Windows service/process. Deployment commonly uses
+an internal NAS host and a controlled reverse proxy.
 
-## Further Documentation
+- Provide stable secrets privately and configure secure cookies with HTTPS.
+- Stop relevant application processes before maintenance; coordinate database
+  backups and migrations rather than copying a live SQLite main file alone.
+- Use SQLite Backup API backups that include committed WAL contents, verify
+  integrity and rehearse migrations on copies before touching operational data.
+- Do not use production databases or the formal Logbook for tests.
+- Never commit SQLite files, Logbook contents, business DOCX/PDF/workbooks,
+  connection strings, tokens or packaged Bridge executables.
+- Attaché access remains read-only, but Bridge/ODBC sessions may still count as
+  active company access for Attaché Archive. Stop the Bridge before Archive and
+  coordinate the operation with the responsible operator.
+- Validate local application behavior, network access and the exact ODBC query
+  path separately. A passing automated suite does not prove deployment readiness.
 
-- [Separate Delivery and OP SHOP Workspaces specification](docs/separate-delivery-and-opshop-workspaces-spec.md)
-- [Legacy Final Summary workspace migration runbook](docs/separate-delivery-and-opshop-workspaces-migration.md)
-- [OP SHOP workspace smoke-test checklist](docs/opshop-workspace-smoke-test-checklist.md)
-- [Manual Dispatch Board code structure](docs/manual-dispatch-board-code-structure.md)
-- [OP SHOP source-driver assignment release preflight](docs/opshop-source-driver-assignment-release-preflight.md)
+Follow the deployment and migration runbooks below; this README is not an
+authorization to migrate data, expose a service or deploy to a production host.
+
+## Documentation
+
+- [Code structure](docs/manual-dispatch-board-code-structure.md)
+- [Delivery / OP SHOP workspace specification](docs/separate-delivery-and-opshop-workspaces-spec.md)
+- [Workspace migration](docs/separate-delivery-and-opshop-workspaces-migration.md)
+- [Attaché integration and Bridge](docs/attache-direct-invoice-lookup.md)
+- [OP SHOP workspace smoke checklist](docs/opshop-workspace-smoke-test-checklist.md)
+- [OP SHOP Collection / summary smoke checklist](docs/opshop-final-summary-smoke-test-checklist.md)
+- [H5 invariants and migration hardening](docs/final-production-hardening-h5.md)
+- [NAS deployment and internal DNS](docs/nas-cpanel-internal-dns-deployment.md)
+- [NAS validation checklist](docs/nas-deployment-validation-checklist.md)
 - [NAS release update checklist](docs/nas-release-update-checklist.md)
+- [Logbook reader](tools/read_logbook.py) and [integrity checker](tools/check_logbook_integrity.py)
+- [CI workflow](.github/workflows/ci.yml)
+
+Phase-specific documents preserve historical decisions and may describe older
+screens or rollout states. Check the current code and target release before
+executing a historical operational procedure.
+
+## Status
+
+The repository implements the two workspaces, saved document lifecycles, Delivery
+closeout, four import paths and read-only Bridge integration described above.
+Automated regression coverage accompanies these features. Real environment
+validation, operational data review and deployment approval remain separate
+release activities; no blanket production-readiness claim is implied.
