@@ -1,4 +1,6 @@
+from datetime import date
 from types import SimpleNamespace
+import inspect
 import unittest
 
 from fastapi.testclient import TestClient
@@ -10,15 +12,19 @@ from attache_bridge.config import (
 from attache_bridge.main import create_app
 from attache_bridge.repository import (
     CUSTOMER_INVOICE_DOCUMENT_TYPE,
+    CURRENT_FUTURE_HEADER_SQL,
+    CURRENT_INVOICE_BALANCE_SQL,
     DETAIL_SQL,
     DOCNUM_METADATA_SQL,
     HEADER_SQL,
     HEADER_EXTENSION2_SQL,
     HEADER_EXTENSION_SQL,
     HISTORICAL_HEADER_SQL,
+    MAX_CURRENT_FUTURE_INVOICES,
     MAX_INVOICE_LINES,
     AttacheInvoiceDataError,
     AttacheInvoiceAmbiguousError,
+    AttacheInvoiceBatchTooLargeError,
     AttacheInvoiceNotFoundError,
     AttacheInvoiceRepository,
     AttacheInvoiceTooLargeError,
@@ -26,6 +32,7 @@ from attache_bridge.repository import (
     AttacheOdbcAuthorizationError,
     AttacheOdbcTimeoutError,
     AttacheOdbcUnavailableError,
+    normalize_from_date,
     normalize_invoice_number,
 )
 
@@ -71,6 +78,29 @@ def _historical_header(**overrides):
     return SimpleNamespace(**values)
 
 
+def _batch_header(**overrides):
+    values = {
+        "doctype": 1,
+        "internaldocnum": 196405,
+        "docnum": "  185479",
+        "docdate": date(2026, 9, 2),
+        "code": "ROTTHO",
+        "termsdescription": "30 DAYS",
+    }
+    values.update(overrides)
+    return SimpleNamespace(**values)
+
+
+def _current_invoice_balance(**overrides):
+    values = {
+        "code": "ROTTHO",
+        "invnum": "185479",
+        "invbal": 0,
+    }
+    values.update(overrides)
+    return SimpleNamespace(**values)
+
+
 def _header_extension(**overrides):
     values = {
         "doctype": 1,
@@ -91,10 +121,18 @@ def _header_extension2(**overrides):
     return SimpleNamespace(**values)
 
 
-def _detail(line_number, code, description, quantity, unit=None):
+def _detail(
+    line_number,
+    code,
+    description,
+    quantity,
+    unit=None,
+    *,
+    internal_document_number=196405,
+):
     return SimpleNamespace(
         doctype=1,
-        internaldocnum=196405,
+        internaldocnum=internal_document_number,
         linenum=line_number,
         qtyorder=quantity,
         qtybackorder=0,
@@ -110,16 +148,23 @@ class FakeCursor:
     def __init__(
         self,
         headers=None,
+        batch_headers=None,
         historical_headers=_DEFAULT_QUERY_ROWS,
         header_extensions=_DEFAULT_QUERY_ROWS,
         header_extensions2=_DEFAULT_QUERY_ROWS,
         details=None,
         metadata_description=_DEFAULT_METADATA_DESCRIPTION,
         headers_by_candidate=None,
+        historical_headers_by_identity=None,
+        header_extensions_by_identity=None,
+        header_extensions2_by_identity=None,
+        details_by_identity=None,
+        current_invoice_balances_by_identity=None,
         fail_stage=None,
         error=None,
     ):
         self.headers = list(headers or [])
+        self.batch_headers = list(batch_headers or [])
         self.historical_headers = (
             [_historical_header()]
             if historical_headers is _DEFAULT_QUERY_ROWS
@@ -145,12 +190,37 @@ class FakeCursor:
             candidate: list(rows)
             for candidate, rows in (headers_by_candidate or {}).items()
         }
+        self.historical_headers_by_identity = {
+            identity: list(rows)
+            for identity, rows in (historical_headers_by_identity or {}).items()
+        }
+        self.header_extensions_by_identity = {
+            identity: list(rows)
+            for identity, rows in (header_extensions_by_identity or {}).items()
+        }
+        self.header_extensions2_by_identity = {
+            identity: list(rows)
+            for identity, rows in (header_extensions2_by_identity or {}).items()
+        }
+        self.details_by_identity = {
+            identity: list(rows)
+            for identity, rows in (details_by_identity or {}).items()
+        }
+        self.current_invoice_balances_by_identity = {
+            identity: list(rows)
+            for identity, rows in (
+                current_invoice_balances_by_identity or {}
+            ).items()
+        }
         self.fail_stage = fail_stage
         self.error = error or FakeOdbcError("HY000", "synthetic ODBC failure")
         self.executed = []
         self.mode = None
         self._description = None
         self.current_headers = []
+        self.current_batch_headers = []
+        self.current_identity = None
+        self.current_balance_identity = None
         self.columns_calls = 0
         self.timeout_set_attempts = 0
         self.legacy_cursor_timeout = None
@@ -189,6 +259,15 @@ class FakeCursor:
             self.header_execute_index += 1
         elif sql == HISTORICAL_HEADER_SQL:
             self._raise_for("historical_header_start")
+        elif sql == CURRENT_FUTURE_HEADER_SQL:
+            self._raise_for("batch_header_start")
+        elif sql == CURRENT_INVOICE_BALANCE_SQL:
+            balance_index = sum(
+                1
+                for executed_sql, _params in self.executed
+                if executed_sql == CURRENT_INVOICE_BALANCE_SQL
+            )
+            self._raise_for(f"batch_balance_{balance_index}_start")
         elif sql == HEADER_EXTENSION_SQL:
             self._raise_for("header_extension_start")
         elif sql == HEADER_EXTENSION2_SQL:
@@ -210,14 +289,32 @@ class FakeCursor:
                     if getattr(header, "docnum", None) == candidate
                 ],
             )
+        elif sql == CURRENT_FUTURE_HEADER_SQL:
+            self.mode = "batch_header"
+            self.current_batch_headers = sorted(
+                (
+                    row
+                    for row in self.batch_headers
+                    if getattr(row, "doctype", None) == params[0]
+                    and getattr(row, "docdate", None) >= params[1]
+                ),
+                key=lambda row: (row.docdate, row.internaldocnum),
+            )
+        elif sql == CURRENT_INVOICE_BALANCE_SQL:
+            self.mode = "current_invoice_balance"
+            self.current_balance_identity = (params[0], params[1])
         elif sql == HISTORICAL_HEADER_SQL:
             self.mode = "historical_header"
+            self.current_identity = (params[0], params[1])
         elif sql == HEADER_EXTENSION_SQL:
             self.mode = "header_extension"
+            self.current_identity = (params[0], params[1])
         elif sql == HEADER_EXTENSION2_SQL:
             self.mode = "header_extension2"
+            self.current_identity = (params[0], params[1])
         elif sql == DETAIL_SQL:
             self.mode = "detail"
+            self.current_identity = (params[0], params[1])
         else:
             raise AssertionError(f"Unexpected SQL: {sql}")
         return self
@@ -225,14 +322,33 @@ class FakeCursor:
     def fetchmany(self, size):
         if self.mode == "header":
             rows = self.current_headers
+        elif self.mode == "batch_header":
+            rows = self.current_batch_headers
+        elif self.mode == "current_invoice_balance":
+            rows = self.current_invoice_balances_by_identity.get(
+                self.current_balance_identity,
+                [],
+            )
         elif self.mode == "historical_header":
-            rows = self.historical_headers
+            rows = self.historical_headers_by_identity.get(
+                self.current_identity,
+                self.historical_headers,
+            )
         elif self.mode == "header_extension":
-            rows = self.header_extensions
+            rows = self.header_extensions_by_identity.get(
+                self.current_identity,
+                self.header_extensions,
+            )
         elif self.mode == "header_extension2":
-            rows = self.header_extensions2
+            rows = self.header_extensions2_by_identity.get(
+                self.current_identity,
+                self.header_extensions2,
+            )
         elif self.mode == "detail":
-            rows = self.details
+            rows = self.details_by_identity.get(
+                self.current_identity,
+                self.details,
+            )
         else:
             raise AssertionError("fetchmany is not valid for metadata discovery")
         return rows[:size]
@@ -298,12 +414,18 @@ class AttacheBridgeRepositoryTest(unittest.TestCase):
     def _repository(
         self,
         headers=None,
+        batch_headers=None,
         historical_headers=_DEFAULT_QUERY_ROWS,
         header_extensions=_DEFAULT_QUERY_ROWS,
         header_extensions2=_DEFAULT_QUERY_ROWS,
         details=None,
         metadata_description=_DEFAULT_METADATA_DESCRIPTION,
         headers_by_candidate=None,
+        historical_headers_by_identity=None,
+        header_extensions_by_identity=None,
+        header_extensions2_by_identity=None,
+        details_by_identity=None,
+        current_invoice_balances_by_identity=None,
         fail_stage=None,
         error=None,
     ):
@@ -312,12 +434,20 @@ class AttacheBridgeRepositoryTest(unittest.TestCase):
         )
         cursor = FakeCursor(
             headers=headers,
+            batch_headers=batch_headers,
             historical_headers=historical_headers,
             header_extensions=header_extensions,
             header_extensions2=header_extensions2,
             details=self.details if details is None else details,
             metadata_description=metadata_description,
             headers_by_candidate=headers_by_candidate,
+            historical_headers_by_identity=historical_headers_by_identity,
+            header_extensions_by_identity=header_extensions_by_identity,
+            header_extensions2_by_identity=header_extensions2_by_identity,
+            details_by_identity=details_by_identity,
+            current_invoice_balances_by_identity=(
+                current_invoice_balances_by_identity
+            ),
             fail_stage=effective_fail_stage,
             error=error,
         )
@@ -334,6 +464,260 @@ class AttacheBridgeRepositoryTest(unittest.TestCase):
             with self.subTest(invalid=invalid):
                 with self.assertRaises(ValueError):
                     normalize_invoice_number(invalid)
+
+    def test_from_date_validation_requires_a_real_exact_iso_calendar_date(self):
+        self.assertEqual(date(2026, 9, 2), normalize_from_date("2026-09-02"))
+        for invalid in (
+            "",
+            "2026-9-2",
+            "20260902",
+            " 2026-09-02",
+            "2026-02-30",
+            "abc",
+            None,
+        ):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises(ValueError):
+                    normalize_from_date(invalid)
+
+    def test_current_future_batch_is_filtered_ordered_complete_and_one_connection(self):
+        second_identity = (1, 196406)
+        repository, cursor, factory = self._repository(
+            batch_headers=[
+                _batch_header(
+                    internaldocnum=196404,
+                    docnum="185478",
+                    docdate=date(2026, 9, 1),
+                ),
+                _batch_header(),
+                _batch_header(
+                    internaldocnum=196406,
+                    docnum="185480",
+                    docdate=date(2026, 9, 3),
+                ),
+                _batch_header(
+                    doctype=2,
+                    internaldocnum=196407,
+                    docnum="185481",
+                    docdate=date(2026, 9, 4),
+                ),
+            ],
+            historical_headers=[
+                _historical_header(docdate="02/09/2026"),
+            ],
+            historical_headers_by_identity={
+                second_identity: [
+                    _historical_header(
+                        internaldocnum=196406,
+                        docnum="185480",
+                        docdate="03/09/2026",
+                    )
+                ],
+            },
+            header_extensions_by_identity={
+                second_identity: [
+                    _header_extension(internaldocnum=196406),
+                ],
+            },
+            header_extensions2_by_identity={
+                second_identity: [
+                    _header_extension2(internaldocnum=196406),
+                ],
+            },
+            details_by_identity={
+                second_identity: [
+                    _detail(
+                        1,
+                        "FUTURE",
+                        "FUTURE PRODUCT",
+                        12,
+                        "KG",
+                        internal_document_number=196406,
+                    )
+                ],
+            },
+        )
+
+        records = repository.list_invoices_from_document_date("2026-09-02")
+
+        self.assertIsInstance(records, tuple)
+        self.assertEqual(["185479", "185480"], [row.invoice_number for row in records])
+        self.assertEqual(["2026-09-02", "2026-09-03"], [row.invoice_date for row in records])
+        self.assertEqual("FUTURE", records[1].lines[0].code)
+        self.assertEqual(
+            [(CURRENT_FUTURE_HEADER_SQL, (1, date(2026, 9, 2)))],
+            [call for call in cursor.executed if call[0] == CURRENT_FUTURE_HEADER_SQL],
+        )
+        self.assertFalse(any(sql == HEADER_SQL for sql, _params in cursor.executed))
+        self.assertEqual([("DSN=FAKE_READ_ONLY", 3)], factory.calls)
+        self.assertTrue(cursor.closed)
+        self.assertTrue(factory.connection.closed)
+
+    def test_current_future_batch_hydrates_terms_and_exact_cod_balance_facts(self):
+        cases = (
+            ("30 DAYS", None, None, 0),
+            ("C.O.D.", [_current_invoice_balance(invbal=0)], 0, 1),
+            ("COD", [_current_invoice_balance(invbal=-12.5)], -12.5, 1),
+            ("C.O.D.", [_current_invoice_balance(invbal=0.005)], 0.005, 1),
+            ("C.O.D.", [_current_invoice_balance(invbal=0.01)], 0.01, 1),
+            ("C.O.D.", [_current_invoice_balance(invbal=None)], None, 1),
+            ("C.O.D.", [], None, 1),
+            (
+                "C.O.D.",
+                [_current_invoice_balance(), _current_invoice_balance()],
+                None,
+                1,
+            ),
+            ("UNKNOWN", None, None, 0),
+        )
+        for terms, balance_rows, expected_balance, expected_queries in cases:
+            with self.subTest(terms=terms, balance_rows=balance_rows):
+                balance_map = (
+                    {("ROTTHO", "185479"): balance_rows}
+                    if balance_rows is not None
+                    else None
+                )
+                repository, cursor, factory = self._repository(
+                    batch_headers=[_batch_header(termsdescription=terms)],
+                    historical_headers=[
+                        _historical_header(docdate="02/09/2026")
+                    ],
+                    current_invoice_balances_by_identity=balance_map,
+                )
+
+                records = repository.list_invoices_from_document_date(
+                    "2026-09-02"
+                )
+
+                self.assertEqual(terms, records[0].terms_description)
+                self.assertEqual(expected_balance, records[0].outstanding_balance)
+                balance_queries = [
+                    call
+                    for call in cursor.executed
+                    if call[0] == CURRENT_INVOICE_BALANCE_SQL
+                ]
+                self.assertEqual(expected_queries, len(balance_queries))
+                if expected_queries:
+                    self.assertEqual(
+                        (CURRENT_INVOICE_BALANCE_SQL, ("ROTTHO", "185479")),
+                        balance_queries[0],
+                    )
+                self.assertEqual([("DSN=FAKE_READ_ONLY", 3)], factory.calls)
+                self.assertTrue(cursor.closed)
+                self.assertTrue(factory.connection.closed)
+
+    def test_current_future_batch_rejects_inconsistent_balance_identity(self):
+        repository, cursor, factory = self._repository(
+            batch_headers=[_batch_header(termsdescription="C.O.D.")],
+            historical_headers=[_historical_header(docdate="02/09/2026")],
+            current_invoice_balances_by_identity={
+                ("ROTTHO", "185479"): [
+                    _current_invoice_balance(code="OTHER")
+                ]
+            },
+        )
+
+        with self.assertRaisesRegex(
+            AttacheInvoiceDataError,
+            "inconsistent invoice balance record",
+        ):
+            repository.list_invoices_from_document_date("2026-09-02")
+        self.assertTrue(cursor.closed)
+        self.assertTrue(factory.connection.closed)
+
+    def test_current_future_batch_empty_duplicate_and_limit_are_fail_closed(self):
+        repository, cursor, factory = self._repository(batch_headers=[])
+        self.assertEqual(
+            (),
+            repository.list_invoices_from_document_date("2026-09-02"),
+        )
+        self.assertTrue(cursor.closed)
+        self.assertTrue(factory.connection.closed)
+
+        repository, cursor, factory = self._repository(
+            batch_headers=[
+                _batch_header(),
+                _batch_header(
+                    internaldocnum=196406,
+                    docnum="185479",
+                    docdate=date(2026, 9, 3),
+                ),
+            ],
+            historical_headers=[
+                _historical_header(docdate="02/09/2026"),
+            ],
+        )
+        with self.assertRaisesRegex(
+            AttacheInvoiceDataError,
+            "duplicate invoice identities",
+        ):
+            repository.list_invoices_from_document_date("2026-09-02")
+        self.assertTrue(cursor.closed)
+        self.assertTrue(factory.connection.closed)
+
+        repository, cursor, factory = self._repository(
+            batch_headers=[
+                _batch_header(
+                    internaldocnum=200000 + index,
+                    docnum=str(300000 + index),
+                )
+                for index in range(MAX_CURRENT_FUTURE_INVOICES + 1)
+            ],
+        )
+        with self.assertRaises(AttacheInvoiceBatchTooLargeError):
+            repository.list_invoices_from_document_date("2026-09-02")
+        self.assertTrue(cursor.closed)
+        self.assertTrue(factory.connection.closed)
+
+    def test_current_future_batch_preserves_per_invoice_line_limit(self):
+        excessive_details = [
+            _detail(index, f"ITEM{index}", "TEST PRODUCT", 1, "EACH")
+            for index in range(1, MAX_INVOICE_LINES + 2)
+        ]
+        repository, cursor, factory = self._repository(
+            batch_headers=[_batch_header()],
+            historical_headers=[_historical_header(docdate="02/09/2026")],
+            details=excessive_details,
+        )
+        with self.assertRaises(AttacheInvoiceTooLargeError):
+            repository.list_invoices_from_document_date("2026-09-02")
+        self.assertTrue(cursor.closed)
+        self.assertTrue(factory.connection.closed)
+
+    def test_current_future_batch_closes_handles_on_timeout_and_malformed_data(self):
+        repository, cursor, factory = self._repository(
+            batch_headers=[_batch_header()],
+            fail_stage="batch_header_start",
+            error=FakeOdbcError("HYT00", -301, "synthetic timeout"),
+        )
+        with self.assertRaises(AttacheOdbcTimeoutError):
+            repository.list_invoices_from_document_date("2026-09-02")
+        self.assertTrue(cursor.closed)
+        self.assertTrue(factory.connection.closed)
+
+        repository, cursor, factory = self._repository(
+            batch_headers=[_batch_header(termsdescription="C.O.D.")],
+            fail_stage="batch_balance_0_start",
+            error=FakeOdbcError("HYT00", -301, "synthetic balance timeout"),
+        )
+        with self.assertRaises(AttacheOdbcTimeoutError):
+            repository.list_invoices_from_document_date("2026-09-02")
+        self.assertTrue(cursor.closed)
+        self.assertTrue(factory.connection.closed)
+
+        repository, cursor, factory = self._repository(
+            batch_headers=[_batch_header()],
+            historical_headers=[
+                _historical_header(
+                    internaldocnum=999999,
+                    docdate="02/09/2026",
+                )
+            ],
+        )
+        with self.assertRaises(AttacheInvoiceDataError):
+            repository.list_invoices_from_document_date("2026-09-02")
+        self.assertTrue(cursor.closed)
+        self.assertTrue(factory.connection.closed)
 
     def test_zero_row_metadata_builds_bounded_exact_equality_candidates(self):
         repository, cursor, factory = self._repository(headers=[_header()])
@@ -897,6 +1281,8 @@ class AttacheBridgeRepositoryTest(unittest.TestCase):
             DOCNUM_METADATA_SQL,
             HEADER_SQL,
             HISTORICAL_HEADER_SQL,
+            CURRENT_FUTURE_HEADER_SQL,
+            CURRENT_INVOICE_BALANCE_SQL,
             HEADER_EXTENSION_SQL,
             HEADER_EXTENSION2_SQL,
             DETAIL_SQL,
@@ -908,9 +1294,14 @@ class AttacheBridgeRepositoryTest(unittest.TestCase):
                 "INSERT ",
                 "UPDATE ",
                 "DELETE ",
+                "MERGE ",
+                "REPLACE ",
                 "CREATE ",
                 "ALTER ",
                 "DROP ",
+                "TRUNCATE ",
+                "GRANT ",
+                "REVOKE ",
                 "EXEC ",
                 "EXECUTE ",
             ):
@@ -924,6 +1315,22 @@ class AttacheBridgeRepositoryTest(unittest.TestCase):
         self.assertNotIn("ADMIN.DELIVERYADDRESS", combined_sql)
         self.assertNotIn("DELIVERYCOUNTRY", combined_sql)
         self.assertNotIn("DELIVERYSTATE", combined_sql)
+        normalized_batch_sql = " ".join(CURRENT_FUTURE_HEADER_SQL.upper().split())
+        self.assertIn("WHERE DOCTYPE = ? AND DOCDATE >= ?", normalized_batch_sql)
+        self.assertIn(
+            "ORDER BY DOCDATE ASC, INTERNALDOCNUM ASC",
+            normalized_batch_sql,
+        )
+        normalized_balance_sql = " ".join(
+            CURRENT_INVOICE_BALANCE_SQL.upper().split()
+        )
+        self.assertIn(
+            "WHERE CODE = ? AND INVNUM = ?",
+            normalized_balance_sql,
+        )
+        repository_source = inspect.getsource(AttacheInvoiceRepository)
+        self.assertNotIn(".commit(", repository_source)
+        self.assertNotIn("executemany(", repository_source)
 
 
 class AttacheBridgeHttpTest(unittest.TestCase):
@@ -979,6 +1386,110 @@ class AttacheBridgeHttpTest(unittest.TestCase):
         self.assertEqual(200, response.status_code)
         self.assertEqual("185479", response.json()["invoice_number"])
         self.assertEqual("185479", repository.invoice_number)
+
+    def test_batch_lookup_requires_token_validates_date_and_returns_echoed_scope(self):
+        class Repository:
+            def list_invoices_from_document_date(self, from_date):
+                self.from_date = from_date
+                return (
+                    SimpleNamespace(
+                        to_current_future_public_dict=lambda: {
+                            "invoice_number": "185479",
+                            "invoice_date": "2026-09-02",
+                            "terms_description": "C.O.D.",
+                            "outstanding_balance": 0,
+                            "lines": [],
+                        }
+                    ),
+                )
+
+        repository = Repository()
+        with self._client(repository) as client:
+            missing = client.get("/v1/invoices?from_date=2026-09-02")
+            self.assertEqual(401, missing.status_code)
+            wrong = client.get(
+                "/v1/invoices?from_date=2026-09-02",
+                headers={"X-Attache-Bridge-Token": "wrong-token"},
+            )
+            self.assertEqual(401, wrong.status_code)
+            for invalid_date in ("2026-9-2", "2026-02-30", "abc"):
+                with self.subTest(invalid_date=invalid_date):
+                    invalid = client.get(
+                        "/v1/invoices",
+                        params={"from_date": invalid_date},
+                        headers={"X-Attache-Bridge-Token": "test-token"},
+                    )
+                    self.assertEqual(400, invalid.status_code)
+                    self.assertEqual(
+                        "invalid_invoice_date",
+                        invalid.json()["detail"]["code"],
+                    )
+            response = client.get(
+                "/v1/invoices?from_date=2026-09-02",
+                headers={"X-Attache-Bridge-Token": "test-token"},
+            )
+        self.assertEqual(200, response.status_code, response.text)
+        self.assertEqual(
+            {
+                "from_date": "2026-09-02",
+                "invoices": [
+                    {
+                        "invoice_number": "185479",
+                        "invoice_date": "2026-09-02",
+                        "terms_description": "C.O.D.",
+                        "outstanding_balance": 0,
+                        "lines": [],
+                    }
+                ],
+            },
+            response.json(),
+        )
+        self.assertEqual("2026-09-02", repository.from_date)
+
+    def test_batch_lookup_empty_limit_timeout_and_unavailable_are_safe(self):
+        class EmptyRepository:
+            def list_invoices_from_document_date(self, _from_date):
+                return ()
+
+        headers = {"X-Attache-Bridge-Token": "test-token"}
+        with self._client(EmptyRepository()) as client:
+            response = client.get(
+                "/v1/invoices?from_date=2026-09-02",
+                headers=headers,
+            )
+        self.assertEqual(
+            {"from_date": "2026-09-02", "invoices": []},
+            response.json(),
+        )
+
+        cases = (
+            (
+                AttacheInvoiceBatchTooLargeError("private count"),
+                413,
+                "invoice_batch_limit_exceeded",
+            ),
+            (AttacheOdbcTimeoutError("private timeout"), 504, "odbc_timeout"),
+            (
+                AttacheOdbcUnavailableError("PWD=private-secret"),
+                503,
+                "bridge_unavailable",
+            ),
+        )
+        for error, status, code in cases:
+            with self.subTest(code=code):
+                class FailingRepository:
+                    def list_invoices_from_document_date(self, _from_date):
+                        raise error
+
+                with self._client(FailingRepository()) as client:
+                    response = client.get(
+                        "/v1/invoices?from_date=2026-09-02",
+                        headers=headers,
+                    )
+                self.assertEqual(status, response.status_code)
+                self.assertEqual(code, response.json()["detail"]["code"])
+                self.assertNotIn("private", response.text)
+                self.assertNotIn("PWD", response.text)
 
     def test_invoice_too_large_is_a_controlled_non_partial_response(self):
         class Repository:

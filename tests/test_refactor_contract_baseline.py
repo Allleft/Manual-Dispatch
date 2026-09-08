@@ -57,7 +57,7 @@ class RefactorContractBaselineTest(unittest.TestCase):
             if getattr(route, "path", None)
         )
 
-        self.assertEqual(101, len(routes))
+        self.assertEqual(103, len(routes))
         self.assertIn(
             (
                 "/api/manual-dispatch/opshop/pickups/countryside-order",
@@ -68,6 +68,20 @@ class RefactorContractBaselineTest(unittest.TestCase):
         self.assertIn(
             (
                 "/api/manual-dispatch/delivery/orders/import-attache-direct-preview",
+                ("POST",),
+            ),
+            routes,
+        )
+        self.assertIn(
+            (
+                "/api/manual-dispatch/delivery/orders/import-attache-current-future-preview",
+                ("POST",),
+            ),
+            routes,
+        )
+        self.assertIn(
+            (
+                "/api/manual-dispatch/delivery/orders/import-attache-current-future-commit",
                 ("POST",),
             ),
             routes,
@@ -101,7 +115,7 @@ class RefactorContractBaselineTest(unittest.TestCase):
             routes,
         )
         self.assertEqual(
-            "297c864ae23b1681b63dfb64421a7204146ef2153a0c906601a639d120e935a4",
+            "159e9852377a51178aedfe583951f866ee9154d4f0cc6a86c0cdb96ee00fe903",
             self._contract_digest(routes),
         )
 

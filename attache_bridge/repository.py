@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime
 from decimal import Decimal
 import logging
@@ -15,6 +15,7 @@ LOGGER = logging.getLogger(__name__)
 CUSTOMER_INVOICE_DOCUMENT_TYPE = 1
 MAX_DOCNUM_COLUMN_SIZE = 64
 MAX_INVOICE_LINES = 500
+MAX_CURRENT_FUTURE_INVOICES = 200
 INVOICE_NUMBER_PATTERN = re.compile(r"^\d{1,20}$")
 ODBC_SQLSTATE_PATTERN = re.compile(r"^[A-Z0-9]{5}$")
 SAFE_EXCEPTION_CLASS_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,127}$")
@@ -45,6 +46,30 @@ SELECT
 FROM admin.invoice_header
 WHERE doctype = ?
   AND internaldocnum = ?
+""".strip()
+
+CURRENT_FUTURE_HEADER_SQL = """
+SELECT
+    doctype,
+    internaldocnum,
+    docnum,
+    docdate,
+    code,
+    termsdescription
+FROM admin.invoice_header
+WHERE doctype = ?
+  AND docdate >= ?
+ORDER BY docdate ASC, internaldocnum ASC
+""".strip()
+
+CURRENT_INVOICE_BALANCE_SQL = """
+SELECT
+    code,
+    invnum,
+    invbal
+FROM admin.Customer_InvoiceTransaction
+WHERE code = ?
+  AND invnum = ?
 """.strip()
 
 HEADER_EXTENSION_SQL = """
@@ -124,6 +149,10 @@ class AttacheInvoiceTooLargeError(AttacheInvoiceDataError):
     pass
 
 
+class AttacheInvoiceBatchTooLargeError(AttacheInvoiceDataError):
+    pass
+
+
 class _OdbcLookupDiagnostics:
     def __init__(self):
         self._started_at = time.perf_counter()
@@ -195,6 +224,8 @@ class AttacheInvoiceRecord:
     state: str | None
     postcode: str | None
     lines: tuple[AttacheInvoiceLine, ...]
+    terms_description: str | None = None
+    outstanding_balance: int | float | None = None
 
     def to_public_dict(self):
         return {
@@ -213,12 +244,34 @@ class AttacheInvoiceRecord:
             "lines": [line.to_dict() for line in self.lines],
         }
 
+    def to_current_future_public_dict(self):
+        payload = self.to_public_dict()
+        payload.update(
+            {
+                "terms_description": self.terms_description,
+                "outstanding_balance": self.outstanding_balance,
+            }
+        )
+        return payload
+
 
 def normalize_invoice_number(value):
     invoice_number = str(value or "").strip()
     if not INVOICE_NUMBER_PATTERN.fullmatch(invoice_number):
         raise ValueError("Invoice number must contain digits only.")
     return invoice_number
+
+
+def normalize_from_date(value):
+    if not isinstance(value, str) or value != value.strip():
+        raise ValueError("from_date must use YYYY-MM-DD format.")
+    try:
+        parsed = date.fromisoformat(value)
+    except ValueError:
+        raise ValueError("from_date must use YYYY-MM-DD format.") from None
+    if parsed.isoformat() != value:
+        raise ValueError("from_date must use YYYY-MM-DD format.")
+    return parsed
 
 
 def create_pyodbc_connection(connection_string, timeout=5):
@@ -304,80 +357,12 @@ class AttacheInvoiceRepository:
                 raise AttacheInvoiceNotFoundError(normalized_invoice_number)
             doctype, internal_document_number = next(iter(matching_headers))
             diagnostics.mark("identity_resolved")
-
-            diagnostics.mark("historical_header_start")
-            cursor.execute(
-                HISTORICAL_HEADER_SQL,
+            record = self._load_invoice_record(
+                cursor,
                 doctype,
                 internal_document_number,
-            )
-            historical_header_rows = list(cursor.fetchmany(2))
-            diagnostics.mark("historical_header_done")
-            historical_header = _required_single_row(
-                historical_header_rows,
-                "Attaché historical invoice header is unavailable or invalid.",
-            )
-            _validate_row_identity(
-                historical_header,
-                doctype,
-                internal_document_number,
-                "historical header",
-            )
-
-            diagnostics.mark("header_extension_start")
-            cursor.execute(
-                HEADER_EXTENSION_SQL,
-                doctype,
-                internal_document_number,
-            )
-            header_extension_rows = list(cursor.fetchmany(2))
-            diagnostics.mark("header_extension_done")
-            header_extension = _optional_single_row(
-                header_extension_rows,
-                "Attaché invoice header extension is invalid.",
-            )
-            if header_extension is not None:
-                _validate_row_identity(
-                    header_extension,
-                    doctype,
-                    internal_document_number,
-                    "header extension",
-                )
-
-            diagnostics.mark("header_extension2_start")
-            cursor.execute(
-                HEADER_EXTENSION2_SQL,
-                doctype,
-                internal_document_number,
-            )
-            header_extension2_rows = list(cursor.fetchmany(2))
-            diagnostics.mark("header_extension2_done")
-            header_extension2 = _optional_single_row(
-                header_extension2_rows,
-                "Attaché invoice header extension 2 is invalid.",
-            )
-            if header_extension2 is not None:
-                _validate_row_identity(
-                    header_extension2,
-                    doctype,
-                    internal_document_number,
-                    "header extension 2",
-                )
-
-            diagnostics.mark("detail_execute_start")
-            cursor.execute(DETAIL_SQL, doctype, internal_document_number)
-            detail_rows = list(cursor.fetchmany(MAX_INVOICE_LINES + 1))
-            diagnostics.mark("detail_execute_done")
-            if len(detail_rows) > MAX_INVOICE_LINES:
-                raise AttacheInvoiceTooLargeError(
-                    "Attaché invoice exceeds the supported product-line limit."
-                )
-            record = self._record_from_rows(
-                historical_header,
-                header_extension,
-                header_extension2,
-                detail_rows,
                 normalized_invoice_number,
+                diagnostics,
             )
             diagnostics.mark("lookup_complete")
             return record
@@ -394,6 +379,240 @@ class AttacheInvoiceRepository:
         finally:
             _close_quietly(cursor)
             _close_quietly(connection)
+
+    def list_invoices_from_document_date(self, from_date):
+        diagnostics = _OdbcLookupDiagnostics()
+        normalized_from_date = normalize_from_date(from_date)
+        self.config.require_configured()
+        diagnostics.mark("config_loaded")
+        connection = None
+        cursor = None
+        try:
+            diagnostics.mark("connection_start")
+            connection = self.connection_factory(
+                self.config.connection_string,
+                timeout=self.config.connection_timeout_seconds,
+            )
+            diagnostics.mark("connection_opened")
+            diagnostics.mark("timeout_configuration_start")
+            connection.timeout = self.config.query_timeout_seconds
+            cursor = connection.cursor()
+            diagnostics.mark("timeout_configuration_done")
+
+            diagnostics.mark("batch_header_start")
+            cursor.execute(
+                CURRENT_FUTURE_HEADER_SQL,
+                CUSTOMER_INVOICE_DOCUMENT_TYPE,
+                normalized_from_date,
+            )
+            header_rows = list(
+                cursor.fetchmany(MAX_CURRENT_FUTURE_INVOICES + 1)
+            )
+            diagnostics.mark("batch_header_done")
+            if len(header_rows) > MAX_CURRENT_FUTURE_INVOICES:
+                raise AttacheInvoiceBatchTooLargeError(
+                    "Too many current/future Attaché invoices were returned."
+                )
+
+            records = []
+            invoice_numbers = set()
+            for header_index, header in enumerate(header_rows):
+                doctype = _required_integer(
+                    _row_value(header, "doctype", 0),
+                    "batch header doctype",
+                )
+                internal_document_number = _required_integer(
+                    _row_value(header, "internaldocnum", 1),
+                    "batch header internal document number",
+                )
+                if doctype != CUSTOMER_INVOICE_DOCUMENT_TYPE:
+                    raise AttacheInvoiceDataError(
+                        "Attaché returned an invalid batch invoice document type."
+                    )
+                invoice_number = normalize_invoice_number(
+                    _row_value(header, "docnum", 2)
+                )
+                invoice_date = _iso_date(_row_value(header, "docdate", 3))
+                if (
+                    invoice_date is None
+                    or invoice_date < normalized_from_date.isoformat()
+                ):
+                    raise AttacheInvoiceDataError(
+                        "Attaché returned an invoice outside the requested date range."
+                    )
+                if invoice_number in invoice_numbers:
+                    raise AttacheInvoiceDataError(
+                        "Attaché batch contains duplicate invoice identities."
+                    )
+                invoice_numbers.add(invoice_number)
+                customer_code = _clean_text(_row_value(header, "code", 4))
+                terms_description = _clean_text(
+                    _row_value(header, "termsdescription", 5)
+                )
+                outstanding_balance = None
+                if _is_cod_terms_description(terms_description):
+                    outstanding_balance = self._load_current_invoice_balance(
+                        cursor,
+                        customer_code,
+                        invoice_number,
+                        header_index,
+                        diagnostics,
+                    )
+                record = self._load_invoice_record(
+                    cursor,
+                    doctype,
+                    internal_document_number,
+                    invoice_number,
+                    diagnostics,
+                )
+                if (
+                    normalize_invoice_number(record.invoice_number)
+                    != invoice_number
+                    or record.invoice_date is None
+                    or record.invoice_date < normalized_from_date.isoformat()
+                    or _clean_text(record.customer_code) != customer_code
+                ):
+                    raise AttacheInvoiceDataError(
+                        "Attaché returned an inconsistent batch invoice record."
+                    )
+                records.append(
+                    replace(
+                        record,
+                        terms_description=terms_description,
+                        outstanding_balance=outstanding_balance,
+                    )
+                )
+            diagnostics.mark("batch_lookup_complete")
+            return tuple(records)
+        except (
+            AttacheBridgeConfigurationError,
+            AttacheInvoiceDataError,
+            ValueError,
+        ):
+            raise
+        except Exception as error:
+            diagnostics.log_failure(error)
+            raise _safe_odbc_error(error) from None
+        finally:
+            _close_quietly(cursor)
+            _close_quietly(connection)
+
+    @staticmethod
+    def _load_current_invoice_balance(
+        cursor,
+        customer_code,
+        invoice_number,
+        header_index,
+        diagnostics,
+    ):
+        if not customer_code:
+            return None
+        diagnostics.mark(f"batch_balance_{header_index}_start")
+        cursor.execute(
+            CURRENT_INVOICE_BALANCE_SQL,
+            customer_code,
+            invoice_number,
+        )
+        rows = list(cursor.fetchmany(2))
+        diagnostics.mark(f"batch_balance_{header_index}_done")
+        if len(rows) != 1:
+            return None
+        row = rows[0]
+        returned_customer_code = _clean_text(_row_value(row, "code", 0))
+        returned_invoice_number = normalize_invoice_number(
+            _row_value(row, "invnum", 1)
+        )
+        if (
+            returned_customer_code != customer_code
+            or returned_invoice_number != invoice_number
+        ):
+            raise AttacheInvoiceDataError(
+                "Attaché returned an inconsistent invoice balance record."
+            )
+        return _json_balance(_row_value(row, "invbal", 2))
+
+    def _load_invoice_record(
+        self,
+        cursor,
+        doctype,
+        internal_document_number,
+        requested_invoice_number,
+        diagnostics,
+    ):
+        diagnostics.mark("historical_header_start")
+        cursor.execute(
+            HISTORICAL_HEADER_SQL,
+            doctype,
+            internal_document_number,
+        )
+        historical_header_rows = list(cursor.fetchmany(2))
+        diagnostics.mark("historical_header_done")
+        historical_header = _required_single_row(
+            historical_header_rows,
+            "Attaché historical invoice header is unavailable or invalid.",
+        )
+        _validate_row_identity(
+            historical_header,
+            doctype,
+            internal_document_number,
+            "historical header",
+        )
+
+        diagnostics.mark("header_extension_start")
+        cursor.execute(
+            HEADER_EXTENSION_SQL,
+            doctype,
+            internal_document_number,
+        )
+        header_extension_rows = list(cursor.fetchmany(2))
+        diagnostics.mark("header_extension_done")
+        header_extension = _optional_single_row(
+            header_extension_rows,
+            "Attaché invoice header extension is invalid.",
+        )
+        if header_extension is not None:
+            _validate_row_identity(
+                header_extension,
+                doctype,
+                internal_document_number,
+                "header extension",
+            )
+
+        diagnostics.mark("header_extension2_start")
+        cursor.execute(
+            HEADER_EXTENSION2_SQL,
+            doctype,
+            internal_document_number,
+        )
+        header_extension2_rows = list(cursor.fetchmany(2))
+        diagnostics.mark("header_extension2_done")
+        header_extension2 = _optional_single_row(
+            header_extension2_rows,
+            "Attaché invoice header extension 2 is invalid.",
+        )
+        if header_extension2 is not None:
+            _validate_row_identity(
+                header_extension2,
+                doctype,
+                internal_document_number,
+                "header extension 2",
+            )
+
+        diagnostics.mark("detail_execute_start")
+        cursor.execute(DETAIL_SQL, doctype, internal_document_number)
+        detail_rows = list(cursor.fetchmany(MAX_INVOICE_LINES + 1))
+        diagnostics.mark("detail_execute_done")
+        if len(detail_rows) > MAX_INVOICE_LINES:
+            raise AttacheInvoiceTooLargeError(
+                "Attaché invoice exceeds the supported product-line limit."
+            )
+        return self._record_from_rows(
+            historical_header,
+            header_extension,
+            header_extension2,
+            detail_rows,
+            requested_invoice_number,
+        )
 
     @staticmethod
     def _docnum_max_width(description):
@@ -587,6 +806,11 @@ def _clean_text(value):
     return text or None
 
 
+def _is_cod_terms_description(value):
+    normalized = str(value or "").strip().upper()
+    return normalized in {"C.O.D.", "COD"}
+
+
 def _iso_date(value):
     if value in (None, ""):
         return None
@@ -621,6 +845,22 @@ def _json_number(value, required=False):
     if not number.is_finite():
         raise AttacheInvoiceDataError(
             "Attaché returned an invalid product quantity."
+        )
+    return int(number) if number == number.to_integral_value() else float(number)
+
+
+def _json_balance(value):
+    if value in (None, ""):
+        return None
+    try:
+        number = Decimal(str(value))
+    except Exception as error:
+        raise AttacheInvoiceDataError(
+            "Attaché returned an invalid invoice balance."
+        ) from error
+    if not number.is_finite():
+        raise AttacheInvoiceDataError(
+            "Attaché returned an invalid invoice balance."
         )
     return int(number) if number == number.to_integral_value() else float(number)
 

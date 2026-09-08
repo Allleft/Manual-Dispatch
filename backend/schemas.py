@@ -1016,6 +1016,23 @@ class AttacheInvoicePdfPreviewResponse:
 
 
 @dataclass
+class AttacheCurrentFuturePreviewItem(AttacheInvoicePdfPreviewItem):
+    terms_description: Optional[str] = None
+    outstanding_balance: Optional[float] = None
+    payment_eligibility: str = "UNKNOWN"
+    source: str = "attache-current-future"
+    issued_at: Optional[int] = None
+    expires_at: Optional[int] = None
+    eligibility_proof: Optional[str] = None
+
+
+@dataclass
+class AttacheCurrentFuturePreviewResponse:
+    from_date: str
+    rows: List[AttacheCurrentFuturePreviewItem]
+
+
+@dataclass
 class DirectAttacheInvoicePreviewRequest:
     invoice_number: Optional[str] = None
 
@@ -1051,6 +1068,23 @@ class CommitAttacheInvoicePdfImportRow:
 @dataclass
 class CommitAttacheInvoicePdfImportRequest:
     rows: List[CommitAttacheInvoicePdfImportRow] = field(default_factory=list)
+
+
+@dataclass
+class CommitAttacheCurrentFutureImportRow(CommitAttacheInvoicePdfImportRow):
+    terms_description: Optional[str] = None
+    outstanding_balance: Optional[float] = None
+    customer_code: Optional[str] = None
+    source: Optional[str] = None
+    issued_at: Optional[int] = None
+    expires_at: Optional[int] = None
+    eligibility_proof: Optional[str] = None
+
+
+@dataclass
+class CommitAttacheCurrentFutureImportRequest:
+    rows: List[CommitAttacheCurrentFutureImportRow] = field(default_factory=list)
+    from_date: Optional[str] = None
 
 
 @dataclass

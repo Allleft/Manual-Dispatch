@@ -107,6 +107,52 @@ existing duplicate check, Delivery Area classification, editable preview and
 `import-attache-pdf-commit` confirmation path. Preview alone never creates an
 Order.
 
+## Today and future invoice payment eligibility
+
+The separate **Import Today & Future Invoices** source performs no Attaché
+access until staff choose **Load Today & Future Invoices** or **Refresh**. One
+load is one authenticated Bridge request and one request-scoped ODBC
+connection. The bounded header query returns at most 200 Customer Invoices
+dated from the Backend-supplied Melbourne business date. The implemented SQL
+reads `termsdescription` from **`admin.invoice_header`**. Separate real read-only
+discovery confirmed **`admin.InvoiceHeader.termsdescription`**; the exact
+implemented `admin.invoice_header.termsdescription` combination still requires
+a real SELECT-only ODBC smoke. These object names are not assumed equivalent.
+
+Only exact, case-insensitive `C.O.D.` terms (plus the explicitly supported
+`COD` alias) require a current-balance lookup. The Bridge reads
+`admin.Customer_InvoiceTransaction.invbal` with parameterized exact customer
+code plus invoice-number predicates. A bounded same-cursor loop is used instead
+of a large tuple-`IN` statement for FairCom ODBC compatibility; it opens no
+additional connections and remains capped by the 200-invoice batch limit.
+Missing or multiple balance rows remain unresolved rather than being treated as
+zero. Bridge responses expose only the optional raw `terms_description` and
+`outstanding_balance` facts; the existing Direct response shape is unchanged.
+
+Backend classification is deliberately source-specific. `30 DAYS` needs no
+payment check. C.O.D. balances at or below the centralized `0.005` tolerance,
+including negative credit balances, are paid in full; balances above it are
+Payment Required. Blank or unsupported terms and unresolved C.O.D. balances
+fail closed as Needs Review. Duplicates remain visible and retain primary
+duplicate status. Preview performs no Manual Dispatch database or Logbook
+write. Each preview row carries an opaque HMAC-SHA256 eligibility proof with a
+15-minute lifetime. Deterministic JSON binds its fixed Current/Future source,
+invoice number, customer code, terms, canonical balance, backend from-date,
+issued-at and expires-at timestamps. Confirm verifies the proof and expiry
+before classifying the authenticated snapshot, then performs the existing
+duplicate checks. It never calls the Bridge. Changed facts, missing/invalid
+proofs and expired previews fail closed and require staff to refresh the
+preview. Ordinary product/address/note edits remain outside the payment proof.
+PDF, Delivery Docket and Direct Attaché have no proof requirement.
+
+Proofs reuse the existing `operator_cookie_secret()` loader and
+`MANUAL_DISPATCH_AUTH_COOKIE_SECRET`, with domain separation from auth-cookie
+signatures. No additional secret lifecycle or persistence is introduced. When
+the existing process-local ephemeral fallback is used, restarts invalidate
+outstanding proofs and independent workers may reject each other's proofs.
+Both cases fail closed; a consistent configured server secret is needed across
+workers. Preview rows loaded before this hardening also require a refresh.
+
 ## Windows source setup (developer/build machine only)
 
 The target Attaché Remote Desktop does not have Python and must use the portable
@@ -127,7 +173,8 @@ python -m pip install -r attache_bridge\requirements.txt
 Set the Bridge variables for the current PowerShell session only. Use a
 dedicated least-privilege Attaché identity with SELECT access only to
 `admin.invoiceheader`, `admin.invoice_header`, `admin.invoiceheaderextension`,
-`admin.invoiceheaderextension2`, and `admin.invoicedetailproduct`.
+`admin.invoiceheaderextension2`, `admin.invoicedetailproduct`, and
+`admin.Customer_InvoiceTransaction`.
 
 ```powershell
 $env:ATTACHE_ODBC_CONNECTION_STRING = "DSN=<read-only-user-dsn>;UID=<read-only-user>;PWD=<secret>"
