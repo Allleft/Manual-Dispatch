@@ -39,6 +39,8 @@ export function createDeliveryTaskPoolActions(context) {
   const dispatchMetadataForContext = (...args) => context.actions.dispatchMetadataForContext(...args);
   const isDeliveryMutationCurrent = (...args) => context.actions.isDeliveryMutationCurrent(...args);
   const defaultDeliveryAttacheImportState = (...args) => context.actions.defaultDeliveryAttacheImportState(...args);
+  const defaultDeliveryAttacheCurrentFutureImportState = (...args) =>
+    context.actions.defaultDeliveryAttacheCurrentFutureImportState(...args);
 
   function updateDeliveryTaskPoolFilter(field, value) {
     state.deliveryTaskPoolFilters = {
@@ -534,6 +536,8 @@ export function createDeliveryTaskPoolActions(context) {
     state.deliveryOrderFormMode = "";
     state.deliveryOrderModalError = "";
     state.deliveryAttacheImportState = defaultDeliveryAttacheImportState();
+    state.deliveryAttacheCurrentFutureImportState =
+      defaultDeliveryAttacheCurrentFutureImportState();
     state.deliverySpecificationModalOpen = false;
     state.deliveryDriverForm = null;
     state.deliveryDriverEditingId = "";

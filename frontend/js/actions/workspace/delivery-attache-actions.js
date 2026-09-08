@@ -34,13 +34,18 @@ export function createDeliveryAttacheActions(context) {
     };
     state.deliveryDocketImportState = context.actions.defaultDeliveryDocketImportState?.()
       || defaultDeliveryDocketImportStateFallback();
+    state.deliveryAttacheCurrentFutureImportState =
+      context.actions.defaultDeliveryAttacheCurrentFutureImportState?.()
+      || defaultDeliveryAttacheCurrentFutureImportStateFallback();
     renderWorkspace();
   }
 
   function closeDeliveryAttacheImport() {
     const hasDocketDraft = context.actions.hasDeliveryDocketDraft?.() || false;
+    const hasCurrentFutureDraft =
+      context.actions.hasDeliveryAttacheCurrentFutureDraft?.() || false;
     if (
-      (hasDeliveryAttacheDraft() || hasDocketDraft)
+      (hasDeliveryAttacheDraft() || hasDocketDraft || hasCurrentFutureDraft)
       && !confirmAction("Discard the current Delivery Document import?")
     ) {
       return;
@@ -55,14 +60,23 @@ export function createDeliveryAttacheActions(context) {
     };
     state.deliveryDocketImportState = context.actions.defaultDeliveryDocketImportState?.()
       || defaultDeliveryDocketImportStateFallback();
+    state.deliveryAttacheCurrentFutureImportState =
+      context.actions.defaultDeliveryAttacheCurrentFutureImportState?.()
+      || defaultDeliveryAttacheCurrentFutureImportStateFallback();
     renderWorkspace();
   }
 
   function chooseDeliveryImportSource(source) {
-    if (!["attache", "docket", "attache-direct"].includes(source)) {
+    if (![
+      "attache",
+      "docket",
+      "attache-direct",
+      "attache-current-future",
+    ].includes(source)) {
       return;
     }
     invalidateDeliveryAttacheDirectLookup();
+    context.actions.invalidateDeliveryAttacheCurrentFutureRequests?.();
     state.deliveryDocumentImportState = {
       isOpen: true,
       source,
@@ -342,7 +356,7 @@ export function createDeliveryAttacheActions(context) {
         };
       }),
     };
-    renderWorkspace();
+    renderDeliveryAttacheImportPreservingScroll();
   }
 
   function removeDeliveryAttacheImportProductLine(rowId, lineIndex) {
@@ -361,7 +375,7 @@ export function createDeliveryAttacheActions(context) {
         };
       }),
     };
-    renderWorkspace();
+    renderDeliveryAttacheImportPreservingScroll();
   }
 
   function toggleDeliveryAttacheImportRow(rowId, selected) {
@@ -487,6 +501,7 @@ export function createDeliveryAttacheActions(context) {
 
   function invalidateDeliveryAttachePreview() {
     context.deliveryAttachePreviewRequestVersion += 1;
+    context.actions.invalidateDeliveryAttacheCurrentFutureRequests?.();
   }
 
   function invalidateDeliveryAttacheDirectLookup() {
@@ -535,6 +550,21 @@ export function createDeliveryAttacheActions(context) {
       isCommitting: false,
       step: "files",
       files: [],
+      rows: [],
+      expandedRowIds: {},
+      search: "",
+      filter: "ALL",
+      error: "",
+      success: "",
+    };
+  }
+
+  function defaultDeliveryAttacheCurrentFutureImportStateFallback() {
+    return {
+      isLoading: false,
+      isCommitting: false,
+      hasLoaded: false,
+      fromDate: "",
       rows: [],
       expandedRowIds: {},
       search: "",

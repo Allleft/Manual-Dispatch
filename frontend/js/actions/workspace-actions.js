@@ -14,6 +14,9 @@ import { createDeliveryRunSheetActions } from "./workspace/delivery-run-sheet-ac
 import { createDeliveryHistoryActions } from "./workspace/delivery-history-actions.js";
 import { createDeliverySpecificationActions } from "./workspace/delivery-specification-actions.js";
 import { createDeliveryAttacheActions } from "./workspace/delivery-attache-actions.js";
+import {
+  createDeliveryAttacheCurrentFutureActions,
+} from "./workspace/delivery-attache-current-future-actions.js";
 import { createDeliveryDocketActions } from "./workspace/delivery-docket-actions.js";
 import { createOpShopWorkspaceActions } from "./workspace/opshop-workspace-actions.js";
 import { createOpShopTaskPoolActions } from "./workspace/opshop-task-pool-actions.js";
@@ -49,6 +52,7 @@ export function createWorkspaceActions({
   Object.assign(context.actions, createDeliverySpecificationActions(context));
   Object.assign(context.actions, createDeliveryAttacheActions(context));
   Object.assign(context.actions, createDeliveryDocketActions(context));
+  Object.assign(context.actions, createDeliveryAttacheCurrentFutureActions(context));
   Object.assign(context.actions, createOpShopWorkspaceActions(context));
   Object.assign(context.actions, createOpShopTaskPoolActions(context));
   Object.assign(context.actions, createOpShopTripSummaryActions(context));
@@ -58,6 +62,7 @@ export function createWorkspaceActions({
 
   const {
     addDeliveryAttacheImportProductLine,
+    addDeliveryAttacheCurrentFutureProductLine,
     addDeliveryDocketImportProductLine,
     addDeliveryOrderProductLine,
     backDeliveryAttacheImportToFiles,
@@ -74,6 +79,7 @@ export function createWorkspaceActions({
     cancelDeliveryVehicleForm,
     clearDeliveryTaskPoolFilters,
     clearDeliveryAttacheImportSelection,
+    clearDeliveryAttacheCurrentFutureSelection,
     clearDeliveryDocketImportSelection,
     cancelOpShopPickupCollection,
     closeDeliveryGenerationConfirmation,
@@ -83,6 +89,7 @@ export function createWorkspaceActions({
     closeDeliveryOrderModal,
     closeDeliverySpecifications,
     commitDeliveryAttacheImport,
+    commitDeliveryAttacheCurrentFutureImport,
     commitDeliveryDocketImport,
     deleteDeliveryDriver,
     deleteDeliveryVehicle,
@@ -95,6 +102,7 @@ export function createWorkspaceActions({
     generateDeliveryRunSheet,
     generateOpShopPickupCollection,
     loadWorkspaceRoute,
+    loadDeliveryAttacheCurrentFutureInvoices,
     lookupDeliveryDirectAttacheInvoice,
     moveDeliveryOrderToArea,
     moveDeliveryOrderToTrip,
@@ -106,10 +114,12 @@ export function createWorkspaceActions({
     previewDeliveryAttacheImport,
     previewDeliveryDocketImport,
     classifyDeliveryAttacheImportRow,
+    classifyDeliveryAttacheCurrentFutureRow,
     classifyDeliveryDocketImportRow,
     clearDeliveryVehicleTransientState,
     removeDeliveryOrderProductLine,
     removeDeliveryAttacheImportProductLine,
+    removeDeliveryAttacheCurrentFutureProductLine,
     removeDeliveryAttacheImportFile,
     removeDeliveryDocketImportProductLine,
     removeDeliveryDocketImportFile,
@@ -129,9 +139,12 @@ export function createWorkspaceActions({
     startEditDeliveryOrder,
     startEditDeliveryVehicle,
     selectAllReadyDeliveryAttacheRows,
+    selectAllReadyDeliveryAttacheCurrentFutureRows,
     selectAllReadyDeliveryDocketRows,
     toggleDeliveryAttacheImportRow,
     toggleDeliveryAttacheImportExpanded,
+    toggleDeliveryAttacheCurrentFutureRow,
+    toggleDeliveryAttacheCurrentFutureExpanded,
     toggleDeliveryDocketImportRow,
     toggleDeliveryDocketImportExpanded,
     toggleDeliveryDriverAvailability,
@@ -143,6 +156,10 @@ export function createWorkspaceActions({
     updateCountrysideRouteGroupDraft,
     updateDeliveryAssignmentDraft,
     updateDeliveryAttacheImportFiles,
+    updateDeliveryAttacheCurrentFutureFilter,
+    updateDeliveryAttacheCurrentFutureImportRow,
+    updateDeliveryAttacheCurrentFutureProductLine,
+    updateDeliveryAttacheCurrentFutureSearch,
     updateDeliveryDirectAttacheInvoiceNumber,
     updateDeliveryAttacheImportProductLine,
     updateDeliveryAttacheImportRow,
@@ -168,6 +185,7 @@ export function createWorkspaceActions({
     updateOpShopAssignmentDraft,
     updateOpShopTaskPoolView,
     updateOpShopTripSummaryDate,
+    refreshDeliveryAttacheCurrentFutureInvoices,
     toggleRegularOpShopDateGroup,
     toggleOncallOpShopDateGroup,
     toggleCountrysideOpShopDateGroup,
@@ -176,6 +194,7 @@ export function createWorkspaceActions({
 
   return {
     addDeliveryAttacheImportProductLine,
+    addDeliveryAttacheCurrentFutureProductLine,
     addDeliveryDocketImportProductLine,
     addDeliveryOrderProductLine,
     backDeliveryAttacheImportToFiles,
@@ -192,6 +211,7 @@ export function createWorkspaceActions({
     cancelDeliveryVehicleForm,
     clearDeliveryTaskPoolFilters,
     clearDeliveryAttacheImportSelection,
+    clearDeliveryAttacheCurrentFutureSelection,
     clearDeliveryDocketImportSelection,
     cancelOpShopPickupCollection,
     closeDeliveryGenerationConfirmation,
@@ -201,6 +221,7 @@ export function createWorkspaceActions({
     closeDeliveryOrderModal,
     closeDeliverySpecifications,
     commitDeliveryAttacheImport,
+    commitDeliveryAttacheCurrentFutureImport,
     commitDeliveryDocketImport,
     deleteDeliveryDriver,
     deleteDeliveryVehicle,
@@ -213,6 +234,7 @@ export function createWorkspaceActions({
     generateDeliveryRunSheet,
     generateOpShopPickupCollection,
     loadWorkspaceRoute,
+    loadDeliveryAttacheCurrentFutureInvoices,
     lookupDeliveryDirectAttacheInvoice,
     moveDeliveryOrderToArea,
     moveDeliveryOrderToTrip,
@@ -224,11 +246,13 @@ export function createWorkspaceActions({
     previewDeliveryAttacheImport,
     previewDeliveryDocketImport,
     classifyDeliveryAttacheImportRow,
+    classifyDeliveryAttacheCurrentFutureRow,
     classifyDeliveryDocketImportRow,
     resetDeliveryVehicleTransientState: clearDeliveryVehicleTransientState,
     reorderCountrysidePickups,
     removeDeliveryOrderProductLine,
     removeDeliveryAttacheImportProductLine,
+    removeDeliveryAttacheCurrentFutureProductLine,
     removeDeliveryAttacheImportFile,
     removeDeliveryDocketImportProductLine,
     removeDeliveryDocketImportFile,
@@ -247,9 +271,12 @@ export function createWorkspaceActions({
     startEditDeliveryOrder,
     startEditDeliveryVehicle,
     selectAllReadyDeliveryAttacheRows,
+    selectAllReadyDeliveryAttacheCurrentFutureRows,
     selectAllReadyDeliveryDocketRows,
     toggleDeliveryAttacheImportRow,
     toggleDeliveryAttacheImportExpanded,
+    toggleDeliveryAttacheCurrentFutureRow,
+    toggleDeliveryAttacheCurrentFutureExpanded,
     toggleDeliveryDocketImportRow,
     toggleDeliveryDocketImportExpanded,
     toggleDeliveryDriverAvailability,
@@ -261,6 +288,10 @@ export function createWorkspaceActions({
     updateCountrysideRouteGroupDraft,
     updateDeliveryAssignmentDraft,
     updateDeliveryAttacheImportFiles,
+    updateDeliveryAttacheCurrentFutureFilter,
+    updateDeliveryAttacheCurrentFutureImportRow,
+    updateDeliveryAttacheCurrentFutureProductLine,
+    updateDeliveryAttacheCurrentFutureSearch,
     updateDeliveryDirectAttacheInvoiceNumber,
     updateDeliveryAttacheImportProductLine,
     updateDeliveryAttacheImportRow,
@@ -286,6 +317,7 @@ export function createWorkspaceActions({
     updateOpShopAssignmentDraft,
     updateOpShopTaskPoolView,
     updateOpShopTripSummaryDate,
+    refreshDeliveryAttacheCurrentFutureInvoices,
     toggleRegularOpShopDateGroup,
     toggleOncallOpShopDateGroup,
     toggleCountrysideOpShopDateGroup,

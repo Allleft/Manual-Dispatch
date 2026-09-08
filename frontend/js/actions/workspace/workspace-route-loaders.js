@@ -23,6 +23,8 @@ export function createWorkspaceRouteLoaders(context) {
   const invalidateDeliveryAttachePreview = (...args) => context.actions.invalidateDeliveryAttachePreview(...args);
   const clearDeliveryVehicleTransientState = (...args) => context.actions.clearDeliveryVehicleTransientState(...args);
   const defaultDeliveryAttacheImportState = (...args) => context.actions.defaultDeliveryAttacheImportState(...args);
+  const defaultDeliveryAttacheCurrentFutureImportState = (...args) =>
+    context.actions.defaultDeliveryAttacheCurrentFutureImportState(...args);
 
   async function loadWorkspaceRoute(route = state.workspaceRoute) {
     clearGenerationConfirmationsForRoute(route);
@@ -100,6 +102,8 @@ export function createWorkspaceRouteLoaders(context) {
     state.deliveryOrderFormMode = "";
     state.deliveryOrderModalError = "";
     state.deliveryAttacheImportState = defaultDeliveryAttacheImportState();
+    state.deliveryAttacheCurrentFutureImportState =
+      defaultDeliveryAttacheCurrentFutureImportState();
     state.deliverySpecificationModalOpen = false;
     state.deliveryDriverForm = null;
     state.deliveryDriverEditingId = "";

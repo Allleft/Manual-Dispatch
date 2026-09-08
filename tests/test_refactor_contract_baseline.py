@@ -269,8 +269,16 @@ class RefactorContractBaselineTest(unittest.TestCase):
         contract = json.loads(completed.stdout)
 
         self.assertEqual(["function", "function"], contract["rendererTypes"])
-        self.assertEqual(106, len(contract["apiExportNames"]))
+        self.assertEqual(108, len(contract["apiExportNames"]))
         self.assertIn("apiPreviewDirectAttacheInvoice", contract["apiExportNames"])
+        self.assertIn(
+            "apiPreviewDeliveryAttacheCurrentFutureInvoices",
+            contract["apiExportNames"],
+        )
+        self.assertIn(
+            "apiCommitDeliveryAttacheCurrentFutureInvoices",
+            contract["apiExportNames"],
+        )
         self.assertIn("apiPreviewDeliveryDockets", contract["apiExportNames"])
         self.assertIn("apiCommitDeliveryDockets", contract["apiExportNames"])
         self.assertIn("apiClassifyDeliveryArea", contract["apiExportNames"])
@@ -280,10 +288,10 @@ class RefactorContractBaselineTest(unittest.TestCase):
             contract["apiExportNames"],
         )
         self.assertEqual(
-            "d936c3da8cb913d815d52e08e4516d55793449e8ba045d74c7eb361f683a1235",
+            "a04f41e7d5467dff4982de13bbc8495755452e3c63367110c1d8bb0b5b16e269",
             self._contract_digest(contract["apiExportNames"]),
         )
-        self.assertEqual(115, len(contract["actionNames"]))
+        self.assertEqual(129, len(contract["actionNames"]))
         self.assertIn("lookupDeliveryDirectAttacheInvoice", contract["actionNames"])
         self.assertIn("updateDeliveryDirectAttacheInvoiceNumber", contract["actionNames"])
         self.assertIn("previewDeliveryDocketImport", contract["actionNames"])
@@ -298,15 +306,37 @@ class RefactorContractBaselineTest(unittest.TestCase):
                 "resetDeliveryOrderArea",
             }.issubset(contract["actionNames"])
         )
+        self.assertTrue(
+            {
+                "addDeliveryAttacheCurrentFutureProductLine",
+                "classifyDeliveryAttacheCurrentFutureRow",
+                "clearDeliveryAttacheCurrentFutureSelection",
+                "commitDeliveryAttacheCurrentFutureImport",
+                "loadDeliveryAttacheCurrentFutureInvoices",
+                "refreshDeliveryAttacheCurrentFutureInvoices",
+                "removeDeliveryAttacheCurrentFutureProductLine",
+                "selectAllReadyDeliveryAttacheCurrentFutureRows",
+                "toggleDeliveryAttacheCurrentFutureExpanded",
+                "toggleDeliveryAttacheCurrentFutureRow",
+                "updateDeliveryAttacheCurrentFutureFilter",
+                "updateDeliveryAttacheCurrentFutureImportRow",
+                "updateDeliveryAttacheCurrentFutureProductLine",
+                "updateDeliveryAttacheCurrentFutureSearch",
+            }.issubset(contract["actionNames"])
+        )
         self.assertEqual(
-            "eab798ec78a413cff1772e3484c07fd44a6500a10e5f761cf2513f0dbb02ea6c",
+            "4c884899f951370a5d4a8e7defa1e9459b05dd19db70f41b3a70aafcd0a4e55b",
             self._contract_digest(contract["actionNames"]),
         )
-        self.assertEqual(192, len(contract["stateFields"]))
+        self.assertEqual(193, len(contract["stateFields"]))
         self.assertIn("deliveryDocumentImportState", contract["stateFields"])
         self.assertIn("deliveryDocketImportState", contract["stateFields"])
+        self.assertIn(
+            "deliveryAttacheCurrentFutureImportState",
+            contract["stateFields"],
+        )
         self.assertEqual(
-            "39433ee4978eae37ae07080250888a409b74a06753e407f8718bfb518f19682e",
+            "c3002ec241ae23604bab3bbe3aedc39c867cff8a262527fd825221d2307eb97c",
             self._contract_digest(contract["stateFields"]),
         )
 

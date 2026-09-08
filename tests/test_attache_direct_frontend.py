@@ -29,10 +29,63 @@ class AttacheDirectFrontendTest(unittest.TestCase):
             "Invoice Number",
             "Find Invoice",
             "Looking up invoice...",
-            "Back to lookup",
         ):
             self.assertIn(label, renderer)
+        self.assertNotIn("Back to lookup", renderer)
         self.assertIn('source === "attache-direct"', renderer)
+        direct_modal = renderer.split(
+            "export function createDeliveryDirectAttacheImportModal", 1
+        )[1].split(
+            "export function createDeliveryDirectAttacheLookupStep", 1
+        )[0]
+        self.assertIn(
+            "body.append(createDeliveryDirectAttacheLookupStep(importState, actions))",
+            direct_modal,
+        )
+        self.assertIn("showFooter: false", direct_modal)
+        self.assertIn(
+            "body.append(createDeliveryDirectAttacheFooter(importState, actions, hasDirectResult))",
+            direct_modal,
+        )
+        direct_footer = renderer.split(
+            "function createDeliveryDirectAttacheFooter", 1
+        )[1].split(
+            "export function createDeliveryDocketImportModal", 1
+        )[0]
+        self.assertIn('createActionButton("Back", actions.backDeliveryImportToSources)', direct_footer)
+        self.assertIn('createActionButton("Cancel", actions.closeDeliveryAttacheImport)', direct_footer)
+        self.assertIn("if (hasDirectResult)", direct_footer)
+        self.assertIn("Confirm Import (${selectedCount} selected)", direct_footer)
+
+        product_editor = renderer.split(
+            "export function createAttacheProductLineEditor", 1
+        )[1].split(
+            "function deliveryDocketProductRefreshOptions", 1
+        )[0]
+        for contract in (
+            'section.className = "workspace-product-line-editor"',
+            'heading.className = "workspace-load-product-heading"',
+            'scroll.className = "workspace-product-line-table-scroll"',
+            'table.className = "workspace-product-line-table"',
+            'lineRow.className = "workspace-product-line-table-row"',
+            'className: "workspace-product-line-add"',
+            'iconName: "trash"',
+            "iconOnly: true",
+            'className: "workspace-product-line-remove"',
+            "Total Actual Quantity: ${formatProductLineTotals(lines)}",
+        ):
+            self.assertIn(contract, product_editor)
+        for header in (
+            "#",
+            "Product Code",
+            "Product Name",
+            "Actual Quantity",
+            "Actual Unit",
+            "Packaging Quantity",
+            "Packaging Unit",
+            "Actions",
+        ):
+            self.assertIn(f'"{header}"', product_editor)
         self.assertIn(
             "If lookup is unavailable, go back and use Import Attaché PDF.",
             renderer,
@@ -44,7 +97,7 @@ class AttacheDirectFrontendTest(unittest.TestCase):
         self.assertIn("directInvoiceNumber", state)
         self.assertIn("isDirectLookupPending", state)
         self.assertIn("directLookupError", state)
-        self.assertIn("grid-template-columns: repeat(3, minmax(0, 1fr));", styles)
+        self.assertIn("grid-template-columns: repeat(2, minmax(0, 1fr));", styles)
 
     def test_deployment_keeps_odbc_out_of_linux_container_configuration(self):
         compose = (PROJECT_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
@@ -178,9 +231,10 @@ class AttacheDirectFrontendTest(unittest.TestCase):
             }}
 
             const successRequest = deferred();
+            let successResponse = successRequest.promise;
             const success = createHarness(async (invoiceNumber) => {{
               if (invoiceNumber !== "185479") throw new Error("wrong invoice number");
-              return successRequest.promise;
+              return successResponse;
             }});
             const firstLookup = success.actions.lookupDeliveryDirectAttacheInvoice();
             const duplicateLookup = success.actions.lookupDeliveryDirectAttacheInvoice();
@@ -213,6 +267,45 @@ class AttacheDirectFrontendTest(unittest.TestCase):
             }}
             if (success.getBoardGets() !== 0) {{
               throw new Error("Direct preview performed a Delivery board refetch");
+            }}
+
+            const firstRows = completed.rows;
+            const replacementRequest = deferred();
+            successResponse = replacementRequest.promise;
+            const replacementLookup = success.actions.lookupDeliveryDirectAttacheInvoice();
+            if (success.state.deliveryAttacheImportState.rows !== firstRows) {{
+              throw new Error("pending Direct lookup cleared the existing result");
+            }}
+            replacementRequest.resolve({{
+              rows: [{{
+                row_id: "REPLACEMENT", selected: true,
+                importable: true, is_duplicate: false,
+              }}],
+            }});
+            await replacementLookup;
+            const replacementRows = success.state.deliveryAttacheImportState.rows;
+            if (replacementRows.length !== 1 || replacementRows[0].row_id !== "REPLACEMENT") {{
+              throw new Error("new Direct success appended instead of replacing the result");
+            }}
+
+            const failedReplacement = deferred();
+            successResponse = failedReplacement.promise;
+            const failedReplacementLookup = success.actions.lookupDeliveryDirectAttacheInvoice();
+            if (success.state.deliveryAttacheImportState.rows !== replacementRows) {{
+              throw new Error("retry pending state replaced the current Direct result");
+            }}
+            failedReplacement.reject(new Error("temporary lookup failure"));
+            await failedReplacementLookup;
+            if (success.state.deliveryAttacheImportState.rows !== replacementRows) {{
+              throw new Error("failed Direct lookup removed the previous successful result");
+            }}
+            if (!success.state.deliveryAttacheImportState.directLookupError.includes(
+              "temporary lookup failure"
+            )) {{
+              throw new Error("failed Direct retry did not surface its inline error");
+            }}
+            if (success.getBoardGets() !== 0) {{
+              throw new Error("Direct retry performed a Delivery board refetch");
             }}
 
             const failure = createHarness(async () => {{
@@ -285,6 +378,131 @@ class AttacheDirectFrontendTest(unittest.TestCase):
             if (opened.state.deliveryDocumentImportState.source !== "attache-direct") {{
               throw new Error("Direct Attaché choice did not open its source state");
             }}
+            """
+        )
+        result = subprocess.run(
+            ["node", "--input-type=module", "--eval", script],
+            cwd=PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(0, result.returncode, result.stderr or result.stdout)
+
+    def test_product_line_structural_changes_preserve_modal_scroll_and_review_state(self):
+        actions_uri = (
+            FRONTEND_ROOT
+            / "js/actions/workspace/delivery-attache-actions.js"
+        ).as_uri()
+        order_renderer_uri = (
+            FRONTEND_ROOT
+            / "js/render/delivery/delivery-order-modal-renderer.js"
+        ).as_uri()
+        script = textwrap.dedent(
+            f"""
+            const {{ createDeliveryAttacheActions }} = await import({actions_uri!r});
+            const {{ formatProductLineTotals }} = await import({order_renderer_uri!r});
+
+            const displayedTotal = formatProductLineTotals([
+              {{ quantity: 1, unit: "KG", package_quantity: 500 }},
+              {{ quantity: 2, unit: "kg", package_quantity: 700 }},
+            ]);
+            if (displayedTotal !== "3 KG") {{
+              throw new Error(`actual-quantity total used packaging values: ${{displayedTotal}}`);
+            }}
+
+            const row = {{
+              row_id: "DIRECT-185479",
+              selected: true,
+              importable: true,
+              is_duplicate: false,
+              product_lines: [{{
+                product_code: "RSING10KG",
+                product_name: "COLOUR RAGS 10KG NET",
+                quantity: 45,
+                unit: "BAG",
+                package_quantity: 45,
+                package_unit: "BAG10",
+              }}],
+            }};
+            const expandedRowIds = {{ "DIRECT-185479": true }};
+            const state = {{
+              deliveryAttacheImportState: {{
+                rows: [row],
+                expandedRowIds,
+                search: "185479",
+                filter: "SELECTED",
+              }},
+            }};
+            const modalBody = {{ scrollTop: 720, scrollLeft: 19 }};
+            let renders = 0;
+            let committedPayload = null;
+            globalThis.document = {{
+              querySelector: (selector) =>
+                selector === ".workspace-modal-body" ? modalBody : null,
+            }};
+            globalThis.requestAnimationFrame = (callback) => {{ callback(); return 1; }};
+            const actions = createDeliveryAttacheActions({{
+              state,
+              renderWorkspace: () => {{
+                renders += 1;
+                modalBody.scrollTop = 0;
+                modalBody.scrollLeft = 0;
+              }},
+              api: {{
+                commitDeliveryAttacheInvoices: async (payload) => {{
+                  committedPayload = payload;
+                  return {{ imported_count: 1, skipped_count: 0 }};
+                }},
+              }},
+              actions: {{
+                runDeliveryAction: async (_key, operation, onError) => {{
+                  try {{
+                    await operation({{ route: "delivery/task-pool" }});
+                  }} catch (error) {{
+                    onError(error);
+                  }}
+                }},
+                isDeliveryMutationCurrent: () => false,
+              }},
+            }});
+
+            actions.updateDeliveryAttacheImportProductLine(
+              "DIRECT-185479", 0, "product_name", "EDITED PRODUCT",
+            );
+            if (renders !== 0 || modalBody.scrollTop !== 720 || modalBody.scrollLeft !== 19) {{
+              throw new Error("product typing caused a broad render or scroll change");
+            }}
+            if (state.deliveryAttacheImportState.rows[0].product_lines[0].product_name
+                !== "EDITED PRODUCT") {{
+              throw new Error("product typing did not update local state");
+            }}
+
+            actions.addDeliveryAttacheImportProductLine("DIRECT-185479");
+            if (renders !== 1 || modalBody.scrollTop !== 720 || modalBody.scrollLeft !== 19) {{
+              throw new Error("Add Product Line did not preserve modal scroll");
+            }}
+            if (state.deliveryAttacheImportState.rows[0].product_lines.length !== 2) {{
+              throw new Error("Add Product Line did not append one local row");
+            }}
+            actions.removeDeliveryAttacheImportProductLine("DIRECT-185479", 1);
+            if (renders !== 2 || modalBody.scrollTop !== 720 || modalBody.scrollLeft !== 19) {{
+              throw new Error("Remove Product Line did not preserve modal scroll");
+            }}
+            const current = state.deliveryAttacheImportState;
+            if (current.expandedRowIds !== expandedRowIds
+                || current.search !== "185479"
+                || current.filter !== "SELECTED") {{
+              throw new Error("product mutation lost expanded/search/filter state");
+            }}
+            await actions.commitDeliveryAttacheImport();
+            if (committedPayload?.rows?.[0]?.product_lines?.[0]?.product_name
+                !== "EDITED PRODUCT") {{
+              throw new Error("Confirm Import payload lost the edited product line");
+            }}
+
+            delete globalThis.document;
+            delete globalThis.requestAnimationFrame;
             """
         )
         result = subprocess.run(

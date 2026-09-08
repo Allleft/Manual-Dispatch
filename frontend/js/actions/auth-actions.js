@@ -110,6 +110,18 @@ export function createAuthActions({
     state.deliveryGenerationConfirmation = null;
     state.deliveryRunSheetCloseout = null;
     state.opshopGenerationConfirmation = null;
+    state.deliveryAttacheCurrentFutureImportState = {
+      isLoading: false,
+      isCommitting: false,
+      hasLoaded: false,
+      fromDate: "",
+      rows: [],
+      expandedRowIds: {},
+      search: "",
+      filter: "ALL",
+      error: "",
+      success: "",
+    };
   }
 
   function invalidateAccountSession({ render = true } = {}) {

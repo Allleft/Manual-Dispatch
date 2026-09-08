@@ -21,6 +21,7 @@ import {
   createStatus,
   createEmptyState,
 } from "./delivery-renderer-utils.js";
+import { formatProductLineTotals } from "./delivery-order-modal-renderer.js";
 
 export function createDeliveryAttacheImportModal(state, actions) {
   const importState = state.deliveryAttacheImportState || {};
@@ -52,6 +53,12 @@ export function createDeliveryAttacheImportModal(state, actions) {
   }
   if (source === "attache-direct") {
     return createDeliveryDirectAttacheImportModal(importState, actions);
+  }
+  if (source === "attache-current-future") {
+    return createDeliveryAttacheCurrentFutureImportModal(
+      state.deliveryAttacheCurrentFutureImportState || {},
+      actions,
+    );
   }
   const modal = createWorkspaceModal(
     "Import Attaché Invoices",
@@ -109,6 +116,12 @@ export function createDeliveryImportSourceChooser(actions) {
       "view",
       () => actions.chooseDeliveryImportSource("attache-direct"),
     ),
+    createImportSourceChoice(
+      "Import Today & Future Invoices",
+      "Load Attaché customer invoices dated today or later.",
+      "calendar",
+      () => actions.chooseDeliveryImportSource("attache-current-future"),
+    ),
   );
   const footer = document.createElement("footer");
   footer.className = "workspace-modal-footer";
@@ -147,20 +160,26 @@ export function createDeliveryDirectAttacheImportModal(importState, actions) {
     },
   );
   const body = modal.querySelector(".workspace-modal-body");
-  if (
+  const hasDirectResult = (
     (importState.step || "files") === "review"
     && importState.reviewSource === "attache-direct"
-  ) {
-    if (importState.error) {
-      body.append(createStatus(importState.error, "error"));
-    }
-    if (importState.success) {
-      body.append(createStatus(importState.success, "loading"));
-    }
-    body.append(createDeliveryAttachePreview(importState, actions));
-    return modal;
-  }
+    && (importState.rows || []).length > 0
+  );
   body.append(createDeliveryDirectAttacheLookupStep(importState, actions));
+  if (importState.error) {
+    body.append(createStatus(importState.error, "error"));
+  }
+  if (importState.success) {
+    body.append(createStatus(importState.success, "loading"));
+  }
+  if (hasDirectResult) {
+    body.append(createDeliveryAttachePreview(importState, actions, {
+      showFooter: false,
+      headingTitle: "Invoice review",
+      headingSubtitle: "Review the returned values, expand the invoice for edits, then confirm the import.",
+    }));
+  }
+  body.append(createDeliveryDirectAttacheFooter(importState, actions, hasDirectResult));
   return modal;
 }
 
@@ -218,14 +237,208 @@ export function createDeliveryDirectAttacheLookupStep(importState, actions) {
   fallback.className = "workspace-muted";
   fallback.textContent = "If lookup is unavailable, go back and use Import Attaché PDF.";
 
+  section.append(fallback);
+  return section;
+}
+
+function createDeliveryDirectAttacheFooter(importState, actions, hasDirectResult) {
   const footer = document.createElement("footer");
-  footer.className = "workspace-modal-footer";
+  footer.className = "workspace-modal-footer workspace-modal-footer-sticky";
   footer.append(
     createActionButton("Back", actions.backDeliveryImportToSources),
     createActionButton("Cancel", actions.closeDeliveryAttacheImport),
   );
-  section.append(fallback, footer);
+  if (hasDirectResult) {
+    const selectedCount = countSelectedAttacheRows(importState.rows);
+    footer.append(createActionButton(
+      `Confirm Import (${selectedCount} selected)`,
+      actions.commitDeliveryAttacheImport,
+      {
+        disabled: importState.isCommitting || selectedCount === 0,
+        primary: true,
+        iconName: "cloud-upload",
+      },
+    ));
+  }
+  return footer;
+}
+
+export function createDeliveryAttacheCurrentFutureImportModal(importState, actions) {
+  const modal = createWorkspaceModal(
+    "Import Today & Future Invoices",
+    actions.closeDeliveryAttacheImport,
+    {
+      eyebrow: "Delivery Order Import",
+      subtitle: "Load Attaché customer invoices dated today or later. Dates use the Melbourne business date.",
+      iconName: "calendar",
+      width: "import",
+    },
+  );
+  const body = modal.querySelector(".workspace-modal-body");
+  if (importState.error) {
+    body.append(createStatus(importState.error, "error"));
+  }
+  if (importState.success) {
+    body.append(createStatus(importState.success, "loading"));
+  }
+  if (importState.isLoading) {
+    body.append(createStatus("Loading Today & Future Invoices...", "loading"));
+  }
+  body.append(
+    importState.hasLoaded
+      ? createDeliveryAttacheCurrentFutureReview(importState, actions)
+      : createDeliveryAttacheCurrentFutureLoadStep(importState, actions),
+  );
+  return modal;
+}
+
+function createDeliveryAttacheCurrentFutureLoadStep(importState, actions) {
+  const section = document.createElement("section");
+  section.className = "workspace-modal-section workspace-attache-current-future-step";
+  section.append(createSectionHeading(
+    "Load Today & Future Attaché invoices",
+    "Nothing is loaded until you choose Load Today & Future Invoices.",
+  ));
+  const safety = document.createElement("p");
+  safety.className = "workspace-muted";
+  safety.textContent = "Attaché access is read-only.";
+  const footer = document.createElement("footer");
+  footer.className = "workspace-modal-footer workspace-modal-footer-sticky";
+  footer.append(
+    createActionButton("Back", actions.backDeliveryImportToSources),
+    createActionButton("Cancel", actions.closeDeliveryAttacheImport),
+    createActionButton(
+      importState.isLoading
+        ? "Loading Today & Future Invoices..."
+        : "Load Today & Future Invoices",
+      actions.loadDeliveryAttacheCurrentFutureInvoices,
+      {
+        primary: true,
+        iconName: "view",
+        disabled: Boolean(importState.isLoading || importState.isCommitting),
+      },
+    ),
+  );
+  section.append(safety, footer);
   return section;
+}
+
+function createDeliveryAttacheCurrentFutureReview(importState, actions) {
+  const section = document.createElement("section");
+  section.className = "workspace-modal-section workspace-attache-current-future-step";
+  const header = document.createElement("div");
+  header.className = "workspace-attache-current-future-header";
+  header.append(
+    createSectionHeading(
+      "Today & Future Attaché Invoices",
+      `From ${formatCurrentFutureFromDate(importState.fromDate)}`,
+    ),
+    createActionButton("Refresh", actions.refreshDeliveryAttacheCurrentFutureInvoices, {
+      iconName: "refresh",
+      disabled: Boolean(importState.isLoading || importState.isCommitting),
+    }),
+  );
+  const rows = importState.rows || [];
+  section.append(header, createCurrentFutureSummaryStrip(rows));
+  if (rows.length) {
+    section.append(createDeliveryAttachePreview(
+      importState,
+      currentFutureActionAdapter(actions),
+      {
+        showFooter: false,
+        showSummary: false,
+        headingTitle: "Invoice review",
+        headingSubtitle: "Review the returned values, expand invoices for edits, then confirm selected imports.",
+      },
+    ));
+  } else {
+    section.append(createEmptyState(
+      "No Attaché invoices dated today or later were found.",
+      "document",
+    ));
+  }
+  const selectedCount = countSelectedAttacheRows(rows);
+  const footer = document.createElement("footer");
+  footer.className = "workspace-modal-footer workspace-modal-footer-sticky";
+  footer.append(
+    createActionButton("Back", actions.backDeliveryImportToSources),
+    createActionButton("Cancel", actions.closeDeliveryAttacheImport),
+    createActionButton(
+      `Confirm Import (${selectedCount} selected)`,
+      actions.commitDeliveryAttacheCurrentFutureImport,
+      {
+        primary: true,
+        iconName: "cloud-upload",
+        disabled: Boolean(
+          importState.isLoading
+          || importState.isCommitting
+          || selectedCount === 0,
+        ),
+      },
+    ),
+  );
+  section.append(footer);
+  return section;
+}
+
+function createCurrentFutureSummaryStrip(rows) {
+  const ready = rows.filter(
+    (row) => row.importable
+      && !row.is_duplicate
+      && !(row.warnings || []).length
+      && ["NOT_REQUIRED", "PAID_IN_FULL"].includes(row.payment_eligibility),
+  ).length;
+  const duplicates = rows.filter((row) => row.is_duplicate).length;
+  const paymentRequired = rows.filter(
+    (row) => !row.is_duplicate && row.payment_eligibility === "PAYMENT_REQUIRED",
+  ).length;
+  const needsReview = rows.filter(
+    (row) => !row.is_duplicate
+      && row.payment_eligibility !== "PAYMENT_REQUIRED"
+      && (!row.importable || (row.warnings || []).length),
+  ).length;
+  const strip = document.createElement("div");
+  strip.className = "workspace-attache-summary-strip workspace-attache-current-future-summary";
+  [
+    ["Found", rows.length],
+    ["Ready", ready],
+    ["Duplicate", duplicates],
+    ["Payment Required", paymentRequired],
+    ["Needs Review", needsReview],
+  ].forEach(([label, value]) => strip.append(createMetricPill(label, value)));
+  return strip;
+}
+
+function currentFutureActionAdapter(actions) {
+  return {
+    updateDeliveryAttacheImportRow:
+      actions.updateDeliveryAttacheCurrentFutureImportRow,
+    classifyDeliveryAttacheImportRow:
+      actions.classifyDeliveryAttacheCurrentFutureRow,
+    updateDeliveryAttacheImportProductLine:
+      actions.updateDeliveryAttacheCurrentFutureProductLine,
+    addDeliveryAttacheImportProductLine:
+      actions.addDeliveryAttacheCurrentFutureProductLine,
+    removeDeliveryAttacheImportProductLine:
+      actions.removeDeliveryAttacheCurrentFutureProductLine,
+    toggleDeliveryAttacheImportRow:
+      actions.toggleDeliveryAttacheCurrentFutureRow,
+    toggleDeliveryAttacheImportExpanded:
+      actions.toggleDeliveryAttacheCurrentFutureExpanded,
+    selectAllReadyDeliveryAttacheRows:
+      actions.selectAllReadyDeliveryAttacheCurrentFutureRows,
+    clearDeliveryAttacheImportSelection:
+      actions.clearDeliveryAttacheCurrentFutureSelection,
+    updateDeliveryAttacheReviewSearch:
+      actions.updateDeliveryAttacheCurrentFutureSearch,
+    updateDeliveryAttacheReviewFilter:
+      actions.updateDeliveryAttacheCurrentFutureFilter,
+  };
+}
+
+function formatCurrentFutureFromDate(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ""));
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : "—";
 }
 
 export function createDeliveryDocketImportModal(importState, actions) {
@@ -644,16 +857,23 @@ export function createDeliveryAttacheFileStep(importState, actions) {
   return controls;
 }
 
-export function createDeliveryAttachePreview(importState, actions) {
+export function createDeliveryAttachePreview(importState, actions, {
+  showFooter = true,
+  showSummary = true,
+  headingTitle = "Step 2: Review extracted invoices",
+  headingSubtitle = "Check parsed values, expand rows for edits, then confirm selected imports.",
+} = {}) {
   const section = document.createElement("section");
   section.className = "workspace-modal-section workspace-attache-review-step";
   const rows = importState.rows || [];
-  section.append(createSectionHeading("Step 2: Review extracted invoices", "Check parsed values, expand rows for edits, then confirm selected imports."));
+  section.append(createSectionHeading(headingTitle, headingSubtitle));
   if (!rows.length) {
     section.append(createEmptyState("No invoice previews yet.", "document"));
     return section;
   }
-  section.append(createAttacheSummaryStrip(rows));
+  if (showSummary) {
+    section.append(createAttacheSummaryStrip(rows));
+  }
   const selectionRow = createAttacheReviewToolbar(importState, actions);
   const list = document.createElement("div");
   list.className = "workspace-attache-review-list";
@@ -661,23 +881,29 @@ export function createDeliveryAttachePreview(importState, actions) {
     list.append(createAttacheReviewRow(row, importState, actions));
   });
   applyAttacheReviewVisibility(list, importState.search, importState.filter);
-  const selectedCount = rows.filter((row) => row.selected && row.importable && !row.is_duplicate).length;
-  const footer = document.createElement("footer");
-  footer.className = "workspace-modal-footer workspace-modal-footer-sticky";
-  const backLabel = importState.reviewSource === "attache-direct"
-    ? "Back to lookup"
-    : "Back to files";
-  footer.append(
-    createActionButton(backLabel, actions.backDeliveryAttacheImportToFiles),
-    createActionButton("Cancel", actions.closeDeliveryAttacheImport),
-    createActionButton(`Confirm Import (${selectedCount} selected)`, actions.commitDeliveryAttacheImport, {
-      disabled: importState.isCommitting || selectedCount === 0,
-      primary: true,
-      iconName: "cloud-upload",
-    }),
-  );
-  section.append(selectionRow, list, footer);
+  section.append(selectionRow, list);
+  if (showFooter) {
+    const selectedCount = countSelectedAttacheRows(rows);
+    const footer = document.createElement("footer");
+    footer.className = "workspace-modal-footer workspace-modal-footer-sticky";
+    footer.append(
+      createActionButton("Back to files", actions.backDeliveryAttacheImportToFiles),
+      createActionButton("Cancel", actions.closeDeliveryAttacheImport),
+      createActionButton(`Confirm Import (${selectedCount} selected)`, actions.commitDeliveryAttacheImport, {
+        disabled: importState.isCommitting || selectedCount === 0,
+        primary: true,
+        iconName: "cloud-upload",
+      }),
+    );
+    section.append(footer);
+  }
   return section;
+}
+
+function countSelectedAttacheRows(rows) {
+  return (rows || []).filter(
+    (row) => row.selected && row.importable && !row.is_duplicate,
+  ).length;
 }
 
 export function createAttacheSummaryStrip(rows) {
@@ -728,6 +954,7 @@ export function createAttacheReviewRow(row, importState, actions) {
     createInlineMeta("Invoice Date", row.invoice_date),
     createInlineMeta("Order", row.order_no),
     createInlineMeta("Customer", row.company_name),
+    ...createAttachePaymentMeta(row),
     createInlineMeta("Suburb", row.suburb),
     createInlineMeta("Delivery Area", formatDeliveryAreaLabel(row.delivery_area)),
     createInlineMeta("Region", formatDeliveryRegionLabel(row.auto_delivery_region)),
@@ -850,7 +1077,7 @@ export function createAttacheExpandedEditor(row, actions) {
         deliveryDocketRowRefreshOptions(actions, row.row_id, "carton_quantity", (value) => Number(value || 0)),
       )),
     ]),
-    createFormSection("Product Lines", [createAttacheProductLineEditor(row, actions)]),
+    createAttacheProductLineEditor(row, actions),
     (row.warnings || []).length
       ? createAttacheWarnings(row.warnings)
       : document.createDocumentFragment(),
@@ -880,6 +1107,14 @@ export function attacheRowStatus(row) {
   if (row.is_duplicate) {
     return "Duplicate";
   }
+  if (hasPaymentEligibility(row)) {
+    if (row.payment_eligibility === "PAYMENT_REQUIRED") {
+      return "Payment Required";
+    }
+    if (row.payment_eligibility === "UNKNOWN") {
+      return "Needs Review";
+    }
+  }
   if (!row.importable) {
     return "Not importable";
   }
@@ -887,6 +1122,52 @@ export function attacheRowStatus(row) {
     return "Warning";
   }
   return "Ready";
+}
+
+function hasPaymentEligibility(row) {
+  return Object.prototype.hasOwnProperty.call(row || {}, "payment_eligibility");
+}
+
+function createAttachePaymentMeta(row) {
+  if (!hasPaymentEligibility(row)) {
+    return [];
+  }
+  const metadata = [
+    createInlineMeta(
+      "Account Terms",
+      row.terms_description || "UNKNOWN",
+    ),
+  ];
+  if (row.terms_description === "C.O.D.") {
+    metadata.push(
+      createInlineMeta(
+        "Outstanding Balance",
+        formatOutstandingBalance(row.outstanding_balance),
+      ),
+    );
+  }
+  const paymentLabels = {
+    NOT_REQUIRED: "Not required",
+    PAID_IN_FULL: "Paid in full",
+    PAYMENT_REQUIRED: "Payment required",
+    UNKNOWN: "Unable to determine",
+  };
+  metadata.push(createInlineMeta(
+    "Payment",
+    paymentLabels[row.payment_eligibility] || "Unable to determine",
+  ));
+  return metadata;
+}
+
+function formatOutstandingBalance(value) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return "Unavailable";
+  }
+  const sign = value < 0 ? "-" : "";
+  return `${sign}$${Math.abs(value).toLocaleString("en-AU", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 }
 
 export function createInlineMeta(labelText, value) {
@@ -924,14 +1205,18 @@ export function createAttacheReviewToolbar(importState, actions) {
   display.className = "workspace-attache-display-controls";
   const filter = document.createElement("select");
   filter.setAttribute("aria-label", "Filter invoice reviews");
-  [
+  const filterOptions = [
     ["ALL", "All invoices"],
     ["READY", "Ready"],
     ["WARNING", "Warning"],
     ["DUPLICATE", "Duplicate"],
     ["NOT_IMPORTABLE", "Not importable"],
     ["SELECTED", "Selected"],
-  ].forEach(([value, label]) => {
+  ];
+  if ((importState.rows || []).some(hasPaymentEligibility)) {
+    filterOptions.splice(2, 0, ["PAYMENT_REQUIRED", "Payment Required"]);
+  }
+  filterOptions.forEach(([value, label]) => {
     const option = document.createElement("option");
     option.value = value;
     option.textContent = label;
@@ -1003,44 +1288,172 @@ export function createInlineField(labelText, control) {
 }
 
 export function createAttacheProductLineEditor(row, actions) {
-  const wrapper = document.createElement("div");
-  wrapper.className = "workspace-attache-products";
-  (row.product_lines || []).forEach((line, index) => {
-    const lineRow = document.createElement("div");
-    lineRow.className = "workspace-attache-product-row";
+  const lines = row.product_lines || [];
+  const section = document.createElement("section");
+  section.className = "workspace-product-line-editor";
+  const heading = document.createElement("div");
+  heading.className = "workspace-load-product-heading";
+  const title = document.createElement("h5");
+  title.textContent = `Product Lines (${lines.length})`;
+  heading.append(title, createActionButton(
+    "Add Product Line",
+    () => actions.addDeliveryAttacheImportProductLine(row.row_id),
+    {
+      iconName: "plus",
+      className: "workspace-product-line-add",
+    },
+  ));
+
+  const scroll = document.createElement("div");
+  scroll.className = "workspace-product-line-table-scroll";
+  scroll.tabIndex = 0;
+  scroll.setAttribute("aria-label", "Editable product lines");
+  const table = document.createElement("table");
+  table.className = "workspace-product-line-table";
+  const columns = document.createElement("colgroup");
+  [
+    "sequence",
+    "code",
+    "name",
+    "actual-quantity",
+    "actual-unit",
+    "packaging-quantity",
+    "packaging-unit",
+    "actions",
+  ].forEach((name) => columns.append(createAttacheProductLineColumn(name)));
+  const head = document.createElement("thead");
+  const headRow = document.createElement("tr");
+  ["#", "Product Code", "Product Name", "Actual Quantity", "Actual Unit", "Packaging Quantity", "Packaging Unit", "Actions"]
+    .forEach((label) => {
+      const cell = document.createElement("th");
+      cell.scope = "col";
+      cell.textContent = label;
+      headRow.append(cell);
+    });
+  head.append(headRow);
+  const body = document.createElement("tbody");
+  const total = document.createElement("p");
+  total.className = "workspace-product-line-total";
+
+  lines.forEach((line, index) => {
+    const lineRow = document.createElement("tr");
+    lineRow.className = "workspace-product-line-table-row";
+    lineRow.dataset.productLineId = `${row.row_id}:${index}`;
     lineRow.append(
-      createInlineField("Product Code", createInlineInput(line.product_code, (value) =>
-        actions.updateDeliveryAttacheImportProductLine(row.row_id, index, "product_code", value), "text",
-        deliveryDocketProductRefreshOptions(actions, row.row_id, index, "product_code"))),
-      createInlineField("Product Name", createInlineInput(line.product_name, (value) =>
-        actions.updateDeliveryAttacheImportProductLine(row.row_id, index, "product_name", value), "text",
-        deliveryDocketProductRefreshOptions(actions, row.row_id, index, "product_name"))),
-      createInlineField("Actual Quantity", createInlineInput(line.quantity, (value) =>
-        actions.updateDeliveryAttacheImportProductLine(row.row_id, index, "quantity", value), "number",
-        deliveryDocketProductRefreshOptions(actions, row.row_id, index, "quantity"))),
-      createInlineField("Actual Unit", createInlineInput(line.unit || "KG", (value) =>
-        actions.updateDeliveryAttacheImportProductLine(row.row_id, index, "unit", value), "text",
-        deliveryDocketProductRefreshOptions(actions, row.row_id, index, "unit"))),
-      createInlineField("Packaging Quantity", createInlineInput(line.package_quantity, (value) =>
-        actions.updateDeliveryAttacheImportProductLine(row.row_id, index, "package_quantity", value), "number",
-        deliveryDocketProductRefreshOptions(actions, row.row_id, index, "package_quantity"))),
-      createInlineField("Packaging Unit", createInlineInput(line.package_unit, (value) =>
-        actions.updateDeliveryAttacheImportProductLine(row.row_id, index, "package_unit", value), "text",
-        deliveryDocketProductRefreshOptions(actions, row.row_id, index, "package_unit"))),
-      createActionButton("Remove", () =>
-        actions.removeDeliveryAttacheImportProductLine(row.row_id, index)),
+      createAttacheProductLineCell(String(index + 1), "sequence"),
+      createAttacheProductLineCell(createAttacheProductLineInput(
+        "Product code",
+        line.product_code,
+        (value) => actions.updateDeliveryAttacheImportProductLine(
+          row.row_id, index, "product_code", value,
+        ),
+        deliveryDocketProductRefreshOptions(actions, row.row_id, index, "product_code"),
+      ), "code"),
+      createAttacheProductLineCell(createAttacheProductLineInput(
+        "Product name",
+        line.product_name,
+        (value) => actions.updateDeliveryAttacheImportProductLine(
+          row.row_id, index, "product_name", value,
+        ),
+        deliveryDocketProductRefreshOptions(actions, row.row_id, index, "product_name"),
+      ), "name"),
+      createAttacheProductLineCell(createAttacheProductLineInput(
+        "Actual quantity",
+        line.quantity,
+        (value) => {
+          line.quantity = value;
+          actions.updateDeliveryAttacheImportProductLine(row.row_id, index, "quantity", value);
+          total.textContent = `Total Actual Quantity: ${formatProductLineTotals(lines)}`;
+        },
+        {
+          type: "number",
+          ...deliveryDocketProductRefreshOptions(actions, row.row_id, index, "quantity"),
+        },
+      ), "actual-quantity"),
+      createAttacheProductLineCell(createAttacheProductLineInput(
+        "Actual unit",
+        line.unit || "KG",
+        (value) => {
+          line.unit = value;
+          actions.updateDeliveryAttacheImportProductLine(row.row_id, index, "unit", value);
+          total.textContent = `Total Actual Quantity: ${formatProductLineTotals(lines)}`;
+        },
+        deliveryDocketProductRefreshOptions(actions, row.row_id, index, "unit"),
+      ), "actual-unit"),
+      createAttacheProductLineCell(createAttacheProductLineInput(
+        "Packaging quantity",
+        line.package_quantity,
+        (value) => actions.updateDeliveryAttacheImportProductLine(
+          row.row_id, index, "package_quantity", value,
+        ),
+        {
+          type: "number",
+          ...deliveryDocketProductRefreshOptions(actions, row.row_id, index, "package_quantity"),
+        },
+      ), "packaging-quantity"),
+      createAttacheProductLineCell(createAttacheProductLineInput(
+        "Packaging unit",
+        line.package_unit,
+        (value) => actions.updateDeliveryAttacheImportProductLine(
+          row.row_id, index, "package_unit", value,
+        ),
+        deliveryDocketProductRefreshOptions(actions, row.row_id, index, "package_unit"),
+      ), "packaging-unit"),
+      createAttacheProductLineCell(createActionButton(
+        "Remove product line",
+        () => actions.removeDeliveryAttacheImportProductLine(row.row_id, index),
+        {
+          iconName: "trash",
+          iconOnly: true,
+          accessibleLabel: `Remove product line ${index + 1}`,
+          className: "workspace-product-line-remove",
+        },
+      ), "actions"),
     );
-    wrapper.append(lineRow);
+    body.append(lineRow);
   });
-  if (!(row.product_lines || []).length) {
-    const empty = document.createElement("p");
-    empty.className = "workspace-muted";
-    empty.textContent = "No product lines parsed.";
-    wrapper.append(empty);
+  table.append(columns, head, body);
+  scroll.append(table);
+  total.textContent = `Total Actual Quantity: ${formatProductLineTotals(lines)}`;
+  section.append(heading, scroll, total);
+  return section;
+}
+
+function createAttacheProductLineInput(
+  label,
+  value,
+  onInput,
+  { type = "text", onChange = null } = {},
+) {
+  const input = document.createElement("input");
+  input.type = type;
+  input.setAttribute("aria-label", label);
+  if (type === "number") {
+    input.setAttribute("min", "0");
   }
-  wrapper.append(createActionButton("Add Product Line", () =>
-    actions.addDeliveryAttacheImportProductLine(row.row_id)));
-  return wrapper;
+  input.value = value ?? "";
+  input.addEventListener("input", () => onInput(input.value));
+  if (onChange) {
+    input.addEventListener("change", () => onChange(input.value));
+  }
+  return input;
+}
+
+function createAttacheProductLineColumn(name) {
+  const column = document.createElement("col");
+  column.className = `workspace-product-column-${name}`;
+  return column;
+}
+
+function createAttacheProductLineCell(content, name) {
+  const cell = document.createElement("td");
+  cell.className = `workspace-product-cell-${name}`;
+  if (content?.nodeType) {
+    cell.append(content);
+  } else {
+    cell.textContent = content;
+  }
+  return cell;
 }
 
 function deliveryDocketProductRefreshOptions(actions, rowId, lineIndex, field) {

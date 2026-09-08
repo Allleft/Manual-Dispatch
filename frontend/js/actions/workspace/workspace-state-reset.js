@@ -10,6 +10,8 @@ export function createWorkspaceStateReset(context) {
   const loadWorkspaceRoute = (...args) => context.actions.loadWorkspaceRoute(...args);
   const invalidateDeliveryAttachePreview = (...args) => context.actions.invalidateDeliveryAttachePreview(...args);
   const defaultDeliveryAttacheImportState = (...args) => context.actions.defaultDeliveryAttacheImportState(...args);
+  const defaultDeliveryAttacheCurrentFutureImportState = (...args) =>
+    context.actions.defaultDeliveryAttacheCurrentFutureImportState(...args);
 
   async function updateDispatchDate(nextDate) {
     if (!nextDate || nextDate === state.dispatchDate) {
@@ -36,6 +38,8 @@ export function createWorkspaceStateReset(context) {
     state.deliveryOrderFormMode = "";
     state.deliveryOrderModalError = "";
     state.deliveryAttacheImportState = defaultDeliveryAttacheImportState();
+    state.deliveryAttacheCurrentFutureImportState =
+      defaultDeliveryAttacheCurrentFutureImportState();
     state.deliverySpecificationModalOpen = false;
     state.deliveryDriverForm = null;
     state.deliveryDriverEditingId = "";
