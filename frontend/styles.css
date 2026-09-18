@@ -1,3 +1,60 @@
+.workspace-modal.workspace-modal-invoice-lookup {
+  width: min(920px, calc(100vw - 32px));
+}
+
+.workspace-tabs-delivery .delivery-order-lookup-trigger {
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+.delivery-order-lookup-form {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.delivery-order-lookup-form .workspace-field {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.delivery-order-lookup-form input,
+.delivery-order-lookup-form button,
+.delivery-order-lookup-trigger {
+  min-height: 44px;
+}
+
+.delivery-order-lookup-match {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+  margin-top: 16px;
+  overflow-wrap: anywhere;
+}
+
+.delivery-order-lookup-status {
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--delivery-soft);
+  color: var(--delivery-strong);
+  font-weight: 700;
+}
+
+.delivery-order-lookup-match summary {
+  cursor: pointer;
+  padding: 12px 0;
+  font-weight: 600;
+}
+
+@media (max-width: 600px) {
+  .delivery-order-lookup-match .workspace-modal-fact-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .delivery-order-lookup-form input { font-size: 16px; }
+}
+
 :root {
   --ink: #17211d;
   --muted: #66736d;

@@ -1,3 +1,5 @@
+import { defaultDeliveryOrderLookupState } from "../../state/delivery-order-lookup-state.js";
+
 export function createWorkspaceStateReset(context) {
   const {
     api,
@@ -30,6 +32,7 @@ export function createWorkspaceStateReset(context) {
   }
 
   function clearWorkspaceDraftsForDispatchDateChange() {
+    state.deliveryOrderLookup = defaultDeliveryOrderLookupState();
     invalidateDeliveryAttachePreview();
     state.deliveryAssignmentDrafts = {};
     state.deliveryOrderDetailId = "";
@@ -59,6 +62,9 @@ export function createWorkspaceStateReset(context) {
   }
 
   function clearGenerationConfirmationsForRoute(route) {
+    if (!route.startsWith("delivery/")) {
+      state.deliveryOrderLookup = defaultDeliveryOrderLookupState();
+    }
     if (route !== "delivery/trip-summary") {
       state.deliveryGenerationConfirmation = null;
     }

@@ -5,6 +5,9 @@ from . import FacadeApplicationService
 class DeliveryApplicationService(FacadeApplicationService):
     """Own delivery application orchestration."""
 
+    def lookup_delivery_orders_by_invoice(self, invoice_number):
+        return self.delivery_order_status_lookup_service.lookup(invoice_number)
+
     def get_delivery_workspace_board(self, dispatch_date):
         self._ensure_workspace_ready("delivery")
         rollover_events = []

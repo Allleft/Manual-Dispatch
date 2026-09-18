@@ -3,6 +3,7 @@ from datetime import date
 
 from backend.errors import StateChangedConflictError
 from backend.schemas import (
+    DeliveryOrderLookupHistory,
     DeliveryRunSheetCloseoutSummary,
     FinalTripSummary,
     FinalTripSummaryOpShopPickupSnapshot,
@@ -29,6 +30,38 @@ def _is_reserving_delivery_run_sheet(run_sheet):
 
 class InMemorySnapshotRepositoryMixin:
     """Snapshot in-memory responsibilities."""
+
+    def list_delivery_run_sheet_history_for_order(self, order_id):
+        records = []
+        for sheet in self.delivery_run_sheets:
+            for trip in sheet.trips:
+                for row in trip.orders:
+                    if row.task_type != "ORDER" or order_id not in (
+                        row.task_id, row.order_id_snapshot,
+                    ):
+                        continue
+                    outcome = next((item for item in sheet.outcomes
+                        if item.run_sheet_row_id == row.row_id
+                        and item.run_sheet_id == sheet.run_sheet_id
+                        and item.order_id == order_id), None)
+                    records.append(DeliveryOrderLookupHistory(
+                        **{name: getattr(sheet, name) for name in (
+                            "run_sheet_id", "dispatch_date", "delivery_date", "driver_id",
+                            "driver_name_snapshot", "vehicle_id", "vehicle_rego_snapshot",
+                            "status", "generated_at", "saved_at", "closed_at",
+                            "closed_by_account_name",
+                        )},
+                        execution_status=sheet.execution_status or "OPEN",
+                        **{name: getattr(row, name) for name in (
+                            "row_id", "trip_no", "row_no", "order_id_snapshot",
+                            "invoice_number_snapshot", "order_no_snapshot",
+                        )},
+                        **{name: getattr(outcome, name) if outcome else None for name in (
+                            "outcome", "reason_code", "note", "next_delivery_date",
+                            "recorded_at", "recorded_by_account_name",
+                        )},
+                    ))
+        return records
 
     def list_final_trip_summaries(self, dispatch_date, delivery_date=None):
         return [

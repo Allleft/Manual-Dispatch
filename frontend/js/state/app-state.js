@@ -4,6 +4,8 @@ import {
 } from "../utils/date-utils.js";
 
 
+import { defaultDeliveryOrderLookupState } from "./delivery-order-lookup-state.js";
+
 export const DEFAULT_DISPATCH_DATE = getTodayLocalDateString();
 export const DEFAULT_TRIP_SUMMARY_DATE = getNextBusinessDayLocalDateString();
 export const AUTH_ACCOUNT_NAME_SESSION_KEY = "manualDispatchAccountName";
@@ -11,6 +13,7 @@ export const AUTH_ACCOUNT_ID_SESSION_KEY = "manualDispatchAccountId";
 
 
 export const state = {
+  deliveryOrderLookup: defaultDeliveryOrderLookupState(),
   dispatchDate: DEFAULT_DISPATCH_DATE,
   driverSummaryDeliveryDate: DEFAULT_TRIP_SUMMARY_DATE,
   activeBoardView: "task-pool",

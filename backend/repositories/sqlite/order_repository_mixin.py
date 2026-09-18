@@ -1,6 +1,8 @@
+from contextlib import contextmanager
 from datetime import datetime, timezone
+import sqlite3
 
-from backend.db.connection import connect
+from backend.db.connection import borrow_connection, connect
 from backend.schemas import ProductDetailLine
 from backend.services.manual_dispatch.delivery_suburb_region_service import (
     validate_delivery_area,
@@ -8,6 +10,28 @@ from backend.services.manual_dispatch.delivery_suburb_region_service import (
 
 class SQLiteOrderRepositoryMixin:
     """Order persistence responsibilities."""
+
+    @contextmanager
+    def delivery_order_lookup_snapshot(self):
+        """Read one consistent lifecycle snapshot without initializing or writing it."""
+        connection = sqlite3.connect(self.db_path.resolve().as_uri() + "?mode=ro", uri=True)
+        connection.row_factory = sqlite3.Row
+        try:
+            connection.execute("PRAGMA query_only = ON")
+            connection.execute("BEGIN")
+            with borrow_connection(self.db_path, connection):
+                yield
+        finally:
+            connection.rollback()
+            connection.close()
+
+    def find_orders_by_invoice_number(self, invoice_number):
+        with connect(self.db_path) as connection:
+            rows = connection.execute(
+                "SELECT * FROM manual_orders WHERE invoice_number = ? ORDER BY order_id",
+                (invoice_number.strip(),),
+            ).fetchall()
+        return [self._row_to_order(row) for row in rows]
 
     def list_orders(self, delivery_date=None):
         with connect(self.db_path) as connection:

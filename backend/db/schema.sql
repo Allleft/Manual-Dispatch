@@ -347,6 +347,12 @@ CREATE TABLE IF NOT EXISTS delivery_run_sheet_rows (
         ON DELETE CASCADE
 );
 
+CREATE INDEX IF NOT EXISTS idx_delivery_run_sheet_rows_task
+ON delivery_run_sheet_rows (task_type, task_id);
+
+CREATE INDEX IF NOT EXISTS idx_delivery_run_sheet_rows_order_snapshot
+ON delivery_run_sheet_rows (task_type, order_id_snapshot);
+
 CREATE TABLE IF NOT EXISTS delivery_run_sheet_outcomes (
     outcome_id TEXT PRIMARY KEY,
     run_sheet_id TEXT NOT NULL,

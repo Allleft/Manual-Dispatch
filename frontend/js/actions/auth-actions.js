@@ -11,6 +11,8 @@ import {
   AUTH_ACCOUNT_NAME_SESSION_KEY,
 } from "../state/app-state.js";
 
+import { defaultDeliveryOrderLookupState } from "../state/delivery-order-lookup-state.js";
+
 function getSafeSessionStorage() {
   try {
     return window.sessionStorage;
@@ -109,6 +111,7 @@ export function createAuthActions({
     state.activeWorkspace = "";
     state.deliveryGenerationConfirmation = null;
     state.deliveryRunSheetCloseout = null;
+    state.deliveryOrderLookup = defaultDeliveryOrderLookupState();
     state.opshopGenerationConfirmation = null;
     state.deliveryAttacheCurrentFutureImportState = {
       isLoading: false,

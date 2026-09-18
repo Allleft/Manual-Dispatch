@@ -34,6 +34,13 @@ def create_delivery_router(
 ) -> APIRouter:
     router = router or APIRouter()
 
+    @router.get("/delivery/orders/lookup")
+    def lookup_delivery_orders_by_invoice(invoice_number: str = ""):
+        try:
+            return to_dict(get_service().lookup_delivery_orders_by_invoice(invoice_number))
+        except ValueError as error:
+            raise to_http_exception(error) from error
+
     @router.get("/delivery/board")
     def get_delivery_workspace_board(dispatch_date: str):
         service = get_service()

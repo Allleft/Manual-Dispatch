@@ -4,6 +4,7 @@ from backend.services.manual_dispatch.assignment_service import AssignmentServic
 from backend.services.manual_dispatch.auth_service import OperatorAuthService
 from backend.services.manual_dispatch.board_service import BoardService
 from backend.services.manual_dispatch.delivery_run_sheet_service import DeliveryRunSheetService
+from backend.services.manual_dispatch.delivery_order_status_lookup_service import DeliveryOrderStatusLookupService
 from backend.services.manual_dispatch.delivery_workspace_board_service import DeliveryWorkspaceBoardService
 from backend.services.manual_dispatch.delivery_order_date_rollover_service import (
     DeliveryOrderDateRolloverService,
@@ -70,6 +71,7 @@ class ManualDispatchService:
             self.delivery_order_date_rollover_service,
         )
         self.delivery_order_area_resolver = DeliveryOrderAreaResolver(self.repository)
+        self.delivery_order_status_lookup_service = DeliveryOrderStatusLookupService(self.repository)
         self.order_service = OrderService(
             self.repository,
             self.id_generator,
@@ -140,6 +142,9 @@ class ManualDispatchService:
 
     def get_delivery_workspace_board(self, dispatch_date):
         return self.delivery_application_service.get_delivery_workspace_board(dispatch_date)
+
+    def lookup_delivery_orders_by_invoice(self, invoice_number):
+        return self.delivery_application_service.lookup_delivery_orders_by_invoice(invoice_number)
 
     def classify_delivery_area(self, request):
         return self.delivery_application_service.classify_delivery_area(request)

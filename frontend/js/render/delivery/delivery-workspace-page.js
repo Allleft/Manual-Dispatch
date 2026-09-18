@@ -7,7 +7,7 @@ const DELIVERY_TABS = [
   { route: "delivery/history", label: "Saved History" },
 ];
 
-export function createWorkspacePage(state, onDispatchDateChange) {
+export function createWorkspacePage(state, onDispatchDateChange, actions = {}) {
   const page = document.createElement("section");
   page.className = "workspace-page workspace-page-delivery";
 
@@ -24,6 +24,12 @@ export function createWorkspacePage(state, onDispatchDateChange) {
   copy.append(title);
   titleGroup.append(icon, copy);
   heading.append(titleGroup);
+  const findInvoice = document.createElement("button");
+  findInvoice.type = "button";
+  findInvoice.className = "button-primary workspace-action-button delivery-order-lookup-trigger";
+  findInvoice.dataset.findDeliveryInvoice = "";
+  findInvoice.textContent = "Find Invoice";
+  findInvoice.addEventListener("click", () => actions.openDeliveryOrderLookup?.());
   if (state.workspaceRoute === "delivery/task-pool") {
     heading.append(createDateControl(state, onDispatchDateChange));
   }
@@ -32,6 +38,7 @@ export function createWorkspacePage(state, onDispatchDateChange) {
   nav.className = "workspace-tabs workspace-tabs-delivery";
   nav.setAttribute("aria-label", "Order Delivery workspace");
   DELIVERY_TABS.forEach((tab) => nav.append(createTab(tab, state.workspaceRoute)));
+  nav.append(findInvoice);
 
   page.append(heading, nav);
   return page;

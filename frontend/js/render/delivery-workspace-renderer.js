@@ -1,4 +1,5 @@
 import { createDeliveryAttacheImportModal } from "./delivery/delivery-attache-modal-renderer.js";
+import { createDeliveryOrderLookupModal } from "./delivery/delivery-order-lookup-modal-renderer.js";
 
 import { createDeliveryGenerationConfirmationModal } from "./delivery/delivery-generation-modal-renderer.js";
 
@@ -24,8 +25,9 @@ export function renderDeliveryWorkspace(
   root,
   { state, actions, onDispatchDateChange },
 ) {
+  const lookupModal = root.querySelector(".delivery-order-lookup-backdrop");
   root.innerHTML = "";
-  const page = createWorkspacePage(state, onDispatchDateChange);
+  const page = createWorkspacePage(state, onDispatchDateChange, actions);
   const content = document.createElement("div");
   content.className = "workspace-content";
 
@@ -61,6 +63,7 @@ export function renderDeliveryWorkspace(
   }
 
   page.append(content);
+  page.append(createDeliveryOrderLookupModal(state, actions, lookupModal));
   page.append(
     createDeliveryOrderModal(state, actions),
     createDeliveryAttacheImportModal(state, actions),

@@ -140,6 +140,11 @@ def initialize_database(db_path=None):
         schema_statements, seed_statements = _split_schema_and_seed(schema)
         connection.executescript(schema_statements)
         _ensure_manual_dispatch_columns(connection)
+        # Legacy databases may not have invoice_number until the compatibility pass.
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_manual_orders_invoice_number "
+            "ON manual_orders (invoice_number)"
+        )
         if is_fresh_database:
             create_invariant_indexes(connection)
         if _is_env_flag_enabled(SEED_DEMO_DATA_ENV, default=False):

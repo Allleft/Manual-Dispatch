@@ -17,6 +17,12 @@ export async function apiGetDeliverySpecifications() {
   return requestJson("/api/manual-dispatch/delivery/specifications");
 }
 
+export async function apiLookupDeliveryOrdersByInvoice(invoiceNumber) {
+  return requestJson("/api/manual-dispatch/delivery/orders/lookup", {
+    query: { invoice_number: invoiceNumber },
+  });
+}
+
 export async function apiClassifyDeliveryArea(suburb, postcode) {
   return requestJson("/api/manual-dispatch/delivery/area-classification", {
     method: "POST",

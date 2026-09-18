@@ -7,6 +7,7 @@ import { createWorkspaceAsyncGuards } from "./workspace/workspace-async-guards.j
 import { createWorkspaceStateReset } from "./workspace/workspace-state-reset.js";
 import { createWorkspaceBusyActions } from "./workspace/workspace-busy-actions.js";
 import { createDeliveryWorkspaceActions } from "./workspace/delivery-workspace-actions.js";
+import { createDeliveryOrderLookupActions } from "./workspace/delivery-order-lookup-actions.js";
 import { createDeliveryTaskPoolActions } from "./workspace/delivery-task-pool-actions.js";
 import { createDeliveryTripSummaryActions } from "./workspace/delivery-trip-summary-actions.js";
 import { createDeliveryVehicleQueue } from "./workspace/delivery-vehicle-queue.js";
@@ -44,6 +45,7 @@ export function createWorkspaceActions({
   Object.assign(context.actions, createWorkspaceStateReset(context));
   Object.assign(context.actions, createWorkspaceBusyActions(context));
   Object.assign(context.actions, createDeliveryWorkspaceActions(context));
+  Object.assign(context.actions, createDeliveryOrderLookupActions(context));
   Object.assign(context.actions, createDeliveryTaskPoolActions(context));
   Object.assign(context.actions, createDeliveryTripSummaryActions(context));
   Object.assign(context.actions, createDeliveryVehicleQueue(context));
@@ -193,6 +195,10 @@ export function createWorkspaceActions({
   } = context.actions;
 
   return {
+    openDeliveryOrderLookup: context.actions.openDeliveryOrderLookup,
+    closeDeliveryOrderLookup: context.actions.closeDeliveryOrderLookup,
+    updateDeliveryOrderLookupQuery: context.actions.updateDeliveryOrderLookupQuery,
+    searchDeliveryOrderLookup: context.actions.searchDeliveryOrderLookup,
     addDeliveryAttacheImportProductLine,
     addDeliveryAttacheCurrentFutureProductLine,
     addDeliveryDocketImportProductLine,

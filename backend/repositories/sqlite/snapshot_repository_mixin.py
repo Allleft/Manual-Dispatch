@@ -2,6 +2,32 @@ from datetime import date
 
 from backend.db.connection import connect
 from backend.errors import StateChangedConflictError
+from backend.schemas import DeliveryOrderLookupHistory
+
+
+DELIVERY_ORDER_HISTORY_SQL = """
+    SELECT sheet.run_sheet_id, sheet.dispatch_date, sheet.delivery_date,
+        sheet.driver_id, sheet.driver_name_snapshot, sheet.vehicle_id,
+        sheet.vehicle_rego_snapshot, sheet.status,
+        COALESCE(sheet.execution_status, 'OPEN') AS execution_status,
+        sheet.generated_at, sheet.saved_at, sheet.closed_at,
+        sheet.closed_by_account_name, row.row_id, row.trip_no, row.row_no,
+        row.order_id_snapshot, row.invoice_number_snapshot, row.order_no_snapshot,
+        outcome.outcome, outcome.reason_code, outcome.note, outcome.next_delivery_date,
+        outcome.recorded_at, outcome.recorded_by_account_name
+    FROM delivery_run_sheet_rows AS row
+    JOIN delivery_run_sheets AS sheet ON sheet.run_sheet_id = row.run_sheet_id
+    LEFT JOIN delivery_run_sheet_outcomes AS outcome
+        ON outcome.run_sheet_row_id = row.row_id
+        AND outcome.run_sheet_id = sheet.run_sheet_id AND outcome.order_id = ?
+    WHERE row.row_id IN (
+        SELECT row_id FROM delivery_run_sheet_rows
+        WHERE task_type = 'ORDER' AND task_id = ?
+        UNION
+        SELECT row_id FROM delivery_run_sheet_rows
+        WHERE task_type = 'ORDER' AND order_id_snapshot = ?
+    )
+"""
 
 
 def _parse_iso_date(value):
@@ -13,6 +39,13 @@ def _parse_iso_date(value):
 
 class SQLiteSnapshotRepositoryMixin:
     """Snapshot persistence responsibilities."""
+
+    def list_delivery_run_sheet_history_for_order(self, order_id):
+        with connect(self.db_path) as connection:
+            rows = connection.execute(
+                DELIVERY_ORDER_HISTORY_SQL, (order_id, order_id, order_id),
+            ).fetchall()
+        return [DeliveryOrderLookupHistory(**dict(row)) for row in rows]
 
     def list_final_trip_summaries(self, dispatch_date, delivery_date=None):
         with connect(self.db_path) as connection:

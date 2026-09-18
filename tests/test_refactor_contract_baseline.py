@@ -57,7 +57,9 @@ class RefactorContractBaselineTest(unittest.TestCase):
             if getattr(route, "path", None)
         )
 
-        self.assertEqual(103, len(routes))
+        self.assertEqual(104, len(routes))
+        lookup_route = ("/api/manual-dispatch/delivery/orders/lookup", ("GET",))
+        self.assertIn(lookup_route, routes)
         self.assertIn(
             (
                 "/api/manual-dispatch/opshop/pickups/countryside-order",
@@ -116,7 +118,7 @@ class RefactorContractBaselineTest(unittest.TestCase):
         )
         self.assertEqual(
             "159e9852377a51178aedfe583951f866ee9154d4f0cc6a86c0cdb96ee00fe903",
-            self._contract_digest(routes),
+            self._contract_digest([route for route in routes if route != lookup_route]),
         )
 
     def test_manual_dispatch_service_facade_contract(self):
@@ -153,7 +155,11 @@ class RefactorContractBaselineTest(unittest.TestCase):
         )
 
         public_methods = self._public_methods(ManualDispatchService)
-        self.assertEqual(98, len(public_methods))
+        self.assertEqual(99, len(public_methods))
+        self.assertIn(
+            {"name": "lookup_delivery_orders_by_invoice", "signature": "(self, invoice_number)"},
+            public_methods,
+        )
         self.assertTrue(
             {
                 "classify_delivery_area",
@@ -165,7 +171,8 @@ class RefactorContractBaselineTest(unittest.TestCase):
         )
         self.assertEqual(
             "adb8cd90b4285ef425ba96e9100583b44fafce201357e56a0fe865ec7d4d2f76",
-            self._contract_digest(public_methods),
+            self._contract_digest([method for method in public_methods
+                                   if method["name"] != "lookup_delivery_orders_by_invoice"]),
         )
 
     def test_repository_facades_keep_identical_public_contracts(self):
@@ -175,7 +182,14 @@ class RefactorContractBaselineTest(unittest.TestCase):
         )
 
         self.assertEqual(sqlite_methods, in_memory_methods)
-        self.assertEqual(118, len(sqlite_methods))
+        self.assertEqual(121, len(sqlite_methods))
+        lookup_methods = {
+            "delivery_order_lookup_snapshot": "(self)",
+            "find_orders_by_invoice_number": "(self, invoice_number)",
+            "list_delivery_run_sheet_history_for_order": "(self, order_id)",
+        }
+        for name, signature in lookup_methods.items():
+            self.assertIn({"name": name, "signature": signature}, sqlite_methods)
         self.assertIn(
             "list_saved_opshop_pickup_dates_by_opshop_ids",
             {method["name"] for method in sqlite_methods},
@@ -195,7 +209,8 @@ class RefactorContractBaselineTest(unittest.TestCase):
         )
         self.assertEqual(
             "02116dee69e13de9f443c87d486778df994ee8edea7f8352d5cf5a24256f4ab0",
-            self._contract_digest(sqlite_methods),
+            self._contract_digest([method for method in sqlite_methods
+                                   if method["name"] not in lookup_methods]),
         )
 
     def test_frontend_facade_and_state_contracts(self):
@@ -269,7 +284,8 @@ class RefactorContractBaselineTest(unittest.TestCase):
         contract = json.loads(completed.stdout)
 
         self.assertEqual(["function", "function"], contract["rendererTypes"])
-        self.assertEqual(108, len(contract["apiExportNames"]))
+        self.assertEqual(109, len(contract["apiExportNames"]))
+        self.assertIn("apiLookupDeliveryOrdersByInvoice", contract["apiExportNames"])
         self.assertIn("apiPreviewDirectAttacheInvoice", contract["apiExportNames"])
         self.assertIn(
             "apiPreviewDeliveryAttacheCurrentFutureInvoices",
@@ -289,9 +305,15 @@ class RefactorContractBaselineTest(unittest.TestCase):
         )
         self.assertEqual(
             "a04f41e7d5467dff4982de13bbc8495755452e3c63367110c1d8bb0b5b16e269",
-            self._contract_digest(contract["apiExportNames"]),
+            self._contract_digest([name for name in contract["apiExportNames"]
+                                   if name != "apiLookupDeliveryOrdersByInvoice"]),
         )
-        self.assertEqual(129, len(contract["actionNames"]))
+        self.assertEqual(133, len(contract["actionNames"]))
+        lookup_actions = {
+            "openDeliveryOrderLookup", "closeDeliveryOrderLookup",
+            "updateDeliveryOrderLookupQuery", "searchDeliveryOrderLookup",
+        }
+        self.assertTrue(lookup_actions.issubset(contract["actionNames"]))
         self.assertIn("lookupDeliveryDirectAttacheInvoice", contract["actionNames"])
         self.assertIn("updateDeliveryDirectAttacheInvoiceNumber", contract["actionNames"])
         self.assertIn("previewDeliveryDocketImport", contract["actionNames"])
@@ -326,9 +348,10 @@ class RefactorContractBaselineTest(unittest.TestCase):
         )
         self.assertEqual(
             "4c884899f951370a5d4a8e7defa1e9459b05dd19db70f41b3a70aafcd0a4e55b",
-            self._contract_digest(contract["actionNames"]),
+            self._contract_digest([name for name in contract["actionNames"] if name not in lookup_actions]),
         )
-        self.assertEqual(193, len(contract["stateFields"]))
+        self.assertEqual(194, len(contract["stateFields"]))
+        self.assertIn("deliveryOrderLookup", contract["stateFields"])
         self.assertIn("deliveryDocumentImportState", contract["stateFields"])
         self.assertIn("deliveryDocketImportState", contract["stateFields"])
         self.assertIn(
@@ -337,7 +360,7 @@ class RefactorContractBaselineTest(unittest.TestCase):
         )
         self.assertEqual(
             "c3002ec241ae23604bab3bbe3aedc39c867cff8a262527fd825221d2307eb97c",
-            self._contract_digest(contract["stateFields"]),
+            self._contract_digest([name for name in contract["stateFields"] if name != "deliveryOrderLookup"]),
         )
 
 

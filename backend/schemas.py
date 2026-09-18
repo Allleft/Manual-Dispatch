@@ -46,6 +46,62 @@ class Order:
 
 
 @dataclass
+class DeliveryOrderLookupHistory:
+    run_sheet_id: str
+    dispatch_date: str
+    delivery_date: str
+    driver_id: str
+    driver_name_snapshot: str
+    vehicle_id: Optional[str]
+    vehicle_rego_snapshot: Optional[str]
+    status: str
+    execution_status: str
+    generated_at: str
+    saved_at: Optional[str]
+    closed_at: Optional[str]
+    closed_by_account_name: Optional[str]
+    row_id: str
+    trip_no: str
+    row_no: int
+    order_id_snapshot: Optional[str]
+    invoice_number_snapshot: Optional[str]
+    order_no_snapshot: Optional[str]
+    outcome: Optional[str] = None
+    reason_code: Optional[str] = None
+    note: Optional[str] = None
+    next_delivery_date: Optional[str] = None
+    recorded_at: Optional[str] = None
+    recorded_by_account_name: Optional[str] = None
+
+
+@dataclass
+class DeliveryOrderLookupAssignment:
+    dispatch_date: str
+    driver_id: str
+    driver_name: Optional[str]
+    trip_no: str
+
+
+@dataclass
+class DeliveryOrderStatusMatch:
+    order_id: str
+    current_status: str
+    status_label: str
+    order: Order
+    assignment: Optional[DeliveryOrderLookupAssignment]
+    active_run_sheet: Optional[DeliveryOrderLookupHistory]
+    latest_closeout: Optional[DeliveryOrderLookupHistory]
+    run_sheet_history: List[DeliveryOrderLookupHistory] = field(default_factory=list)
+
+
+@dataclass
+class DeliveryOrderStatusLookup:
+    invoice_number: str
+    match_count: int
+    orders: List[DeliveryOrderStatusMatch] = field(default_factory=list)
+
+
+@dataclass
 class Driver:
     driver_id: str
     name: str

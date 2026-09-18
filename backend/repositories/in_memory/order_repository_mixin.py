@@ -1,3 +1,4 @@
+from contextlib import nullcontext
 from datetime import datetime, timezone
 
 from backend.services.manual_dispatch.delivery_suburb_region_service import (
@@ -7,6 +8,15 @@ from backend.services.manual_dispatch.delivery_suburb_region_service import (
 
 class InMemoryOrderRepositoryMixin:
     """Order in-memory responsibilities."""
+
+    def delivery_order_lookup_snapshot(self):
+        return nullcontext()
+
+    def find_orders_by_invoice_number(self, invoice_number):
+        return sorted(
+            (order for order in self.orders if order.invoice_number == invoice_number.strip()),
+            key=lambda order: order.order_id,
+        )
 
     def list_orders(self, delivery_date=None):
         return [
