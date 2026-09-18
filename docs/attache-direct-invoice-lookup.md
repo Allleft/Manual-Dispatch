@@ -49,6 +49,41 @@ in code as `CUSTOMER_INVOICE_DOCUMENT_TYPE`. A visible document number may also
 exist on another document class, such as a credit note; Direct Invoice Lookup
 does not broaden the search to those classes or guess between them.
 
+### ODBC connection lifecycle
+
+The Bridge HTTP process may remain running without intentionally retaining an
+ODBC connection between lookups. An Attaché ODBC connection is opened only for
+an authenticated lookup request. Direct Lookup opens one connection per request;
+Current/Future Lookup also opens one connection for the entire batch, not one
+per invoice. Connections and cursors are request-local: there is no persistent
+connection or background keep-alive worker. `/health` reads configuration only,
+and missing/invalid HTTP tokens are rejected before repository creation.
+
+`attache_bridge.repository` imports the optional pyodbc dependency and sets
+`pyodbc.pooling = False` once at module initialization, before the connection
+factory is available to requests. This follows the
+[pyodbc global pooling requirement](https://github.com/mkleehammer/pyodbc/wiki/The-pyodbc-Module#pooling):
+the setting must be applied before the first connection, not toggled per request.
+Both lookup paths use the same factory. Injected test factories remain supported;
+without pyodbc, the real factory returns the existing controlled configuration
+error rather than preventing the HTTP app from importing.
+
+Both lookups close their cursor and connection in `finally`, on success,
+not-found, malformed data, timeout, ODBC authentication/authorization failure,
+and unexpected query errors. If connection setup fails before a handle is
+returned there is no handle to close; if timeout setup or cursor creation fails,
+the opened connection is still closed. Cleanup attempts both handles even if
+cursor closing raises. Existing cleanup suppresses close errors, so a close
+attempt is not proof that a driver/server has released its session.
+
+Disabling pyodbc pooling means the Bridge does not intentionally retain a
+reusable pooled ODBC connection after request cleanup. **Bridge HTTP process
+running** and **active Attaché/FairCom ODBC session** are different states.
+Automated fake-driver tests cannot establish real FairCom session release or
+prove that Attaché Archive succeeds. Neither always stopping the Bridge nor
+keeping it running safely is established as an operational requirement here;
+the controlled smoke test below is the remaining release gate.
+
 ### Observed header lookup performance
 
 A read-only diagnostic in the real FairCom environment found that exact
@@ -272,6 +307,39 @@ returned HTTP 200 in 549 ms with the correct historical delivery street, raw
 suburb and delivery postcode, plus six raw product lines. The verified Bridge
 query path remained SELECT-only. Real Attaché frozen Bridge localhost smoke
 status: **PASS**.
+
+### Bridge-running Archive smoke test
+
+This is a manual next-stage procedure, not an automated test or deployment
+authorization. The earlier frozen lookup PASS above did **not** validate this
+new pooling configuration or Archive compatibility.
+
+1. On the approved Windows build machine, build a fresh frozen Bridge EXE using
+   `tools/build_attache_bridge_windows.ps1` and an appropriate x64 build Python.
+   Keep credentials outside the package. Do not reuse an older EXE.
+2. On the authorized Bridge host, start the new EXE with the existing approved
+   configuration; do not change DSNs, firewall rules, tokens or passwords.
+3. Confirm `/health` is healthy and port 8787 is listening.
+4. Perform one known Direct Invoice Lookup and confirm it succeeds.
+5. Leave `attache-bridge.exe` **running**. Stop making Manual Dispatch invoice
+   lookups, including Current/Future previews, while observing session release.
+6. Have the responsible Attaché/FairCom operator observe whether the Manual
+   Dispatch ODBC session disappears. Record elapsed time and the observation;
+   do not terminate sessions or alter business data to manufacture a PASS.
+7. Let normal Attaché users finish. After the final real user exits, observe
+   whether the normal Archive starts. Record the result and EXE build/hash.
+
+PASS requires all of: Bridge process RUNNING, port 8787 LISTENING, no remaining
+Manual Dispatch ODBC/FairCom session after lookup, final real user exited, and
+Archive starting normally. If session identity or release cannot be verified,
+report the outcome as inconclusive, not PASS.
+
+If PASS, a 24/7 Bridge Windows Service becomes a candidate architecture. If a
+retained Bridge/FairCom session blocks Archive, the candidate fallback is a
+Windows Service with controlled daily stop/start. Neither architecture is
+implemented or approved by this document; investigate other failure causes
+separately. Do not proceed to Windows Service or NAS production deployment
+until the real smoke result has been reviewed.
 
 ## Optional local-to-remote network check
 

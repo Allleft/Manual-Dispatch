@@ -6,6 +6,13 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 class H3OperationalSafetyTest(unittest.TestCase):
+    def test_ci_covers_attache_feature_push_and_pull_request(self):
+        workflow = self._read(".github/workflows/ci.yml")
+        push, pull_request = workflow.split("  pull_request:", 1)
+        pull_request = pull_request.split("  workflow_dispatch:", 1)[0]
+        for trigger in (push, pull_request):
+            self.assertIn("      - feature/attache-direct-invoice-lookup\n", trigger)
+
     def test_ci_covers_integration_branch_and_matches_python_runtime(self):
         workflow = self._read(".github/workflows/ci.yml")
 
@@ -81,8 +88,11 @@ class H3OperationalSafetyTest(unittest.TestCase):
             self.assertIn("MANUAL_DISPATCH_SEED_DEMO_DATA=false", source)
 
         readme = self._read("README.md")
-        self.assertIn("Python 3.12 is the supported production runtime", readme)
-        self.assertIn("Every production deployment must explicitly configure", readme)
+        self.assertIn("Python **3.12** is used by CI and the Docker image", readme)
+        self.assertIn(
+            "Set a stable, private `MANUAL_DISPATCH_AUTH_COOKIE_SECRET` for deployment.",
+            readme,
+        )
 
     @staticmethod
     def _read(relative_path):

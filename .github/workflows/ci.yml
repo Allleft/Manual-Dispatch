@@ -6,11 +6,13 @@ on:
       - main
       - feature/opshop-pickup
       - feature/separate-delivery-and-opshop-workspaces
+      - feature/attache-direct-invoice-lookup
   pull_request:
     branches:
       - main
       - feature/opshop-pickup
       - feature/separate-delivery-and-opshop-workspaces
+      - feature/attache-direct-invoice-lookup
   workflow_dispatch:
 
 jobs:

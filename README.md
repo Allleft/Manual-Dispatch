@@ -354,9 +354,14 @@ an internal NAS host and a controlled reverse proxy.
 - Do not use production databases or the formal Logbook for tests.
 - Never commit SQLite files, Logbook contents, business DOCX/PDF/workbooks,
   connection strings, tokens or packaged Bridge executables.
-- Attaché access remains read-only, but Bridge/ODBC sessions may still count as
-  active company access for Attaché Archive. Stop the Bridge before Archive and
-  coordinate the operation with the responsible operator.
+- The Bridge HTTP process may remain running: each authenticated invoice lookup
+  opens one ODBC connection and closes its cursor/connection in `finally`.
+  pyodbc pooling is disabled before the first connection so request cleanup does
+  not intentionally retain a reusable pooled connection. A running HTTP process
+  is distinct from an active Attaché/FairCom session. Real driver session release
+  and Archive compatibility remain unproven; use the controlled
+  [Bridge-running Archive smoke test](docs/attache-direct-invoice-lookup.md#bridge-running-archive-smoke-test)
+  before choosing an always-on service or a controlled stop/start schedule.
 - Validate local application behavior, network access and the exact ODBC query
   path separately. A passing automated suite does not prove deployment readiness.
 

@@ -8,6 +8,15 @@ import time
 from .config import AttacheBridgeConfig, AttacheBridgeConfigurationError
 
 
+try:
+    import pyodbc
+except ImportError:
+    pyodbc = None
+else:
+    # HENV pooling must be configured once, before any request can connect.
+    pyodbc.pooling = False
+
+
 LOGGER = logging.getLogger(__name__)
 
 # Attaché Accounts uses document type 1 for Customer Invoices. Other document
@@ -275,12 +284,10 @@ def normalize_from_date(value):
 
 
 def create_pyodbc_connection(connection_string, timeout=5):
-    try:
-        import pyodbc
-    except ImportError as error:
+    if pyodbc is None:
         raise AttacheBridgeConfigurationError(
             "The Attaché ODBC dependency is not installed."
-        ) from error
+        )
     return pyodbc.connect(
         connection_string,
         autocommit=True,

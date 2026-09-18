@@ -1,7 +1,10 @@
 from datetime import date
 from types import SimpleNamespace
+import importlib.util
 import inspect
+import sys
 import unittest
+from unittest.mock import Mock, patch
 
 from fastapi.testclient import TestClient
 
@@ -10,6 +13,7 @@ from attache_bridge.config import (
     AttacheBridgeConfigurationError,
 )
 from attache_bridge.main import create_app
+from attache_bridge import repository as repository_module
 from attache_bridge.repository import (
     CUSTOMER_INVOICE_DOCUMENT_TYPE,
     CURRENT_FUTURE_HEADER_SQL,
@@ -396,6 +400,67 @@ class FakeConnectionFactory:
         return self.connection
 
 
+class AttacheBridgePyodbcInitializationTest(unittest.TestCase):
+    def _import_repository(self, driver):
+        name = "attache_bridge._lifecycle_test_repository"
+        spec = importlib.util.spec_from_file_location(name, repository_module.__file__)
+        module = importlib.util.module_from_spec(spec)
+        with patch.dict(sys.modules, {name: module, "pyodbc": driver}):
+            spec.loader.exec_module(module)
+        return module
+
+    def test_pooling_disabled_once_before_connect_and_not_per_request(self):
+        events = []
+        connections = []
+
+        class FakePyodbc:
+            pooling = True
+
+            def __setattr__(self, name, value):
+                events.append((name, value))
+                super().__setattr__(name, value)
+
+            def connect(self, connection_string, **kwargs):
+                if self.pooling is not False:
+                    raise AssertionError("pooling must be disabled before connect")
+                events.append(("connect", connection_string, kwargs))
+                connection = FakeConnection(FakeCursor())
+                connections.append(connection)
+                return connection
+
+        module = self._import_repository(FakePyodbc())
+        self.assertEqual([("pooling", False)], events)
+        for timeout in (3, 5):
+            connection = module.create_pyodbc_connection("DSN=FAKE_READ_ONLY", timeout)
+            connection.close()
+        self.assertEqual(
+            [
+                ("pooling", False),
+                ("connect", "DSN=FAKE_READ_ONLY", {"autocommit": True, "timeout": 3}),
+                ("connect", "DSN=FAKE_READ_ONLY", {"autocommit": True, "timeout": 5}),
+            ],
+            events,
+        )
+        self.assertIsNot(connections[0], connections[1])
+        self.assertTrue(all(connection.closed for connection in connections))
+
+    def test_missing_pyodbc_is_controlled_and_injected_factory_still_works(self):
+        module = self._import_repository(None)
+        with self.assertRaisesRegex(
+            AttacheBridgeConfigurationError, "ODBC dependency is not installed"
+        ):
+            module.create_pyodbc_connection("DSN=FAKE_READ_ONLY")
+        cursor = FakeCursor(headers=[_header()])
+        factory = FakeConnectionFactory(cursor)
+        repository = module.AttacheInvoiceRepository(
+            AttacheBridgeConfig("DSN=FAKE_READ_ONLY", "test-token"), factory
+        )
+        self.assertEqual("185479", repository.lookup_invoice("185479").invoice_number)
+        self.assertEqual(1, len(factory.calls))
+        self.assertTrue(cursor.closed)
+        self.assertTrue(factory.connection.closed)
+
+
 class AttacheBridgeRepositoryTest(unittest.TestCase):
     def setUp(self):
         self.config = AttacheBridgeConfig(
@@ -692,6 +757,7 @@ class AttacheBridgeRepositoryTest(unittest.TestCase):
         )
         with self.assertRaises(AttacheOdbcTimeoutError):
             repository.list_invoices_from_document_date("2026-09-02")
+        self.assertEqual(1, len(factory.calls))
         self.assertTrue(cursor.closed)
         self.assertTrue(factory.connection.closed)
 
@@ -702,6 +768,7 @@ class AttacheBridgeRepositoryTest(unittest.TestCase):
         )
         with self.assertRaises(AttacheOdbcTimeoutError):
             repository.list_invoices_from_document_date("2026-09-02")
+        self.assertEqual(1, len(factory.calls))
         self.assertTrue(cursor.closed)
         self.assertTrue(factory.connection.closed)
 
@@ -716,8 +783,30 @@ class AttacheBridgeRepositoryTest(unittest.TestCase):
         )
         with self.assertRaises(AttacheInvoiceDataError):
             repository.list_invoices_from_document_date("2026-09-02")
+        self.assertEqual(1, len(factory.calls))
         self.assertTrue(cursor.closed)
         self.assertTrue(factory.connection.closed)
+
+    def test_batch_odbc_failures_close_the_single_request_connection(self):
+        for error, expected in (
+            (FakeOdbcError("HYT00"), AttacheOdbcTimeoutError),
+            (FakeOdbcError("28000"), AttacheOdbcAuthenticationError),
+            (FakeOdbcError("42501"), AttacheOdbcAuthorizationError),
+            (RuntimeError("synthetic failure"), AttacheOdbcUnavailableError),
+        ):
+            for stage in ("batch_header_start", "detail_execute_start"):
+                with self.subTest(error=expected.__name__, stage=stage):
+                    repository, cursor, factory = self._repository(
+                        batch_headers=[_batch_header()],
+                        historical_headers=[_historical_header(docdate="02/09/2026")],
+                        fail_stage=stage,
+                        error=error,
+                    )
+                    with self.assertRaises(expected):
+                        repository.list_invoices_from_document_date("2026-09-02")
+                    self.assertEqual(1, len(factory.calls))
+                    self.assertTrue(cursor.closed)
+                    self.assertTrue(factory.connection.closed)
 
     def test_zero_row_metadata_builds_bounded_exact_equality_candidates(self):
         repository, cursor, factory = self._repository(headers=[_header()])
@@ -1224,6 +1313,9 @@ class AttacheBridgeRepositoryTest(unittest.TestCase):
                 with self.assertRaises(expected) as raised:
                     repository.lookup_invoice("185479")
                 self.assertNotIn("fake-secret", str(raised.exception))
+                self.assertEqual(1, len(_factory.calls))
+                self.assertTrue(_cursor.closed)
+                self.assertTrue(_factory.connection.closed)
 
     def test_sqlstate_extraction_is_defensive_and_never_stringifies_objects(self):
         class MustNotStringify:
@@ -1248,8 +1340,62 @@ class AttacheBridgeRepositoryTest(unittest.TestCase):
     def test_connection_and_cursor_are_closed_on_success_and_failure(self):
         repository, cursor, factory = self._repository(headers=[_header()])
         repository.lookup_invoice("185479")
+        self.assertEqual([("DSN=FAKE_READ_ONLY", 3)], factory.calls)
         self.assertTrue(cursor.closed)
         self.assertTrue(factory.connection.closed)
+
+    def test_both_lookup_paths_close_connection_when_cursor_creation_fails(self):
+        for batch in (False, True):
+            with self.subTest(batch=batch):
+                repository, cursor, factory = self._repository()
+                factory.connection.cursor = Mock(
+                    side_effect=FakeOdbcError("HYT00", "synthetic timeout")
+                )
+                with self.assertRaises(AttacheOdbcTimeoutError):
+                    if batch:
+                        repository.list_invoices_from_document_date("2026-09-02")
+                    else:
+                        repository.lookup_invoice("185479")
+                self.assertEqual(1, len(factory.calls))
+                self.assertFalse(cursor.closed)
+                self.assertTrue(factory.connection.closed)
+
+    def test_both_lookup_paths_clean_up_before_cursor_exists(self):
+        for batch in (False, True):
+            for stage in ("connection_start", "timeout_configuration_start"):
+                with self.subTest(batch=batch, stage=stage):
+                    repository, cursor, factory = self._repository(
+                        fail_stage=stage, error=FakeOdbcError("HYT00", "synthetic timeout")
+                    )
+                    with self.assertRaises(AttacheOdbcTimeoutError):
+                        if batch:
+                            repository.list_invoices_from_document_date("2026-09-02")
+                        else:
+                            repository.lookup_invoice("185479")
+                    self.assertEqual(1, len(factory.calls))
+                    self.assertFalse(cursor.closed)
+                    self.assertEqual(
+                        stage != "connection_start", factory.connection.closed
+                    )
+
+    def test_cursor_close_error_does_not_skip_connection_close(self):
+        for batch in (False, True):
+            with self.subTest(batch=batch):
+                repository, cursor, factory = self._repository(headers=[_header()])
+                cursor.close = Mock(side_effect=RuntimeError("synthetic close failure"))
+                with patch.object(
+                    factory.connection, "close", wraps=factory.connection.close
+                ) as close_connection:
+                    if batch:
+                        self.assertEqual(
+                            (), repository.list_invoices_from_document_date("2026-09-02")
+                        )
+                    else:
+                        repository.lookup_invoice("185479")
+                    cursor.close.assert_called_once_with()
+                    close_connection.assert_called_once_with()
+                self.assertEqual(1, len(factory.calls))
+                self.assertTrue(factory.connection.closed)
 
     def test_non_finite_quantity_and_invalid_keys_are_controlled_data_errors(self):
         invalid_details = [
@@ -1358,6 +1504,17 @@ class AttacheBridgeHttpTest(unittest.TestCase):
                 {"status": "ok", "configured": True},
                 client.get("/health").json(),
             )
+
+    def test_health_and_unauthenticated_requests_never_create_repository(self):
+        factory = Mock(side_effect=AssertionError("must not create ODBC repository"))
+        with TestClient(create_app(
+            config_provider=lambda: self.config, repository_factory=factory
+        )) as client:
+            self.assertEqual(200, client.get("/health").status_code)
+            for path in ("/v1/invoices/185479", "/v1/invoices?from_date=2026-09-02"):
+                for headers in ({}, {"X-Attache-Bridge-Token": "wrong-token"}):
+                    self.assertEqual(401, client.get(path, headers=headers).status_code)
+        factory.assert_not_called()
 
     def test_lookup_requires_token_and_returns_typed_record(self):
         class Repository:
