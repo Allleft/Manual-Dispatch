@@ -28,7 +28,8 @@ def _history_key(record):
         timestamp = timestamp.astimezone(timezone.utc)
     except (TypeError, ValueError):
         timestamp = datetime.min.replace(tzinfo=timezone.utc)
-    return timestamp, record.run_sheet_id, record.trip_no, record.row_no, record.row_id
+    # Equal clock readings must follow lifecycle dates, not random Run Sheet IDs.
+    return timestamp, record.delivery_date, record.run_sheet_id, record.trip_no, record.row_no, record.row_id
 
 
 class DeliveryOrderStatusLookupService:
