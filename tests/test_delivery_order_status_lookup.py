@@ -6,6 +6,7 @@ from contextlib import closing
 from dataclasses import replace
 from pathlib import Path
 from unittest.mock import Mock, patch
+from uuid import UUID
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -176,6 +177,34 @@ class LookupContract:
                          [row.outcome for row in match.run_sheet_history])
         self.assertEqual(second.run_sheet_id, match.latest_closeout.run_sheet_id)
         self.assertEqual(first.run_sheet_id, match.run_sheet_history[1].run_sheet_id)
+
+    def test_second_successful_delivery_with_equal_closeout_timestamps(self):
+        timestamp = "2026-09-18T01:02:03.123456+00:00"
+        service_module = "backend.services.manual_dispatch.delivery_run_sheet_service"
+        with patch(f"{service_module}._timestamp", return_value=timestamp):
+            # Reverse UUID order must not override the persisted delivery dates.
+            with patch(f"{service_module}.uuid4", return_value=UUID(int=(1 << 128) - 1)):
+                first = self.returned()
+            self.assign()
+            with patch(f"{service_module}.uuid4", return_value=UUID(int=0)):
+                second = self.close(self.save(self.generate()), "DELIVERED")
+
+        self.assertGreater(first.run_sheet_id, second.run_sheet_id)
+        match = self.match()
+        self.assertEqual("DELIVERED", match.current_status)
+        self.assertEqual("FINALIZED", match.order.status)
+        self.assertEqual("DELIVERED", match.latest_closeout.outcome)
+        self.assertEqual(second.run_sheet_id, match.latest_closeout.run_sheet_id)
+        self.assertEqual([second.run_sheet_id, first.run_sheet_id],
+                         [row.run_sheet_id for row in match.run_sheet_history])
+        self.assertEqual(["DELIVERED", "RETURN_TO_POOL"],
+                         [row.outcome for row in match.run_sheet_history])
+        self.assertEqual([NEXT_DATE, DATE],
+                         [row.delivery_date for row in match.run_sheet_history])
+        self.assertEqual(NEXT_DATE, match.run_sheet_history[1].next_delivery_date)
+        for row in match.run_sheet_history:
+            self.assertEqual(timestamp, row.recorded_at)
+            self.assertEqual(timestamp, row.closed_at)
 
     def test_cancelled(self):
         self.repository.cancel_order(self.order.order_id)
