@@ -81,8 +81,11 @@ class H3OperationalSafetyTest(unittest.TestCase):
             self.assertIn("MANUAL_DISPATCH_SEED_DEMO_DATA=false", source)
 
         readme = self._read("README.md")
-        self.assertIn("Python 3.12 is the supported production runtime", readme)
-        self.assertIn("Every production deployment must explicitly configure", readme)
+        self.assertIn("Python **3.12** is used by CI and the Docker image", readme)
+        self.assertIn(
+            "Set a stable, private `MANUAL_DISPATCH_AUTH_COOKIE_SECRET` for deployment.",
+            readme,
+        )
 
     @staticmethod
     def _read(relative_path):
