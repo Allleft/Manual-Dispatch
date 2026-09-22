@@ -28,6 +28,11 @@ dist/
 build/
 /release/attache-bridge-windows-x64/
 /release/attache-bridge-windows-x64.zip
+# Operator-provided service binaries and generated encrypted deployment artifacts
+*.exe
+bridge-secrets.dpapi.json
+service-install.json
+/release/attache-bridge-service/
 .cache/
 coverage/
 outputs/

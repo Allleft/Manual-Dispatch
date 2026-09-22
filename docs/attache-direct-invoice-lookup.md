@@ -80,9 +80,11 @@ Disabling pyodbc pooling means the Bridge does not intentionally retain a
 reusable pooled ODBC connection after request cleanup. **Bridge HTTP process
 running** and **active Attaché/FairCom ODBC session** are different states.
 Automated fake-driver tests cannot establish real FairCom session release or
-prove that Attaché Archive succeeds. Neither always stopping the Bridge nor
-keeping it running safely is established as an operational requirement here;
-the controlled smoke test below is the remaining release gate.
+prove that Attaché Archive succeeds. The authorized operator subsequently
+verified the Bridge-running Archive gate on 2026-09-22 (details below).
+There is currently no requirement to stop Bridge before Archive. For unattended
+operation, use the [WinSW service runbook](attache-bridge-windows-service.md);
+installation under a Windows service identity still needs its own acceptance.
 
 ### Observed header lookup performance
 
@@ -310,9 +312,21 @@ status: **PASS**.
 
 ### Bridge-running Archive smoke test
 
-This is a manual next-stage procedure, not an automated test or deployment
-authorization. The earlier frozen lookup PASS above did **not** validate this
-new pooling configuration or Archive compatibility.
+**Operator-verified PASS on 2026-09-22**, supplied as evidence for this stage:
+
+- Frozen build based on `072492149f212f2935cfc85c1e0554e99c83dfc4`.
+- EXE SHA256: `E80F1C98FA5C3A168B404D20C080618F3FA5A02FBF405BDBC440FD0012F8731F`.
+- Invoice 185479: HTTP 200, approximately 677 ms, expected header and six rows.
+- Bridge remained running, port 8787 available; no non-localhost established
+  TCP connection remained for its processes. No retained external
+  Attaché/FairCom connection was observable.
+- Normal users exited while Bridge kept running; Archive started normally.
+
+`BRIDGE_RUNNING_ARCHIVE_SMOKE_PASS` / `ODBC_SESSION_RELEASE_GATE_PASS`.
+This agent did not repeat the real test. These observations are operational
+evidence for that build/environment, not a universal driver guarantee or proof
+that a new Windows Service deployment already works. The earlier August frozen
+smoke was a separate test. The following procedure is retained for retesting:
 
 1. On the approved Windows build machine, build a fresh frozen Bridge EXE using
    `tools/build_attache_bridge_windows.ps1` and an appropriate x64 build Python.
@@ -334,12 +348,12 @@ Manual Dispatch ODBC/FairCom session after lookup, final real user exited, and
 Archive starting normally. If session identity or release cannot be verified,
 report the outcome as inconclusive, not PASS.
 
-If PASS, a 24/7 Bridge Windows Service becomes a candidate architecture. If a
-retained Bridge/FairCom session blocks Archive, the candidate fallback is a
-Windows Service with controlled daily stop/start. Neither architecture is
-implemented or approved by this document; investigate other failure causes
-separately. Do not proceed to Windows Service or NAS production deployment
-until the real smoke result has been reviewed.
+With the September PASS, a 24/7 Bridge service path is now implemented for
+review; installation has not been performed by this implementation task.
+If a future retest shows a retained session blocking Archive, stop the rollout
+and investigate before considering controlled stop/start. No daily scheduler
+or NAS deployment is introduced. See the service runbook for account/reboot
+checks and rollback to the manual EXE.
 
 ## Optional local-to-remote network check
 

@@ -1,0 +1,26 @@
+<service>
+  <id>ManualDispatchAttacheBridge</id>
+  <name>Manual Dispatch Attaché Bridge</name>
+  <description>Read-only Attaché invoice lookup with request-scoped ODBC connections.</description>
+  <executable>%BASE%\attache-bridge.exe</executable>
+  <arguments>--host 10.254.254.23 --port 8787</arguments>
+  <workingdirectory>%BASE%</workingdirectory>
+  <env name="ATTACHE_BRIDGE_SECRETS_FILE" value="%BASE%\bridge-secrets.dpapi.json" />
+  <startmode>Automatic</startmode>
+  <delayedAutoStart>true</delayedAutoStart>
+  <interactive>false</interactive>
+  <stoptimeout>30 sec</stoptimeout>
+  <onfailure action="restart" delay="10 sec" />
+  <onfailure action="restart" delay="30 sec" />
+  <onfailure action="restart" delay="60 sec" />
+  <resetfailure>1 hour</resetfailure>
+  <logpath>%BASE%\logs</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>8</keepFiles>
+  </log>
+  <serviceaccount>
+    <prompt>console</prompt>
+    <allowservicelogon>true</allowservicelogon>
+  </serviceaccount>
+</service>

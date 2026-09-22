@@ -358,10 +358,13 @@ an internal NAS host and a controlled reverse proxy.
   opens one ODBC connection and closes its cursor/connection in `finally`.
   pyodbc pooling is disabled before the first connection so request cleanup does
   not intentionally retain a reusable pooled connection. A running HTTP process
-  is distinct from an active Attaché/FairCom session. Real driver session release
-  and Archive compatibility remain unproven; use the controlled
-  [Bridge-running Archive smoke test](docs/attache-direct-invoice-lookup.md#bridge-running-archive-smoke-test)
-  before choosing an always-on service or a controlled stop/start schedule.
+  is distinct from an active Attaché/FairCom session. The authorized operator
+  verified Archive starting normally with Bridge running on **2026-09-22**:
+  `BRIDGE_RUNNING_ARCHIVE_SMOKE_PASS` / `ODBC_SESSION_RELEASE_GATE_PASS`.
+  There is currently no requirement to stop Bridge before Archive. The optional
+  [WinSW 3.x service path](docs/attache-bridge-windows-service.md) provides encrypted
+  local secret provisioning and separate install/start steps. Service-account,
+  restart and reboot acceptance still require controlled real-host validation.
 - Validate local application behavior, network access and the exact ODBC query
   path separately. A passing automated suite does not prove deployment readiness.
 
