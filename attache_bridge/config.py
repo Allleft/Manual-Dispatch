@@ -1,11 +1,14 @@
 from dataclasses import dataclass, field
 import os
 
+from .service_secrets import ServiceSecretsError, load_service_secrets
+
 
 ODBC_CONNECTION_STRING_ENV = "ATTACHE_ODBC_CONNECTION_STRING"
 BRIDGE_API_TOKEN_ENV = "ATTACHE_BRIDGE_API_TOKEN"
 CONNECTION_TIMEOUT_ENV = "ATTACHE_BRIDGE_CONNECTION_TIMEOUT_SECONDS"
 QUERY_TIMEOUT_ENV = "ATTACHE_BRIDGE_QUERY_TIMEOUT_SECONDS"
+SECRETS_FILE_ENV = "ATTACHE_BRIDGE_SECRETS_FILE"
 
 
 class AttacheBridgeConfigurationError(RuntimeError):
@@ -22,11 +25,24 @@ class AttacheBridgeConfig:
     @classmethod
     def from_environment(cls, environ=None):
         environment = os.environ if environ is None else environ
-        return cls(
+        values = {}
+        secrets_file = environment.get(SECRETS_FILE_ENV)
+        explicit_pair = all(name in environment for name in (
+            ODBC_CONNECTION_STRING_ENV, BRIDGE_API_TOKEN_ENV,
+        ))
+        # A complete manual configuration must not read a stale service file.
+        if secrets_file is not None and not explicit_pair:
+            try:
+                values = load_service_secrets(secrets_file)
+            except ServiceSecretsError:
+                raise AttacheBridgeConfigurationError(
+                    "Attaché Bridge service secrets are unavailable or invalid."
+                ) from None
+        config = cls(
             connection_string=str(
-                environment.get(ODBC_CONNECTION_STRING_ENV, "") or ""
+                environment.get(ODBC_CONNECTION_STRING_ENV, values.get("connection_string", "")) or ""
             ).strip(),
-            api_token=str(environment.get(BRIDGE_API_TOKEN_ENV, "") or "").strip(),
+            api_token=str(environment.get(BRIDGE_API_TOKEN_ENV, values.get("api_token", "")) or "").strip(),
             connection_timeout_seconds=_bounded_timeout(
                 environment.get(CONNECTION_TIMEOUT_ENV),
                 CONNECTION_TIMEOUT_ENV,
@@ -36,6 +52,7 @@ class AttacheBridgeConfig:
                 QUERY_TIMEOUT_ENV,
             ),
         )
+        return config.require_configured() if secrets_file is not None else config
 
     def require_configured(self):
         missing = []
