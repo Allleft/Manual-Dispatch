@@ -31,6 +31,13 @@ connection; authentication is checked before repository creation.
   to `127.0.0.1:8787`; explicit authorized host arguments are still supported.
 - Service mode wraps the same console EXE with WinSW, bound specifically to
   `10.254.254.23:8787`. Never bind `0.0.0.0`.
+- Service mode explicitly sets `ATTACHE_BRIDGE_CONNECTION_TIMEOUT_SECONDS=10`
+  and `ATTACHE_BRIDGE_QUERY_TIMEOUT_SECONDS=15`: ODBC connection timeout is
+  10 seconds and query timeout is 15 seconds. These non-secret values match the
+  already completed real Bridge smoke/business validation, avoiding a change
+  to the generic 5/5-second defaults when switching to Service mode. Generic
+  configuration and manual-launcher defaults remain unchanged. This alignment
+  does not mean the Windows Service itself has been real-host validated.
 - Keep the existing approved firewall boundary:
   **office `192.168.18.0/24` -> `10.254.254.23:8787`**.
 - Do not modify FairCom data, DSN or firewall during installation. Do not

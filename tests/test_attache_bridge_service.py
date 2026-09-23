@@ -198,7 +198,11 @@ class ServiceDeploymentContractTest(unittest.TestCase):
                          [(row.get("action"), row.get("delay")) for row in root.findall("onfailure")])
         self.assertEqual("roll-by-size", root.find("log").get("mode"))
         self.assertEqual("8", root.findtext("log/keepFiles"))
-        self.assertEqual(["ATTACHE_BRIDGE_SECRETS_FILE"], [row.get("name") for row in root.findall("env")])
+        self.assertEqual([
+            ("ATTACHE_BRIDGE_SECRETS_FILE", r"%BASE%\bridge-secrets.dpapi.json"),
+            ("ATTACHE_BRIDGE_CONNECTION_TIMEOUT_SECONDS", "10"),
+            ("ATTACHE_BRIDGE_QUERY_TIMEOUT_SECONDS", "15"),
+        ], [(row.get("name"), row.get("value")) for row in root.findall("env")])
         for forbidden in ("0.0.0.0", "ATTACHE_ODBC_CONNECTION_STRING", "ATTACHE_BRIDGE_API_TOKEN",
                           "<password", "<username", "<download", "reboot", "PWD=", "DSN="):
             self.assertNotIn(forbidden, source)

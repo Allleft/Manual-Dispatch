@@ -6,6 +6,8 @@
   <arguments>--host 10.254.254.23 --port 8787</arguments>
   <workingdirectory>%BASE%</workingdirectory>
   <env name="ATTACHE_BRIDGE_SECRETS_FILE" value="%BASE%\bridge-secrets.dpapi.json" />
+  <env name="ATTACHE_BRIDGE_CONNECTION_TIMEOUT_SECONDS" value="10" />
+  <env name="ATTACHE_BRIDGE_QUERY_TIMEOUT_SECONDS" value="15" />
   <startmode>Automatic</startmode>
   <delayedAutoStart>true</delayedAutoStart>
   <interactive>false</interactive>
