@@ -1729,7 +1729,10 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
               package_unit: "BAG10",
             };
             Object.entries(changes).forEach(([field, value]) => {
-              actions.updateDeliveryOrderProductLine("LINE-A", field, value);
+              const updated = actions.updateDeliveryOrderProductLine("LINE-A", field, value);
+              if (updated !== state.deliveryOrderForm) {
+                throw new Error("Product update did not return the current form");
+              }
             });
             const first = state.deliveryOrderForm.product_lines[0];
             const second = state.deliveryOrderForm.product_lines[1];
@@ -1742,20 +1745,26 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
               throw new Error("Stable row update changed a different product line");
             }
 
-            actions.addDeliveryOrderProductLine();
+            const addedForm = actions.addDeliveryOrderProductLine();
+            if (addedForm !== state.deliveryOrderForm) {
+              throw new Error("Add did not return the current form for the local editor");
+            }
             const added = state.deliveryOrderForm.product_lines.at(-1);
             if (!added._draft_id || state.deliveryOrderForm.product_lines.length !== 3) {
               throw new Error("Add Product Line did not create a stable draft row");
             }
-            actions.removeDeliveryOrderProductLine(added._draft_id);
+            const removedForm = actions.removeDeliveryOrderProductLine(added._draft_id);
+            if (removedForm !== state.deliveryOrderForm) {
+              throw new Error("Remove did not return the current form for the local editor");
+            }
             if (state.deliveryOrderForm.product_lines.length !== 2 ||
                 state.deliveryOrderForm.product_lines.some(
                   (line) => line._draft_id === added._draft_id
                 )) {
               throw new Error("Remove Product Line did not remove the stable draft row");
             }
-            if (renders !== 2) {
-              throw new Error("Add/remove render behavior changed");
+            if (renders !== 0) {
+              throw new Error("Product line change rerendered the Delivery workspace");
             }
             """
         )
