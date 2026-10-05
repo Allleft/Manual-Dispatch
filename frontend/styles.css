@@ -7470,6 +7470,11 @@ select:disabled {
   justify-content: space-between;
 }
 
+.workspace-attache-review-summary > .workspace-attache-summary-urgency {
+  flex: 0 0 7.5rem;
+  width: 7.5rem;
+}
+
 .workspace-attache-expanded-editor {
   display: grid;
   gap: 0.8rem;

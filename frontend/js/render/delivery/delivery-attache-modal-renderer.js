@@ -8,6 +8,7 @@ import {
   formatDeliveryAreaLabel,
   formatDeliveryRegionLabel,
 } from "../../utils/delivery-area-utils.js";
+import { normalizeDeliveryOrderUrgency } from "../../utils/delivery-order-priority-utils.js";
 
 import {
   createWorkspaceModal,
@@ -928,6 +929,23 @@ export function createAttacheSummaryStrip(rows) {
 export function createAttacheReviewRow(row, importState, actions) {
   const card = document.createElement("article");
   card.className = "workspace-attache-review-card";
+  const isDirectImport = importState.reviewSource === "attache-direct";
+  const rowActions = isDirectImport ? {
+    ...actions,
+    updateDeliveryAttacheImportRow(rowId, field, value) {
+      actions.updateDeliveryAttacheImportRow(rowId, field, value);
+      if (rowId === row.row_id && field === "urgency") {
+        card.querySelectorAll(".workspace-field").forEach((controlField) => {
+          if (controlField.querySelector("span")?.textContent === "Urgency") {
+            const select = controlField.querySelector("select");
+            if (select) {
+              select.value = value;
+            }
+          }
+        });
+      }
+    },
+  } : actions;
   card.dataset.invoiceReviewId = row.row_id;
   card.dataset.invoiceSearch = [
     row.invoice_number,
@@ -946,6 +964,15 @@ export function createAttacheReviewRow(row, importState, actions) {
   checkbox.disabled = importState.isCommitting || row.is_duplicate || !row.importable;
   checkbox.setAttribute("aria-label", `Select invoice ${formatOptional(row.invoice_number, row.row_id)}`);
   checkbox.addEventListener("change", () => actions.toggleDeliveryAttacheImportRow(row.row_id, checkbox.checked));
+  const urgencyField = isDirectImport ? createInlineField("Urgency", createInlineSelect(
+    normalizeDeliveryOrderUrgency(row.urgency),
+    [
+      { value: "Normal", label: "Normal" },
+      { value: "Urgent", label: "Urgent" },
+    ],
+    (value) => rowActions.updateDeliveryAttacheImportRow(row.row_id, "urgency", value),
+  )) : null;
+  urgencyField?.classList.add("workspace-inline-meta", "workspace-attache-summary-urgency");
   const summary = document.createElement("div");
   summary.className = "workspace-attache-review-summary";
   summary.append(
@@ -956,8 +983,10 @@ export function createAttacheReviewRow(row, importState, actions) {
     createInlineMeta("Customer", row.company_name),
     ...createAttachePaymentMeta(row),
     createInlineMeta("Suburb", row.suburb),
-    createInlineMeta("Delivery Area", formatDeliveryAreaLabel(row.delivery_area)),
-    createInlineMeta("Region", formatDeliveryRegionLabel(row.auto_delivery_region)),
+    ...(isDirectImport ? [urgencyField] : [
+      createInlineMeta("Delivery Area", formatDeliveryAreaLabel(row.delivery_area)),
+      createInlineMeta("Region", formatDeliveryRegionLabel(row.auto_delivery_region)),
+    ]),
     createInlineMeta("Delivery Date", row.delivery_date),
     createInlineMeta(
       "Load",
@@ -996,7 +1025,7 @@ export function createAttacheReviewRow(row, importState, actions) {
     card.append(warning);
   }
   if (expanded) {
-    card.append(createAttacheExpandedEditor(row, actions));
+    card.append(createAttacheExpandedEditor(row, rowActions));
   }
   return card;
 }
