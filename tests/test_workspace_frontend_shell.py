@@ -5775,6 +5775,381 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             """,
         )
 
+    def test_countryside_template_panels_render_inline_and_keep_group_forms_global(self):
+        self._run_frontend_module_script(
+            "js/render/opshop-countryside-pickup-list-modal-renderer.js",
+            r"""
+            const { state } = await import("./frontend/js/state/app-state.js");
+            const { createCountrysideOpShopPickupActions } = await import(
+              "./frontend/js/actions/opshop-countryside-pickup-actions.js"
+            );
+            const expanded = { "ROUTE-A": true, "ROUTE-B": true };
+            const drafts = { "TASK-A": "DRIVER-A" };
+            const candidates = [
+              { schedule_id: "SHOP-A", route_group_id: "ROUTE-A", opshop_name: "Alpha", suburb: "ALPHA" },
+              { schedule_id: "SHOP-A2", route_group_id: "ROUTE-A", opshop_name: "Second Alpha", suburb: "ALPHA" },
+              { schedule_id: "SHOP-B", route_group_id: "ROUTE-B", opshop_name: "Beta", suburb: "BETA" },
+            ];
+            const memberships = candidates.map((candidate) => ({
+              ...candidate, name: candidate.opshop_name,
+              street_address: candidate.schedule_id + " rich address",
+              primary_contact: "Primary contact", primary_phone: "Primary phone",
+              secondary_contact: "Secondary contact", secondary_phone: "Secondary phone",
+              area_region: "Region", time_window: "9-12", access_type: "Rear door",
+              key_required: true, trailer_restriction: "No trailer",
+              default_driver_name: "Default driver", route_group_name: "Shared Name",
+              status_notes: "Original status notes",
+            }));
+            Object.assign(state, {
+              activeWorkspace: "opshop",
+              activeCountrysideRouteTemplateDetailId: "",
+              countrysideOpShopPickupListError: "",
+              countrysideOpShopPickupScheduleCandidates: candidates,
+              countrysideOpShopPickupAssignedDriverSelections: drafts,
+              countrysideRouteFormMode: "", countrysideRouteForm: {},
+              countrysideRouteGroups: [
+                { route_group_id: "ROUTE-A", route_group_name: "Shared Name" },
+                { route_group_id: "ROUTE-B", route_group_name: "Shared Name" },
+              ],
+              countrysideRouteManagementError: "", countrysideRouteMemberships: memberships,
+              countrysideRouteTemplateFormMode: "", countrysideRouteTemplateForm: {},
+              countrysideRouteTemplateEditingScheduleId: "",
+              countrysideRouteTemplateMoveTargetRouteGroupId: "",
+              expandedCountrysideTemplateRouteGroups: expanded,
+              isCountrysideOpShopPickupListLoading: false,
+              isCountrysideOpShopPickupSaving: false, isCountrysideRouteTemplateSaving: false,
+              selectedCountrysideRouteGroupId: "ROUTE-A", opshopBoard: { drivers: [] },
+            });
+            let panel;
+            const calls = [];
+            const selected = [];
+            const actions = createCountrysideOpShopPickupActions({
+              state, loadBoard: () => { throw new Error("Opening inline UI reloaded the board"); },
+              renderBoard: () => { panel = module.createCountrysideRouteManagementPanel(callbacks); },
+            });
+            const callbacks = {
+              onAddRouteTemplate: () => calls.push("add:" + state.selectedCountrysideRouteGroupId),
+              onCancelRouteGroupForm: actions.cancelRouteGroupForm,
+              onCancelRouteTemplateForm: actions.cancelRouteTemplateForm,
+              onCloseRouteTemplateDetail: actions.closeRouteTemplateDetail,
+              onCreateRouteGroup: () => calls.push("create"),
+              onDisableRouteGroup: () => calls.push("disable"),
+              onMoveRouteTemplate: () => calls.push("move:" + state.countrysideRouteTemplateEditingScheduleId),
+              onOpenRouteTemplateDetail: actions.openRouteTemplateDetail,
+              onRemoveRouteTemplate: () => calls.push("remove:" + state.countrysideRouteTemplateEditingScheduleId),
+              onRenameRouteGroup: () => calls.push("rename"),
+              onSelectRouteGroup: async (id) => {
+                await Promise.resolve();
+                selected.push(id);
+                state.selectedCountrysideRouteGroupId = id;
+                state.countrysideRouteMemberships = memberships.filter((item) => item.route_group_id === id);
+              },
+              onStartAddRouteTemplate: actions.startAddRouteTemplate,
+              onStartDisableRouteGroup: actions.startDisableRouteGroup,
+              onStartMoveRouteTemplate: actions.startMoveRouteTemplate,
+              onStartNewRouteGroup: actions.startNewRouteGroup,
+              onStartRemoveRouteTemplate: actions.startRemoveRouteTemplate,
+              onStartRenameRouteGroup: actions.startRenameRouteGroup,
+              onToggleRouteGroup: () => { throw new Error("Opening inline UI toggled the accordion"); },
+              onUpdateRouteGroupForm: actions.updateRouteGroupForm,
+              onUpdateRouteTemplateForm: actions.updateRouteTemplateForm,
+            };
+            const render = () => { panel = module.createCountrysideRouteManagementPanel(callbacks); };
+            const body = (id) => panel.querySelectorAll(".opshop-route-group-accordion-item")
+              .find((item) => item.dataset.routeGroupId === id).querySelector(".opshop-route-group-accordion-body");
+            const row = (id) => panel.querySelectorAll(".opshop-route-group-member-row")
+              .find((item) => item.dataset.scheduleId === id);
+            const button = (node, label) => node.querySelectorAll("button")
+              .find((item) => item.textContent === label);
+            const dispatch = (node, type) => {
+              if (!node?.listeners[type]?.length) throw new Error("Missing callback for " + type);
+              node.listeners[type][0]({ preventDefault() {}, stopPropagation() {} });
+            };
+            const click = async (node, label) => {
+              dispatch(button(node, label), "click");
+              for (let i = 0; i < 4; i += 1) await Promise.resolve();
+            };
+            const assertNoPanels = () => {
+              if (panel.querySelectorAll(".opshop-route-template-inline-panel").length) {
+                throw new Error("Cancel/Close left inline content open");
+              }
+            };
+            const assertRowPanel = (id, className) => {
+              const inline = row(id).querySelector("." + className);
+              if (!inline || row(id).children[2] !== inline
+                  || panel.querySelectorAll(".opshop-route-template-inline-panel").length !== 1
+                  || panel.children.some((child) => child.classList.contains(className))
+                  || panel.querySelectorAll(".opshop-route-group-member-row")
+                    .some((item) => item.dataset.scheduleId !== id
+                      && item.querySelector(".opshop-route-template-inline-panel"))) {
+                throw new Error("Inline content is duplicated, global, or under the wrong member: " + id);
+              }
+              return inline;
+            };
+            render();
+            assertNoPanels();
+            await click(body("ROUTE-B"), "Add OP SHOP");
+            let form = body("ROUTE-B").querySelector(".opshop-route-template-form");
+            if (state.selectedCountrysideRouteGroupId !== "ROUTE-B" || selected.join("|") !== "ROUTE-B"
+                || !form || body("ROUTE-B").children[1] !== form
+                || !body("ROUTE-B").children[0].classList.contains("opshop-route-group-accordion-actions")
+                || !body("ROUTE-B").children[2].classList.contains("opshop-route-group-member-list")
+                || body("ROUTE-A").querySelector(".opshop-route-template-form")
+                || panel.querySelectorAll(".opshop-route-template-inline-panel").length !== 1
+                || panel.children.some((child) => child.classList.contains("opshop-route-template-form"))) {
+              throw new Error("Add form did not stay between the clicked group's actions and member list");
+            }
+            for (const label of [
+              "OP SHOP Name", "Suburb", "Street Address", "Area / Region",
+              "Primary Contact", "Primary Phone", "Secondary Contact", "Secondary Phone",
+              "Pickup Frequency", "Time Window", "Access Type", "Key Required",
+              "Trailer Restriction", "Default Driver", "Status Notes",
+            ]) {
+              if (!form.textContent.includes(label)) throw new Error("Add lost existing field: " + label);
+            }
+            const nameInput = form.querySelectorAll("input").find((input) => input.name === "name");
+            if (!nameInput.required) throw new Error("Add lost name validation");
+            nameInput.value = "New shop";
+            dispatch(nameInput, "input");
+            if (state.countrysideRouteTemplateForm.name !== "New shop") throw new Error("Add input callback lost");
+            dispatch(form, "submit");
+            await click(form, "Cancel");
+            assertNoPanels();
+
+            await click(row("SHOP-A"), "View");
+            let detail = assertRowPanel("SHOP-A", "opshop-route-template-detail-panel");
+            if (selected.join("|") !== "ROUTE-B|ROUTE-A" || !detail.textContent.includes("SHOP-A rich address")
+                || !detail.textContent.includes("Original status notes")) {
+              throw new Error("View did not await the correct group's rich membership data");
+            }
+            if (detail.querySelectorAll(".opshop-route-template-detail-field").length !== 15) {
+              throw new Error("View changed existing detail fields");
+            }
+            await click(row("SHOP-A"), "Move");
+            form = assertRowPanel("SHOP-A", "opshop-route-template-form");
+            if (panel.querySelector(".opshop-route-template-detail-panel")) throw new Error("Move left View open");
+            const target = form.querySelector("select");
+            if (target.children.some((option) => option.value === "ROUTE-A")
+                || !target.children.some((option) => option.value === "ROUTE-B")
+                || !button(form, "Move").disabled) {
+              throw new Error("Move changed source exclusion or target validation");
+            }
+            target.value = "ROUTE-B";
+            dispatch(target, "change");
+            if (state.countrysideRouteTemplateMoveTargetRouteGroupId !== "ROUTE-B") {
+              throw new Error("Move target callback lost");
+            }
+            form = assertRowPanel("SHOP-A", "opshop-route-template-form");
+            dispatch(form, "submit");
+
+            await click(row("SHOP-B"), "View");
+            detail = assertRowPanel("SHOP-B", "opshop-route-template-detail-panel");
+            if (panel.querySelector(".opshop-route-template-form")
+                || !detail.textContent.includes("SHOP-B rich address")) throw new Error("View B left Move A open");
+            await click(detail, "Close Detail");
+            assertNoPanels();
+            await click(body("ROUTE-B"), "Add OP SHOP");
+            await click(row("SHOP-A2"), "Move");
+            assertRowPanel("SHOP-A2", "opshop-route-template-form");
+            if (state.selectedCountrysideRouteGroupId !== "ROUTE-B") {
+              throw new Error("Move should not need to change the selected group for inline ownership");
+            }
+            await click(row("SHOP-A"), "Remove");
+            let confirmation = assertRowPanel("SHOP-A", "opshop-delete-confirmation");
+            if (!confirmation.textContent.includes("Remove Alpha from this route?")
+                || !confirmation.textContent.includes("This soft-disables the route template only;")
+                || !confirmation.textContent.includes("saved history are not deleted.")) {
+              throw new Error("Remove changed its existing confirmation wording");
+            }
+            await click(confirmation, "Remove from Route");
+            await click(confirmation, "Cancel");
+            assertNoPanels();
+            await click(row("SHOP-A2"), "View");
+            assertRowPanel("SHOP-A2", "opshop-route-template-detail-panel");
+            await click(body("ROUTE-A"), "Add OP SHOP");
+            if (panel.querySelector(".opshop-route-template-detail-panel")) throw new Error("Add left View open");
+            await click(body("ROUTE-A").querySelector(".opshop-route-template-form"), "Cancel");
+            assertNoPanels();
+
+            for (const [label, mode, expectedClass] of [
+              ["Add Route Group", "new", "opshop-route-group-form"],
+              ["Rename", "rename", "opshop-route-group-form"],
+              ["Disable", "disable", "opshop-delete-confirmation"],
+            ]) {
+              await click(panel.querySelector(".opshop-route-management-bar"), label);
+              const groupForm = panel.children[3];
+              if (state.countrysideRouteFormMode !== mode || !groupForm.classList.contains(expectedClass)
+                  || groupForm.classList.contains("opshop-route-template-inline-panel")) {
+                throw new Error("Route Group form placement/behavior changed: " + label);
+              }
+              assertNoPanels();
+              if (mode === "disable") {
+                await click(groupForm, "Disable Route");
+              } else {
+                dispatch(groupForm, "submit");
+              }
+              await click(groupForm, "Cancel");
+              if (state.countrysideRouteFormMode) throw new Error("Route Group Cancel callback lost");
+            }
+            if (calls.join("|") !== "add:ROUTE-B|move:SHOP-A|remove:SHOP-A|create|rename|disable") {
+              throw new Error("Template or Route Group callbacks changed: " + calls.join("|"));
+            }
+            if (state.expandedCountrysideTemplateRouteGroups !== expanded
+                || state.countrysideOpShopPickupAssignedDriverSelections !== drafts
+                || panel.querySelectorAll(".opshop-route-group-accordion-body").some((item) => item.hidden)
+                || panel.querySelectorAll(".opshop-route-group-accordion-toggle")
+                  .some((item) => item.attributes["aria-expanded"] !== "true")) {
+              throw new Error("Inline actions or Cancel/Close changed accordion state or assignment drafts");
+            }
+            """,
+            setup=r"""
+            class FakeNode {
+              constructor(tagName, text = "") {
+                this.tagName = tagName; this.children = []; this.attributes = {}; this.listeners = {};
+                this.dataset = {}; this.value = ""; this._text = text; this.className = "";
+                this.classList = {
+                  add: (...tokens) => { this.className += " " + tokens.join(" "); },
+                  contains: (token) => this.className.split(/\s+/).includes(token),
+                };
+              }
+              get textContent() { return this._text + this.children.map((child) => child.textContent || "").join(""); }
+              set textContent(value) { this._text = String(value ?? ""); }
+              append(...children) { this.children.push(...children); }
+              replaceChildren(...children) { this.children = children; this._text = ""; }
+              setAttribute(name, value) { this.attributes[name] = String(value); }
+              addEventListener(type, listener) { (this.listeners[type] ||= []).push(listener); }
+              querySelector(selector) { return this.querySelectorAll(selector)[0] || null; }
+              querySelectorAll(selector) {
+                const matches = [];
+                const visit = (node) => {
+                  if (selector.startsWith(".") ? node.classList?.contains(selector.slice(1))
+                      : node.tagName === selector) matches.push(node);
+                  node.children?.forEach(visit);
+                };
+                this.children.forEach(visit);
+                return matches;
+              }
+            }
+            globalThis.document = {
+              createElement: (tag) => new FakeNode(tag),
+              createElementNS: (_namespace, tag) => new FakeNode(tag),
+              createTextNode: (text) => new FakeNode("#text", String(text)),
+            };
+            globalThis.window = {
+              location: { protocol: "http:" },
+              scrollTo: () => { throw new Error("Opening inline content scrolled the page"); },
+            };
+            globalThis.requestAnimationFrame = () => { throw new Error("Opening inline content scheduled scrolling"); };
+            globalThis.fetch = () => { throw new Error("Opening inline content made an unexpected API request"); };
+            """,
+        )
+
+    def test_countryside_template_actions_replace_conflicts_without_auto_scroll(self):
+        self._run_frontend_module_script(
+            "js/actions/opshop-countryside-pickup-actions.js",
+            r"""
+            const expanded = { "ROUTE-A": true, "ROUTE-B": true };
+            const drafts = { "TASK-A": "DRIVER-A" };
+            const state = {
+              selectedCountrysideRouteGroupId: "ROUTE-A",
+              countrysideRouteGroups: [{ route_group_id: "ROUTE-A" }],
+              expandedCountrysideTemplateRouteGroups: expanded,
+              countrysideOpShopPickupAssignedDriverSelections: drafts,
+            };
+            let renders = 0;
+            const actions = module.createCountrysideOpShopPickupActions({
+              state, loadBoard: () => { throw new Error("Panel opening reloaded board"); },
+              renderBoard: () => { renders += 1; },
+            });
+            const a = { schedule_id: "SHOP-A", name: "Alpha", route_group_id: "ROUTE-A" };
+            const b = { schedule_id: "SHOP-B", name: "Beta", route_group_id: "ROUTE-B" };
+            const assertMode = (mode, id = "") => {
+              if (state.countrysideRouteTemplateFormMode !== mode
+                  || state.countrysideRouteTemplateEditingScheduleId !== id
+                  || state.activeCountrysideRouteTemplateDetailId
+                  || state.countrysideRouteTemplateMoveTargetRouteGroupId) {
+                throw new Error("Conflicting template state remained in mode " + mode);
+              }
+            };
+            actions.openRouteTemplateDetail(a);
+            actions.startAddRouteTemplate();
+            assertMode("add");
+            actions.startMoveRouteTemplate(a);
+            assertMode("move", "SHOP-A");
+            actions.updateRouteTemplateForm("target_route_group_id", "ROUTE-B");
+            actions.openRouteTemplateDetail(b);
+            assertModeForDetail(b);
+            actions.startRemoveRouteTemplate(a);
+            assertMode("remove", "SHOP-A");
+            actions.startRemoveRouteTemplate(b);
+            assertMode("remove", "SHOP-B");
+            if (state.countrysideRouteTemplateForm.name !== "Beta"
+                || state.countrysideRouteTemplateForm.route_group_id !== "ROUTE-B") {
+              throw new Error("Remove lost the initiating template's fields");
+            }
+            actions.cancelRouteTemplateForm();
+            assertMode("");
+            actions.openRouteTemplateDetail(a);
+            actions.closeRouteTemplateDetail();
+            assertMode("");
+            state.selectedCountrysideRouteGroupId = "";
+            actions.startAddRouteTemplate();
+            if (!state.countrysideRouteManagementError || state.countrysideRouteTemplateFormMode) {
+              throw new Error("Invalid Add lost existing validation");
+            }
+            if (renders < 10 || state.expandedCountrysideTemplateRouteGroups !== expanded
+                || state.countrysideOpShopPickupAssignedDriverSelections !== drafts) {
+              throw new Error("Inline actions changed rendering, expansion or assignment drafts");
+            }
+            function assertModeForDetail(template) {
+              if (state.activeCountrysideRouteTemplateDetailId !== template.schedule_id
+                  || state.countrysideRouteTemplateFormMode
+                  || state.countrysideRouteTemplateEditingScheduleId
+                  || state.countrysideRouteTemplateMoveTargetRouteGroupId
+                  || Object.keys(state.countrysideRouteTemplateForm).length) {
+                throw new Error("View left a conflicting form or target selection open");
+              }
+            }
+            """,
+            setup=r"""
+            const forbidden = () => { throw new Error("Template opening caused scroll, DOM query or API access"); };
+            globalThis.window = { location: { protocol: "http:" }, scrollTo: forbidden };
+            globalThis.document = { querySelector: forbidden };
+            globalThis.requestAnimationFrame = forbidden;
+            globalThis.fetch = forbidden;
+            """,
+        )
+
+    def test_countryside_inline_panels_have_scoped_layout_and_no_opening_scroll_hooks(self):
+        actions = self._read("js/actions/opshop-countryside-pickup-actions.js")
+        for name in (
+            "startAddRouteTemplate",
+            "startMoveRouteTemplate",
+            "startRemoveRouteTemplate",
+            "openRouteTemplateDetail",
+        ):
+            body = actions.split(f"function {name}(", 1)[1].split("\n  function ", 1)[0]
+            for token in (
+                "smoothScroll",
+                "scrollIntoView",
+                "scrollTo",
+                "scrollTop",
+                "requestAnimationFrame",
+                "captureElementScroll",
+                "restoreElementScroll",
+                "restoreWindowScroll",
+            ):
+                self.assertNotIn(token, body, f"{name} must not automatically scroll")
+        css = self._read("styles.css")
+        inline_rule = css.split(
+            ".opshop-countryside-management-panel .opshop-route-template-inline-panel {", 1
+        )[1].split("}", 1)[0]
+        self.assertIn("grid-column: 1 / -1;", inline_rule)
+        self.assertIn("min-width: 0;", inline_rule)
+        self.assertNotIn("width:", inline_rule.replace("min-width:", ""))
+        self.assertIn(".opshop-route-group-member-row {\n    grid-template-columns: minmax(0, 1fr);", css)
+        self.assertIn(".opshop-list-form {\n    grid-template-columns: 1fr;", css)
+
     def test_countryside_delete_keeps_authoritative_refresh_and_restores_scroll(self):
         actions = self._read("js/actions/opshop-countryside-pickup-actions.js")
         delete_block = actions.split(

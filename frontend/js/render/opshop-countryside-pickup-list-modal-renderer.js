@@ -141,12 +141,18 @@ export function createCountrysideRouteManagementPanel({
       onStartRenameRouteGroup,
     }),
     createRouteGroupOverview({
+      onAddRouteTemplate,
+      onCancelRouteTemplateForm,
+      onCloseRouteTemplateDetail,
+      onMoveRouteTemplate,
       onOpenRouteTemplateDetail,
+      onRemoveRouteTemplate,
       onSelectRouteGroup,
       onStartAddRouteTemplate,
       onStartMoveRouteTemplate,
       onStartRemoveRouteTemplate,
       onToggleRouteGroup,
+      onUpdateRouteTemplateForm,
     }),
     createErrorMessage(),
     createRouteGroupForm({
@@ -156,14 +162,6 @@ export function createCountrysideRouteManagementPanel({
       onRenameRouteGroup,
       onUpdateRouteGroupForm,
     }),
-    createRouteTemplateForm({
-      onAddRouteTemplate,
-      onCancelRouteTemplateForm,
-      onMoveRouteTemplate,
-      onRemoveRouteTemplate,
-      onUpdateRouteTemplateForm,
-    }),
-    createRouteTemplateDetailPanel({ onCloseRouteTemplateDetail }),
   );
   return panel;
 }
@@ -278,12 +276,18 @@ function createRouteGroupManagement({
 }
 
 function createRouteGroupOverview({
+  onAddRouteTemplate,
+  onCancelRouteTemplateForm,
+  onCloseRouteTemplateDetail,
+  onMoveRouteTemplate,
   onOpenRouteTemplateDetail,
+  onRemoveRouteTemplate,
   onSelectRouteGroup,
   onStartAddRouteTemplate,
   onStartMoveRouteTemplate,
   onStartRemoveRouteTemplate,
   onToggleRouteGroup,
+  onUpdateRouteTemplateForm,
 }) {
   const section = document.createElement("section");
   section.className = "opshop-list-section opshop-route-group-overview";
@@ -354,6 +358,19 @@ function createRouteGroupOverview({
     bodyActions.append(addButton);
     body.append(bodyActions);
 
+    if (
+      state.countrysideRouteTemplateFormMode === "add" &&
+      state.selectedCountrysideRouteGroupId === routeGroup.route_group_id
+    ) {
+      const form = createRouteTemplateForm({
+        onAddRouteTemplate,
+        onCancelRouteTemplateForm,
+        onUpdateRouteTemplateForm,
+      });
+      form.classList.add("opshop-route-template-inline-panel");
+      body.append(form);
+    }
+
     if (!candidates.length) {
       const empty = document.createElement("p");
       empty.className = "hint-row";
@@ -368,10 +385,15 @@ function createRouteGroupOverview({
           name: candidate.name || candidate.opshop_name,
         };
         list.append(createRouteGroupMemberRow(template, {
+          onCancelRouteTemplateForm,
+          onCloseRouteTemplateDetail,
+          onMoveRouteTemplate,
           onOpenRouteTemplateDetail,
+          onRemoveRouteTemplate,
           onSelectRouteGroup,
           onStartMoveRouteTemplate,
           onStartRemoveRouteTemplate,
+          onUpdateRouteTemplateForm,
         }));
       });
       body.append(list);
@@ -386,14 +408,20 @@ function createRouteGroupOverview({
 function createRouteGroupMemberRow(
   template,
   {
+    onCancelRouteTemplateForm,
+    onCloseRouteTemplateDetail,
+    onMoveRouteTemplate,
     onOpenRouteTemplateDetail,
+    onRemoveRouteTemplate,
     onSelectRouteGroup,
     onStartMoveRouteTemplate,
     onStartRemoveRouteTemplate,
+    onUpdateRouteTemplateForm,
   },
 ) {
   const row = document.createElement("article");
   row.className = "opshop-route-group-member-row";
+  row.dataset.scheduleId = template.schedule_id;
 
   const identity = document.createElement("div");
   identity.className = "opshop-route-group-member-identity";
@@ -417,6 +445,26 @@ function createRouteGroupMemberRow(
   );
 
   row.append(identity, actions);
+  if (
+    ["move", "remove"].includes(state.countrysideRouteTemplateFormMode) &&
+    state.countrysideRouteTemplateEditingScheduleId === template.schedule_id
+  ) {
+    const form = createRouteTemplateForm({
+      onCancelRouteTemplateForm,
+      onMoveRouteTemplate,
+      onRemoveRouteTemplate,
+      onUpdateRouteTemplateForm,
+    });
+    form.classList.add("opshop-route-template-inline-panel");
+    row.append(form);
+  } else if (
+    !state.countrysideRouteTemplateFormMode &&
+    state.activeCountrysideRouteTemplateDetailId === template.schedule_id
+  ) {
+    const detail = createRouteTemplateDetailPanel({ onCloseRouteTemplateDetail });
+    detail.classList.add("opshop-route-template-inline-panel");
+    row.append(detail);
+  }
   return row;
 }
 

@@ -2381,6 +2381,12 @@ h1 {
   background: rgba(250, 253, 251, 0.86);
 }
 
+.opshop-countryside-management-panel .opshop-route-template-inline-panel {
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin: 0;
+}
+
 .opshop-route-group-member-identity {
   display: grid;
   gap: 0.18rem;
