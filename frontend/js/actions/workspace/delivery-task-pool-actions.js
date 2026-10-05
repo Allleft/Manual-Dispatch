@@ -222,7 +222,7 @@ export function createDeliveryTaskPoolActions(context) {
         },
       ],
     };
-    renderWorkspace();
+    return state.deliveryOrderForm;
   }
 
   function updateDeliveryOrderProductLine(lineId, field, value) {
@@ -248,6 +248,7 @@ export function createDeliveryTaskPoolActions(context) {
       ...(state.deliveryOrderForm || {}),
       product_lines: lines,
     };
+    return state.deliveryOrderForm;
   }
 
   function removeDeliveryOrderProductLine(lineId) {
@@ -257,7 +258,7 @@ export function createDeliveryTaskPoolActions(context) {
         (line) => line._draft_id !== lineId,
       ),
     };
-    renderWorkspace();
+    return state.deliveryOrderForm;
   }
 
   async function saveDeliveryOrderForm() {

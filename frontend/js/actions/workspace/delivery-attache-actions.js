@@ -1,4 +1,5 @@
 import { applyDeliveryAreaClassification } from "../../utils/delivery-area-utils.js";
+import { normalizeDeliveryOrderUrgency } from "../../utils/delivery-order-priority-utils.js";
 import {
   captureElementScroll,
   restoreElementScroll,
@@ -254,6 +255,7 @@ export function createDeliveryAttacheActions(context) {
         reviewSource: "attache-direct",
         rows: (response.rows || []).map((row) => ({
           ...row,
+          urgency: normalizeDeliveryOrderUrgency(row.urgency),
           selected: Boolean(row.selected && row.importable && !row.is_duplicate),
         })),
         expandedRowIds: {},
@@ -461,8 +463,11 @@ export function createDeliveryAttacheActions(context) {
         success: "",
       };
       renderWorkspace();
+      const rows = state.deliveryAttacheImportState.rows || [];
       const response = await api.commitDeliveryAttacheInvoices({
-        rows: state.deliveryAttacheImportState.rows || [],
+        rows: importState.reviewSource === "attache-direct"
+          ? rows.map((row) => ({ ...row, urgency: normalizeDeliveryOrderUrgency(row.urgency) }))
+          : rows,
       });
       if (isDeliveryMutationCurrent(context) && state.deliveryAttacheImportState?.isOpen) {
         state.deliveryAttacheImportState = {

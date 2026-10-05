@@ -336,6 +336,7 @@ export function createCountrysideOpShopPickupActions({
       renderBoard();
       return;
     }
+    resetRouteTemplateForm();
     state.countrysideRouteTemplateFormMode = "add";
     state.countrysideRouteTemplateEditingScheduleId = "";
     state.countrysideRouteTemplateMoveTargetRouteGroupId = "";
@@ -398,6 +399,7 @@ export function createCountrysideOpShopPickupActions({
   }
 
   function openRouteTemplateDetail(template) {
+    resetRouteTemplateForm();
     state.activeCountrysideRouteTemplateDetailId = template.schedule_id;
     renderBoard();
   }
