@@ -1,4 +1,5 @@
 import { state } from "../state/app-state.js";
+import { driversForAssignment } from "../utils/driver-utils.js";
 import {
   getOpShopPickupByTaskId,
   isGeneratedTask,
@@ -387,7 +388,7 @@ function createEditForm({ onCancelForm, onStartDelete, onUpdateForm, onUpdatePic
       "Assigned to",
       state.oncallOpShopPickupForm.assigned_driver_id,
       (value) => onUpdateForm("assigned_driver_id", value),
-      { disabled: lockState.isLocked },
+      { disabled: lockState.isLocked, currentDriverId: pickup && (pickup.assigned_driver_id || pickup.driver_id) },
     ),
     createNotesInput(onUpdateForm),
     createFormActions({
@@ -521,7 +522,9 @@ function createDriverSelect(labelText, value, onChange, options = {}) {
   const select = document.createElement("select");
   select.disabled = Boolean(options.disabled) || state.isOncallOpShopPickupSaving;
   select.append(createOption("", "Unassigned", !value));
-  getOpShopModalDrivers(state).forEach((driver) => {
+  driversForAssignment(
+    getOpShopModalDrivers(state), options.currentDriverId || (options.disabled ? value : ""),
+  ).forEach((driver) => {
     select.append(createOption(driver.driver_id, driver.name, value === driver.driver_id));
   });
   select.value = value || "";
@@ -764,7 +767,9 @@ function createAssignedToSelect(pickup, onUpdateAssignedDriver) {
     isFinalSummaryLocked || isGeneratedFinalSummaryLocked,
   );
   select.append(createOption("", "Unassigned", !selectedDriverId));
-  getOpShopModalDrivers(state).forEach((driver) => {
+  driversForAssignment(
+    getOpShopModalDrivers(state), pickup.assigned_driver_id || pickup.driver_id,
+  ).forEach((driver) => {
     const hasSavedFinalSummary = isDriverFinalizedForPickup(driver.driver_id, pickup.pickup_date);
     const option = createOption(
       driver.driver_id,

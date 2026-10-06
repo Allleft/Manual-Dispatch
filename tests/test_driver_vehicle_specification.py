@@ -89,16 +89,16 @@ class DriverVehicleSpecificationTest(unittest.TestCase):
         self.assertNotIn("D003", board_driver_ids)
         self.assertIn("D003", spec_driver_ids)
 
-    def test_driver_availability_false_is_rejected_with_active_assignment(self):
+    def test_driver_availability_false_preserves_active_assignment(self):
         self._assign_order("ORD-001", "D001", "trip1")
-
-        with self.assertRaises(ValueError) as context:
-            self.service.update_driver(
-                "D001",
-                UpdateDriverRequest(name="John", is_available=False, pallet_only=False),
-            )
-
-        self.assertIn("unassign or finalize", str(context.exception))
+        before = self.repository.list_assignments(self.dispatch_date)
+        updated = self.service.update_driver(
+            "D001",
+            UpdateDriverRequest(is_available=False),
+        )
+        self.assertFalse(updated.is_available)
+        self.assertEqual(before, self.repository.list_assignments(self.dispatch_date))
+        self.assertIn("D001", [driver.driver_id for driver in self.service.get_board(self.dispatch_date).drivers])
 
     def test_delete_unused_driver_soft_deletes_and_hides_from_specs(self):
         self.service.delete_driver("D003")

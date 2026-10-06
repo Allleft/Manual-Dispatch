@@ -4,6 +4,7 @@ from backend.schemas import (
     DeliveryWorkspaceBoardResponse,
 )
 from backend.services.manual_dispatch.normalization import clean_required_iso_date
+from backend.services.manual_dispatch.driver_availability import list_visible_drivers
 from backend.services.manual_dispatch.suburb_distance_service import (
     get_estimated_distance_km,
 )
@@ -64,7 +65,11 @@ class DeliveryWorkspaceBoardService:
         return DeliveryWorkspaceBoardResponse(
             dispatch_date=dispatch_date,
             orders=orders,
-            drivers=self.repository.list_drivers(),
+            drivers=list_visible_drivers(
+                self.repository,
+                {assignment.driver_id for assignment in assignments}
+                | {run_sheet.driver_id for run_sheet in run_sheets},
+            ),
             vehicles=self.repository.list_vehicles(),
             assignments=assignments,
             driver_vehicle_assignments=(
@@ -114,7 +119,11 @@ class DeliveryWorkspaceBoardService:
         return DeliveryTripSummaryResponse(
             delivery_date=delivery_date,
             orders=orders,
-            drivers=self.repository.list_drivers(),
+            drivers=list_visible_drivers(
+                self.repository,
+                {assignment.driver_id for assignment in assignments}
+                | {run_sheet.driver_id for run_sheet in run_sheets},
+            ),
             vehicles=self.repository.list_vehicles(),
             assignments=assignments,
             driver_vehicle_assignments=(

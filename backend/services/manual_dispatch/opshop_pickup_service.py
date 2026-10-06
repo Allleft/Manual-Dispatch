@@ -26,6 +26,7 @@ from backend.services.manual_dispatch.opshop_regular_frequency import (
     parse_regular_pickup_frequency,
 )
 from backend.services.manual_dispatch.transaction import immediate_transactional
+from backend.services.manual_dispatch.validation import ManualDispatchValidator
 
 
 OPSHOP_FORTNIGHT_ANCHOR_DATE = date(2026, 5, 18)
@@ -75,6 +76,7 @@ class FrequencyClassification:
 class OpShopPickupService:
     def __init__(self, repository):
         self.repository = repository
+        self.validator = ManualDispatchValidator(repository)
 
     def ensure_opshop_pickup_tasks_for_window(self, request):
         return self._ensure_opshop_pickup_tasks_for_window(
@@ -495,6 +497,7 @@ class OpShopPickupService:
                 continue
             if driver_id not in driver_ids:
                 continue
+            self.validator.validate_driver_assignment(driver_id, task.driver_id)
             if is_driver_delivery_date_finalized(
                 self.repository,
                 request.dispatch_date,
@@ -555,6 +558,7 @@ class OpShopPickupService:
                 continue
             if driver_id not in driver_ids:
                 continue
+            self.validator.validate_driver_assignment(driver_id, task.driver_id)
             if is_driver_delivery_date_finalized(
                 self.repository,
                 request.dispatch_date,
@@ -615,6 +619,7 @@ class OpShopPickupService:
                 continue
             if driver_id not in driver_ids:
                 continue
+            self.validator.validate_driver_assignment(driver_id, task.driver_id)
             if is_driver_delivery_date_finalized(
                 self.repository,
                 request.dispatch_date,
@@ -706,6 +711,10 @@ class OpShopPickupService:
                 raise ValueError(
                     "Completed Countryside OP SHOP pickup tasks cannot be reassigned"
                 )
+            self.validator.validate_driver_assignment(
+                driver_id,
+                existing.driver_id if existing else None,
+            )
             if existing and existing.status == "ASSIGNED" and existing.driver_id:
                 if is_driver_delivery_date_finalized(
                     self.repository,
@@ -860,6 +869,7 @@ class OpShopPickupService:
             getattr(request, "dispatch_date", None) or pickup_date,
             "dispatch_date",
         ).isoformat()
+        self.validator.validate_driver_assignment(driver_id)
         if is_driver_delivery_date_finalized(
             self.repository,
             dispatch_date,

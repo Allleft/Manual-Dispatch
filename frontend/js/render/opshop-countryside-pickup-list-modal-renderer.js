@@ -12,6 +12,7 @@ import {
 } from "../utils/dom-utils.js";
 import { formatOptional, truncateText } from "../utils/format-utils.js";
 import { createIcon } from "../utils/icon-utils.js";
+import { driversForAssignment } from "../utils/driver-utils.js";
 import { getCountrysideTemplateRouteGroupPanelId } from "../utils/opshop-countryside-accordion-utils.js";
 
 export function renderCountrysideOpShopPickupListModal({
@@ -818,7 +819,7 @@ function createAddForm({ onCancelForm, onCreatePickup, onUpdateForm }) {
       "Assigned Driver",
       state.countrysideOpShopPickupForm.assigned_driver_id,
       (value) => onUpdateForm("assigned_driver_id", value),
-      { pickupDate: state.countrysideOpShopPickupForm.pickup_date },
+      { forAssignment: true, pickupDate: state.countrysideOpShopPickupForm.pickup_date },
     ),
     createNotesInput(onUpdateForm),
     disabledHint,
@@ -863,7 +864,10 @@ function createEditForm({ onCancelForm, onStartDelete, onUpdateForm, onUpdatePic
       "Assigned to",
       state.countrysideOpShopPickupForm.assigned_driver_id,
       (value) => onUpdateForm("assigned_driver_id", value),
-      { disabled: lockState.isLocked, pickupDate: state.countrysideOpShopPickupForm.pickup_date },
+      {
+        disabled: lockState.isLocked, pickupDate: state.countrysideOpShopPickupForm.pickup_date,
+        forAssignment: true, currentDriverId: pickup && (pickup.assigned_driver_id || pickup.driver_id),
+      },
     ),
     createNotesInput(onUpdateForm),
     createFormActions({
@@ -993,7 +997,10 @@ function createDriverSelect(labelText, value, onChange, options = {}) {
     state.isCountrysideOpShopPickupSaving ||
     state.isCountrysideRouteTemplateSaving;
   select.append(createOption("", "Unassigned", !value));
-  getCountrysideDrivers().forEach((driver) => {
+  const drivers = options.forAssignment
+    ? driversForAssignment(getCountrysideDrivers(), options.currentDriverId || (options.disabled ? value : ""))
+    : getCountrysideDrivers();
+  drivers.forEach((driver) => {
     const hasSavedFinalSummary = options.pickupDate
       ? isDriverFinalizedForPickup(driver.driver_id, options.pickupDate)
       : false;
@@ -1616,7 +1623,9 @@ function createAssignedToSelect(pickup, onUpdateAssignedDriver) {
     isFinalSummaryLocked || isGeneratedFinalSummaryLocked,
   );
   select.append(createOption("", "Unassigned", !selectedDriverId));
-  getCountrysideDrivers().forEach((driver) => {
+  driversForAssignment(
+    getCountrysideDrivers(), pickup.assigned_driver_id || pickup.driver_id,
+  ).forEach((driver) => {
     const hasSavedFinalSummary = isDriverFinalizedForPickup(driver.driver_id, pickup.pickup_date);
     const option = createOption(
       driver.driver_id,

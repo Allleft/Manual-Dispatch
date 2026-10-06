@@ -1,4 +1,5 @@
 import { createIcon } from "../../utils/icon-utils.js";
+import { driversForAssignment } from "../../utils/driver-utils.js";
 import { getNextBusinessDayLocalDateString } from "../../utils/date-utils.js";
 import {
   getCountrysidePickupRouteGroupCollapseKey,
@@ -293,7 +294,7 @@ export function createRouteGroupAssignmentForm(
     "Assigned to",
     draft.assigned_driver_id,
     [{ value: "", label: "Select driver" }].concat(
-      (state.opshopBoard?.drivers || []).map((driver) => ({
+      driversForAssignment(state.opshopBoard?.drivers).map((driver) => ({
         value: driver.driver_id,
         label: driver.name,
       })),

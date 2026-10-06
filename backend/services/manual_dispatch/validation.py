@@ -21,6 +21,12 @@ class ManualDispatchValidator:
         driver = self.repository.get_driver(driver_id)
         if not driver or driver.is_deleted:
             raise ValueError(f"Driver does not exist: {driver_id}")
+        return driver
+
+    def validate_driver_assignment(self, driver_id, current_driver_id=None):
+        driver = self.validate_driver_exists(driver_id)
+        if not driver.is_available and driver_id != current_driver_id:
+            raise ValueError(f"Driver is unavailable for new assignments: {driver_id}")
 
     def validate_vehicle_exists(self, vehicle_id):
         vehicle = self.repository.get_vehicle(vehicle_id)
@@ -30,12 +36,6 @@ class ManualDispatchValidator:
     def validate_trip_no(self, trip_no):
         if trip_no not in SUPPORTED_TRIPS:
             raise ValueError(f"Invalid trip_no: {trip_no}")
-
-    def ensure_driver_can_be_made_unavailable(self, driver_id):
-        if self.repository.driver_has_active_assignments(driver_id):
-            raise ValueError(
-                "Please unassign or finalize this driver's current orders before making the driver unavailable."
-            )
 
     def ensure_vehicle_can_be_made_unavailable(self, vehicle_id):
         if self.repository.vehicle_has_current_selection(vehicle_id):

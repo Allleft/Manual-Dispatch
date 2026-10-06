@@ -4,6 +4,7 @@ from backend.services.manual_dispatch.final_summary_lock import (
 )
 from backend.services.manual_dispatch.opshop_pickup_service import OpShopPickupService
 from backend.services.manual_dispatch.normalization import clean_required_iso_date
+from backend.services.manual_dispatch.driver_availability import list_visible_drivers
 from backend.services.manual_dispatch.suburb_distance_service import (
     get_estimated_distance_km,
 )
@@ -90,7 +91,12 @@ class BoardService:
         return ManualDispatchBoardResponse(
             dispatch_date=dispatch_date,
             orders=orders,
-            drivers=self.repository.list_drivers(),
+            drivers=list_visible_drivers(
+                self.repository,
+                {assignment.driver_id for assignment in assignments}
+                | {pickup.driver_id for pickup in assigned_pickups}
+                | {summary.driver_id for summary in generated_summaries},
+            ),
             vehicles=self.repository.list_vehicles(),
             assignments=assignments,
             driver_vehicle_assignments=self.repository.list_driver_vehicle_assignments(

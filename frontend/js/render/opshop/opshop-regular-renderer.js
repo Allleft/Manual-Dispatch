@@ -1,4 +1,5 @@
 import { createIcon } from "../../utils/icon-utils.js";
+import { driversForAssignment } from "../../utils/driver-utils.js";
 
 import { formatOptional } from "../../utils/format-utils.js";
 
@@ -102,7 +103,9 @@ export function createRegularPickupAssignment(pickup, state, actions) {
     "Assigned to",
     selectedDriverId,
     [{ value: "", label: "Unassigned" }].concat(
-      (state.opshopBoard?.drivers || []).map((driver) => ({
+      driversForAssignment(
+        state.opshopBoard?.drivers, pickup.assigned_driver_id || pickup.driver_id,
+      ).map((driver) => ({
         value: driver.driver_id,
         label: driver.name,
       })),
