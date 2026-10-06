@@ -6,9 +6,32 @@ from backend.services.manual_dispatch.attache_invoice_pdf_parser import (
     _is_stop_marker,
     parse_attache_invoice_text,
 )
+from tests.attache_docket_parser_fixtures import INVOICE_186598_PDF_TEXT
 
 
 class AttacheInvoicePdfParserTest(unittest.TestCase):
+    def test_invoice_186598_numeric_stock_codes_keep_each_following_package(self):
+        parsed = parse_attache_invoice_text(
+            INVOICE_186598_PDF_TEXT,
+            source_filename="186598.pdf",
+            import_date=date(2026, 10, 5),
+        )
+
+        self.assertEqual("186598", parsed.invoice_number)
+        self.assertEqual("204722", parsed.order_no)
+        self.assertEqual(3, len(parsed.product_lines))
+        for product, code, name in zip(
+            parsed.product_lines,
+            ("34287-SEQ", "30576-SEQ", "35762-SEQ"),
+            ("WHITE COTTON RAGS 1.5KG", "PURE WHITE RAGS 1.5KG", "COLOURED COTTON RAGS 1.5KG"),
+        ):
+            self.assert_product(product, code, name, 224, "BAG", 224, "BAG1.5")
+        self.assertEqual((3, 0, 0), (
+            parsed.pallet_quantity, parsed.loose_bags_quantity, parsed.carton_quantity,
+        ))
+        self.assertEqual([], parsed.warnings)
+        self.assert_charge_data_excluded(parsed)
+
     def assert_product(
         self,
         line,

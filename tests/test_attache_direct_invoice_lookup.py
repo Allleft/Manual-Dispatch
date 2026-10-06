@@ -51,6 +51,7 @@ from backend.services.manual_dispatch.attache_current_future_payment_eligibility
 )
 from backend.api.manual_dispatch_routes.common import operator_cookie_secret
 from backend.services.manual_dispatch_service import ManualDispatchService
+from tests.attache_docket_parser_fixtures import invoice_186598_payload
 from tests.manual_dispatch_api_test_helpers import authenticate_test_client
 
 from backend.api import manual_dispatch as manual_dispatch_api
@@ -444,6 +445,72 @@ class AttacheBridgeClientTest(unittest.TestCase):
 
 
 class AttacheDirectInvoiceNormalizerTest(unittest.TestCase):
+    def test_invoice_186598_retains_native_products_and_immediate_packaging(self):
+        row = normalize_direct_attache_invoice(
+            invoice_186598_payload(),
+            expected_invoice_number="186598",
+            import_date=date(2026, 10, 5),
+        )
+
+        self.assertEqual("186598", row.invoice_number)
+        self.assertEqual("204722", row.order_no)
+        self.assertEqual(
+            [
+                {
+                    "product_name": name,
+                    "product_code": code,
+                    "quantity": 224,
+                    "unit": "BAG",
+                    "package_quantity": 224,
+                    "package_unit": "BAG1.5",
+                }
+                for code, name in (
+                    ("34287-SEQ", "WHITE COTTON RAGS 1.5KG"),
+                    ("30576-SEQ", "PURE WHITE RAGS 1.5KG"),
+                    ("35762-SEQ", "COLOURED COTTON RAGS 1.5KG"),
+                )
+            ],
+            row.product_lines,
+        )
+        self.assertEqual((3, 0, 0), (
+            row.pallet_quantity, row.loose_bags_quantity, row.carton_quantity,
+        ))
+        self.assertEqual([], row.warnings)
+
+    def test_numeric_stock_codes_use_invoiced_quantity_and_each_own_package(self):
+        payload = invoice_186598_payload()
+        payload["invoice_number"] = "199999"
+        expected = (
+            ("70001-ALT", 112, "KG", 7, "BAG1.5"),
+            ("70002-ALT", 224, "BAG", 11, "BAG1.5"),
+            ("70003-ALT", 336, "PACK", 13, "BAG1.5"),
+        )
+        for index, (code, quantity, unit, package_quantity, _) in enumerate(expected):
+            product = payload["lines"][index * 2]
+            product.update({
+                "code": code, "quantity_invoiced": quantity, "unit": unit,
+                "quantity_ordered": 999, "quantity_backordered": 888,
+            })
+            packaging = payload["lines"][index * 2 + 1]
+            packaging.update({
+                "quantity_invoiced": package_quantity,
+                "quantity_ordered": 777, "quantity_backordered": 666,
+            })
+
+        row = normalize_direct_attache_invoice(
+            payload, expected_invoice_number="199999", import_date=date(2026, 10, 5),
+        )
+
+        self.assertEqual(list(expected), [
+            (
+                product["product_code"], product["quantity"], product["unit"],
+                product["package_quantity"], product["package_unit"],
+            )
+            for product in row.product_lines
+        ])
+        self.assertEqual(3, row.pallet_quantity)
+        self.assertEqual([], row.warnings)
+
     def test_structured_invoice_reuses_pdf_product_packaging_and_load_rules(self):
         payload = deepcopy(DIRECT_INVOICE_PAYLOAD)
         payload["delivery_date"] = "2026-08-10"

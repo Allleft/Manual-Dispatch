@@ -27,7 +27,7 @@ ACCOUNTING_NOISE_PATTERNS = (
 
 CHARGE_CODES = {"DEL", "DELIVERY", "FREIGHT", "FUEL", "LEVY", "SURCHARGE"}
 PACKAGING_CODE_PATTERN = re.compile(r"^BAG\d+(?:\.\d+)?$", re.IGNORECASE)
-PRODUCT_CODE_PATTERN = re.compile(r"^[A-Z][A-Z0-9.#/-]{0,39}$", re.IGNORECASE)
+PRODUCT_CODE_PATTERN = re.compile(r"^[A-Z0-9][A-Z0-9.#/-]{0,39}$", re.IGNORECASE)
 PRODUCT_UNITS = {
     "BAG",
     "BAGS",
