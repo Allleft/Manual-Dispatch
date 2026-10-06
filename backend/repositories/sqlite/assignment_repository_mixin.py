@@ -1,4 +1,6 @@
 from backend.db.connection import connect
+from backend.db.invariants import table_columns
+from backend.repositories.delivery_scope import legacy_vehicle_projection, validate_delivery_trip
 from backend.schemas import (
     ManualDispatchAssignment,
     ManualDriverVehicleAssignment,
@@ -318,7 +320,9 @@ class SQLiteAssignmentRepositoryMixin:
                 """,
                 (dispatch_date,),
             ).fetchall()
-        return [self._row_to_driver_vehicle_assignment(row) for row in rows]
+        return legacy_vehicle_projection([
+            self._row_to_driver_vehicle_assignment(row) for row in rows
+        ])
 
     def list_driver_vehicle_assignments_for_delivery_date(self, delivery_date):
         with connect(self.db_path) as connection:
@@ -331,7 +335,9 @@ class SQLiteAssignmentRepositoryMixin:
                 """,
                 (delivery_date,),
             ).fetchall()
-        assignments = [self._row_to_driver_vehicle_assignment(row) for row in rows]
+        assignments = legacy_vehicle_projection([
+            self._row_to_driver_vehicle_assignment(row) for row in rows
+        ])
         seen_drivers = set()
         seen_vehicles = set()
         for assignment in assignments:
@@ -687,6 +693,16 @@ class SQLiteAssignmentRepositoryMixin:
         return cursor.rowcount > 0
 
     def upsert_driver_vehicle_assignment(self, dispatch_date, delivery_date, driver_id, vehicle_id):
+        """Temporary day-level compatibility entry point; new writes use the trip API."""
+        with connect(self.db_path) as connection:
+            has_trip_column = "trip_no" in table_columns(connection, "manual_driver_vehicle_assignments")
+        if has_trip_column:
+            assignment, conflict = self._upsert_legacy_delivery_vehicle(
+                dispatch_date, delivery_date, driver_id, vehicle_id
+            )
+            if conflict:
+                raise ValueError("Vehicle is already assigned for this delivery date.")
+            return assignment
         timestamp = self._timestamp()
 
         with connect(self.db_path) as connection:
@@ -719,6 +735,13 @@ class SQLiteAssignmentRepositoryMixin:
     def upsert_delivery_workspace_vehicle_assignment(
         self, dispatch_date, delivery_date, driver_id, vehicle_id
     ):
+        """Current day-level application adapter; never chooses an arbitrary trip."""
+        with connect(self.db_path) as connection:
+            has_trip_column = "trip_no" in table_columns(connection, "manual_driver_vehicle_assignments")
+        if has_trip_column:
+            return self._upsert_legacy_delivery_vehicle(
+                dispatch_date, delivery_date, driver_id, vehicle_id
+            )
         timestamp = self._timestamp()
         with connect(self.db_path) as connection:
             connection.execute("BEGIN IMMEDIATE")
@@ -812,6 +835,22 @@ class SQLiteAssignmentRepositoryMixin:
         driver_id,
         delivery_date=None,
     ):
+        """Current day-level clear; the explicit trip clear is a separate contract."""
+        with connect(self.db_path) as connection:
+            has_trip_column = "trip_no" in table_columns(connection, "manual_driver_vehicle_assignments")
+        if has_trip_column:
+            with self._immediate_transaction():
+                with connect(self.db_path) as connection:
+                    condition = "delivery_date = ? AND driver_id = ?" if delivery_date else "dispatch_date = ? AND driver_id = ?"
+                    parameters = (delivery_date or dispatch_date, driver_id)
+                    rows = connection.execute(
+                        f"SELECT * FROM manual_driver_vehicle_assignments WHERE {condition}", parameters
+                    ).fetchall()
+                    legacy_vehicle_projection([self._row_to_driver_vehicle_assignment(row) for row in rows])
+                    cursor = connection.execute(
+                        f"DELETE FROM manual_driver_vehicle_assignments WHERE {condition}", parameters
+                    )
+                    return cursor.rowcount > 0
         with connect(self.db_path) as connection:
             if delivery_date:
                 connection.execute("BEGIN IMMEDIATE")
@@ -852,6 +891,108 @@ class SQLiteAssignmentRepositoryMixin:
                 )
             connection.commit()
         return cursor.rowcount > 0
+
+    def _upsert_legacy_delivery_vehicle(self, dispatch_date, delivery_date, driver_id, vehicle_id):
+        # Only equal migration projections may follow the existing whole-day UI.
+        with self._immediate_transaction():
+            with connect(self.db_path) as connection:
+                rows = connection.execute(
+                    "SELECT * FROM manual_driver_vehicle_assignments WHERE delivery_date = ? ORDER BY driver_id, trip_no",
+                    (delivery_date,),
+                ).fetchall()
+                assignments = [self._row_to_driver_vehicle_assignment(row) for row in rows]
+                legacy = legacy_vehicle_projection(assignments)
+                current = next((item for item in legacy if item.driver_id == driver_id), None)
+                conflicts = sorted({item.driver_id for item in assignments
+                                    if item.vehicle_id == vehicle_id and item.driver_id != driver_id})
+                if conflicts:
+                    return None, conflicts[0]
+                timestamp = self._timestamp()
+                origin = current.dispatch_date if current else dispatch_date
+                if current:
+                    connection.execute(
+                        "UPDATE manual_driver_vehicle_assignments SET vehicle_id = ?, updated_at = ? "
+                        "WHERE delivery_date = ? AND driver_id = ?",
+                        (vehicle_id, timestamp, delivery_date, driver_id),
+                    )
+                else:
+                    connection.execute(
+                        "INSERT INTO manual_driver_vehicle_assignments "
+                        "(dispatch_date, delivery_date, driver_id, vehicle_id, trip_no, created_at, updated_at) "
+                        "VALUES (?, ?, ?, ?, NULL, ?, ?)",
+                        (origin, delivery_date, driver_id, vehicle_id, timestamp, timestamp),
+                    )
+                return ManualDriverVehicleAssignment(origin, delivery_date, driver_id, vehicle_id), None
+
+    def list_delivery_trip_vehicle_assignments(self, delivery_date):
+        self.require_delivery_per_trip_schema()
+        with connect(self.db_path) as connection:
+            rows = connection.execute(
+                "SELECT * FROM manual_driver_vehicle_assignments WHERE delivery_date = ? "
+                "AND trip_no IS NOT NULL ORDER BY driver_id, trip_no, dispatch_date", (delivery_date,)
+            ).fetchall()
+        return [self._row_to_driver_vehicle_assignment(row) for row in rows]
+
+    def get_delivery_trip_vehicle_assignment(self, delivery_date, driver_id, trip_no):
+        validate_delivery_trip(trip_no)
+        matches = [item for item in self.list_delivery_trip_vehicle_assignments(delivery_date)
+                   if item.driver_id == driver_id and item.trip_no == trip_no]
+        if len(matches) > 1:
+            raise ValueError("Driver vehicle assignment integrity error: duplicate trip.")
+        return matches[0] if matches else None
+
+    def upsert_delivery_trip_vehicle_assignment(self, dispatch_date, delivery_date, driver_id, vehicle_id, trip_no):
+        validate_delivery_trip(trip_no)
+        self.require_delivery_per_trip_schema()
+        with self._immediate_transaction():
+            with connect(self.db_path) as connection:
+                rows = connection.execute(
+                    "SELECT * FROM manual_driver_vehicle_assignments WHERE delivery_date = ? AND trip_no = ?",
+                    (delivery_date, trip_no),
+                ).fetchall()
+                current_rows = [row for row in rows if row["driver_id"] == driver_id]
+                if len(current_rows) > 1:
+                    raise ValueError("Driver vehicle assignment integrity error: duplicate trip.")
+                frozen = connection.execute(
+                    "SELECT driver_id, vehicle_id FROM delivery_run_sheets "
+                    "WHERE delivery_date = ? AND (trip_no IS NULL OR trip_no = ?)",
+                    (delivery_date, trip_no),
+                ).fetchall()
+                if any(row["driver_id"] == driver_id for row in frozen):
+                    raise ValueError("Delivery Run Sheet locks this driver/date/trip.")
+                conflicts = sorted({row["driver_id"] for row in [*rows, *frozen]
+                                    if row["vehicle_id"] == vehicle_id and row["driver_id"] != driver_id})
+                if conflicts:
+                    return None, conflicts[0]
+                timestamp = self._timestamp()
+                origin = current_rows[0]["dispatch_date"] if current_rows else dispatch_date
+                if current_rows:
+                    connection.execute(
+                        "UPDATE manual_driver_vehicle_assignments SET vehicle_id = ?, updated_at = ? "
+                        "WHERE delivery_date = ? AND driver_id = ? AND trip_no = ?",
+                        (vehicle_id, timestamp, delivery_date, driver_id, trip_no),
+                    )
+                else:
+                    connection.execute(
+                        "INSERT INTO manual_driver_vehicle_assignments "
+                        "(dispatch_date, delivery_date, driver_id, vehicle_id, trip_no, created_at, updated_at) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        (origin, delivery_date, driver_id, vehicle_id, trip_no, timestamp, timestamp),
+                    )
+                return ManualDriverVehicleAssignment(origin, delivery_date, driver_id, vehicle_id, trip_no), None
+
+    def remove_delivery_trip_vehicle_assignment(self, delivery_date, driver_id, trip_no):
+        validate_delivery_trip(trip_no)
+        self.require_delivery_per_trip_schema()
+        with self._immediate_transaction():
+            if self.get_delivery_run_sheet_for_driver(None, delivery_date, driver_id, trip_no):
+                raise ValueError("Delivery Run Sheet locks this driver/date/trip.")
+            with connect(self.db_path) as connection:
+                cursor = connection.execute(
+                    "DELETE FROM manual_driver_vehicle_assignments WHERE delivery_date = ? "
+                    "AND driver_id = ? AND trip_no = ?", (delivery_date, driver_id, trip_no)
+                )
+                return cursor.rowcount > 0
 
     def _fetch_assignment_row(self, connection, dispatch_date, task_type, task_id):
         return connection.execute(

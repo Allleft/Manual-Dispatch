@@ -1,5 +1,10 @@
 PRAGMA foreign_keys = ON;
 
+CREATE TABLE IF NOT EXISTS manual_dispatch_schema_capabilities (
+    capability TEXT PRIMARY KEY,
+    version INTEGER NOT NULL CHECK(version > 0)
+);
+
 CREATE TABLE IF NOT EXISTS manual_orders (
     order_id TEXT PRIMARY KEY,
     invoice_number TEXT,
@@ -98,9 +103,11 @@ CREATE TABLE IF NOT EXISTS manual_driver_vehicle_assignments (
     delivery_date TEXT NOT NULL,
     driver_id TEXT NOT NULL,
     vehicle_id TEXT NOT NULL,
+    trip_no TEXT,
     created_at TEXT,
     updated_at TEXT,
-    PRIMARY KEY(dispatch_date, delivery_date, driver_id),
+    PRIMARY KEY(dispatch_date, delivery_date, driver_id, trip_no),
+    CHECK(trip_no IS NULL OR trip_no IN ('trip1', 'trip2')),
     FOREIGN KEY(driver_id) REFERENCES manual_drivers(driver_id),
     FOREIGN KEY(vehicle_id) REFERENCES manual_vehicles(vehicle_id)
 );
@@ -294,6 +301,7 @@ CREATE TABLE IF NOT EXISTS delivery_run_sheets (
     dispatch_date TEXT NOT NULL,
     delivery_date TEXT NOT NULL,
     driver_id TEXT NOT NULL,
+    trip_no TEXT,
     driver_name_snapshot TEXT NOT NULL,
     vehicle_id TEXT,
     vehicle_rego_snapshot TEXT,
@@ -310,7 +318,7 @@ CREATE TABLE IF NOT EXISTS delivery_run_sheets (
     closed_at TEXT,
     closed_by_account_id INTEGER,
     closed_by_account_name TEXT,
-    UNIQUE(dispatch_date, delivery_date, driver_id),
+    CHECK(trip_no IS NULL OR trip_no IN ('trip1', 'trip2')),
     CHECK(status IN ('GENERATED', 'SAVED')),
     CHECK(execution_status IN ('OPEN', 'CLOSED')),
     FOREIGN KEY(saved_by_account_id) REFERENCES operator_accounts(id)

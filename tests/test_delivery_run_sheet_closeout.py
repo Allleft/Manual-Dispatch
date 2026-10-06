@@ -389,7 +389,7 @@ class DeliveryRunSheetCloseoutTest(unittest.TestCase):
     def test_non_order_snapshot_conflicts_without_mutation(self):
         repository = InMemoryManualDispatchRepository()
         service, identity, run_sheet, _ = self._build_saved_sheet(repository)
-        run_sheet.trips[0].orders[0] = replace(
+        repository.delivery_run_sheets[0].trips[0].orders[0] = replace(
             run_sheet.trips[0].orders[0],
             task_type="OPSHOP_PICKUP",
         )

@@ -1,12 +1,29 @@
 from backend.db.connection import connect
+from backend.db.delivery_per_trip import delivery_per_trip_schema_status
+from backend.db.invariants import table_columns
 
 class SQLiteLegacyRepositoryMixin:
     """Legacy persistence responsibilities."""
 
+    def get_delivery_per_trip_schema_status(self):
+        with connect(self.db_path) as connection:
+            return delivery_per_trip_schema_status(connection)
+
+    def require_delivery_per_trip_schema(self):
+        status = self.get_delivery_per_trip_schema_status()
+        if not status["ready"]:
+            raise ValueError("Per-trip Delivery schema migration is required.")
+        return status
+
     def get_workspace_migration_status(self):
         with connect(self.db_path) as connection:
+            schema_status = delivery_per_trip_schema_status(connection)
+            legacy_scope = (
+                "AND run_sheet.trip_no IS NULL"
+                if "trip_no" in table_columns(connection, "delivery_run_sheets") else ""
+            )
             rows = connection.execute(
-                """
+                f"""
                 SELECT
                     summary.summary_id,
                     summary.status,
@@ -38,6 +55,7 @@ class SQLiteLegacyRepositoryMixin:
                             AND run_sheet.dispatch_date = summary.dispatch_date
                             AND run_sheet.delivery_date = summary.delivery_date
                             AND run_sheet.driver_id = summary.driver_id
+                            {legacy_scope}
                             AND (
                                 SELECT COUNT(*)
                                 FROM delivery_run_sheet_rows run_sheet_row
@@ -95,6 +113,10 @@ class SQLiteLegacyRepositoryMixin:
             "opshop_unmigrated_summary_count": len(opshop_unmigrated_ids),
             "delivery_unmigrated_summary_ids": delivery_unmigrated_ids,
             "opshop_unmigrated_summary_ids": opshop_unmigrated_ids,
+            "delivery_per_trip_schema": schema_status,
+            "delivery_per_trip_ready": (
+                schema_status["ready"] and not generated_count and not delivery_unmigrated_ids
+            ),
         }
 
     def get_task(self, task_type, task_id):

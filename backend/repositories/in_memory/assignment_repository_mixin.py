@@ -1,4 +1,5 @@
 from copy import deepcopy
+from backend.repositories.delivery_scope import legacy_vehicle_projection, validate_delivery_trip
 from backend.schemas import (
     ManualDispatchAssignment,
     ManualDriverVehicleAssignment,
@@ -151,18 +152,18 @@ class InMemoryAssignmentRepositoryMixin:
         )
 
     def list_driver_vehicle_assignments(self, dispatch_date):
-        return [
+        return legacy_vehicle_projection([
             assignment
             for assignment in self.driver_vehicle_assignments
             if assignment.dispatch_date == dispatch_date
-        ]
+        ])
 
     def list_driver_vehicle_assignments_for_delivery_date(self, delivery_date):
-        assignments = [
+        assignments = legacy_vehicle_projection([
             assignment
             for assignment in self.driver_vehicle_assignments
             if assignment.delivery_date == delivery_date
-        ]
+        ])
         seen_drivers = set()
         seen_vehicles = set()
         for assignment in assignments:
@@ -338,106 +339,97 @@ class InMemoryAssignmentRepositoryMixin:
         return True
 
     def upsert_driver_vehicle_assignment(self, dispatch_date, delivery_date, driver_id, vehicle_id):
-        existing = next(
-            (
-                assignment
-                for assignment in self.driver_vehicle_assignments
-                if assignment.dispatch_date == dispatch_date
-                and assignment.delivery_date == delivery_date
-                and assignment.driver_id == driver_id
-            ),
-            None,
+        """Temporary day-level adapter; use the explicit trip contract for new writes."""
+        assignment, conflict = self._upsert_legacy_delivery_vehicle(
+            dispatch_date, delivery_date, driver_id, vehicle_id
         )
-        if existing:
-            existing.vehicle_id = vehicle_id
-            return existing
-
-        assignment = ManualDriverVehicleAssignment(
-            dispatch_date=dispatch_date,
-            delivery_date=delivery_date,
-            driver_id=driver_id,
-            vehicle_id=vehicle_id,
-        )
-        self.driver_vehicle_assignments.append(assignment)
+        if conflict:
+            raise ValueError("Vehicle is already assigned for this delivery date.")
         return assignment
+
+    def _upsert_legacy_delivery_vehicle(self, dispatch_date, delivery_date, driver_id, vehicle_id):
+        assignments = [item for item in self.driver_vehicle_assignments if item.delivery_date == delivery_date]
+        legacy = legacy_vehicle_projection(assignments)
+        current = next((item for item in legacy if item.driver_id == driver_id), None)
+        conflicts = sorted({item.driver_id for item in assignments
+                            if item.vehicle_id == vehicle_id and item.driver_id != driver_id})
+        if conflicts:
+            return None, conflicts[0]
+        if current:
+            for item in assignments:
+                if item.driver_id == driver_id:
+                    item.vehicle_id = vehicle_id
+            return deepcopy(current), None
+        assignment = ManualDriverVehicleAssignment(dispatch_date, delivery_date, driver_id, vehicle_id)
+        self.driver_vehicle_assignments.append(assignment)
+        return deepcopy(assignment), None
 
     def upsert_delivery_workspace_vehicle_assignment(
         self, dispatch_date, delivery_date, driver_id, vehicle_id
     ):
-        current_rows = [
-            assignment
-            for assignment in self.driver_vehicle_assignments
-            if assignment.delivery_date == delivery_date
-            and assignment.driver_id == driver_id
-        ]
-        if len(current_rows) > 1:
-            raise ValueError(
-                "Driver vehicle assignment integrity error for "
-                f"{delivery_date}:{driver_id}: expected at most one row."
-            )
-        conflict = next(
-            (
-                assignment
-                for assignment in self.driver_vehicle_assignments
-                if assignment.delivery_date == delivery_date
-                and assignment.vehicle_id == vehicle_id
-                and assignment.driver_id != driver_id
-            ),
-            None,
-        )
-        if conflict:
-            return None, conflict.driver_id
-        if current_rows:
-            current_rows[0].vehicle_id = vehicle_id
-            return current_rows[0], None
+        """Current application's explicit day-level compatibility adapter."""
+        return self._upsert_legacy_delivery_vehicle(dispatch_date, delivery_date, driver_id, vehicle_id)
 
-        assignment = ManualDriverVehicleAssignment(
-            dispatch_date=dispatch_date,
-            delivery_date=delivery_date,
-            driver_id=driver_id,
-            vehicle_id=vehicle_id,
-        )
+    def list_delivery_trip_vehicle_assignments(self, delivery_date):
+        assignments = [item for item in self.driver_vehicle_assignments
+                       if item.delivery_date == delivery_date and item.trip_no is not None]
+        drivers = set()
+        vehicles = set()
+        for item in assignments:
+            validate_delivery_trip(item.trip_no)
+            driver_key = item.driver_id, item.trip_no
+            vehicle_key = item.vehicle_id, item.trip_no
+            if driver_key in drivers or vehicle_key in vehicles:
+                raise ValueError("Driver vehicle assignment integrity error: duplicate trip.")
+            drivers.add(driver_key)
+            vehicles.add(vehicle_key)
+        return deepcopy(sorted(assignments, key=lambda item: (item.driver_id, item.trip_no, item.dispatch_date)))
+
+    def get_delivery_trip_vehicle_assignment(self, delivery_date, driver_id, trip_no):
+        validate_delivery_trip(trip_no)
+        matches = [item for item in self.list_delivery_trip_vehicle_assignments(delivery_date)
+                   if item.driver_id == driver_id and item.trip_no == trip_no]
+        return matches[0] if matches else None
+
+    def upsert_delivery_trip_vehicle_assignment(self, dispatch_date, delivery_date, driver_id, vehicle_id, trip_no):
+        validate_delivery_trip(trip_no)
+        rows = self.list_delivery_trip_vehicle_assignments(delivery_date)
+        frozen = [sheet for sheet in self.delivery_run_sheets
+                  if sheet.delivery_date == delivery_date and sheet.trip_no in (None, trip_no)]
+        if any(sheet.driver_id == driver_id for sheet in frozen):
+            raise ValueError("Delivery Run Sheet locks this driver/date/trip.")
+        conflicts = sorted({item.driver_id for item in [*rows, *frozen]
+                            if item.vehicle_id == vehicle_id and item.driver_id != driver_id
+                            and (getattr(item, "trip_no", None) in (None, trip_no))})
+        if conflicts:
+            return None, conflicts[0]
+        current = self.get_delivery_trip_vehicle_assignment(delivery_date, driver_id, trip_no)
+        origin = current.dispatch_date if current else dispatch_date
+        assignment = ManualDriverVehicleAssignment(origin, delivery_date, driver_id, vehicle_id, trip_no)
+        self.driver_vehicle_assignments = [item for item in self.driver_vehicle_assignments
+                                          if (item.delivery_date, item.driver_id, item.trip_no)
+                                          != (delivery_date, driver_id, trip_no)]
         self.driver_vehicle_assignments.append(assignment)
-        return assignment, None
+        return deepcopy(assignment), None
 
-    def remove_driver_vehicle_assignment(
-        self,
-        dispatch_date,
-        driver_id,
-        delivery_date=None,
-    ):
-        if delivery_date:
-            current_rows = [
-                assignment
-                for assignment in self.driver_vehicle_assignments
-                if assignment.delivery_date == delivery_date
-                and assignment.driver_id == driver_id
-            ]
-            if len(current_rows) > 1:
-                raise ValueError(
-                    "Driver vehicle assignment integrity error for "
-                    f"{delivery_date}:{driver_id}: expected at most one row."
-                )
-            if not current_rows:
-                return False
-            current = current_rows[0]
-            self.driver_vehicle_assignments = [
-                assignment
-                for assignment in self.driver_vehicle_assignments
-                if assignment is not current
-            ]
-            return True
+    def remove_delivery_trip_vehicle_assignment(self, delivery_date, driver_id, trip_no):
+        validate_delivery_trip(trip_no)
+        if self.get_delivery_run_sheet_for_driver(None, delivery_date, driver_id, trip_no):
+            raise ValueError("Delivery Run Sheet locks this driver/date/trip.")
+        before = len(self.driver_vehicle_assignments)
+        self.driver_vehicle_assignments = [item for item in self.driver_vehicle_assignments
+                                          if (item.delivery_date, item.driver_id, item.trip_no)
+                                          != (delivery_date, driver_id, trip_no)]
+        return before != len(self.driver_vehicle_assignments)
 
-        before_count = len(self.driver_vehicle_assignments)
-        self.driver_vehicle_assignments = [
-            assignment
-            for assignment in self.driver_vehicle_assignments
-            if not (
-                assignment.dispatch_date == dispatch_date
-                and assignment.driver_id == driver_id
-            )
-        ]
-        return len(self.driver_vehicle_assignments) != before_count
+    def remove_driver_vehicle_assignment(self, dispatch_date, driver_id, delivery_date=None):
+        """Legacy whole-day clear; never interprets a divergent per-trip selection."""
+        rows = [item for item in self.driver_vehicle_assignments if item.driver_id == driver_id
+                and (item.delivery_date == delivery_date if delivery_date else item.dispatch_date == dispatch_date)]
+        legacy_vehicle_projection(rows)
+        before = len(self.driver_vehicle_assignments)
+        self.driver_vehicle_assignments = [item for item in self.driver_vehicle_assignments if item not in rows]
+        return before != len(self.driver_vehicle_assignments)
 
     def _create_assignment_id(self):
         assignment_id = f"A-{self._next_assignment_number:03d}"

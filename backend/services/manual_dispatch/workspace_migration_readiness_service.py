@@ -9,6 +9,15 @@ class WorkspaceMigrationReadinessService:
     def get_status(self):
         return self.repository.get_workspace_migration_status()
 
+    def ensure_per_trip_ready(self):
+        """Opt-in gate for future per-trip application writes, not the current UI."""
+        status = self.get_status()
+        if not status["delivery_per_trip_ready"]:
+            raise WorkspaceMigrationRequiredError(
+                "Per-trip Delivery schema migration/readiness is required."
+            )
+        return status
+
     def ensure_ready(self, workspace):
         status = self.get_status()
         ready_field, label = _workspace_config(workspace)

@@ -182,7 +182,22 @@ class RefactorContractBaselineTest(unittest.TestCase):
         )
 
         self.assertEqual(sqlite_methods, in_memory_methods)
-        self.assertEqual(121, len(sqlite_methods))
+        per_trip_methods = {
+            "create_delivery_run_sheet": "(self, run_sheet)",
+            "get_delivery_per_trip_schema_status": "(self)",
+            "require_delivery_per_trip_schema": "(self)",
+            "list_delivery_trip_vehicle_assignments": "(self, delivery_date)",
+            "get_delivery_trip_vehicle_assignment": "(self, delivery_date, driver_id, trip_no)",
+            "upsert_delivery_trip_vehicle_assignment": "(self, dispatch_date, delivery_date, driver_id, vehicle_id, trip_no)",
+            "remove_delivery_trip_vehicle_assignment": "(self, delivery_date, driver_id, trip_no)",
+        }
+        extended_trip_methods = {
+            "get_delivery_run_sheet_for_driver": "(self, dispatch_date, delivery_date, driver_id, trip_no=None)",
+            "has_saved_delivery_run_sheet": "(self, dispatch_date, driver_id, delivery_date, trip_no=None)",
+        }
+        self.assertEqual(121 + len(per_trip_methods), len(sqlite_methods))
+        for name, signature in {**per_trip_methods, **extended_trip_methods}.items():
+            self.assertIn({"name": name, "signature": signature}, sqlite_methods)
         lookup_methods = {
             "delivery_order_lookup_snapshot": "(self)",
             "find_orders_by_invoice_number": "(self, invoice_number)",
@@ -209,8 +224,16 @@ class RefactorContractBaselineTest(unittest.TestCase):
         )
         self.assertEqual(
             "02116dee69e13de9f443c87d486778df994ee8edea7f8352d5cf5a24256f4ab0",
-            self._contract_digest([method for method in sqlite_methods
-                                   if method["name"] not in lookup_methods]),
+            self._contract_digest([
+                {
+                    **method,
+                    "signature": method["signature"].replace(
+                        ", trip_no=None)", ")"
+                    ) if method["name"] in extended_trip_methods else method["signature"],
+                }
+                for method in sqlite_methods
+                if method["name"] not in lookup_methods and method["name"] not in per_trip_methods
+            ]),
         )
 
     def test_frontend_facade_and_state_contracts(self):

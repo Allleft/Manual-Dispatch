@@ -221,7 +221,7 @@ class WorkspaceSnapshotPersistenceTest(unittest.TestCase):
         ):
             self.assertIn(column_name, columns)
 
-    def test_upsert_replaces_snapshot_children_without_duplicates(self):
+    def test_saved_delivery_is_immutable_and_opshop_upsert_remains_supported(self):
         run_sheet = self._delivery_run_sheet()
         collection = self._opshop_collection()
         self.repository.upsert_delivery_run_sheet(run_sheet)
@@ -229,7 +229,8 @@ class WorkspaceSnapshotPersistenceTest(unittest.TestCase):
 
         run_sheet.trips[0].orders[0].company_name_snapshot = "Updated Customer"
         collection.pickups[0].notes_snapshot = "Updated pickup note"
-        self.repository.upsert_delivery_run_sheet(run_sheet)
+        with self.assertRaisesRegex(ValueError, "immutable"):
+            self.repository.upsert_delivery_run_sheet(run_sheet)
         self.repository.upsert_opshop_pickup_collection(collection)
 
         with sqlite3.connect(self.db_path) as connection:
@@ -243,7 +244,7 @@ class WorkspaceSnapshotPersistenceTest(unittest.TestCase):
         self.assertEqual(1, delivery_count)
         self.assertEqual(1, opshop_count)
         self.assertEqual(
-            "Updated Customer",
+            "Demo Customer A",
             self.repository.get_delivery_run_sheet("DRS-001").trips[0].orders[0].company_name_snapshot,
         )
         self.assertEqual(

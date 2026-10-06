@@ -254,13 +254,15 @@ class LookupContract:
         row = sheet.trips[0].orders[0]
         row.task_id = "LEGACY-TASK-REFERENCE"
         row.invoice_number_snapshot = "OLD-INVOICE"
-        self.repository.upsert_delivery_run_sheet(sheet)
+        self.assertTrue(self.repository.delete_generated_delivery_run_sheet(sheet.run_sheet_id))
+        self.repository.create_delivery_run_sheet(sheet)
         match = self.match()
         self.assertEqual("RUN_SHEET_GENERATED", match.current_status)
         self.assertEqual("OLD-INVOICE", match.run_sheet_history[0].invoice_number_snapshot)
         row.task_id = self.order.order_id
         row.order_id_snapshot = None
-        self.repository.upsert_delivery_run_sheet(sheet)
+        self.assertTrue(self.repository.delete_generated_delivery_run_sheet(sheet.run_sheet_id))
+        self.repository.create_delivery_run_sheet(sheet)
         self.assertEqual(1, len(self.match().run_sheet_history))
 
     def test_multiple_open_rows_fail_explicitly(self):

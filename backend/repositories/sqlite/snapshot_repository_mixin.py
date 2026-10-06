@@ -3,6 +3,8 @@ from datetime import date
 from backend.db.connection import connect
 from backend.errors import StateChangedConflictError
 from backend.schemas import DeliveryOrderLookupHistory
+from backend.db.invariants import table_columns
+from backend.repositories.delivery_scope import validate_delivery_trip, validate_run_sheet_snapshot
 
 
 DELIVERY_ORDER_HISTORY_SQL = """
@@ -299,9 +301,9 @@ class SQLiteSnapshotRepositoryMixin:
 
     def get_delivery_run_sheet_reserving_order(self, order_id):
         with connect(self.db_path) as connection:
-            row = connection.execute(
+            rows = connection.execute(
                 """
-                SELECT run_sheet.*
+                SELECT DISTINCT run_sheet.*
                 FROM delivery_run_sheets run_sheet
                 JOIN delivery_run_sheet_rows run_sheet_row
                     ON run_sheet_row.run_sheet_id = run_sheet.run_sheet_id
@@ -314,18 +316,15 @@ class SQLiteSnapshotRepositoryMixin:
                     )
                     AND run_sheet_row.task_type = 'ORDER'
                     AND run_sheet_row.task_id = ?
-                ORDER BY
-                    CASE run_sheet.status
-                        WHEN 'SAVED' THEN 0
-                        ELSE 1
-                    END,
-                    run_sheet.generated_at DESC,
-                    run_sheet.run_sheet_id
-                LIMIT 1
                 """,
                 (order_id,),
-            ).fetchone()
-        return self._row_to_delivery_run_sheet(row) if row else None
+            ).fetchall()
+        if len(rows) > 1:
+            raise ValueError(
+                "Delivery Run Sheet reservation integrity error for "
+                f"{order_id}: expected at most one active document."
+            )
+        return self._row_to_delivery_run_sheet(rows[0]) if rows else None
 
     def get_delivery_run_sheet(self, run_sheet_id):
         with connect(self.db_path) as connection:
@@ -340,6 +339,7 @@ class SQLiteSnapshotRepositoryMixin:
         dispatch_date,
         delivery_date,
         driver_id,
+        trip_no=None,
     ):
         with connect(self.db_path) as connection:
             rows = connection.execute(
@@ -351,6 +351,12 @@ class SQLiteSnapshotRepositoryMixin:
                 """,
                 (delivery_date, driver_id),
             ).fetchall()
+        if trip_no is not None:
+            validate_delivery_trip(trip_no)
+            self.require_delivery_per_trip_schema()
+            rows = [row for row in rows if row["trip_no"] in (None, trip_no)]
+        elif any("trip_no" in row.keys() and row["trip_no"] is not None for row in rows):
+            raise ValueError("Explicit trip_no is required for per-trip Run Sheet lookup.")
         if len(rows) > 1:
             raise ValueError(
                 "Delivery Run Sheet integrity error for "
@@ -358,20 +364,25 @@ class SQLiteSnapshotRepositoryMixin:
             )
         return self._row_to_delivery_run_sheet(rows[0]) if rows else None
 
-    def has_saved_delivery_run_sheet(self, dispatch_date, driver_id, delivery_date):
+    def has_saved_delivery_run_sheet(self, dispatch_date, driver_id, delivery_date, trip_no=None):
         run_sheet = self.get_delivery_run_sheet_for_driver(
             dispatch_date,
             delivery_date,
             driver_id,
+            trip_no,
         )
         return bool(run_sheet and run_sheet.status == "SAVED")
 
     def upsert_delivery_run_sheet(self, run_sheet):
+        """Compatibility name for insert-only snapshots; use transitions to mutate state."""
+        validate_run_sheet_snapshot(run_sheet)
+        if run_sheet.trip_no is not None:
+            self.require_delivery_per_trip_schema()
         with connect(self.db_path) as connection:
             connection.execute("BEGIN IMMEDIATE")
             existing = connection.execute(
                 """
-                SELECT execution_status
+                SELECT status, execution_status
                 FROM delivery_run_sheets
                 WHERE run_sheet_id = ?
                 """,
@@ -382,21 +393,26 @@ class SQLiteSnapshotRepositoryMixin:
                 raise StateChangedConflictError(
                     "Closed Delivery Run Sheets are immutable."
                 )
+            if existing:
+                raise StateChangedConflictError("Delivery Run Sheet snapshots are immutable.")
+            has_trip_column = "trip_no" in table_columns(connection, "delivery_run_sheets")
+            scope_clause = ""
+            parameters = [run_sheet.delivery_date, run_sheet.driver_id, run_sheet.run_sheet_id]
+            if has_trip_column and run_sheet.trip_no is not None:
+                scope_clause = "AND (trip_no IS NULL OR trip_no = ?)"
+                parameters.append(run_sheet.trip_no)
             duplicate = connection.execute(
-                """
+                f"""
                 SELECT run_sheet_id
                 FROM delivery_run_sheets
                 WHERE delivery_date = ?
                     AND driver_id = ?
                     AND run_sheet_id != ?
+                    {scope_clause}
                 ORDER BY dispatch_date, run_sheet_id
                 LIMIT 1
                 """,
-                (
-                    run_sheet.delivery_date,
-                    run_sheet.driver_id,
-                    run_sheet.run_sheet_id,
-                ),
+                parameters,
             ).fetchone()
             if duplicate:
                 connection.rollback()
@@ -404,77 +420,20 @@ class SQLiteSnapshotRepositoryMixin:
                     "Delivery Run Sheet already exists for this driver "
                     "and delivery date."
                 )
+            columns = [
+                "run_sheet_id", "dispatch_date", "delivery_date", "driver_id",
+                "driver_name_snapshot", "vehicle_id", "vehicle_rego_snapshot",
+                "total_pallets", "total_loose_bags", "total_cartons", "status",
+                "generated_at", "saved_at", "saved_by_account_name", "saved_by_account_id",
+                "legacy_summary_id", "execution_status", "closed_at",
+                "closed_by_account_id", "closed_by_account_name",
+            ]
+            if has_trip_column:
+                columns.append("trip_no")
             connection.execute(
-                """
-                INSERT INTO delivery_run_sheets (
-                    run_sheet_id,
-                    dispatch_date,
-                    delivery_date,
-                    driver_id,
-                    driver_name_snapshot,
-                    vehicle_id,
-                    vehicle_rego_snapshot,
-                    total_pallets,
-                    total_loose_bags,
-                    total_cartons,
-                    status,
-                    generated_at,
-                    saved_at,
-                    saved_by_account_name,
-                    saved_by_account_id,
-                    legacy_summary_id,
-                    execution_status,
-                    closed_at,
-                    closed_by_account_id,
-                    closed_by_account_name
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(run_sheet_id) DO UPDATE SET
-                    dispatch_date = excluded.dispatch_date,
-                    delivery_date = excluded.delivery_date,
-                    driver_id = excluded.driver_id,
-                    driver_name_snapshot = excluded.driver_name_snapshot,
-                    vehicle_id = excluded.vehicle_id,
-                    vehicle_rego_snapshot = excluded.vehicle_rego_snapshot,
-                    total_pallets = excluded.total_pallets,
-                    total_loose_bags = excluded.total_loose_bags,
-                    total_cartons = excluded.total_cartons,
-                    status = excluded.status,
-                    generated_at = excluded.generated_at,
-                    saved_at = excluded.saved_at,
-                    saved_by_account_name = excluded.saved_by_account_name,
-                    saved_by_account_id = excluded.saved_by_account_id,
-                    legacy_summary_id = excluded.legacy_summary_id,
-                    execution_status = excluded.execution_status,
-                    closed_at = excluded.closed_at,
-                    closed_by_account_id = excluded.closed_by_account_id,
-                    closed_by_account_name = excluded.closed_by_account_name
-                """,
-                (
-                    run_sheet.run_sheet_id,
-                    run_sheet.dispatch_date,
-                    run_sheet.delivery_date,
-                    run_sheet.driver_id,
-                    run_sheet.driver_name_snapshot,
-                    run_sheet.vehicle_id,
-                    run_sheet.vehicle_rego_snapshot,
-                    run_sheet.total_pallets,
-                    run_sheet.total_loose_bags,
-                    run_sheet.total_cartons,
-                    run_sheet.status,
-                    run_sheet.generated_at,
-                    run_sheet.saved_at,
-                    run_sheet.saved_by_account_name,
-                    run_sheet.saved_by_account_id,
-                    run_sheet.legacy_summary_id,
-                    run_sheet.execution_status,
-                    run_sheet.closed_at,
-                    run_sheet.closed_by_account_id,
-                    run_sheet.closed_by_account_name,
-                ),
-            )
-            connection.execute(
-                "DELETE FROM delivery_run_sheet_rows WHERE run_sheet_id = ?",
-                (run_sheet.run_sheet_id,),
+                f"INSERT INTO delivery_run_sheets ({', '.join(columns)}) "
+                f"VALUES ({', '.join('?' for _ in columns)})",
+                [getattr(run_sheet, column) for column in columns],
             )
             for trip in run_sheet.trips:
                 for order in trip.orders:
@@ -526,6 +485,9 @@ class SQLiteSnapshotRepositoryMixin:
                     )
             connection.commit()
         return self.get_delivery_run_sheet(run_sheet.run_sheet_id)
+
+    def create_delivery_run_sheet(self, run_sheet):
+        return self.upsert_delivery_run_sheet(run_sheet)
 
     def insert_delivery_run_sheet_outcomes(self, outcomes):
         with connect(self.db_path) as connection:

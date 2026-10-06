@@ -226,6 +226,7 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
                     "delivery_date": delivery_date,
                     "driver_id": "DRIVER-1",
                     "vehicle_id": "VEHICLE-1",
+                    "trip_no": None,
                 }
             ],
             payload["driver_vehicle_assignments"],
@@ -619,6 +620,7 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
                     "delivery_date": self.dispatch_date,
                     "driver_id": "DRIVER-1",
                     "run_sheet_id": saved.run_sheet_id,
+                    "trip_no": None,
                 }
             ],
             [to_dict(lock) for lock in saved_board.saved_vehicle_assignment_locks],

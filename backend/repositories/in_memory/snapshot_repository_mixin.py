@@ -1,7 +1,9 @@
 from dataclasses import replace
+from copy import deepcopy
 from datetime import date
 
 from backend.errors import StateChangedConflictError
+from backend.repositories.delivery_scope import validate_delivery_trip, validate_run_sheet_snapshot
 from backend.schemas import (
     DeliveryOrderLookupHistory,
     DeliveryRunSheetCloseoutSummary,
@@ -164,7 +166,7 @@ class InMemorySnapshotRepositoryMixin:
         status=None,
     ):
         return [
-            run_sheet
+            deepcopy(run_sheet)
             for run_sheet in self.delivery_run_sheets
             if (not dispatch_date or run_sheet.dispatch_date == dispatch_date)
             and (not delivery_date or run_sheet.delivery_date == delivery_date)
@@ -212,36 +214,29 @@ class InMemorySnapshotRepositoryMixin:
                 for order in trip.orders
             )
         ]
-        return next(
-            (
-                run_sheet
-                for run_sheet in sorted(
-                    reserving_sheets,
-                    key=lambda item: (
-                        0 if item.status == "SAVED" else 1,
-                        item.generated_at or "",
-                        item.run_sheet_id,
-                    ),
-                )
-            ),
-            None,
-        )
+        if len(reserving_sheets) > 1:
+            raise ValueError(
+                "Delivery Run Sheet reservation integrity error for "
+                f"{order_id}: expected at most one active document."
+            )
+        return deepcopy(reserving_sheets[0]) if reserving_sheets else None
 
     def get_delivery_run_sheet(self, run_sheet_id):
-        return next(
+        return deepcopy(next(
             (
                 run_sheet
                 for run_sheet in self.delivery_run_sheets
                 if run_sheet.run_sheet_id == run_sheet_id
             ),
             None,
-        )
+        ))
 
     def get_delivery_run_sheet_for_driver(
         self,
         dispatch_date,
         delivery_date,
         driver_id,
+        trip_no=None,
     ):
         matches = [
             run_sheet
@@ -249,22 +244,30 @@ class InMemorySnapshotRepositoryMixin:
             if run_sheet.delivery_date == delivery_date
             and run_sheet.driver_id == driver_id
         ]
+        if trip_no is not None:
+            validate_delivery_trip(trip_no)
+            matches = [sheet for sheet in matches if sheet.trip_no in (None, trip_no)]
+        elif any(sheet.trip_no is not None for sheet in matches):
+            raise ValueError("Explicit trip_no is required for per-trip Run Sheet lookup.")
         if len(matches) > 1:
             raise ValueError(
                 "Delivery Run Sheet integrity error for "
                 f"{delivery_date}:{driver_id}: expected at most one active document."
             )
-        return matches[0] if matches else None
+        return deepcopy(matches[0]) if matches else None
 
-    def has_saved_delivery_run_sheet(self, dispatch_date, driver_id, delivery_date):
+    def has_saved_delivery_run_sheet(self, dispatch_date, driver_id, delivery_date, trip_no=None):
         run_sheet = self.get_delivery_run_sheet_for_driver(
             dispatch_date,
             delivery_date,
             driver_id,
+            trip_no,
         )
         return bool(run_sheet and run_sheet.status == "SAVED")
 
     def upsert_delivery_run_sheet(self, run_sheet):
+        """Compatibility name for insert-only snapshots."""
+        validate_run_sheet_snapshot(run_sheet)
         existing_sheet = self.get_delivery_run_sheet(run_sheet.run_sheet_id)
         if (
             existing_sheet
@@ -273,6 +276,16 @@ class InMemorySnapshotRepositoryMixin:
             raise StateChangedConflictError(
                 "Closed Delivery Run Sheets are immutable."
             )
+        if existing_sheet:
+            raise StateChangedConflictError("Delivery Run Sheet snapshots are immutable.")
+        row_ids = {row.row_id for trip in run_sheet.trips for row in trip.orders}
+        if any(row.row_id in row_ids for sheet in self.delivery_run_sheets
+               for trip in sheet.trips for row in trip.orders):
+            raise ValueError("Duplicate Delivery Run Sheet snapshot row ID.")
+        if run_sheet.legacy_summary_id is not None and any(
+            sheet.legacy_summary_id == run_sheet.legacy_summary_id for sheet in self.delivery_run_sheets
+        ):
+            raise ValueError("Duplicate legacy Final Trip Summary marker.")
         duplicate = next(
             (
                 existing
@@ -280,6 +293,8 @@ class InMemorySnapshotRepositoryMixin:
                 if existing.run_sheet_id != run_sheet.run_sheet_id
                 and existing.delivery_date == run_sheet.delivery_date
                 and existing.driver_id == run_sheet.driver_id
+                and (existing.trip_no is None or run_sheet.trip_no is None
+                     or existing.trip_no == run_sheet.trip_no)
             ),
             None,
         )
@@ -292,8 +307,11 @@ class InMemorySnapshotRepositoryMixin:
             for existing in self.delivery_run_sheets
             if existing.run_sheet_id != run_sheet.run_sheet_id
         ]
-        self.delivery_run_sheets.append(run_sheet)
-        return run_sheet
+        self.delivery_run_sheets.append(deepcopy(run_sheet))
+        return deepcopy(run_sheet)
+
+    def create_delivery_run_sheet(self, run_sheet):
+        return self.upsert_delivery_run_sheet(run_sheet)
 
     def insert_delivery_run_sheet_outcomes(self, outcomes):
         outcomes_by_sheet = {}

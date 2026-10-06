@@ -107,6 +107,8 @@ class WorkspaceSafetyHardeningTest(unittest.TestCase):
             "opshop_unmigrated_summary_count": 0,
             "delivery_unmigrated_summary_ids": [],
             "opshop_unmigrated_summary_ids": [],
+            "delivery_per_trip_schema": {"ready": True, "version": 1, "issues": []},
+            "delivery_per_trip_ready": True,
         }
         self.assertEqual(expected, self.service.get_workspace_migration_status())
         response = self.client.get(

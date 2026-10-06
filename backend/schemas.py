@@ -145,6 +145,7 @@ class ManualDriverVehicleAssignment:
     delivery_date: str
     driver_id: str
     vehicle_id: str
+    trip_no: Optional[str] = None
 
 
 @dataclass
@@ -543,6 +544,7 @@ class DeliveryVehicleAssignmentLock:
     delivery_date: str
     driver_id: str
     run_sheet_id: str
+    trip_no: Optional[str] = None
 
 
 @dataclass
@@ -852,6 +854,7 @@ class DeliveryRunSheet:
     closeout_summary: DeliveryRunSheetCloseoutSummary = field(
         default_factory=DeliveryRunSheetCloseoutSummary
     )
+    trip_no: Optional[str] = None
 
 
 @dataclass
