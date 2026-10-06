@@ -37,12 +37,15 @@ class DeliveryWorkspaceMutationService:
         dispatch_date = request_dispatch_date or order.delivery_date
         driver_id = clean_required_text(request.driver_id, "driver_id")
         trip_no = clean_required_text(request.trip_no, "trip_no")
-        self.validator.validate_driver_exists(driver_id)
         self.validator.validate_trip_no(trip_no)
 
         current = self.repository.find_assignment_for_task(
             "ORDER",
             order.order_id,
+        )
+        self.validator.validate_driver_assignment(
+            driver_id,
+            current.driver_id if current else None,
         )
         ensure_order_not_reserved(self.repository, dispatch_date, order.order_id)
         if current:

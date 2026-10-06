@@ -1,4 +1,5 @@
 import { state } from "../state/app-state.js";
+import { driversForAssignment } from "../utils/driver-utils.js";
 import {
   getOpShopPickupByTaskId,
   isGeneratedTask,
@@ -536,7 +537,9 @@ function createAssignedToSelect(pickup, onUpdateAssignedDriver) {
     isFinalSummaryLocked || isGeneratedFinalSummaryLocked,
   );
   select.append(createOption("", "Unassigned", !selectedDriverId));
-  getOpShopModalDrivers(state).forEach((driver) => {
+  driversForAssignment(
+    getOpShopModalDrivers(state), pickup.assigned_driver_id || pickup.driver_id,
+  ).forEach((driver) => {
     const hasSavedFinalSummary = isDriverFinalizedForPickup(driver.driver_id, pickup.pickup_date);
     const option = createOption(
       driver.driver_id,
@@ -595,7 +598,7 @@ function defaultDriverExistsForVisiblePickup(pickup) {
     pickup &&
       pickup.default_driver_id &&
       getOpShopModalDrivers(state).some(
-        (driver) => driver.driver_id === pickup.default_driver_id,
+        (driver) => driver.driver_id === pickup.default_driver_id && driver.is_available !== false,
       ),
   );
 }

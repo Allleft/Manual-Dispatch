@@ -1,4 +1,5 @@
 import { createIcon } from "../../utils/icon-utils.js";
+import { driversForAssignment } from "../../utils/driver-utils.js";
 import { deliveryOrderDragAutoScroll } from "../../utils/delivery-drag-auto-scroll.js";
 
 import {
@@ -461,7 +462,7 @@ export function createOrderAssignmentControls(order, board, state, actions) {
     "Driver",
     draft.driver_id || "",
     [{ value: "", label: "Select driver" }].concat(
-      (board.drivers || []).map((driver) => ({
+      driversForAssignment(board.drivers).map((driver) => ({
         value: driver.driver_id,
         label: formatOptional(driver.name, driver.driver_id),
       })),

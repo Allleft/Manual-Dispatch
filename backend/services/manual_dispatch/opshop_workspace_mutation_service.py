@@ -49,7 +49,7 @@ class OpShopWorkspaceMutationService:
             if not driver_id:
                 self._ensure_current_assignment_exists(dispatch_date, task)
             if driver_id:
-                self.validator.validate_driver_exists(driver_id)
+                self.validator.validate_driver_assignment(driver_id, task.driver_id)
                 ensure_opshop_pickup_collection_key_mutable(
                     self.repository,
                     dispatch_date,
@@ -154,6 +154,10 @@ class OpShopWorkspaceMutationService:
                     existing.pickup_task_id,
                 )
                 self._ensure_current_assignment_mutable(dispatch_date, existing)
+            self.validator.validate_driver_assignment(
+                driver_id,
+                existing.driver_id if existing else None,
+            )
             task = self._route_group_task(
                 schedule,
                 existing,

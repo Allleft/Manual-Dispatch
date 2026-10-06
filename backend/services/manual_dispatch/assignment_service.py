@@ -36,7 +36,15 @@ class AssignmentService:
         )
         self.validator.validate_task_type(request.task_type)
         self.validator.validate_task_exists(request.task_type, request.task_id)
-        self.validator.validate_driver_exists(request.driver_id)
+        current = self.repository.get_assignment(
+            request.dispatch_date,
+            request.task_type,
+            request.task_id,
+        )
+        self.validator.validate_driver_assignment(
+            request.driver_id,
+            current.driver_id if current else None,
+        )
         self.validator.validate_trip_no(request.trip_no)
         if request.task_type == "ORDER":
             self.rollover_service.roll_forward_eligible_unassigned_delivery_order(
@@ -51,11 +59,6 @@ class AssignmentService:
             delivery_date,
         )
         if request.task_type == "ORDER":
-            current = self.repository.get_assignment(
-                request.dispatch_date,
-                "ORDER",
-                request.task_id,
-            )
             ensure_order_not_reserved(
                 self.repository,
                 request.dispatch_date,

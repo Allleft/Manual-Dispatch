@@ -1,4 +1,5 @@
 import { state } from "../state/app-state.js";
+import { driversForAssignment } from "../utils/driver-utils.js";
 import {
   getFilteredUnassignedOrders,
   getUnassignedOrders,
@@ -542,7 +543,7 @@ function createAssignmentControls({
   driverSelect.id = `driver-${controlIdSuffix}`;
   driverSelect.disabled = state.isSaving || state.isLoading;
   driverSelect.append(createOption("", "Select driver", selection.driver_id === ""));
-  state.drivers.forEach((driver) => {
+  driversForAssignment(state.drivers).forEach((driver) => {
     driverSelect.append(createOption(driver.driver_id, driver.name, selection.driver_id === driver.driver_id));
   });
 

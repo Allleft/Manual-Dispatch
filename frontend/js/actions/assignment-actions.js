@@ -3,6 +3,7 @@ import {
   apiUnassignTask,
 } from "../api/manual-dispatch-api.js";
 import { getTaskKey } from "../state/selectors.js";
+import { driversForAssignment } from "../utils/driver-utils.js";
 
 export function createAssignmentActions({
   clearError,
@@ -38,7 +39,7 @@ export function createAssignmentActions({
     const assignedTaskKeys = new Set(
       state.assignments.map((assignment) => getTaskKey(assignment.task_type, assignment.task_id)),
     );
-    const driverIds = new Set(state.drivers.map((driver) => driver.driver_id));
+    const driverIds = new Set(driversForAssignment(state.drivers).map((driver) => driver.driver_id));
 
     Object.entries(state.pendingSelections).forEach(([taskKey, selection]) => {
       if (!taskKeys.has(taskKey) || assignedTaskKeys.has(taskKey)) {

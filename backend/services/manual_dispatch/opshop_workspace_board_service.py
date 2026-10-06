@@ -7,6 +7,7 @@ from backend.schemas import (
     OpShopWorkspacePickupItem,
 )
 from backend.services.manual_dispatch.normalization import clean_required_iso_date
+from backend.services.manual_dispatch.driver_availability import list_visible_drivers
 from backend.services.manual_dispatch.opshop_pickup_service import OpShopPickupService
 
 
@@ -85,7 +86,11 @@ class OpShopWorkspaceBoardService:
         return OpShopWorkspaceBoardResponse(
             dispatch_date=dispatch_date,
             opshop_pickups=pickups,
-            drivers=self.repository.list_drivers(),
+            drivers=list_visible_drivers(
+                self.repository,
+                {pickup.driver_id for pickup in pickups}
+                | {collection.driver_id for collection in collections},
+            ),
             templates=self.repository.list_opshop_templates(),
             countryside_route_groups=(
                 self.repository.list_countryside_route_groups()
@@ -125,7 +130,11 @@ class OpShopWorkspaceBoardService:
         return OpShopTripSummaryResponse(
             pickup_date=pickup_date,
             opshop_pickups=pickups,
-            drivers=self.repository.list_drivers(),
+            drivers=list_visible_drivers(
+                self.repository,
+                {pickup.driver_id for pickup in pickups}
+                | {collection.driver_id for collection in collections},
+            ),
             templates=self.repository.list_opshop_templates(),
             countryside_route_groups=(
                 self.repository.list_countryside_route_groups()

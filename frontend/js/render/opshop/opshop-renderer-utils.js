@@ -199,7 +199,7 @@ export function defaultDriverHint(pickup, state) {
     return "None";
   }
   const defaultDriverExists = (state.opshopBoard?.drivers || []).some(
-    (driver) => driver.driver_id === pickup.default_driver_id,
+    (driver) => driver.driver_id === pickup.default_driver_id && driver.is_available !== false,
   );
   if (pickup.default_driver_id && defaultDriverExists) {
     return `${defaultName} suggested`;

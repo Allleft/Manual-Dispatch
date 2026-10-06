@@ -42,9 +42,6 @@ class SpecificationService:
             "is_available",
             existing.is_available,
         )
-        if not is_available and existing.is_available:
-            self.validator.ensure_driver_can_be_made_unavailable(driver_id)
-
         driver = Driver(
             driver_id=existing.driver_id,
             name=(
