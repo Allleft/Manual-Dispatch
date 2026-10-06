@@ -71,11 +71,11 @@ INLINE_ANNOTATION_PATTERN = re.compile(r"\*{2,}(.*?)(?:\*{2,}|$)")
 PARENTHESIZED_ENTRY_PATTERN = re.compile(r"\(((?:ENTRY|ENTER)\b[^()]*)\)", re.IGNORECASE)
 BOOKING_REFERENCE_PATTERN = re.compile(r"\bBOOKING\s*#\s*(\S+)", re.IGNORECASE)
 DELIVER_BLOCK_HEADER_PATTERN = re.compile(
-    r"^(?:DELIVER(?:Y)?|DROP\s+OFF)\s+TO\s*:?$",
+    r"^(?:DELIVER(?:Y)?|DROP\s+OFF)\s+TO\s*:?\s*(?:C/(?:O|-))?$",
     re.IGNORECASE,
 )
 ON_FORWARD_BLOCK_HEADER_PATTERN = re.compile(
-    r"^ON\s+(?:FWD|FORWARD)\s+TO(?:\s+CUSTOMER)?\s*(?::.*)?$",
+    r"^ON\s+(?:FWD|FORWARD)(?:\s+STOCK)?\s+TO(?:\s+CUSTOMER)?\s*(?::.*)?$",
     re.IGNORECASE,
 )
 CONTEXTUAL_TO_PATTERN = re.compile(r"^TO\s*:\s*(.*)$", re.IGNORECASE)
@@ -636,6 +636,8 @@ def _profile_line(value):
     line = PARENTHESIZED_ENTRY_PATTERN.sub(" ", line)
     line = BOOKING_REFERENCE_PATTERN.sub(" ", line)
     line = re.sub(r"\s+", " ", line).strip()
+    if line.upper() in {"C/O", "C/-"}:
+        return None, None
     phone_match = INLINE_PHONE_PATTERN.search(line)
     if not phone_match:
         phone_match = UNLABELED_INLINE_PHONE_PATTERN.search(line)

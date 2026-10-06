@@ -14,6 +14,7 @@ from backend.services.manual_dispatch.delivery_docket_docx_parser import (
 from backend.services.manual_dispatch.delivery_suburb_region_service import (
     UNKNOWN_DELIVERY_AREA_WARNING,
 )
+from tests.attache_docket_parser_fixtures import DOCKET_4440_PARAGRAPHS
 
 
 IMPORT_DATE = date(2026, 8, 13)
@@ -62,6 +63,72 @@ def _parse(lines, filename):
 
 
 class DeliveryDocketDocxParserTest(unittest.TestCase):
+    def test_case_4440_keeps_final_customer_and_physical_delivery_separate(self):
+        parsed = parse_delivery_docket_docx_bytes(
+            _docx_bytes(DOCKET_4440_PARAGRAPHS),
+            source_filename="4440-AG SPARES -DENILIQUIN.docx",
+            import_date=date(2026, 10, 5),
+        )
+
+        self.assertEqual("4440", parsed.docket_number)
+        self.assertEqual("186656", parsed.docket_reference)
+        self.assertEqual("186656", parsed.invoice_number)
+        self.assertEqual("14096", parsed.order_no)
+        self.assertEqual("ON_FORWARD", parsed.delivery_mode)
+        self.assertEqual("AG SPARES - DENILIQUIN", parsed.company_name)
+        self.assertEqual("23 FOUNDATION RD", parsed.delivery_address)
+        self.assertEqual("TRUGANINA", parsed.suburb)
+        self.assertIsNone(parsed.postcode)
+        self.assertEqual("03 5881 1255", parsed.phone)
+        self.assertEqual(1, parsed.pallet_quantity)
+        self.assertEqual([{
+            "product_code": None,
+            "product_name": "COLOURED T SHIRT",
+            "quantity": 450,
+            "unit": "KG",
+            "package_quantity": 45,
+            "package_unit": "BAG10",
+        }], parsed.product_lines)
+        self.assertIn("On Forward To: AG SPARES - DENILIQUIN", parsed.note)
+        self.assertIn("201-205 BARHAM ROAD", parsed.note)
+        self.assertIn("DENILIQUIN", parsed.note)
+        self.assertIn("2710", parsed.note)
+        self.assertIn("Annotation: PLS CHARGE CUSTOMERS ACCT", parsed.note)
+        self.assertEqual([], parsed.warnings)
+        self.assertTrue(parsed.importable)
+
+    def test_inline_delivery_qualifiers_and_stock_headings_preserve_profiles(self):
+        for delivery_heading in ("DELIVER TO: c/o", "DELIVER TO: c/-", "DELIVERY TO: c/o"):
+            for forward_heading in ("ON FWD STOCK TO:", "ON FORWARD STOCK TO:"):
+                with self.subTest(delivery_heading=delivery_heading, forward_heading=forward_heading):
+                    lines = list(DOCKET_4440_PARAGRAPHS)
+                    lines[2] = delivery_heading
+                    lines[6] = forward_heading
+                    parsed = _parse(lines, "stock-heading-variants.docx")
+                    self.assertEqual("ON_FORWARD", parsed.delivery_mode)
+                    self.assertEqual("AG SPARES - DENILIQUIN", parsed.company_name)
+                    self.assertEqual("23 FOUNDATION RD", parsed.delivery_address)
+                    self.assertEqual("TRUGANINA", parsed.suburb)
+                    self.assertIsNone(parsed.postcode)
+                    self.assertEqual("03 5881 1255", parsed.phone)
+
+    def test_standalone_routing_tokens_are_not_delivery_or_forward_profiles(self):
+        for token in ("c/o", "c/-"):
+            with self.subTest(token=token):
+                parsed = _parse([
+                    "DELIVERY DOCKET: 4994/199994", "DELIVER TO:",
+                    token, "TEST DEPOT", token, "23 FOUNDATION RD", token, "TRUGANINA VIC",
+                    "ON FWD TO:", token, "FINAL CUSTOMER", token,
+                    "201-205 BARHAM ROAD", token, "DENILIQUIN 2710", "1 PALLET",
+                ], "routing-tokens.docx")
+                self.assertEqual("ON_FORWARD", parsed.delivery_mode)
+                self.assertEqual("FINAL CUSTOMER", parsed.company_name)
+                self.assertEqual("23 FOUNDATION RD", parsed.delivery_address)
+                self.assertEqual("TRUGANINA", parsed.suburb)
+                self.assertIsNone(parsed.postcode)
+                self.assertIn("Deliver To: TEST DEPOT", parsed.note)
+                self.assertIn("On Forward To: FINAL CUSTOMER", parsed.note)
+
     def test_extracts_paragraphs_and_table_cells_in_document_order(self):
         payload = _docx_bytes(
             ["DELIVERY DOCKET: 4370/185467", "DATED: 10/08/2026"],
