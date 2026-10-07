@@ -31,7 +31,9 @@ from backend.schemas import (
     to_dict,
 )
 from backend.services.manual_dispatch_service import ManualDispatchService
-from tests.manual_dispatch_api_test_helpers import authenticate_test_client
+from tests.manual_dispatch_api_test_helpers import (
+    assign_equal_trip_vehicle_fixture, authenticate_test_client,
+)
 
 try:
     from fastapi import FastAPI
@@ -114,6 +116,7 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
                 "assignments",
                 "driver_vehicle_assignments",
                 "saved_vehicle_assignment_locks",
+                "legacy_driver_vehicle_assignments",
             },
             set(delivery_response.json()),
         )
@@ -199,6 +202,7 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
         )
         self.service.assign_delivery_workspace_vehicle(
             DeliveryWorkspaceVehicleAssignmentRequest(
+                trip_no="trip1",
                 dispatch_date=self.dispatch_date,
                 delivery_date=delivery_date,
                 driver_id="DRIVER-1",
@@ -226,7 +230,7 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
                     "delivery_date": delivery_date,
                     "driver_id": "DRIVER-1",
                     "vehicle_id": "VEHICLE-1",
-                    "trip_no": None,
+                    "trip_no": "trip1",
                 }
             ],
             payload["driver_vehicle_assignments"],
@@ -321,8 +325,9 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
                 trip_no="trip1",
             )
         )
-        self.service.assign_delivery_workspace_vehicle(
+        assign_equal_trip_vehicle_fixture(self.service.assign_delivery_workspace_vehicle,
             DeliveryWorkspaceVehicleAssignmentRequest(
+                trip_no="trip1",
                 dispatch_date=self.dispatch_date,
                 delivery_date=delivery_date,
                 driver_id="DRIVER-1",
@@ -345,7 +350,7 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
             [assignment["task_id"] for assignment in current_payload["assignments"]],
         )
         self.assertEqual(
-            [self.dispatch_date],
+            [self.dispatch_date, self.dispatch_date],
             [
                 assignment["dispatch_date"]
                 for assignment in current_payload["driver_vehicle_assignments"]
@@ -374,7 +379,7 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
         self.assertIsNone(other_payload["dispatch_date"])
         self.assertEqual([], other_payload["assignments"])
         self.assertEqual(
-            [self.dispatch_date],
+            [self.dispatch_date, self.dispatch_date],
             [
                 assignment["dispatch_date"]
                 for assignment in other_payload["driver_vehicle_assignments"]
@@ -723,7 +728,7 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
         self.assertNotIn("ORDER-1", self._delivery_task_pool_order_ids(saved_other_board))
         self.assertNotIn("ORDER-2", self._delivery_task_pool_order_ids(saved_other_board))
         self.assertIn("ORDER-UNRELATED", self._delivery_task_pool_order_ids(saved_other_board))
-        self.assertEqual([], saved_other_board.saved_vehicle_assignment_locks)
+        self.assertEqual(saved_original_board.saved_vehicle_assignment_locks, saved_other_board.saved_vehicle_assignment_locks)
         self.assertEqual(
             [saved.run_sheet_id],
             [

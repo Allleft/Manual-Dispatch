@@ -102,7 +102,11 @@ class ManualDispatchApiContractTest(unittest.TestCase):
             for method in route.methods
         }
 
-        self.assertEqual(104, len(routes))
+        stage2_day_vehicle_paths = {
+            "/api/manual-dispatch/delivery/day-vehicle-assignments",
+            "/api/manual-dispatch/delivery/day-vehicle-assignments/clear",
+        }
+        self.assertEqual(104 + len(stage2_day_vehicle_paths), len(routes))
         self.assertEqual(
             {
                 ("POST", "/api/manual-dispatch/auth/login"),
@@ -112,10 +116,12 @@ class ManualDispatchApiContractTest(unittest.TestCase):
             public_routes,
         )
         protected_routes = [route for route in routes if route.dependant.dependencies]
-        self.assertEqual(101, len(protected_routes))
+        self.assertEqual(101 + len(stage2_day_vehicle_paths), len(protected_routes))
+        protected_paths = {route.path for route in protected_routes}
+        self.assertTrue(stage2_day_vehicle_paths.issubset(protected_paths))
         self.assertIn(
             "/api/manual-dispatch/delivery/orders/lookup",
-            {route.path for route in protected_routes},
+            protected_paths,
         )
         for route in protected_routes:
             dependency_names = {

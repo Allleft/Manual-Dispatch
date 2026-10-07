@@ -1,4 +1,4 @@
-from backend.errors import StateChangedConflictError
+from backend.errors import DeliveryRunSheetLockedError, StateChangedConflictError
 
 
 DELIVERY_RUN_SHEET_SAVED_LOCK_MESSAGE = (
@@ -47,13 +47,15 @@ def ensure_delivery_run_sheet_key_mutable(
     dispatch_date,
     driver_id,
     delivery_date,
+    trip_no=None,
 ):
-    run_sheet = repository.get_delivery_run_sheet_for_driver(
-        dispatch_date,
-        delivery_date,
-        driver_id,
-    )
-    _raise_for_run_sheet(run_sheet)
+    # Reading actual header scopes also supports pre-cutover NULL-only schemas;
+    # existing order assignment must not acquire a new vehicle migration gate.
+    for run_sheet in repository.list_delivery_run_sheets(delivery_date=delivery_date):
+        if run_sheet.driver_id == driver_id and (
+            trip_no is None or run_sheet.trip_no is None or run_sheet.trip_no == trip_no
+        ):
+            _raise_for_run_sheet(run_sheet)
 
 
 def ensure_order_not_reserved(repository, _dispatch_date, order_id):
@@ -71,6 +73,6 @@ def _raise_for_run_sheet(run_sheet):
     if not run_sheet:
         return
     if run_sheet.status == "SAVED":
-        raise StateChangedConflictError(DELIVERY_RUN_SHEET_SAVED_LOCK_MESSAGE)
+        raise DeliveryRunSheetLockedError(DELIVERY_RUN_SHEET_SAVED_LOCK_MESSAGE)
     if run_sheet.status == "GENERATED":
-        raise StateChangedConflictError(DELIVERY_RUN_SHEET_GENERATED_LOCK_MESSAGE)
+        raise DeliveryRunSheetLockedError(DELIVERY_RUN_SHEET_GENERATED_LOCK_MESSAGE)

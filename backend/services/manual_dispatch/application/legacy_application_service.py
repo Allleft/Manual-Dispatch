@@ -1,3 +1,4 @@
+from backend.services.manual_dispatch.normalization import clean_required_text
 from . import FacadeApplicationService
 
 
@@ -88,11 +89,15 @@ class LegacyApplicationService(FacadeApplicationService):
         return board
 
     def assign_vehicle_to_driver(self, request):
+        trip_no = clean_required_text(request.trip_no, "trip_no")
+        self.validator.validate_trip_no(trip_no)
+        self.workspace_migration_readiness_service.ensure_per_trip_ready()
         delivery_date = request.delivery_date or request.dispatch_date
         before = self._vehicle_assignment_snapshot(
             request.dispatch_date,
             delivery_date,
             request.driver_id,
+            trip_no,
         )
         try:
             board = self.assignment_service.assign_vehicle_to_driver(request)
@@ -110,7 +115,7 @@ class LegacyApplicationService(FacadeApplicationService):
                 delivery_date=delivery_date,
                 driver=self._driver_name(request.driver_id),
                 vehicle=self._vehicle_label(request.vehicle_id),
-                metadata={"failure_reason": str(error)},
+                metadata={"failure_reason": str(error), "trip_no": trip_no},
             )
             raise
         self._record_vehicle_assignment_change(
@@ -122,22 +127,28 @@ class LegacyApplicationService(FacadeApplicationService):
                 request.dispatch_date,
                 delivery_date,
                 request.driver_id,
+                trip_no,
             ),
         )
         return board
 
-    def clear_driver_vehicle_assignment(self, dispatch_date, driver_id, delivery_date=None):
+    def clear_driver_vehicle_assignment(self, dispatch_date, driver_id, delivery_date=None, trip_no=None):
+        trip_no = clean_required_text(trip_no, "trip_no")
+        self.validator.validate_trip_no(trip_no)
+        self.workspace_migration_readiness_service.ensure_per_trip_ready()
         effective_delivery_date = delivery_date or dispatch_date
         before = self._vehicle_assignment_snapshot(
             dispatch_date,
             effective_delivery_date,
             driver_id,
+            trip_no,
         )
         try:
             result = self.assignment_service.clear_driver_vehicle_assignment(
                 dispatch_date,
                 driver_id,
                 delivery_date,
+                trip_no,
             )
         except Exception as error:
             self._record_failed_logbook(
@@ -150,7 +161,7 @@ class LegacyApplicationService(FacadeApplicationService):
                 delivery_date=effective_delivery_date,
                 driver=self._driver_name(driver_id),
                 vehicle=before.get("vehicle") if before else None,
-                metadata={"failure_reason": str(error)},
+                metadata={"failure_reason": str(error), "trip_no": trip_no},
             )
             raise
         if before:

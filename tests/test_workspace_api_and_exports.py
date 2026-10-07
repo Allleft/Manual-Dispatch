@@ -37,7 +37,9 @@ from backend.services.manual_dispatch_service import ManualDispatchService
 from backend.services.opshop_pickup_collection_excel_export_service import (
     build_opshop_pickup_collection_excel,
 )
-from tests.manual_dispatch_api_test_helpers import authenticate_test_client
+from tests.manual_dispatch_api_test_helpers import (
+    assign_equal_trip_vehicle_fixture, authenticate_test_client,
+)
 
 try:
     from fastapi import FastAPI
@@ -2012,8 +2014,9 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         )
 
     def _assign_delivery_vehicle(self, driver_id, vehicle_id):
-        self.service.assign_delivery_workspace_vehicle(
+        assign_equal_trip_vehicle_fixture(self.service.assign_delivery_workspace_vehicle,
             DeliveryWorkspaceVehicleAssignmentRequest(
+                trip_no="trip1",
                 dispatch_date=self.dispatch_date,
                 delivery_date=self.dispatch_date,
                 driver_id=driver_id,

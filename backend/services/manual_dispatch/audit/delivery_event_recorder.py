@@ -198,7 +198,8 @@ class DeliveryEventRecorder(FacadeAuditRecorder):
             or dispatch_date
             or delivery_date
         )
-        metadata = {"before": before or {}, "after": after or {}}
+        metadata = {"before": before or {}, "after": after or {},
+                    "trip_no": (after or before or {}).get("trip_no")}
         if before and not after:
             self._record_logbook(
                 result="SUCCESS",
@@ -571,26 +572,23 @@ class DeliveryEventRecorder(FacadeAuditRecorder):
             return "Unassigned"
         return f"{snapshot.get('driver') or 'Unknown'} / {snapshot.get('trip') or 'Trip'}"
 
-    def _vehicle_assignment_snapshot(self, _dispatch_date, delivery_date, driver_id):
+    def _vehicle_assignment_snapshot(self, _dispatch_date, delivery_date, driver_id, trip_no=None):
         if not delivery_date or not driver_id:
             return None
-        assignments = self.repository.list_driver_vehicle_assignments_for_delivery_date(
-            delivery_date
-        )
-        assignment = next(
-            (
-                item
-                for item in assignments
-                if item.driver_id == driver_id
-            ),
-            None,
-        )
+        if trip_no is not None:
+            assignment = self.repository.get_delivery_trip_vehicle_assignment(delivery_date, driver_id, trip_no)
+        else:
+            assignment = next(
+                (item for item in self.repository.list_driver_vehicle_assignments_for_delivery_date(delivery_date)
+                 if item.driver_id == driver_id), None,
+            )
         if not assignment:
             return None
         return {
             "dispatch_date": assignment.dispatch_date,
             "vehicle_id": assignment.vehicle_id,
             "vehicle": self._vehicle_label(assignment.vehicle_id),
+            "trip_no": trip_no,
         }
 
     def _order_entity_id(self, order):

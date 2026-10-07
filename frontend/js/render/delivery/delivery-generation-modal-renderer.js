@@ -1,3 +1,5 @@
+import { getDeliveryDayVehicleDraft } from "../../utils/delivery-vehicle-utils.js";
+
 import {
   formatOptional,
   formatProductDetailLine,
@@ -26,8 +28,7 @@ export function createDeliveryGenerationCandidate(
     deliveryDate,
     driver.driver_id,
   );
-  const vehicleDraftKey = `${deliveryDate}|${driver.driver_id}`;
-  const vehicleId = state.deliveryVehicleDrafts?.[vehicleDraftKey]
+  const vehicleId = getDeliveryDayVehicleDraft(state.deliveryVehicleDrafts, deliveryDate, driver.driver_id)
     ?? vehicleAssignment?.vehicle_id
     ?? "";
   const vehicle = (board.vehicles || []).find((item) => item.vehicle_id === vehicleId);

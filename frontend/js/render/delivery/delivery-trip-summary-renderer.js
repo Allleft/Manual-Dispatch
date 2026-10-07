@@ -6,7 +6,8 @@ import {
 import {
   formatDeliveryVehicleConflictMessage,
   formatDeliveryVehicleOptionLabel,
-  getDeliveryVehicleConflictDriverNames,
+  getDeliveryDayVehicleConflictDriverNames as getDeliveryVehicleConflictDriverNames,
+  DELIVERY_VEHICLE_TRIPS, deliveryVehicleKey, getDeliveryDayVehicleDraft,
 } from "../../utils/delivery-vehicle-utils.js";
 
 import { createDeliveryGenerationCandidate } from "./delivery-generation-modal-renderer.js";
@@ -160,9 +161,9 @@ export function createDriverVehicleControl(driver, board, deliveryDate, isLocked
     deliveryDate,
     driver.driver_id,
   );
-  const draftKey = `${deliveryDate}|${driver.driver_id}`;
+  const draftKeys = DELIVERY_VEHICLE_TRIPS.map((trip) => deliveryVehicleKey(deliveryDate, driver.driver_id, trip));
   const selectedVehicleId =
-    state.deliveryVehicleDrafts[draftKey] ?? currentAssignment?.vehicle_id ?? "";
+    getDeliveryDayVehicleDraft(state.deliveryVehicleDrafts, deliveryDate, driver.driver_id) ?? currentAssignment?.vehicle_id ?? "";
   const conflictDriverNames = getDeliveryVehicleConflictDriverNames({
     board,
     claims: state.deliveryVehicleClaims,
@@ -171,10 +172,10 @@ export function createDriverVehicleControl(driver, board, deliveryDate, isLocked
     vehicleId: selectedVehicleId,
   });
   const localConflictMessage = formatDeliveryVehicleConflictMessage(conflictDriverNames);
-  const backendConflictMessage = state.deliveryVehicleErrors?.[draftKey] || "";
+  const backendConflictMessage = draftKeys.map((key) => state.deliveryVehicleErrors?.[key]).find(Boolean) || "";
   const conflictMessage = localConflictMessage || backendConflictMessage;
   const hasVehicleConflict = Boolean(conflictMessage);
-  const isUpdatingVehicle = Boolean(state.deliveryVehiclePendingKeys?.[draftKey]);
+  const isUpdatingVehicle = draftKeys.some((key) => state.deliveryVehiclePendingKeys?.[key]);
   const vehicleSelect = createSelect(
     "Vehicle",
     selectedVehicleId,
@@ -193,7 +194,7 @@ export function createDriverVehicleControl(driver, board, deliveryDate, isLocked
         ),
       })),
     ),
-    (value) => actions.updateDeliveryVehicleSelection(
+    (value) => actions.updateDeliveryDayVehicleSelection(
       deliveryDate,
       driver.driver_id,
       value,

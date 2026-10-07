@@ -1,3 +1,4 @@
+from backend.services.manual_dispatch.normalization import clean_required_text
 from backend.services.manual_dispatch.delivery_run_sheet_lock import ensure_order_not_reserved
 from . import FacadeApplicationService
 
@@ -114,14 +115,29 @@ class DeliveryApplicationService(FacadeApplicationService):
         return board
 
     def assign_delivery_workspace_vehicle(self, request):
+        return self._assign_delivery_vehicle(request, day_compatibility=False)
+
+    def assign_delivery_day_vehicle(self, request):
+        return self._assign_delivery_vehicle(request, day_compatibility=True)
+
+    def _assign_delivery_vehicle(self, request, *, day_compatibility):
         self._ensure_workspace_ready("delivery")
+        if not day_compatibility:
+            self.workspace_migration_readiness_service.ensure_per_trip_ready()
+            self.validator.validate_trip_no(clean_required_text(request.trip_no, "trip_no"))
+        trip_no = None if day_compatibility else clean_required_text(request.trip_no, "trip_no")
         before = self._vehicle_assignment_snapshot(
             request.dispatch_date,
             request.delivery_date,
             request.driver_id,
+            trip_no,
         )
         try:
-            board = self.delivery_workspace_mutation_service.assign_vehicle(request)
+            mutation = (
+                self.delivery_workspace_mutation_service.assign_day_vehicle if day_compatibility
+                else self.delivery_workspace_mutation_service.assign_vehicle
+            )
+            board = mutation(request)
         except Exception as error:
             self._record_failed_logbook(
                 workspace="DELIVERY",
@@ -136,13 +152,14 @@ class DeliveryApplicationService(FacadeApplicationService):
                 delivery_date=request.delivery_date,
                 driver=self._driver_name(request.driver_id),
                 vehicle=self._vehicle_label(request.vehicle_id),
-                metadata={"failure_reason": str(error)},
+                metadata={"failure_reason": str(error), "trip_no": trip_no, "day_compatibility": day_compatibility},
             )
             raise
         after = self._vehicle_assignment_snapshot(
             request.dispatch_date,
             request.delivery_date,
             request.driver_id,
+            trip_no,
         )
         self._record_vehicle_assignment_change(
             request.dispatch_date,
@@ -154,14 +171,29 @@ class DeliveryApplicationService(FacadeApplicationService):
         return board
 
     def clear_delivery_workspace_vehicle(self, request):
+        return self._clear_delivery_vehicle(request, day_compatibility=False)
+
+    def clear_delivery_day_vehicle(self, request):
+        return self._clear_delivery_vehicle(request, day_compatibility=True)
+
+    def _clear_delivery_vehicle(self, request, *, day_compatibility):
         self._ensure_workspace_ready("delivery")
+        if not day_compatibility:
+            self.workspace_migration_readiness_service.ensure_per_trip_ready()
+            self.validator.validate_trip_no(clean_required_text(request.trip_no, "trip_no"))
+        trip_no = None if day_compatibility else clean_required_text(request.trip_no, "trip_no")
         before = self._vehicle_assignment_snapshot(
             request.dispatch_date,
             request.delivery_date,
             request.driver_id,
+            trip_no,
         )
         try:
-            board = self.delivery_workspace_mutation_service.clear_vehicle(request)
+            mutation = (
+                self.delivery_workspace_mutation_service.clear_day_vehicle if day_compatibility
+                else self.delivery_workspace_mutation_service.clear_vehicle
+            )
+            board = mutation(request)
         except Exception as error:
             self._record_failed_logbook(
                 workspace="DELIVERY",
@@ -176,7 +208,7 @@ class DeliveryApplicationService(FacadeApplicationService):
                 delivery_date=request.delivery_date,
                 driver=self._driver_name(request.driver_id),
                 vehicle=before.get("vehicle") if before else None,
-                metadata={"failure_reason": str(error)},
+                metadata={"failure_reason": str(error), "trip_no": trip_no, "day_compatibility": day_compatibility},
             )
             raise
         if before:

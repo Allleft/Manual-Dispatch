@@ -196,6 +196,7 @@ class ManualDispatchLogbookIntegrationTest(unittest.TestCase):
 
             self.service.assign_delivery_workspace_vehicle(
                 DeliveryWorkspaceVehicleAssignmentRequest(
+                    trip_no="trip1",
                     dispatch_date=self.dispatch_date,
                     delivery_date=self.dispatch_date,
                     driver_id="D001",
@@ -204,6 +205,7 @@ class ManualDispatchLogbookIntegrationTest(unittest.TestCase):
             )
             self.service.assign_delivery_workspace_vehicle(
                 DeliveryWorkspaceVehicleAssignmentRequest(
+                    trip_no="trip1",
                     dispatch_date=self.dispatch_date,
                     delivery_date=self.dispatch_date,
                     driver_id="D001",
@@ -212,6 +214,7 @@ class ManualDispatchLogbookIntegrationTest(unittest.TestCase):
             )
             self.service.clear_delivery_workspace_vehicle(
                 DeliveryWorkspaceVehicleClearRequest(
+                    trip_no="trip1",
                     dispatch_date=self.dispatch_date,
                     delivery_date=self.dispatch_date,
                     driver_id="D001",

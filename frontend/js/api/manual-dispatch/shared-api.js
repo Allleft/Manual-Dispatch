@@ -119,6 +119,7 @@ function createApiError(message, response, detail = null) {
   const error = new Error(message);
   error.status = response.status;
   error.detail = detail;
+  error.code = response.headers?.get?.("X-Manual-Dispatch-Error-Code") || null;
   return error;
 }
 

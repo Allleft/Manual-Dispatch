@@ -30,6 +30,7 @@ from backend.services.manual_dispatch.opshop_pickup_collection_lock import (
     is_opshop_pickup_collection_finalized,
 )
 from backend.services.manual_dispatch_service import ManualDispatchService
+from tests.manual_dispatch_api_test_helpers import assign_equal_trip_vehicle_fixture
 
 
 class WorkspaceServicesTest(unittest.TestCase):
@@ -291,6 +292,7 @@ class WorkspaceServicesTest(unittest.TestCase):
         self._assign_order("ORD-001", "D001", "trip1")
         vehicle_assignment = self.service.assign_vehicle_to_driver(
             AssignDriverVehicleRequest(
+                trip_no="trip1",
                 dispatch_date=self.dispatch_date,
                 delivery_date=self.dispatch_date,
                 driver_id="D001",
@@ -361,8 +363,9 @@ class WorkspaceServicesTest(unittest.TestCase):
             len(self.repository.list_assignments_for_task("ORDER", "ORD-001")),
         )
 
-        self.service.assign_delivery_workspace_vehicle(
+        assign_equal_trip_vehicle_fixture(self.service.assign_delivery_workspace_vehicle,
             DeliveryWorkspaceVehicleAssignmentRequest(
+                trip_no="trip1",
                 dispatch_date=origin_dispatch_date,
                 delivery_date=self.dispatch_date,
                 driver_id="D002",
@@ -371,7 +374,7 @@ class WorkspaceServicesTest(unittest.TestCase):
         )
         board = self.service.get_delivery_trip_summary_board(self.dispatch_date)
         self.assertEqual(
-            [(origin_dispatch_date, "D002", "V001")],
+            [(origin_dispatch_date, "D002", "V001"), (origin_dispatch_date, "D002", "V001")],
             [
                 (
                     item.dispatch_date,

@@ -745,6 +745,7 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
     def test_assign_vehicle_to_driver_persists_driver_date_vehicle_selection(self):
         self.service.assign_vehicle_to_driver(
             AssignDriverVehicleRequest(
+                trip_no="trip1",
                 dispatch_date="2026-05-05",
                 driver_id="D001",
                 vehicle_id="V002",
@@ -752,7 +753,7 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
         )
 
         repository = SQLiteManualDispatchRepository(self.db_path)
-        board = ManualDispatchService(repository).get_board("2026-05-05")
+        board = ManualDispatchService(repository).get_delivery_workspace_board("2026-05-05")
 
         self.assertEqual(1, len(board.driver_vehicle_assignments))
         self.assertEqual("D001", board.driver_vehicle_assignments[0].driver_id)
@@ -762,6 +763,7 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
     def test_vehicle_selection_is_scoped_by_delivery_date(self):
         self.service.assign_vehicle_to_driver(
             AssignDriverVehicleRequest(
+                trip_no="trip1",
                 dispatch_date="2026-05-05",
                 delivery_date="2026-05-05",
                 driver_id="D001",
@@ -770,6 +772,7 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
         )
         self.service.assign_vehicle_to_driver(
             AssignDriverVehicleRequest(
+                trip_no="trip1",
                 dispatch_date="2026-05-05",
                 delivery_date="2026-05-06",
                 driver_id="D001",
@@ -778,7 +781,7 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
         )
 
         repository = SQLiteManualDispatchRepository(self.db_path)
-        board = ManualDispatchService(repository).get_board("2026-05-05")
+        board = ManualDispatchService(repository).get_delivery_workspace_board("2026-05-05")
 
         self.assertEqual(
             [("2026-05-05", "V001"), ("2026-05-06", "V002")],
@@ -802,19 +805,21 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
 
         self.service.assign_vehicle_to_driver(
             AssignDriverVehicleRequest(
+                trip_no="trip1",
                 dispatch_date="2026-05-05",
                 driver_id="D001",
                 vehicle_id="V002",
             )
         )
 
-        board = self.service.get_board("2026-05-05")
+        board = self.service.get_delivery_workspace_board("2026-05-05")
         self.assertEqual(1, len(board.assignments))
         self.assertFalse(hasattr(board.assignments[0], "vehicle_id"))
 
     def test_duplicate_vehicle_assignment_across_drivers_is_rejected(self):
         self.service.assign_vehicle_to_driver(
             AssignDriverVehicleRequest(
+                trip_no="trip1",
                 dispatch_date="2026-05-05",
                 driver_id="D001",
                 vehicle_id="V001",
@@ -823,13 +828,14 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "already assigned"):
             self.service.assign_vehicle_to_driver(
                 AssignDriverVehicleRequest(
+                    trip_no="trip1",
                     dispatch_date="2026-05-05",
                     driver_id="D002",
                     vehicle_id="V001",
                 )
             )
 
-        board = self.service.get_board("2026-05-05")
+        board = self.service.get_delivery_workspace_board("2026-05-05")
         self.assertEqual(1, len(board.driver_vehicle_assignments))
         self.assertEqual("D001", board.driver_vehicle_assignments[0].driver_id)
         self.assertEqual("V001", board.driver_vehicle_assignments[0].vehicle_id)
@@ -850,6 +856,7 @@ class SQLiteManualDispatchRepositoryTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.service.assign_vehicle_to_driver(
                 AssignDriverVehicleRequest(
+                    trip_no="trip1",
                     dispatch_date="2026-05-05",
                     driver_id="D001",
                     vehicle_id="V999",

@@ -151,6 +151,13 @@ class InMemoryAssignmentRepositoryMixin:
             ),
         )
 
+    def list_delivery_vehicle_assignments(self, dispatch_date=None, delivery_date=None):
+        return deepcopy(sorted([
+            row for row in self.driver_vehicle_assignments
+            if (dispatch_date is None or row.dispatch_date == dispatch_date)
+            and (delivery_date is None or row.delivery_date == delivery_date)
+        ], key=lambda row: (row.delivery_date, row.driver_id, row.trip_no or "", row.dispatch_date)))
+
     def list_driver_vehicle_assignments(self, dispatch_date):
         return legacy_vehicle_projection([
             assignment
@@ -359,6 +366,7 @@ class InMemoryAssignmentRepositoryMixin:
             for item in assignments:
                 if item.driver_id == driver_id:
                     item.vehicle_id = vehicle_id
+            current.vehicle_id = vehicle_id
             return deepcopy(current), None
         assignment = ManualDriverVehicleAssignment(dispatch_date, delivery_date, driver_id, vehicle_id)
         self.driver_vehicle_assignments.append(assignment)

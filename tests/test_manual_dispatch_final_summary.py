@@ -26,7 +26,9 @@ from backend.schemas import (
     UpdateOrderRequest,
 )
 from backend.services.manual_dispatch_service import ManualDispatchService
-from tests.manual_dispatch_api_test_helpers import authenticate_test_client
+from tests.manual_dispatch_api_test_helpers import (
+    assign_equal_trip_vehicle_fixture, authenticate_test_client,
+)
 
 try:
     from fastapi import FastAPI
@@ -784,7 +786,7 @@ class ManualDispatchFinalSummaryTest(unittest.TestCase):
         )
 
     def _assign_vehicle(self, driver_id, vehicle_id, delivery_date=None):
-        return self.service.assign_vehicle_to_driver(
+        return assign_equal_trip_vehicle_fixture(self.service.assign_vehicle_to_driver,
             AssignDriverVehicleRequest(
                 dispatch_date=self.dispatch_date,
                 delivery_date=delivery_date or self.dispatch_date,

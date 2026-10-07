@@ -309,6 +309,23 @@ class SQLiteAssignmentRepositoryMixin:
             ).fetchall()
         return [self._row_to_opshop_pickup_board_item(row) for row in rows]
 
+    def list_delivery_vehicle_assignments(self, dispatch_date=None, delivery_date=None):
+        """Raw scoped rows; NULL carryover is distinguished by the board DTO."""
+        conditions, parameters = [], []
+        for name, value in (("dispatch_date", dispatch_date), ("delivery_date", delivery_date)):
+            if value is not None:
+                conditions.append(f"{name} = ?")
+                parameters.append(value)
+        where = " WHERE " + " AND ".join(conditions) if conditions else ""
+        with connect(self.db_path) as connection:
+            has_trip = "trip_no" in table_columns(connection, "manual_driver_vehicle_assignments")
+            ordering = "delivery_date, driver_id, trip_no, dispatch_date" if has_trip else "delivery_date, driver_id, dispatch_date"
+            rows = connection.execute(
+                "SELECT * FROM manual_driver_vehicle_assignments" + where + " ORDER BY " + ordering,
+                parameters,
+            ).fetchall()
+        return [self._row_to_driver_vehicle_assignment(row) for row in rows]
+
     def list_driver_vehicle_assignments(self, dispatch_date):
         with connect(self.db_path) as connection:
             rows = connection.execute(

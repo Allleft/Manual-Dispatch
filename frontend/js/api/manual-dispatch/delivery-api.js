@@ -80,6 +80,18 @@ export async function apiClearDeliveryWorkspaceVehicle(payload) {
   });
 }
 
+export async function apiAssignDeliveryDayVehicle(payload) {
+  return requestJson("/api/manual-dispatch/delivery/day-vehicle-assignments", {
+    method: "POST", body: payload,
+  });
+}
+
+export async function apiClearDeliveryDayVehicle(payload) {
+  return requestJson("/api/manual-dispatch/delivery/day-vehicle-assignments/clear", {
+    method: "POST", body: payload,
+  });
+}
+
 export async function apiCreateGeneratedDeliveryRunSheet(payload) {
   return requestJson("/api/manual-dispatch/delivery/run-sheets/generated", {
     method: "POST",

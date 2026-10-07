@@ -100,6 +100,7 @@ class ManualDispatchDriverVehicleRouteTest(unittest.TestCase):
                 "dispatch_date": self.dispatch_date,
                 "driver_id": "D999",
                 "vehicle_id": None,
+                "trip_no": "trip1",
             },
         )
 
@@ -133,6 +134,7 @@ class ManualDispatchDriverVehicleRouteTest(unittest.TestCase):
         payload = {
             "dispatch_date": self.dispatch_date,
             "driver_id": "D001",
+            "trip_no": "trip1",
         }
         payload.update(overrides)
         return self.client.post("/api/manual-dispatch/driver-vehicle", json=payload)

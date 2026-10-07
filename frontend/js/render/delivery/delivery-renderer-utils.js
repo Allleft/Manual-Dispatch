@@ -1,3 +1,5 @@
+import { getDeliveryDayVehicleAssignment } from "../../utils/delivery-vehicle-utils.js";
+
 import { createIcon } from "../../utils/icon-utils.js";
 
 import {
@@ -39,11 +41,7 @@ export function findRunSheetForDriver(runSheets, deliveryDate, driverId) {
 }
 
 export function findVehicleAssignment(board, deliveryDate, driverId) {
-  return (board.driver_vehicle_assignments || []).find(
-    (assignment) =>
-      assignment.delivery_date === deliveryDate &&
-      assignment.driver_id === driverId,
-  );
+  return getDeliveryDayVehicleAssignment(board, deliveryDate, driverId);
 }
 
 export function assignmentMap(board) {

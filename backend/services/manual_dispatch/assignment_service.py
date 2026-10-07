@@ -1,4 +1,6 @@
-from backend.errors import StateChangedConflictError
+from dataclasses import replace
+from backend.schemas import DeliveryWorkspaceVehicleClearRequest
+from backend.services.manual_dispatch.delivery_vehicle_assignment_service import DeliveryVehicleAssignmentService
 from backend.schemas import ManualDriverVehicleClearResponse
 from backend.services.manual_dispatch.delivery_run_sheet_lock import (
     ensure_order_not_assigned_elsewhere,
@@ -138,73 +140,34 @@ class AssignmentService:
     @immediate_transactional
     def assign_vehicle_to_driver(self, request):
         dispatch_date = clean_required_iso_date(request.dispatch_date, "dispatch_date")
-        delivery_date = clean_required_iso_date(
-            getattr(request, "delivery_date", None) or dispatch_date,
-            "delivery_date",
-        )
-        driver_id = clean_required_text(request.driver_id, "driver_id")
-        vehicle_id = clean_optional_text(getattr(request, "vehicle_id", None))
-
-        self.validator.validate_driver_exists(driver_id)
+        delivery_date = clean_required_iso_date(request.delivery_date or dispatch_date, "delivery_date")
+        trip_no = clean_required_text(request.trip_no, "trip_no")
+        self.validator.validate_trip_no(trip_no)
         ensure_driver_delivery_date_not_finalized(
-            self.repository,
-            dispatch_date,
-            driver_id,
-            delivery_date,
+            self.repository, dispatch_date, request.driver_id, delivery_date,
         )
-
-        if not vehicle_id:
-            return self.clear_driver_vehicle_assignment(
-                dispatch_date,
-                driver_id,
-                delivery_date,
-            )
-
-        self.validator.validate_vehicle_exists(vehicle_id)
-
-        assignment, conflicting_driver_id = (
-            self.repository.upsert_delivery_workspace_vehicle_assignment(
-                dispatch_date,
-                delivery_date,
-                driver_id,
-                vehicle_id,
-            )
+        if not clean_optional_text(request.vehicle_id):
+            return self.clear_driver_vehicle_assignment(dispatch_date, request.driver_id, delivery_date, trip_no)
+        return DeliveryVehicleAssignmentService(self.repository, self.validator).assign(
+            replace(request, dispatch_date=dispatch_date, delivery_date=delivery_date, trip_no=trip_no)
         )
-        if conflicting_driver_id:
-            vehicle = self.repository.get_vehicle(vehicle_id)
-            driver = self.repository.get_driver(conflicting_driver_id)
-            vehicle_name = vehicle.rego if vehicle else vehicle_id
-            driver_name = driver.name if driver else conflicting_driver_id
-            raise StateChangedConflictError(
-                f"Vehicle {vehicle_name} is already assigned to "
-                f"{driver_name} for this delivery date."
-            )
-        return assignment
 
     @immediate_transactional
-    def clear_driver_vehicle_assignment(self, dispatch_date, driver_id, delivery_date=None):
+    def clear_driver_vehicle_assignment(self, dispatch_date, driver_id, delivery_date=None, trip_no=None):
         dispatch_date = clean_required_iso_date(dispatch_date, "dispatch_date")
-        delivery_date = clean_required_iso_date(
-            delivery_date or dispatch_date,
-            "delivery_date",
-        )
-        driver_id = clean_required_text(driver_id, "driver_id")
-        self.validator.validate_driver_exists(driver_id)
+        delivery_date = clean_required_iso_date(delivery_date or dispatch_date, "delivery_date")
+        trip_no = clean_required_text(trip_no, "trip_no")
+        self.validator.validate_trip_no(trip_no)
         ensure_driver_delivery_date_not_finalized(
-            self.repository,
-            dispatch_date,
-            driver_id,
-            delivery_date,
+            self.repository, dispatch_date, driver_id, delivery_date,
         )
-        self.repository.remove_driver_vehicle_assignment(
-            dispatch_date,
-            driver_id,
-            delivery_date,
+        DeliveryVehicleAssignmentService(self.repository, self.validator).clear(
+            DeliveryWorkspaceVehicleClearRequest(
+                dispatch_date=dispatch_date, delivery_date=delivery_date, driver_id=driver_id, trip_no=trip_no,
+            )
         )
         return ManualDriverVehicleClearResponse(
-            dispatch_date=dispatch_date,
-            delivery_date=delivery_date,
-            driver_id=driver_id,
+            dispatch_date=dispatch_date, delivery_date=delivery_date, driver_id=driver_id, trip_no=trip_no,
         )
 
     def _get_task_delivery_date(self, task_type, task_id):

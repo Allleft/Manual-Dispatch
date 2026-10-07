@@ -17,6 +17,7 @@ from backend.services.excel_export_service import (
     build_manual_dispatch_excel,
 )
 from backend.services.manual_dispatch_service import ManualDispatchService
+from tests.manual_dispatch_api_test_helpers import assign_equal_trip_vehicle_fixture
 
 
 class ManualDispatchExcelExportTest(unittest.TestCase):
@@ -118,7 +119,7 @@ class ManualDispatchExcelExportTest(unittest.TestCase):
         )
 
     def _assign_vehicle(self, driver_id, vehicle_id):
-        self.service.assign_vehicle_to_driver(
+        assign_equal_trip_vehicle_fixture(self.service.assign_vehicle_to_driver,
             AssignDriverVehicleRequest(
                 dispatch_date=self.dispatch_date,
                 driver_id=driver_id,

@@ -29,6 +29,7 @@ from backend.schemas import (
     UpdateVehicleRequest,
 )
 from backend.services.manual_dispatch_service import ManualDispatchService
+from tests.manual_dispatch_api_test_helpers import assign_equal_trip_vehicle_fixture
 
 
 class RecordingLogbook:
@@ -137,7 +138,7 @@ class DriverAvailabilityBehavior:
 
     def test_toggle_preserves_orders_assignments_and_vehicle_selections(self):
         self._assign()
-        self.service.assign_vehicle_to_driver(AssignDriverVehicleRequest(
+        assign_equal_trip_vehicle_fixture(self.service.assign_vehicle_to_driver,AssignDriverVehicleRequest(
             dispatch_date=self.dispatch_date, driver_id="D001", vehicle_id="V001"
         ))
         assignments = deepcopy(self.repository.list_assignments(self.dispatch_date))
@@ -225,7 +226,7 @@ class DriverAvailabilityBehavior:
         self.assertFalse(self.repository.get_driver("D001").is_deleted)
 
     def test_delete_driver_with_vehicle_selection_remains_blocked(self):
-        self.service.assign_vehicle_to_driver(AssignDriverVehicleRequest(
+        assign_equal_trip_vehicle_fixture(self.service.assign_vehicle_to_driver,AssignDriverVehicleRequest(
             dispatch_date=self.dispatch_date, driver_id="D001", vehicle_id="V001"
         ))
         self._set_available(False)
@@ -260,7 +261,7 @@ class DriverAvailabilityBehavior:
         self.assertFalse(self.repository.get_driver("D001").is_deleted)
 
     def test_vehicle_availability_guard_is_unchanged(self):
-        self.service.assign_vehicle_to_driver(AssignDriverVehicleRequest(
+        assign_equal_trip_vehicle_fixture(self.service.assign_vehicle_to_driver,AssignDriverVehicleRequest(
             dispatch_date=self.dispatch_date, driver_id="D001", vehicle_id="V001"
         ))
         with self.assertRaisesRegex(ValueError, "clear this vehicle"):

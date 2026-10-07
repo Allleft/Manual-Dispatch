@@ -12,6 +12,8 @@ from backend.schemas import (
     DeliveryWorkspaceAssignOrderRequest,
     DeliveryWorkspaceUnassignOrderRequest,
     DeliveryWorkspaceVehicleAssignmentRequest,
+    DeliveryDayVehicleAssignmentRequest,
+    DeliveryDayVehicleClearRequest,
     DeliveryWorkspaceVehicleClearRequest,
     UpdateDriverRequest,
     UpdateDeliveryOrderAreaRequest,
@@ -246,6 +248,7 @@ def create_delivery_router(
                 delivery_date=payload.get("delivery_date"),
                 driver_id=payload.get("driver_id"),
                 vehicle_id=payload.get("vehicle_id"),
+                trip_no=payload.get("trip_no"),
             )
             return with_logbook_actor(
                 service,
@@ -267,11 +270,43 @@ def create_delivery_router(
                 dispatch_date=payload.get("dispatch_date"),
                 delivery_date=payload.get("delivery_date"),
                 driver_id=payload.get("driver_id"),
+                trip_no=payload.get("trip_no"),
             )
             return with_logbook_actor(
                 service,
                 http_request,
                 lambda: to_dict(service.clear_delivery_workspace_vehicle(request)),
+            )
+        except ValueError as error:
+            raise to_http_exception(error) from error
+
+    # Stage 3 removes these explicit day routes when controls/generation switch together.
+    @router.post("/delivery/day-vehicle-assignments")
+    def assign_delivery_day_vehicle(http_request: Request = None, payload: dict = Body(...)):
+        service = get_service()
+        try:
+            reject_scoped_fields(payload, {"task_type", "trip_no"})
+            request = DeliveryDayVehicleAssignmentRequest(
+                dispatch_date=payload.get("dispatch_date"), delivery_date=payload.get("delivery_date"),
+                driver_id=payload.get("driver_id"), vehicle_id=payload.get("vehicle_id"),
+            )
+            return with_logbook_actor(
+                service, http_request, lambda: to_dict(service.assign_delivery_day_vehicle(request)),
+            )
+        except ValueError as error:
+            raise to_http_exception(error) from error
+
+    @router.post("/delivery/day-vehicle-assignments/clear")
+    def clear_delivery_day_vehicle(http_request: Request = None, payload: dict = Body(...)):
+        service = get_service()
+        try:
+            reject_scoped_fields(payload, {"task_type", "trip_no"})
+            request = DeliveryDayVehicleClearRequest(
+                dispatch_date=payload.get("dispatch_date"), delivery_date=payload.get("delivery_date"),
+                driver_id=payload.get("driver_id"),
+            )
+            return with_logbook_actor(
+                service, http_request, lambda: to_dict(service.clear_delivery_day_vehicle(request)),
             )
         except ValueError as error:
             raise to_http_exception(error) from error

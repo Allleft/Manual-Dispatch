@@ -57,7 +57,12 @@ class RefactorContractBaselineTest(unittest.TestCase):
             if getattr(route, "path", None)
         )
 
-        self.assertEqual(104, len(routes))
+        self.assertEqual(106, len(routes))
+        day_routes = {
+            ("/api/manual-dispatch/delivery/day-vehicle-assignments", ("POST",)),
+            ("/api/manual-dispatch/delivery/day-vehicle-assignments/clear", ("POST",)),
+        }
+        self.assertTrue(day_routes.issubset(routes))
         lookup_route = ("/api/manual-dispatch/delivery/orders/lookup", ("GET",))
         self.assertIn(lookup_route, routes)
         self.assertIn(
@@ -118,7 +123,7 @@ class RefactorContractBaselineTest(unittest.TestCase):
         )
         self.assertEqual(
             "159e9852377a51178aedfe583951f866ee9154d4f0cc6a86c0cdb96ee00fe903",
-            self._contract_digest([route for route in routes if route != lookup_route]),
+            self._contract_digest([route for route in routes if route != lookup_route and route not in day_routes]),
         )
 
     def test_manual_dispatch_service_facade_contract(self):
@@ -155,7 +160,15 @@ class RefactorContractBaselineTest(unittest.TestCase):
         )
 
         public_methods = self._public_methods(ManualDispatchService)
-        self.assertEqual(99, len(public_methods))
+        self.assertEqual(101, len(public_methods))
+        day_methods = {"assign_delivery_day_vehicle", "clear_delivery_day_vehicle"}
+        for name in day_methods:
+            self.assertIn({"name": name, "signature": "(self, request)"}, public_methods)
+        self.assertIn(
+            {"name": "clear_driver_vehicle_assignment",
+             "signature": "(self, dispatch_date, driver_id, delivery_date=None, trip_no=None)"},
+            public_methods,
+        )
         self.assertIn(
             {"name": "lookup_delivery_orders_by_invoice", "signature": "(self, invoice_number)"},
             public_methods,
@@ -171,8 +184,12 @@ class RefactorContractBaselineTest(unittest.TestCase):
         )
         self.assertEqual(
             "adb8cd90b4285ef425ba96e9100583b44fafce201357e56a0fe865ec7d4d2f76",
-            self._contract_digest([method for method in public_methods
-                                   if method["name"] != "lookup_delivery_orders_by_invoice"]),
+            self._contract_digest([
+                {**method, "signature": method["signature"].replace(", trip_no=None)", ")")
+                 if method["name"] == "clear_driver_vehicle_assignment" else method["signature"]}
+                for method in public_methods
+                if method["name"] != "lookup_delivery_orders_by_invoice" and method["name"] not in day_methods
+            ]),
         )
 
     def test_repository_facades_keep_identical_public_contracts(self):
@@ -183,6 +200,7 @@ class RefactorContractBaselineTest(unittest.TestCase):
 
         self.assertEqual(sqlite_methods, in_memory_methods)
         per_trip_methods = {
+            "list_delivery_vehicle_assignments": "(self, dispatch_date=None, delivery_date=None)",
             "create_delivery_run_sheet": "(self, run_sheet)",
             "get_delivery_per_trip_schema_status": "(self)",
             "require_delivery_per_trip_schema": "(self)",
@@ -307,7 +325,9 @@ class RefactorContractBaselineTest(unittest.TestCase):
         contract = json.loads(completed.stdout)
 
         self.assertEqual(["function", "function"], contract["rendererTypes"])
-        self.assertEqual(109, len(contract["apiExportNames"]))
+        self.assertEqual(111, len(contract["apiExportNames"]))
+        day_api_names = {"apiAssignDeliveryDayVehicle", "apiClearDeliveryDayVehicle"}
+        self.assertTrue(day_api_names.issubset(contract["apiExportNames"]))
         self.assertIn("apiLookupDeliveryOrdersByInvoice", contract["apiExportNames"])
         self.assertIn("apiPreviewDirectAttacheInvoice", contract["apiExportNames"])
         self.assertIn(
@@ -329,9 +349,10 @@ class RefactorContractBaselineTest(unittest.TestCase):
         self.assertEqual(
             "a04f41e7d5467dff4982de13bbc8495755452e3c63367110c1d8bb0b5b16e269",
             self._contract_digest([name for name in contract["apiExportNames"]
-                                   if name != "apiLookupDeliveryOrdersByInvoice"]),
+                                   if name != "apiLookupDeliveryOrdersByInvoice" and name not in day_api_names]),
         )
-        self.assertEqual(133, len(contract["actionNames"]))
+        self.assertEqual(134, len(contract["actionNames"]))
+        self.assertIn("updateDeliveryDayVehicleSelection", contract["actionNames"])
         lookup_actions = {
             "openDeliveryOrderLookup", "closeDeliveryOrderLookup",
             "updateDeliveryOrderLookupQuery", "searchDeliveryOrderLookup",
@@ -371,7 +392,7 @@ class RefactorContractBaselineTest(unittest.TestCase):
         )
         self.assertEqual(
             "4c884899f951370a5d4a8e7defa1e9459b05dd19db70f41b3a70aafcd0a4e55b",
-            self._contract_digest([name for name in contract["actionNames"] if name not in lookup_actions]),
+            self._contract_digest([name for name in contract["actionNames"] if name not in lookup_actions and name != "updateDeliveryDayVehicleSelection"]),
         )
         self.assertEqual(194, len(contract["stateFields"]))
         self.assertIn("deliveryOrderLookup", contract["stateFields"])

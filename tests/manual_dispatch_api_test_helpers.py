@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 from backend.schemas import RegisterOperatorAccountRequest
 
 
@@ -30,3 +32,11 @@ def authenticate_test_client(
             f"Test client login failed with {response.status_code}: {response.text}"
         )
     return response.json()
+
+
+def assign_equal_trip_vehicle_fixture(assign, request):
+    """Explicit equal trip fixture for tests of the still-combined generator."""
+    result = None
+    for trip_no in ("trip1", "trip2"):
+        result = assign(replace(request, trip_no=trip_no))
+    return result

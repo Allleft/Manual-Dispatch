@@ -92,6 +92,7 @@ class ManualDispatchServiceTest(unittest.TestCase):
     def test_assign_vehicle_to_driver_stores_driver_date_vehicle_selection(self):
         vehicle_assignment = self.service.assign_vehicle_to_driver(
             AssignDriverVehicleRequest(
+                trip_no="trip1",
                 dispatch_date="2026-05-05",
                 driver_id="D001",
                 vehicle_id="V002",
@@ -106,6 +107,7 @@ class ManualDispatchServiceTest(unittest.TestCase):
     def test_vehicle_selection_is_scoped_by_dispatch_and_delivery_date(self):
         first = self.service.assign_vehicle_to_driver(
             AssignDriverVehicleRequest(
+                trip_no="trip1",
                 dispatch_date="2026-05-05",
                 delivery_date="2026-05-05",
                 driver_id="D001",
@@ -114,6 +116,7 @@ class ManualDispatchServiceTest(unittest.TestCase):
         )
         second = self.service.assign_vehicle_to_driver(
             AssignDriverVehicleRequest(
+                trip_no="trip1",
                 dispatch_date="2026-05-05",
                 delivery_date="2026-05-06",
                 driver_id="D001",
@@ -121,7 +124,7 @@ class ManualDispatchServiceTest(unittest.TestCase):
             )
         )
 
-        board = self.service.get_board("2026-05-05")
+        board = self.service.get_delivery_workspace_board("2026-05-05")
 
         self.assertEqual("V001", first.vehicle_id)
         self.assertEqual("V002", second.vehicle_id)
@@ -147,13 +150,14 @@ class ManualDispatchServiceTest(unittest.TestCase):
 
         self.service.assign_vehicle_to_driver(
             AssignDriverVehicleRequest(
+                trip_no="trip1",
                 dispatch_date="2026-05-05",
                 driver_id="D001",
                 vehicle_id="V002",
             )
         )
 
-        board = self.service.get_board("2026-05-05")
+        board = self.service.get_delivery_workspace_board("2026-05-05")
         self.assertEqual([task_assignment], board.assignments)
         self.assertFalse(hasattr(board.assignments[0], "vehicle_id"))
 

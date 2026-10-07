@@ -33,25 +33,34 @@ def validate_run_sheet_snapshot(run_sheet):
 
 
 def legacy_vehicle_projection(assignments):
-    """The current UI has an explicit day-level compatibility contract.
+    """Temporary day projection used only by compatibility UI/combined generation.
 
-    A migrated carryover may have equal seeded trip selections. Divergent
-    operational selections cannot be interpreted by the old day-level UI.
+    Two explicit equal trips project as a day selection. Neither a missing trip
+    nor a divergent pair can be inferred from historical NULL carryover.
+    NULL-only data retains the old day selection until Stage 3 cutover.
     """
-    legacy = [item for item in assignments if item.trip_no is None]
-    by_identity = {(item.delivery_date, item.driver_id): item for item in legacy}
-    if len(by_identity) != len(legacy):
-        raise ValueError("Driver vehicle assignment integrity error: duplicate driver.")
-    occupied = set()
-    for item in legacy:
-        key = item.delivery_date, item.vehicle_id
-        if key in occupied:
-            raise ValueError("Driver vehicle assignment integrity error: duplicate vehicle.")
-        occupied.add(key)
+    from dataclasses import replace
+    from backend.errors import StateChangedConflictError
+
+    grouped = {}
     for item in assignments:
-        if item.trip_no is None:
-            continue
-        carryover = by_identity.get((item.delivery_date, item.driver_id))
-        if carryover is None or carryover.vehicle_id != item.vehicle_id:
-            raise ValueError("Explicit trip_no is required for trip-specific vehicle selections.")
-    return legacy
+        grouped.setdefault((item.delivery_date, item.driver_id), []).append(item)
+    projected = []
+    occupied = set()
+    for identity, rows in sorted(grouped.items()):
+        legacy = [row for row in rows if row.trip_no is None]
+        trips = {row.trip_no: row for row in rows if row.trip_no is not None}
+        if len(legacy) > 1 or len(trips) != len(rows) - len(legacy):
+            raise ValueError("Driver vehicle assignment integrity error: duplicate driver/trip.")
+        if trips:
+            if set(trips) != {"trip1", "trip2"} or trips["trip1"].vehicle_id != trips["trip2"].vehicle_id:
+                raise StateChangedConflictError("Explicit trip_no is required for partial or divergent trip-specific vehicle selections.")
+            selection = replace(trips["trip1"], trip_no=None)
+        else:
+            selection = replace(legacy[0])
+        vehicle_key = identity[0], selection.vehicle_id
+        if vehicle_key in occupied:
+            raise ValueError("Driver vehicle assignment integrity error: duplicate vehicle.")
+        occupied.add(vehicle_key)
+        projected.append(selection)
+    return projected

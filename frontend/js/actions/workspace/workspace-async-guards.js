@@ -12,7 +12,7 @@ export function createWorkspaceAsyncGuards(context) {
   const loadMigrationStatusForHome = (...args) => context.actions.loadMigrationStatusForHome(...args);
 
   async function handleWorkspaceMigrationGuard(error) {
-    if (!error || error.status !== 409) {
+    if (!error || error.status !== 409 || error.code !== "workspace_migration_required") {
       return false;
     }
     await loadMigrationStatusForHome(error.message);
