@@ -231,6 +231,7 @@ class ManualDispatchLogbookIntegrationTest(unittest.TestCase):
             )
             generated = self.service.create_generated_delivery_run_sheet(
                 GenerateDeliveryRunSheetRequest(
+                    trip_no="trip1",
                     dispatch_date=self.dispatch_date,
                     delivery_date=self.dispatch_date,
                     driver_id="D001",
@@ -239,6 +240,7 @@ class ManualDispatchLogbookIntegrationTest(unittest.TestCase):
             self.service.cancel_generated_delivery_run_sheet(generated.run_sheet_id)
             saved = self.service.create_generated_delivery_run_sheet(
                 GenerateDeliveryRunSheetRequest(
+                    trip_no="trip1",
                     dispatch_date=self.dispatch_date,
                     delivery_date=self.dispatch_date,
                     driver_id="D001",
@@ -357,6 +359,7 @@ class ManualDispatchLogbookIntegrationTest(unittest.TestCase):
         )
         generated = self.service.create_generated_delivery_run_sheet(
             GenerateDeliveryRunSheetRequest(
+                trip_no="trip1",
                 dispatch_date=self.dispatch_date,
                 delivery_date=self.dispatch_date,
                 driver_id="D001",
@@ -366,6 +369,7 @@ class ManualDispatchLogbookIntegrationTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "already exists"):
             self.service.create_generated_delivery_run_sheet(
                 GenerateDeliveryRunSheetRequest(
+                    trip_no="trip1",
                     dispatch_date=self.dispatch_date,
                     delivery_date=self.dispatch_date,
                     driver_id="D001",

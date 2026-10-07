@@ -33,11 +33,11 @@ def validate_run_sheet_snapshot(run_sheet):
 
 
 def legacy_vehicle_projection(assignments):
-    """Temporary day projection used only by compatibility UI/combined generation.
+    """LEGACY REQUIRED: fail-closed reads for old boards/Final Trip Summaries.
 
     Two explicit equal trips project as a day selection. Neither a missing trip
     nor a divergent pair can be inferred from historical NULL carryover.
-    NULL-only data retains the old day selection until Stage 3 cutover.
+    New trip controls and Run Sheet generation never use this projection.
     """
     from dataclasses import replace
     from backend.errors import StateChangedConflictError

@@ -1107,7 +1107,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
         self.assertNotIn("createAddOrderControl", self.delivery_renderer)
         self.assertIn("moveDeliveryOrderToTrip", self.delivery_renderer)
         self.assertIn("unassignDeliveryOrder", self.delivery_renderer)
-        self.assertIn("updateDeliveryDayVehicleSelection", self.delivery_renderer)
+        self.assertIn("updateDeliveryVehicleSelection", self.delivery_renderer)
         self.assertIn("generateDeliveryRunSheet", self.delivery_renderer)
         self.assertIn("saveDeliveryRunSheet", self.delivery_renderer)
         self.assertIn("cancelDeliveryRunSheet", self.delivery_renderer)
@@ -1857,7 +1857,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
 
     def test_delivery_vehicle_selector_labels_and_duplicate_state_contract(self):
         vehicle_control = self.delivery_renderer.split(
-            "function createDriverVehicleControl", 1
+            "function createTripVehicleControl", 1
         )[1].split("function createTripPanel", 1)[0]
         vehicle_action = self.workspace_actions.split(
             "async function updateDeliveryVehicleSelection", 1
@@ -3742,6 +3742,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             }
 
             actions.generateDeliveryRunSheet({
+              trip_no: "trip1",
               delivery_date: "2026-06-22",
               driver_id: "D001",
               driver_name: "Driver One",
@@ -3754,7 +3755,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             await actions.confirmGenerateDeliveryRunSheet();
             if (generatedPayloads[0].dispatch_date !== "2026-06-24" ||
                 generatedPayloads[0].delivery_date !== "2026-06-22" ||
-                generatedPayloads[0].driver_id !== "D001") {
+                generatedPayloads[0].driver_id !== "D001" || generatedPayloads[0].trip_no !== "trip1") {
               throw new Error("Generate Run Sheet payload was not scoped correctly");
             }
             if (state.workspaceRoute !== "delivery/trip-summary" ||
@@ -3762,8 +3763,8 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
                 navigatedRoutes.length !== 0) {
               throw new Error("Generate left Trip Summary or changed its browser route");
             }
-            if (state.deliveryTripSummaryDate !== "2026-06-22" || tripSummaryLoads !== 2) {
-              throw new Error("Generate did not reload the selected Trip Summary date exactly once");
+            if (state.deliveryTripSummaryDate !== "2026-06-22" || tripSummaryLoads !== 1) {
+              throw new Error("Generate reloaded and reset the sibling Trip Summary state");
             }
             if (state.deliveryGenerationConfirmation !== null ||
                 state.deliveryTripSummaryRunSheets[0]?.run_sheet_id !== "DRS-1") {
@@ -3780,7 +3781,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
     def test_delivery_generate_ignores_dispatch_changes_but_rejects_stale_routes(self):
         self._run_workspace_actions_script(
             """
-            async function runScenario(mutator, shouldReload) {
+            async function runScenario(mutator, shouldMerge) {
               const state = {
                 isLoggedIn: true,
                 workspaceRoute: "delivery/trip-summary",
@@ -3823,6 +3824,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
                 },
               });
               actions.generateDeliveryRunSheet({
+                trip_no: "trip1",
                 delivery_date: "2026-06-24",
                 driver_id: "D001",
                 driver_name: "Driver One",
@@ -3830,16 +3832,17 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
                 totals: {},
               });
               const pending = actions.confirmGenerateDeliveryRunSheet();
+              await new Promise(resolve => setImmediate(resolve));
               mutator(state);
               resolveGenerate();
               await pending;
               if (navigatedRoutes.length !== 0) {
                 throw new Error("Generate response navigated unexpectedly");
               }
-              if (shouldReload && tripSummaryLoads !== 1) {
+              if (shouldMerge && state.deliveryTripSummaryRunSheets?.[0]?.run_sheet_id !== "DRS-1") {
                 throw new Error("Dispatch-only change incorrectly made Generate stale");
               }
-              if (!shouldReload && tripSummaryLoads !== 0) {
+              if (tripSummaryLoads !== 0 || (!shouldMerge && state.deliveryTripSummaryRunSheets?.length)) {
                 throw new Error("Stale route Generate response reloaded an obsolete route");
               }
             }
@@ -3898,6 +3901,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
               },
             });
             const deliveryCandidate = {
+              trip_no: "trip1",
               delivery_date: "2026-07-06", driver_id: "D003",
               driver_name: "John Georgiadis",
               orders: [{ order_id: "ORDER-1", order_number: "1001" }],
@@ -3914,6 +3918,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
             deliveryActions.generateDeliveryRunSheet(deliveryCandidate);
             const firstDeliveryConfirm = deliveryActions.confirmGenerateDeliveryRunSheet();
             const secondDeliveryConfirm = deliveryActions.confirmGenerateDeliveryRunSheet();
+            await new Promise(resolve => setImmediate(resolve));
             if (deliveryCalls !== 1) {
               throw new Error(`Delivery rapid confirm made ${deliveryCalls} API calls`);
             }
@@ -4052,6 +4057,7 @@ class WorkspaceFrontendShellTest(unittest.TestCase):
               api: { createGeneratedDeliveryRunSheet: async () => { throw new Error("Delivery changed"); } },
             });
             deliveryActions.generateDeliveryRunSheet({
+              trip_no: "trip1",
               delivery_date: "2026-07-06", driver_id: "D003",
               driver_name: "John", orders: [{ order_id: "O-1" }], totals: {},
             });

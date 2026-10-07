@@ -125,16 +125,6 @@ class DeliveryWorkspaceMutationService:
         self.vehicle_service.clear(request)
         return self._vehicle_response_board(request)
 
-    @immediate_transactional
-    def assign_day_vehicle(self, request):
-        self.vehicle_service.assign_day_compatibility(request)
-        return self._vehicle_response_board(request)
-
-    @immediate_transactional
-    def clear_day_vehicle(self, request):
-        self.vehicle_service.clear_day_compatibility(request)
-        return self._vehicle_response_board(request)
-
     def _vehicle_response_board(self, request):
         dispatch_date = clean_optional_iso_date(request.dispatch_date, "dispatch_date")
         return self._response_board(

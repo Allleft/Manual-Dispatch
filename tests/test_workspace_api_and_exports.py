@@ -38,6 +38,7 @@ from backend.services.opshop_pickup_collection_excel_export_service import (
     build_opshop_pickup_collection_excel,
 )
 from tests.manual_dispatch_api_test_helpers import (
+    create_legacy_combined_delivery_fixture,
     assign_equal_trip_vehicle_fixture, authenticate_test_client,
 )
 
@@ -940,7 +941,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             response.json()["detail"],
         )
 
-    def test_delivery_export_uses_daily_run_sheet_form_layout(self):
+    def test_legacy_delivery_export_uses_daily_run_sheet_form_layout(self):
         self._assign_delivery_vehicle("D001", "V001")
         self._set_product_lines(
             "ORD-001",
@@ -971,7 +972,9 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
                 trip_no="trip2",
             )
         )
-        run_sheet_id = self._generate_and_save_delivery()
+        run_sheet_id = create_legacy_combined_delivery_fixture(self.service, self.dispatch_date, "D001").run_sheet_id
+        saved = self.client.post(f"/api/manual-dispatch/delivery/run-sheets/{run_sheet_id}/save", json=self._save_payload())
+        self.assertEqual(200, saved.status_code)
         with sqlite3.connect(self.db_path) as connection:
             connection.execute(
                 "UPDATE manual_vehicles SET rego = ? WHERE vehicle_id = ?",
@@ -1098,7 +1101,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         for manual_column in range(7, 14):
             self.assertIsNone(customer_a_row[manual_column])
 
-    def test_delivery_date_export_uses_snapshot_rows_and_one_sheet_per_driver(self):
+    def test_delivery_date_export_uses_snapshot_rows_and_one_sheet_per_run_sheet(self):
         self._assign_delivery_vehicle("D001", "V001")
         self._assign_delivery_vehicle("D002", "V002")
         self._set_product_lines(
@@ -1153,6 +1156,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         tony = self.client.post(
             "/api/manual-dispatch/delivery/run-sheets/generated",
             json={
+                "trip_no": "trip1",
                 "dispatch_date": self.dispatch_date,
                 "delivery_date": self.dispatch_date,
                 "driver_id": "D002",
@@ -1254,7 +1258,8 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         john_rows = list(workbook["John"].iter_rows(values_only=True))
         self.assertEqual(1, john_rows[8][0])
         self.assertEqual("Demo Customer A", john_rows[8][1])
-        self.assertEqual("Demo Customer C", john_rows[9][1])
+        self.assertIsNone(john_rows[9][1])
+        self.assertNotIn("Demo Customer C", self._workbook_values(response.content))
         self.assertEqual("INV-1001", john_rows[8][3])
         self.assertEqual(
             "RWIND - 45 BAG10\n"
@@ -2157,6 +2162,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
 
     def _delivery_generate_payload(self):
         return {
+            "trip_no": "trip1",
             "dispatch_date": self.dispatch_date,
             "delivery_date": self.dispatch_date,
             "driver_id": "D001",

@@ -22,24 +22,6 @@ export function getDeliveryTripVehicleAssignment(board, deliveryDate, driverId, 
     row.delivery_date === deliveryDate && row.driver_id === driverId && row.trip_no === tripNo);
 }
 
-// Stage 3 retires these day projections when controls and generation switch together.
-export function getDeliveryDayVehicleAssignment(board, deliveryDate, driverId) {
-  const trips = (board?.driver_vehicle_assignments || []).filter((row) =>
-    row.delivery_date === deliveryDate && row.driver_id === driverId);
-  if (trips.length) {
-    const first = getDeliveryTripVehicleAssignment(board, deliveryDate, driverId, "trip1");
-    const second = getDeliveryTripVehicleAssignment(board, deliveryDate, driverId, "trip2");
-    return trips.length === 2 && first && second && first.vehicle_id === second.vehicle_id ? first : null;
-  }
-  return (board?.legacy_driver_vehicle_assignments || []).find((row) =>
-    row.delivery_date === deliveryDate && row.driver_id === driverId && row.trip_no == null);
-}
-
-export function getDeliveryDayVehicleDraft(drafts, deliveryDate, driverId) {
-  const values = DELIVERY_VEHICLE_TRIPS.map((tripNo) => drafts?.[deliveryVehicleKey(deliveryDate, driverId, tripNo)]);
-  return values[0] === values[1] ? values[0] : undefined;
-}
-
 export function getDeliveryVehicleConflictDriverNames({
   board, claims, deliveryDate, driverId, tripNo, vehicleId,
 }) {
@@ -67,21 +49,6 @@ export function getDeliveryVehicleConflictDriverNames({
       && claim?.vehicle_id === vehicleId && Number(claim.sequence || 0) < currentSequence)
     .sort((left, right) => Number(left.claim.sequence || 0) - Number(right.claim.sequence || 0))[0];
   return earlier ? [driverNames.get(earlier.scope.driverId) || earlier.scope.driverId] : [];
-}
-
-export function getDeliveryDayVehicleConflictDriverNames(input) {
-  const board = input.board || {};
-  const legacy = (board.legacy_driver_vehicle_assignments || []).filter((row) =>
-    !(board.driver_vehicle_assignments || []).some((trip) =>
-      trip.delivery_date === row.delivery_date && trip.driver_id === row.driver_id));
-  const compatibilityBoard = {
-    ...board,
-    driver_vehicle_assignments: (board.driver_vehicle_assignments || []).concat(
-      legacy.flatMap((row) => DELIVERY_VEHICLE_TRIPS.map((trip_no) => ({ ...row, trip_no }))),
-    ),
-  };
-  return [...new Set(DELIVERY_VEHICLE_TRIPS.flatMap((tripNo) =>
-    getDeliveryVehicleConflictDriverNames({ ...input, board: compatibilityBoard, tripNo })))];
 }
 
 export function formatDeliveryVehicleConflictMessage(driverNames) {

@@ -1,3 +1,5 @@
+import { deliveryVehicleKey } from "../../utils/delivery-vehicle-utils.js";
+
 import {
   buildDeliveryCloseoutConfirmation,
   buildDeliveryCloseoutPayload,
@@ -21,9 +23,10 @@ export function createDeliveryRunSheetActions(context) {
   const isDeliveryGenerationBusy = (...args) => context.actions.isDeliveryGenerationBusy(...args);
   const restoreGenerateButtonFocus = (...args) => context.actions.restoreGenerateButtonFocus(...args);
   const isDeliveryMutationCurrent = (...args) => context.actions.isDeliveryMutationCurrent(...args);
+  const ensureDeliveryVehicleSelectionSettled = (...args) => context.actions.ensureDeliveryVehicleSelectionSettled(...args);
 
   function generateDeliveryRunSheet(candidate) {
-    if (!candidate || !(candidate.orders || []).length) {
+    if (!candidate || !["trip1", "trip2"].includes(candidate.trip_no) || !(candidate.orders || []).length) {
       return;
     }
     state.deliveryGenerationConfirmation = {
@@ -54,23 +57,36 @@ export function createDeliveryRunSheetActions(context) {
       return;
     }
     await runDeliveryAction(
-      `delivery-generate:${candidate.delivery_date}:${candidate.driver_id}`,
+      `delivery-generate:${deliveryVehicleKey(candidate.delivery_date, candidate.driver_id, candidate.trip_no)}`,
       async (context) => {
-        await api.createGeneratedDeliveryRunSheet({
+        const vehicleId = await ensureDeliveryVehicleSelectionSettled(candidate.delivery_date, candidate.driver_id, candidate.trip_no);
+        if (!isDeliveryMutationCurrent(context)) {
+          return;
+        }
+        if (vehicleId !== (candidate.vehicle_id || "")) {
+          throw new Error("Vehicle changed. Close this preview and review the trip again.");
+        }
+        const runSheet = await api.createGeneratedDeliveryRunSheet({
           dispatch_date: candidate.dispatch_date,
           delivery_date: candidate.delivery_date,
           driver_id: candidate.driver_id,
+          trip_no: candidate.trip_no,
         });
         if (isDeliveryMutationCurrent(context)) {
-          state.deliveryGenerationConfirmation = null;
-          await loadDeliveryRoute(context.route);
+          const merge = (sheets) => (sheets || []).filter((sheet) => sheet.run_sheet_id !== runSheet.run_sheet_id).concat(runSheet);
+          state.deliveryTripSummaryRunSheets = merge(state.deliveryTripSummaryRunSheets);
+          state.deliveryRunSheets = merge(state.deliveryRunSheets);
+          if (state.deliveryGenerationConfirmation === candidate) {
+            state.deliveryGenerationConfirmation = null;
+          }
         }
       },
       (error) => {
-        state.deliveryGenerationConfirmation = {
-          ...candidate,
-          error: error.message,
-        };
+        if (state.deliveryGenerationConfirmation === candidate) {
+          state.deliveryGenerationConfirmation = { ...candidate, error: error.message };
+        } else {
+          state.deliveryActionError = error.message;
+        }
       },
     );
   }

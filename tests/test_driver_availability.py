@@ -94,6 +94,7 @@ class DriverAvailabilityBehavior:
     def _generate(self):
         return self.service.create_generated_delivery_run_sheet(
             GenerateDeliveryRunSheetRequest(
+                trip_no="trip1",
                 dispatch_date=self.dispatch_date,
                 delivery_date=self.dispatch_date,
                 driver_id="D001",

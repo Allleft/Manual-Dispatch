@@ -623,22 +623,6 @@ class DeliveryWorkspaceVehicleClearRequest:
 
 
 @dataclass
-class DeliveryDayVehicleAssignmentRequest:
-    """Temporary explicit contract for the combined Run Sheet UI."""
-    dispatch_date: Optional[str] = None
-    delivery_date: Optional[str] = None
-    driver_id: Optional[str] = None
-    vehicle_id: Optional[str] = None
-
-
-@dataclass
-class DeliveryDayVehicleClearRequest:
-    dispatch_date: Optional[str] = None
-    delivery_date: Optional[str] = None
-    driver_id: Optional[str] = None
-
-
-@dataclass
 class OpShopWorkspaceAssignmentBatchRequest:
     dispatch_date: Optional[str] = None
     assignments: List[dict] = field(default_factory=list)
@@ -939,6 +923,7 @@ class UpdateOpShopPickupCollectionRowsRequest:
 
 @dataclass
 class GenerateDeliveryRunSheetRequest:
+    trip_no: str
     dispatch_date: Optional[str] = None
     delivery_date: Optional[str] = None
     driver_id: Optional[str] = None

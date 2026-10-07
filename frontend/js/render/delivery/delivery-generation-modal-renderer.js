@@ -1,4 +1,4 @@
-import { getDeliveryDayVehicleDraft } from "../../utils/delivery-vehicle-utils.js";
+import { deliveryVehicleKey } from "../../utils/delivery-vehicle-utils.js";
 
 import {
   formatOptional,
@@ -20,6 +20,7 @@ export function createDeliveryGenerationCandidate(
   driver,
   board,
   deliveryDate,
+  tripNo,
   driverOrders,
   state,
 ) {
@@ -27,13 +28,16 @@ export function createDeliveryGenerationCandidate(
     board,
     deliveryDate,
     driver.driver_id,
+    tripNo,
   );
-  const vehicleId = getDeliveryDayVehicleDraft(state.deliveryVehicleDrafts, deliveryDate, driver.driver_id)
+  const key = deliveryVehicleKey(deliveryDate, driver.driver_id, tripNo);
+  const vehicleId = state.deliveryVehicleDrafts?.[key]
     ?? vehicleAssignment?.vehicle_id
     ?? "";
   const vehicle = (board.vehicles || []).find((item) => item.vehicle_id === vehicleId);
-  const totals = orderTotals(driverOrders);
-  const orders = driverOrders.map(({ order, assignment }) => ({
+  const selectedOrders = driverOrders.filter(({ assignment }) => assignment.trip_no === tripNo);
+  const totals = orderTotals(selectedOrders);
+  const orders = selectedOrders.map(({ order }) => ({
     order_id: order.order_id,
     order_number: order.order_no || order.invoice_number || order.order_id,
     company_name: order.company_name,
@@ -42,7 +46,7 @@ export function createDeliveryGenerationCandidate(
     delivery_date: order.delivery_date,
     note: order.note,
     product_lines: order.product_lines || [],
-    trip_no: assignment.trip_no === "trip2" ? "trip2" : "trip1",
+    trip_no: tripNo,
     pallet_quantity: Number(order.pallet_quantity || 0),
     loose_bags_quantity: Number(order.loose_bags_quantity || 0),
     carton_quantity: Number(order.carton_quantity || 0),
@@ -51,22 +55,20 @@ export function createDeliveryGenerationCandidate(
     dispatch_date: board.dispatch_date || deliveryDate,
     delivery_date: deliveryDate,
     driver_id: driver.driver_id,
+    trip_no: tripNo,
+    vehicle_id: vehicleId,
     driver_name: formatOptional(driver.name, driver.driver_id),
     vehicle: vehicle
       ? { rego: vehicle.rego, pallet_capacity: vehicle.pallet_capacity }
       : null,
     orders,
-    totals: {
-      ...totals,
-      trip1: orders.filter((order) => order.trip_no === "trip1").length,
-      trip2: orders.filter((order) => order.trip_no === "trip2").length,
-    },
+    totals,
   };
 }
 
 export function createDeliveryGenerationConfirmationModal(state, actions) {
   const confirmation = state.deliveryGenerationConfirmation;
-  const actionKey = `delivery-generate:${confirmation.delivery_date}:${confirmation.driver_id}`;
+  const actionKey = `delivery-generate:${deliveryVehicleKey(confirmation.delivery_date, confirmation.driver_id, confirmation.trip_no)}`;
   const isGenerating = isBusy(state, actionKey);
   const modal = createWorkspaceModal(
     "Confirm Delivery Run Sheet",
@@ -83,6 +85,7 @@ export function createDeliveryGenerationConfirmationModal(state, actions) {
   body.classList.add("workspace-generation-confirmation-body");
   body.append(createModalFactSection("Run Sheet Summary", [
     ["Driver", confirmation.driver_name],
+    ["Trip", confirmation.trip_no === "trip1" ? "Trip 1" : "Trip 2"],
     ["Dispatch date", confirmation.dispatch_date],
     ["Delivery date", confirmation.delivery_date],
     ["Vehicle", confirmation.vehicle?.rego || "Not selected"],
@@ -93,8 +96,6 @@ export function createDeliveryGenerationConfirmationModal(state, actions) {
         : "Select a vehicle to view",
     ],
     ["Orders", confirmation.orders.length],
-    ["Trip 1 orders", confirmation.totals.trip1 || 0],
-    ["Trip 2 orders", confirmation.totals.trip2 || 0],
     ["Pallets", confirmation.totals.pallets || 0],
     ["Loose bags", confirmation.totals.bags || 0],
     ["Cartons", confirmation.totals.cartons || 0],

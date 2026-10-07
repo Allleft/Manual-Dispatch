@@ -27,11 +27,13 @@ class InMemoryAssignmentRepositoryMixin:
             )
         ]
 
-    def list_delivery_order_assignments_for_delivery_date(self, delivery_date):
+    def list_delivery_order_assignments_for_delivery_date(self, delivery_date, driver_id=None, trip_no=None):
         return [
             assignment
             for assignment in self.assignments
             if assignment.task_type == "ORDER"
+            and (driver_id is None or assignment.driver_id == driver_id)
+            and (trip_no is None or assignment.trip_no == trip_no)
             and (order := self.get_order(assignment.task_id))
             and order.status == "ACTIVE"
             and order.delivery_date == delivery_date
@@ -346,7 +348,7 @@ class InMemoryAssignmentRepositoryMixin:
         return True
 
     def upsert_driver_vehicle_assignment(self, dispatch_date, delivery_date, driver_id, vehicle_id):
-        """Temporary day-level adapter; use the explicit trip contract for new writes."""
+        """REMOVE LATER: retained for historical NULL fixtures/legacy consumers."""
         assignment, conflict = self._upsert_legacy_delivery_vehicle(
             dispatch_date, delivery_date, driver_id, vehicle_id
         )
@@ -375,7 +377,7 @@ class InMemoryAssignmentRepositoryMixin:
     def upsert_delivery_workspace_vehicle_assignment(
         self, dispatch_date, delivery_date, driver_id, vehicle_id
     ):
-        """Current application's explicit day-level compatibility adapter."""
+        """REMOVE LATER: legacy repository alias, unreachable from active APIs."""
         return self._upsert_legacy_delivery_vehicle(dispatch_date, delivery_date, driver_id, vehicle_id)
 
     def list_delivery_trip_vehicle_assignments(self, delivery_date):

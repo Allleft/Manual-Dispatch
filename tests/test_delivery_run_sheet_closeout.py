@@ -22,7 +22,6 @@ from backend.schemas import (
     CloseDeliveryRunSheetRequest,
     CloseDeliveryRunSheetRowRequest,
     Driver,
-    GenerateDeliveryRunSheetRequest,
     OperatorAccountIdentity,
     Order,
     RegisterOperatorAccountRequest,
@@ -32,7 +31,7 @@ from backend.services.manual_dispatch.logbook_file_service import (
     LogbookFileService,
 )
 from backend.services.manual_dispatch_service import ManualDispatchService
-from tests.manual_dispatch_api_test_helpers import authenticate_test_client
+from tests.manual_dispatch_api_test_helpers import authenticate_test_client, create_legacy_combined_delivery_fixture
 from tools.check_logbook_integrity import check_logbook_integrity
 from tools.logbook_contract import KNOWN_ACTIONS
 
@@ -631,13 +630,7 @@ class DeliveryRunSheetCloseoutTest(unittest.TestCase):
             account_id=account.account_id,
             account_name=account.account_name,
         )
-        run_sheet = service.create_generated_delivery_run_sheet(
-            GenerateDeliveryRunSheetRequest(
-                dispatch_date=DELIVERY_DATE,
-                delivery_date=DELIVERY_DATE,
-                driver_id="CLOSE-DRIVER",
-            )
-        )
+        run_sheet = create_legacy_combined_delivery_fixture(service, DELIVERY_DATE, "CLOSE-DRIVER")
         return service, identity, run_sheet, logbook
 
     @staticmethod

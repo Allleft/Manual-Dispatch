@@ -286,29 +286,19 @@ class DeliveryPerTripVehicleFrontendTest(unittest.TestCase):
             }
         """)
 
-    def test_explicit_day_queue_uses_two_trip_keys_one_compatibility_write(self):
+    def test_day_queue_entrypoint_is_retired(self):
         self.run_node("""
-            const state = stateFor(), gate = deferred(), writes = [];
-            const { actions, context } = queueFor(state, { assignDeliveryDayVehicle: async (payload) => {
-              writes.push(payload); await gate.promise; return board([], [row("A", null, payload.vehicle_id)]);
-            } });
-            const pending = actions.updateDeliveryDayVehicleSelection(date, "A", "V1");
-            assert(writes.length === 1 && !Object.hasOwn(writes[0], "trip_no"));
-            assert(context.deliveryVehicleQueues.size === 2 && context.deliveryVehiclePhysicalTails.size === 2);
-            assert(state.deliveryVehicleDrafts[key(date, "A", "trip1")] === "V1");
-            assert(state.deliveryVehicleDrafts[key(date, "A", "trip2")] === "V1");
-            gate.resolve(); await pending;
-            assert(state.deliveryBoard.driver_vehicle_assignments.length === 0);
-            assert(utils.getDeliveryDayVehicleAssignment(state.deliveryBoard, date, "A").vehicle_id === "V1");
+            const { actions } = queueFor(stateFor());
+            assert(!Object.hasOwn(actions, "updateDeliveryDayVehicleSelection"));
         """)
 
-    def test_day_projection_equal_divergent_partial_and_null_only(self):
+    def test_new_trip_reads_never_project_sibling_or_null(self):
         self.run_node("""
-            assert(utils.getDeliveryDayVehicleAssignment(board([row("A", "trip1", "V1"), row("A", "trip2", "V1")]), date, "A").vehicle_id === "V1");
-            assert(!utils.getDeliveryDayVehicleAssignment(board([row("A", "trip1", "V1"), row("A", "trip2", "V2")]), date, "A"));
-            assert(!utils.getDeliveryDayVehicleAssignment(board([row("A", "trip1", "V1")], [row("A", null, "V1")]), date, "A"));
-            assert(utils.getDeliveryDayVehicleAssignment(board([], [row("A", null, "V1")]), date, "A").vehicle_id === "V1");
-            assert(utils.getDeliveryDayVehicleDraft({ [key(date, "A", "trip1")]: "V1", [key(date, "A", "trip2")]: "V2" }, date, "A") === undefined);
+            const selected = board([row("A", "trip1", "V1"), row("A", "trip2", "V2")]);
+            assert(utils.getDeliveryTripVehicleAssignment(selected, date, "A", "trip1").vehicle_id === "V1");
+            assert(utils.getDeliveryTripVehicleAssignment(selected, date, "A", "trip2").vehicle_id === "V2");
+            assert(!utils.getDeliveryTripVehicleAssignment(board([], [row("A", null, "V1")]), date, "A", "trip1"));
+            assert(!Object.hasOwn(utils, "getDeliveryDayVehicleAssignment"));
         """)
 
     def test_client_serializes_trip_and_propagates_error_code(self):
@@ -322,9 +312,8 @@ class DeliveryPerTripVehicleFrontendTest(unittest.TestCase):
             const api = await import(API_URI);
             await api.apiAssignDeliveryWorkspaceVehicle({ delivery_date: date, driver_id: "A", trip_no: "trip2", vehicle_id: "V1" });
             await api.apiClearDeliveryWorkspaceVehicle({ delivery_date: date, driver_id: "A", trip_no: "trip1" });
-            await api.apiAssignDeliveryDayVehicle({ delivery_date: date, driver_id: "A", vehicle_id: "V1" });
             assert(calls[0].body.trip_no === "trip2" && calls[1].body.trip_no === "trip1");
-            assert(calls[2].url.endsWith("/delivery/day-vehicle-assignments") && !Object.hasOwn(calls[2].body, "trip_no"));
+            assert(!Object.hasOwn(api, "apiAssignDeliveryDayVehicle"));
             globalThis.fetch = async () => ({ ok: false, status: 409, headers: { get: () => "workspace_migration_required" },
               json: async () => ({ detail: "Migration needed" }) });
             let error;
@@ -332,13 +321,12 @@ class DeliveryPerTripVehicleFrontendTest(unittest.TestCase):
             assert(error.code === "workspace_migration_required" && error.status === 409 && error.detail === "Migration needed");
         """.replace("API_URI", repr(api_uri)))
 
-    def test_visible_layout_remains_one_day_control(self):
+    def test_visible_layout_owns_vehicle_control_per_trip(self):
         source = (JS / "render/delivery/delivery-trip-summary-renderer.js").read_text(encoding="utf-8")
-        self.assertIn("actions.updateDeliveryDayVehicleSelection(", source)
-        self.assertEqual(1, source.count("card.append(facts, createDriverVehicleControl("))
+        self.assertIn("actions.updateDeliveryVehicleSelection(", source)
+        self.assertNotIn("createDriverVehicleControl", source)
         panel = source.split("export function createTripPanel", 1)[1].split("export function createAssignedOrderRow", 1)[0]
-        self.assertNotIn("createDriverVehicleControl", panel)
-        self.assertNotIn("createSelect", panel)
+        self.assertIn("createTripVehicleControl", panel)
 
 
 if __name__ == "__main__":

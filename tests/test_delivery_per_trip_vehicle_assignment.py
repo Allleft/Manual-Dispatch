@@ -19,7 +19,7 @@ from backend.errors import DeliveryRunSheetLockedError, StateChangedConflictErro
 from backend.repositories.in_memory_manual_dispatch_repository import InMemoryManualDispatchRepository
 from backend.repositories.sqlite_manual_dispatch_repository import SQLiteManualDispatchRepository
 from backend.schemas import (
-    AssignDriverVehicleRequest, DeliveryDayVehicleAssignmentRequest, DeliveryDayVehicleClearRequest,
+    AssignDriverVehicleRequest,
     DeliveryWorkspaceAssignOrderRequest, DeliveryWorkspaceUnassignOrderRequest,
     DeliveryWorkspaceVehicleAssignmentRequest, DeliveryWorkspaceVehicleClearRequest,
 )
@@ -62,11 +62,6 @@ class VehicleFixture(unittest.TestCase):
 
     def legacy(self):
         return self.repository.upsert_driver_vehicle_assignment(DATE, DATE, "D001", "V001")
-
-    def day_assign(self, vehicle="V001"):
-        return self.service.assign_delivery_day_vehicle(DeliveryDayVehicleAssignmentRequest(
-            delivery_date=DATE, driver_id="D001", vehicle_id=vehicle,
-        ))
 
     def sheet(self, trip="trip1", status="GENERATED", execution="OPEN", driver="D001"):
         sheet = snapshot(trip_no=trip, status=status, execution_status=execution, driver=driver)
@@ -284,44 +279,43 @@ class DeliveryPerTripVehicleDomainTest(VehicleFixture):
         self.assertEqual(3, len(events))
         self.assertEqual({"trip2"}, {row["metadata"]["trip_no"] for row in events})
 
-    def test_day_adapter_projects_equal_explicit_trips_without_null(self):
+    def test_legacy_repository_projection_of_equal_trips_remains_readable(self):
         self.assign()
         self.assign(trip="trip2")
-        self.assertEqual("V001", self.service.delivery_run_sheet_service._vehicle_snapshot(DATE, "D001")[0])
-        self.day_assign("V002")
+        self.assertEqual("V001", self.repository.list_driver_vehicle_assignments_for_delivery_date(DATE)[0].vehicle_id)
+        self.repository.upsert_driver_vehicle_assignment(DATE, DATE, "D001", "V002")
         self.assertEqual(["V002", "V002"], [self.selected(trip=trip) for trip in ("trip1", "trip2")])
         self.assertEqual([], [row for row in self.repository.list_delivery_vehicle_assignments() if row.trip_no is None])
 
-    def test_day_adapter_rejects_divergent_and_partial_trips_without_mutation(self):
+    def test_legacy_repository_projection_rejects_divergent_and_partial_trips(self):
         self.assign()
         before = self.repository.list_delivery_vehicle_assignments()
         with self.assertRaises(StateChangedConflictError):
-            self.day_assign("V002")
+            self.repository.list_driver_vehicle_assignments_for_delivery_date(DATE)
         self.assertEqual(before, self.repository.list_delivery_vehicle_assignments())
         self.assign(trip="trip2", vehicle="V002")
         before = self.repository.list_delivery_vehicle_assignments()
         for operation in (
-            lambda: self.day_assign("V003"),
-            lambda: self.service.clear_delivery_day_vehicle(DeliveryDayVehicleClearRequest(delivery_date=DATE, driver_id="D001")),
-            lambda: self.service.delivery_run_sheet_service._vehicle_snapshot(DATE, "D001"),
+            lambda: self.repository.upsert_driver_vehicle_assignment(DATE, DATE, "D001", "V003"),
+            lambda: self.repository.list_driver_vehicle_assignments_for_delivery_date(DATE),
         ):
             with self.assertRaises(StateChangedConflictError):
                 operation()
         self.assertEqual(before, self.repository.list_delivery_vehicle_assignments())
 
-    def test_day_adapter_null_only_intentionally_remains_day_scoped(self):
-        self.day_assign()
-        board = self.day_assign("V002")
+    def test_historical_null_fixture_remains_visible_as_legacy_only(self):
+        self.legacy()
+        self.repository.upsert_driver_vehicle_assignment(DATE, DATE, "D001", "V002")
+        board = self.service.get_delivery_trip_summary_board(DATE)
         self.assertEqual([], board.driver_vehicle_assignments)
         self.assertEqual("V002", board.legacy_driver_vehicle_assignments[0].vehicle_id)
         self.assertIsNone(self.selected())
-        self.service.clear_delivery_day_vehicle(DeliveryDayVehicleClearRequest(delivery_date=DATE, driver_id="D001"))
+        self.repository.remove_driver_vehicle_assignment(DATE, "D001", DATE)
         self.assertEqual([], self.repository.list_delivery_vehicle_assignments())
 
-    def test_day_adapter_cannot_bypass_a_per_trip_lock(self):
-        self.sheet(trip="trip2")
-        with self.assertRaises(DeliveryRunSheetLockedError):
-            self.day_assign("V002")
+    def test_day_service_entrypoints_are_retired(self):
+        self.assertFalse(hasattr(self.service, "assign_delivery_day_vehicle"))
+        self.assertFalse(hasattr(self.service, "clear_delivery_day_vehicle"))
 
 
 class SQLiteDeliveryPerTripVehicleDomainTest(DeliveryPerTripVehicleDomainTest):
@@ -354,7 +348,7 @@ class SQLiteDeliveryPerTripVehicleDomainTest(DeliveryPerTripVehicleDomainTest):
         self.assertEqual(["success", "success"], self.race(("trip1", "trip2")))
         self.assertEqual(2, len(self.repository.list_delivery_trip_vehicle_assignments(DATE)))
 
-    def test_old_schema_orders_and_explicit_day_path_remain_usable(self):
+    def test_old_schema_orders_and_legacy_reads_remain_usable(self):
         path = self.root / "old-schema.sqlite3"
         schema = (Path(__file__).resolve().parents[1] / "backend/db/schema.sql").read_text(encoding="utf-8")
         for table, ddl in (("manual_driver_vehicle_assignments", OLD_VEHICLE_DDL), ("delivery_run_sheets", OLD_RUN_SHEET_DDL)):
@@ -370,9 +364,8 @@ class SQLiteDeliveryPerTripVehicleDomainTest(DeliveryPerTripVehicleDomainTest):
         service.assign_delivery_workspace_order(DeliveryWorkspaceAssignOrderRequest(
             order_id="ORD-001", driver_id="D001", trip_no="trip2",
         ))
-        board = service.assign_delivery_day_vehicle(DeliveryDayVehicleAssignmentRequest(
-            delivery_date=DATE, driver_id="D001", vehicle_id="V001",
-        ))
+        repository.upsert_driver_vehicle_assignment(DATE, DATE, "D001", "V001")
+        board = service.get_delivery_trip_summary_board(DATE)
         self.assertEqual("trip2", board.assignments[0].trip_no)
         self.assertEqual([], board.driver_vehicle_assignments)
         self.assertEqual("V001", board.legacy_driver_vehicle_assignments[0].vehicle_id)
@@ -459,17 +452,13 @@ class DeliveryPerTripVehicleApiTest(VehicleFixture):
         self.assertEqual("workspace_migration_required", response.headers["X-Manual-Dispatch-Error-Code"])
         self.assertIn("X-Manual-Dispatch-Error-Code", response.headers["Access-Control-Expose-Headers"])
 
-    def test_day_endpoint_is_explicit_and_rejects_trip_payload(self):
-        response = self.client.post("/api/manual-dispatch/delivery/day-vehicle-assignments", json={
-            "delivery_date": DATE, "driver_id": "D001", "vehicle_id": "V001",
-        })
-        self.assertEqual(200, response.status_code)
-        self.assertEqual([], response.json()["driver_vehicle_assignments"])
-        self.assertEqual([None], [row["trip_no"] for row in response.json()["legacy_driver_vehicle_assignments"]])
-        response = self.client.post("/api/manual-dispatch/delivery/day-vehicle-assignments", json={
-            "delivery_date": DATE, "driver_id": "D001", "vehicle_id": "V001", "trip_no": "trip1",
-        })
-        self.assertEqual(400, response.status_code)
+    def test_day_endpoints_are_retired_without_vehicle_writes(self):
+        for suffix in ("", "/clear"):
+            response = self.client.post("/api/manual-dispatch/delivery/day-vehicle-assignments" + suffix, json={
+                "delivery_date": DATE, "driver_id": "D001", "vehicle_id": "V001",
+            })
+            self.assertEqual(404, response.status_code)
+        self.assertEqual([], self.repository.list_delivery_vehicle_assignments())
 
     def test_legacy_disabled_stays_disabled_enabled_requires_trip(self):
         payload = {"dispatch_date": DATE, "delivery_date": DATE, "driver_id": "D001", "vehicle_id": "V001"}

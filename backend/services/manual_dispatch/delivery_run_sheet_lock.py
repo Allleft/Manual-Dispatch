@@ -19,11 +19,13 @@ def is_delivery_run_sheet_finalized(
     dispatch_date,
     driver_id,
     delivery_date,
+    trip_no=None,
 ):
     return repository.has_saved_delivery_run_sheet(
         dispatch_date,
         driver_id,
         delivery_date,
+        trip_no,
     )
 
 
@@ -32,12 +34,14 @@ def ensure_delivery_run_sheet_not_finalized(
     dispatch_date,
     driver_id,
     delivery_date,
+    trip_no=None,
 ):
     if is_delivery_run_sheet_finalized(
         repository,
         dispatch_date,
         driver_id,
         delivery_date,
+        trip_no,
     ):
         raise StateChangedConflictError(DELIVERY_RUN_SHEET_SAVED_LOCK_MESSAGE)
 

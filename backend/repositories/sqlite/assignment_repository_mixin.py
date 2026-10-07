@@ -42,7 +42,7 @@ class SQLiteAssignmentRepositoryMixin:
             ).fetchall()
         return [self._row_to_assignment(row) for row in rows]
 
-    def list_delivery_order_assignments_for_delivery_date(self, delivery_date):
+    def list_delivery_order_assignments_for_delivery_date(self, delivery_date, driver_id=None, trip_no=None):
         with connect(self.db_path) as connection:
             rows = connection.execute(
                 """
@@ -53,9 +53,11 @@ class SQLiteAssignmentRepositoryMixin:
                 WHERE assignment.task_type = 'ORDER'
                     AND manual_order.status = 'ACTIVE'
                     AND manual_order.delivery_date = ?
+                    AND (? IS NULL OR assignment.driver_id = ?)
+                    AND (? IS NULL OR assignment.trip_no = ?)
                 ORDER BY assignment.assignment_id
                 """,
-                (delivery_date,),
+                (delivery_date, driver_id, driver_id, trip_no, trip_no),
             ).fetchall()
         return [self._row_to_assignment(row) for row in rows]
 
@@ -710,7 +712,7 @@ class SQLiteAssignmentRepositoryMixin:
         return cursor.rowcount > 0
 
     def upsert_driver_vehicle_assignment(self, dispatch_date, delivery_date, driver_id, vehicle_id):
-        """Temporary day-level compatibility entry point; new writes use the trip API."""
+        """REMOVE LATER: retained for historical NULL fixtures/legacy consumers."""
         with connect(self.db_path) as connection:
             has_trip_column = "trip_no" in table_columns(connection, "manual_driver_vehicle_assignments")
         if has_trip_column:
@@ -752,7 +754,7 @@ class SQLiteAssignmentRepositoryMixin:
     def upsert_delivery_workspace_vehicle_assignment(
         self, dispatch_date, delivery_date, driver_id, vehicle_id
     ):
-        """Current day-level application adapter; never chooses an arbitrary trip."""
+        """REMOVE LATER: legacy repository alias, unreachable from active APIs."""
         with connect(self.db_path) as connection:
             has_trip_column = "trip_no" in table_columns(connection, "manual_driver_vehicle_assignments")
         if has_trip_column:

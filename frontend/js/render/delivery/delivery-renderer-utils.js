@@ -1,4 +1,4 @@
-import { getDeliveryDayVehicleAssignment } from "../../utils/delivery-vehicle-utils.js";
+import { deliveryVehicleKey, getDeliveryTripVehicleAssignment } from "../../utils/delivery-vehicle-utils.js";
 
 import { createIcon } from "../../utils/icon-utils.js";
 
@@ -31,17 +31,19 @@ export function assignedOrdersForDriver(board, deliveryDate, driverId) {
     });
 }
 
-export function findRunSheetForDriver(runSheets, deliveryDate, driverId) {
+export function findRunSheetForDriverTrip(runSheets, deliveryDate, driverId, tripNo) {
+  deliveryVehicleKey(deliveryDate, driverId, tripNo);
   return (runSheets || []).find(
     (runSheet) =>
       runSheet.delivery_date === deliveryDate &&
       runSheet.driver_id === driverId &&
+      (runSheet.trip_no == null || runSheet.trip_no === tripNo) &&
       ["GENERATED", "SAVED"].includes(runSheet.status),
   );
 }
 
-export function findVehicleAssignment(board, deliveryDate, driverId) {
-  return getDeliveryDayVehicleAssignment(board, deliveryDate, driverId);
+export function findVehicleAssignment(board, deliveryDate, driverId, tripNo) {
+  return getDeliveryTripVehicleAssignment(board, deliveryDate, driverId, tripNo);
 }
 
 export function assignmentMap(board) {

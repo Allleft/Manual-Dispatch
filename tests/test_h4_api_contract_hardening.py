@@ -238,6 +238,7 @@ class H4PartialPatchServiceContractTest(unittest.TestCase):
         )
         generated = self.service.create_generated_delivery_run_sheet(
             GenerateDeliveryRunSheetRequest(
+                trip_no="trip1",
                 dispatch_date="2099-05-01",
                 delivery_date="2099-05-05",
                 driver_id="D001",
@@ -249,6 +250,7 @@ class H4PartialPatchServiceContractTest(unittest.TestCase):
         with self.assertRaisesRegex(StateChangedConflictError, "already exists"):
             self.service.create_generated_delivery_run_sheet(
                 GenerateDeliveryRunSheetRequest(
+                    trip_no="trip1",
                     dispatch_date="2099-05-02",
                     delivery_date="2099-05-05",
                     driver_id="D001",

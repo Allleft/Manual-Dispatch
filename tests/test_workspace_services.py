@@ -121,6 +121,7 @@ class WorkspaceServicesTest(unittest.TestCase):
             )
         generated = service.create_generated_delivery_run_sheet(
             GenerateDeliveryRunSheetRequest(
+                trip_no="trip1",
                 dispatch_date="2026-05-05",
                 delivery_date="2026-05-05",
                 driver_id="D001",
@@ -162,6 +163,7 @@ class WorkspaceServicesTest(unittest.TestCase):
         saved = service.save_generated_delivery_run_sheet(
             service.create_generated_delivery_run_sheet(
                 GenerateDeliveryRunSheetRequest(
+                    trip_no="trip1",
                     dispatch_date="2026-05-05",
                     delivery_date="2026-05-05",
                     driver_id="D001",
@@ -225,6 +227,7 @@ class WorkspaceServicesTest(unittest.TestCase):
                 self.dispatch_date,
                 "D001",
                 self.dispatch_date,
+                "trip1",
             )
         )
         self.assertFalse(
@@ -387,6 +390,7 @@ class WorkspaceServicesTest(unittest.TestCase):
 
         generated = self.service.create_generated_delivery_run_sheet(
             GenerateDeliveryRunSheetRequest(
+                trip_no="trip2",
                 delivery_date=self.dispatch_date,
                 driver_id="D002",
             )
@@ -395,6 +399,7 @@ class WorkspaceServicesTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "already exists"):
             self.service.create_generated_delivery_run_sheet(
                 GenerateDeliveryRunSheetRequest(
+                    trip_no="trip2",
                     dispatch_date=other_dispatch_date,
                     delivery_date=self.dispatch_date,
                     driver_id="D002",
@@ -622,6 +627,7 @@ class WorkspaceServicesTest(unittest.TestCase):
     def _generate_delivery(self):
         return self.service.create_generated_delivery_run_sheet(
             GenerateDeliveryRunSheetRequest(
+                trip_no="trip1",
                 dispatch_date=self.dispatch_date,
                 delivery_date=self.dispatch_date,
                 driver_id="D001",

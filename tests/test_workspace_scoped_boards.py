@@ -360,6 +360,7 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
         saved = self.service.save_generated_delivery_run_sheet(
             self.service.create_generated_delivery_run_sheet(
                 GenerateDeliveryRunSheetRequest(
+                    trip_no="trip1",
                     dispatch_date=self.dispatch_date,
                     delivery_date=delivery_date,
                     driver_id="DRIVER-1",
@@ -625,7 +626,7 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
                     "delivery_date": self.dispatch_date,
                     "driver_id": "DRIVER-1",
                     "run_sheet_id": saved.run_sheet_id,
-                    "trip_no": None,
+                    "trip_no": "trip1",
                 }
             ],
             [to_dict(lock) for lock in saved_board.saved_vehicle_assignment_locks],
@@ -1126,6 +1127,7 @@ class WorkspaceScopedBoardsTest(unittest.TestCase):
 
     def _delivery_generate_request(self):
         return GenerateDeliveryRunSheetRequest(
+            trip_no="trip1",
             dispatch_date=self.dispatch_date,
             delivery_date=self.dispatch_date,
             driver_id="DRIVER-1",

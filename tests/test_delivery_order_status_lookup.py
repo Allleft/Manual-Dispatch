@@ -65,6 +65,7 @@ class LookupContract:
 
     def generate(self):
         return self.service.create_generated_delivery_run_sheet(GenerateDeliveryRunSheetRequest(
+            trip_no=self.repository.find_assignment_for_task("ORDER", self.order.order_id).trip_no,
             dispatch_date="1999-01-01",
             delivery_date=self.repository.get_order(self.order.order_id).delivery_date,
             driver_id="LOOKUP-DRIVER",

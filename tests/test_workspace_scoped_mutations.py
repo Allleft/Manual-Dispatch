@@ -562,6 +562,7 @@ class WorkspaceScopedMutationsTest(unittest.TestCase):
     def _generate_delivery(self, driver_id):
         return self.service.create_generated_delivery_run_sheet(
             GenerateDeliveryRunSheetRequest(
+                trip_no="trip1",
                 dispatch_date=self.dispatch_date,
                 delivery_date=self.dispatch_date,
                 driver_id=driver_id,

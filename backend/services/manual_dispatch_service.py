@@ -179,12 +179,6 @@ class ManualDispatchService:
     def unassign_delivery_workspace_order(self, request):
         return self.delivery_application_service.unassign_delivery_workspace_order(request)
 
-    def assign_delivery_day_vehicle(self, request):
-        return self.delivery_application_service.assign_delivery_day_vehicle(request)
-
-    def clear_delivery_day_vehicle(self, request):
-        return self.delivery_application_service.clear_delivery_day_vehicle(request)
-
     def assign_delivery_workspace_vehicle(self, request):
         return self.delivery_application_service.assign_delivery_workspace_vehicle(request)
 

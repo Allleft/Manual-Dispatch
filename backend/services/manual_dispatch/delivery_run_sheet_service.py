@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from backend.errors import StateChangedConflictError
+from backend.repositories.delivery_scope import validate_run_sheet_snapshot
 
 from backend.schemas import (
     CloseDeliveryRunSheetRowRequest,
@@ -51,27 +52,33 @@ class DeliveryRunSheetService:
         )
         driver_id = clean_required_text(request.driver_id, "driver_id")
         self.validator.validate_driver_exists(driver_id)
+        trip_no = clean_required_text(request.trip_no, "trip_no")
+        self.validator.validate_trip_no(trip_no)
 
         existing = self.repository.get_delivery_run_sheet_for_driver(
             dispatch_date,
             delivery_date,
             driver_id,
+            trip_no,
         )
         if existing:
             raise StateChangedConflictError(
-                "Delivery Run Sheet already exists for this driver and delivery date."
+                "A legacy combined Delivery Run Sheet overlaps this trip."
+                if existing.trip_no is None else
+                "Delivery Run Sheet already exists for this driver, delivery date and trip."
             )
 
-        trips = self._build_trips(delivery_date, driver_id)
-        if not trips:
-            raise ValueError("At least one assigned Delivery Order is required.")
+        trip = self._build_trip(delivery_date, driver_id, trip_no)
+        if not trip.orders:
+            raise ValueError("At least one assigned Delivery Order is required for this trip.")
 
         driver = self.repository.get_driver(driver_id)
         vehicle_id, vehicle_rego = self._vehicle_snapshot(
             delivery_date,
             driver_id,
+            trip_no,
         )
-        orders = [order for trip in trips for order in trip.orders]
+        orders = trip.orders
         run_sheet = DeliveryRunSheet(
             run_sheet_id=f"DRS-{uuid4().hex.upper()}",
             dispatch_date=dispatch_date,
@@ -91,15 +98,16 @@ class DeliveryRunSheetService:
             saved_by_account_name=None,
             saved_by_account_id=None,
             legacy_summary_id=None,
-            trips=trips,
+            trips=[trip],
+            trip_no=trip_no,
         )
         try:
-            return self.repository.upsert_delivery_run_sheet(run_sheet)
+            return self.repository.create_delivery_run_sheet(run_sheet)
         except sqlite3.IntegrityError as error:
             if not _is_delivery_run_sheet_key_conflict(error):
                 raise
             raise StateChangedConflictError(
-                "Delivery Run Sheet already exists for this driver and delivery date."
+                "Delivery Run Sheet already exists for this driver, delivery date and trip."
             ) from error
 
     def list(self, dispatch_date=None, delivery_date=None, status=None):
@@ -241,6 +249,13 @@ class DeliveryRunSheetService:
         )
 
     def _validate_closeout_rows(self, run_sheet, request):
+        if run_sheet.trip_no is not None:
+            try:
+                validate_run_sheet_snapshot(run_sheet)
+            except ValueError as error:
+                raise StateChangedConflictError(
+                    "Delivery Run Sheet contains an inconsistent trip snapshot."
+                ) from error
         request_rows = getattr(request, "rows", None)
         if not isinstance(request_rows, list):
             raise ValueError("rows must be a list.")
@@ -350,82 +365,62 @@ class DeliveryRunSheetService:
             "next_delivery_date": next_delivery_date,
         }
 
-    def _build_trips(self, delivery_date, driver_id):
+    def _build_trip(self, delivery_date, driver_id, trip_no):
         assignments = [
             assignment
             for assignment in (
                 self.repository.list_delivery_order_assignments_for_delivery_date(
-                    delivery_date
+                    delivery_date, driver_id, trip_no,
                 )
             )
             if assignment.driver_id == driver_id
-            and assignment.trip_no in {"trip1", "trip2"}
+            and assignment.trip_no == trip_no
         ]
-        trips = []
+        orders = []
         row_no = 1
-        for trip_no in ("trip1", "trip2"):
-            orders = []
-            for assignment in assignments:
-                if assignment.trip_no != trip_no:
-                    continue
-                order = self.repository.get_order(assignment.task_id)
-                if (
-                    not order
-                    or order.status != "ACTIVE"
-                    or order.delivery_date != delivery_date
-                ):
-                    continue
-                orders.append(
-                    DeliveryRunSheetOrderSnapshot(
-                        row_id=f"DRR-{uuid4().hex.upper()}",
-                        trip_no=trip_no,
-                        row_no=row_no,
-                        task_type="ORDER",
-                        task_id=order.order_id,
-                        order_id_snapshot=order.order_id,
-                        invoice_number_snapshot=order.invoice_number,
-                        order_no_snapshot=order.order_no,
-                        company_name_snapshot=order.company_name,
-                        suburb_snapshot=order.suburb,
-                        delivery_address_snapshot=order.delivery_address,
-                        product_snapshot=None,
-                        pallet_quantity_snapshot=order.pallet_quantity,
-                        loose_bags_quantity_snapshot=order.loose_bags_quantity,
-                        carton_quantity_snapshot=order.carton_quantity,
-                        note_snapshot=order.note,
-                        product_lines_snapshot=[
-                            ProductDetailLine(
-                                product_name=line.product_name,
-                                quantity=line.quantity,
-                                unit=line.unit,
-                                product_code=line.product_code,
-                                package_quantity=line.package_quantity,
-                                package_unit=line.package_unit,
-                            )
-                            for line in order.product_lines
-                        ],
-                        estimated_distance_km_from_warehouse_snapshot=(
-                            order.estimated_distance_km_from_warehouse
-                        ),
-                    )
+        for assignment in assignments:
+            order = self.repository.get_order(assignment.task_id)
+            if not order or order.status != "ACTIVE" or order.delivery_date != delivery_date:
+                continue
+            orders.append(
+                DeliveryRunSheetOrderSnapshot(
+                    row_id=f"DRR-{uuid4().hex.upper()}",
+                    trip_no=trip_no,
+                    row_no=row_no,
+                    task_type="ORDER",
+                    task_id=order.order_id,
+                    order_id_snapshot=order.order_id,
+                    invoice_number_snapshot=order.invoice_number,
+                    order_no_snapshot=order.order_no,
+                    company_name_snapshot=order.company_name,
+                    suburb_snapshot=order.suburb,
+                    delivery_address_snapshot=order.delivery_address,
+                    product_snapshot=None,
+                    pallet_quantity_snapshot=order.pallet_quantity,
+                    loose_bags_quantity_snapshot=order.loose_bags_quantity,
+                    carton_quantity_snapshot=order.carton_quantity,
+                    note_snapshot=order.note,
+                    product_lines_snapshot=[
+                        ProductDetailLine(
+                            product_name=line.product_name,
+                            quantity=line.quantity,
+                            unit=line.unit,
+                            product_code=line.product_code,
+                            package_quantity=line.package_quantity,
+                            package_unit=line.package_unit,
+                        ) for line in order.product_lines
+                    ],
+                    estimated_distance_km_from_warehouse_snapshot=(
+                        order.estimated_distance_km_from_warehouse
+                    ),
                 )
-                row_no += 1
-            if orders:
-                trips.append(DeliveryRunSheetTrip(trip_no=trip_no, orders=orders))
-        return trips
+            )
+            row_no += 1
+        return DeliveryRunSheetTrip(trip_no=trip_no, orders=orders)
 
-    def _vehicle_snapshot(self, delivery_date, driver_id):
-        assignment = next(
-            (
-                item
-                for item in (
-                    self.repository.list_driver_vehicle_assignments_for_delivery_date(
-                        delivery_date
-                    )
-                )
-                if item.driver_id == driver_id
-            ),
-            None,
+    def _vehicle_snapshot(self, delivery_date, driver_id, trip_no):
+        assignment = self.repository.get_delivery_trip_vehicle_assignment(
+            delivery_date, driver_id, trip_no,
         )
         if not assignment:
             return None, None
@@ -438,7 +433,9 @@ def _timestamp():
 
 
 def _is_delivery_run_sheet_key_conflict(error):
-    return (
+    return any(key in str(error) for key in (
         "UNIQUE constraint failed: delivery_run_sheets.dispatch_date, "
-        "delivery_run_sheets.delivery_date, delivery_run_sheets.driver_id"
-    ) in str(error)
+        "delivery_run_sheets.delivery_date, delivery_run_sheets.driver_id",
+        "UNIQUE constraint failed: delivery_run_sheets.delivery_date, "
+        "delivery_run_sheets.driver_id, delivery_run_sheets.trip_no",
+    ))

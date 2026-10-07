@@ -140,6 +140,7 @@ class H2SQLiteTransactionPrimitiveTest(unittest.TestCase):
             try:
                 return service.create_generated_delivery_run_sheet(
                     GenerateDeliveryRunSheetRequest(
+                        trip_no="trip1",
                         dispatch_date="2026-07-20",
                         delivery_date="2026-05-05",
                         driver_id="D001",
@@ -187,6 +188,7 @@ class H2SQLiteTransactionPrimitiveTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "injected delivery child failure"):
                 service.create_generated_delivery_run_sheet(
                     GenerateDeliveryRunSheetRequest(
+                        trip_no="trip1",
                         dispatch_date="2026-07-20",
                         delivery_date="2026-05-05",
                         driver_id="D001",
@@ -509,7 +511,7 @@ class H2SQLiteTransactionPrimitiveTest(unittest.TestCase):
         )
         entered_snapshot_build = Event()
         release_snapshot_build = Event()
-        original_build = generation_service.delivery_run_sheet_service._build_trips
+        original_build = generation_service.delivery_run_sheet_service._build_trip
 
         def gated_build(*args, **kwargs):
             entered_snapshot_build.set()
@@ -517,11 +519,12 @@ class H2SQLiteTransactionPrimitiveTest(unittest.TestCase):
                 raise RuntimeError("test coordination timed out")
             return original_build(*args, **kwargs)
 
-        generation_service.delivery_run_sheet_service._build_trips = gated_build
+        generation_service.delivery_run_sheet_service._build_trip = gated_build
 
         def generate():
             return generation_service.create_generated_delivery_run_sheet(
                 GenerateDeliveryRunSheetRequest(
+                    trip_no="trip1",
                     dispatch_date="2026-07-20",
                     delivery_date="2026-05-05",
                     driver_id="D001",

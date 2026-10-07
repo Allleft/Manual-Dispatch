@@ -1,7 +1,6 @@
 import {
   DELIVERY_VEHICLE_TRIPS, deliveryVehicleKey, parseDeliveryVehicleKey,
-  getDeliveryDayVehicleAssignment, getDeliveryDayVehicleDraft,
-  getDeliveryDayVehicleConflictDriverNames, getDeliveryTripVehicleAssignment,
+  getDeliveryTripVehicleAssignment,
   getDeliveryVehicleConflictDriverNames,
 } from "../../utils/delivery-vehicle-utils.js";
 
@@ -12,43 +11,33 @@ export function createDeliveryVehicleQueue(context) {
 
   async function updateDeliveryVehicleSelection(deliveryDate, driverId, tripNo, vehicleId) {
     deliveryVehicleKey(deliveryDate, driverId, tripNo);
-    return updateSelection(deliveryDate, driverId, tripNo, vehicleId, false);
+    return updateSelection(deliveryDate, driverId, tripNo, vehicleId);
   }
 
-  // Only the existing single control uses this temporary, explicit day contract.
-  async function updateDeliveryDayVehicleSelection(deliveryDate, driverId, vehicleId) {
-    return updateSelection(deliveryDate, driverId, null, vehicleId, true);
+  function selectionKeys(deliveryDate, driverId, tripNo) {
+    return [deliveryVehicleKey(deliveryDate, driverId, tripNo)];
   }
 
-  function selectionKeys(deliveryDate, driverId, tripNo, dayCompatibility) {
-    return (dayCompatibility ? DELIVERY_VEHICLE_TRIPS : [tripNo])
-      .map((trip) => deliveryVehicleKey(deliveryDate, driverId, trip));
+  function selectionAssignment(board, deliveryDate, driverId, tripNo) {
+    return getDeliveryTripVehicleAssignment(board, deliveryDate, driverId, tripNo);
   }
 
-  function selectionAssignment(board, deliveryDate, driverId, tripNo, dayCompatibility) {
-    return dayCompatibility
-      ? getDeliveryDayVehicleAssignment(board, deliveryDate, driverId)
-      : getDeliveryTripVehicleAssignment(board, deliveryDate, driverId, tripNo);
-  }
-
-  function selectionConflicts(board, deliveryDate, driverId, tripNo, vehicleId, dayCompatibility) {
+  function selectionConflicts(board, deliveryDate, driverId, tripNo, vehicleId) {
     const input = { board, claims: state.deliveryVehicleClaims, deliveryDate, driverId, tripNo, vehicleId };
-    return dayCompatibility
-      ? getDeliveryDayVehicleConflictDriverNames(input)
-      : getDeliveryVehicleConflictDriverNames(input);
+    return getDeliveryVehicleConflictDriverNames(input);
   }
 
-  async function updateSelection(deliveryDate, driverId, tripNo, vehicleId, dayCompatibility) {
-    const keys = selectionKeys(deliveryDate, driverId, tripNo, dayCompatibility);
+  async function updateSelection(deliveryDate, driverId, tripNo, vehicleId) {
+    const keys = selectionKeys(deliveryDate, driverId, tripNo);
     keys.forEach((key) => {
       state.deliveryVehicleDrafts = { ...(state.deliveryVehicleDrafts || {}), [key]: vehicleId };
-      updateDeliveryVehicleClaim(key, vehicleId, dayCompatibility);
+      updateDeliveryVehicleClaim(key, vehicleId);
       clearDeliveryVehicleError(key);
     });
     renderWorkspace();
     const board = currentDeliveryBoard();
-    const currentAssignment = selectionAssignment(board, deliveryDate, driverId, tripNo, dayCompatibility);
-    const conflictDriverNames = selectionConflicts(board, deliveryDate, driverId, tripNo, vehicleId, dayCompatibility);
+    const currentAssignment = selectionAssignment(board, deliveryDate, driverId, tripNo);
+    const conflictDriverNames = selectionConflicts(board, deliveryDate, driverId, tripNo, vehicleId);
     if (conflictDriverNames.length) {
       return;
     }
@@ -59,25 +48,24 @@ export function createDeliveryVehicleQueue(context) {
       retryAvailableDeliveryVehicleClaims();
       return;
     }
-    return queueSelection(deliveryDate, driverId, tripNo, dayCompatibility);
+    return queueSelection(deliveryDate, driverId, tripNo);
   }
 
   function queueDeliveryVehicleUpdate(deliveryDate, driverId, tripNo) {
-    return queueSelection(deliveryDate, driverId, tripNo, false);
+    return queueSelection(deliveryDate, driverId, tripNo);
   }
 
-  function queueSelection(deliveryDate, driverId, tripNo, dayCompatibility) {
-    const keys = selectionKeys(deliveryDate, driverId, tripNo, dayCompatibility);
+  function queueSelection(deliveryDate, driverId, tripNo) {
+    const keys = selectionKeys(deliveryDate, driverId, tripNo);
     const existingEntry = context.deliveryVehicleQueues.get(keys[0]);
-    if (existingEntry?.mutationVersion === context.deliveryVehicleMutationVersion
-        && existingEntry.dayCompatibility === dayCompatibility) {
+    if (existingEntry?.mutationVersion === context.deliveryVehicleMutationVersion) {
       return existingEntry.promise;
     }
     const entry = {
       queueId: ++context.deliveryVehicleQueueIdCounter,
       mutationVersion: context.deliveryVehicleMutationVersion,
       authSessionVersion: state.authSessionVersion,
-      deliveryDate, driverId, tripNo, dayCompatibility, keys, promise: null,
+      deliveryDate, driverId, tripNo, keys, promise: null,
     };
     keys.forEach((key) => {
       state.deliveryVehiclePendingKeys = { ...(state.deliveryVehiclePendingKeys || {}), [key]: true };
@@ -129,20 +117,18 @@ export function createDeliveryVehicleQueue(context) {
   }
 
   async function processDeliveryVehicleQueue(entry) {
-    const { deliveryDate, driverId, tripNo, dayCompatibility, keys } = entry;
+    const { deliveryDate, driverId, tripNo, keys } = entry;
     const key = keys[0];
     while (isDeliveryVehicleQueueCurrent(key, entry)
         && keys.every((scopeKey) => Object.hasOwn(state.deliveryVehicleDrafts || {}, scopeKey))) {
-      const vehicleId = dayCompatibility
-        ? getDeliveryDayVehicleDraft(state.deliveryVehicleDrafts, deliveryDate, driverId)
-        : state.deliveryVehicleDrafts[key];
+      const vehicleId = state.deliveryVehicleDrafts[key];
       if (vehicleId === undefined) {
         return;
       }
-      if (selectionConflicts(currentDeliveryBoard(), deliveryDate, driverId, tripNo, vehicleId, dayCompatibility).length) {
+      if (selectionConflicts(currentDeliveryBoard(), deliveryDate, driverId, tripNo, vehicleId).length) {
         return;
       }
-      const currentAssignment = selectionAssignment(currentDeliveryBoard(), deliveryDate, driverId, tripNo, dayCompatibility);
+      const currentAssignment = selectionAssignment(currentDeliveryBoard(), deliveryDate, driverId, tripNo);
       if (currentAssignment?.vehicle_id === vehicleId) {
         keys.forEach((scopeKey) => {
           removeDeliveryVehicleDraft(scopeKey);
@@ -151,21 +137,12 @@ export function createDeliveryVehicleQueue(context) {
         });
         return;
       }
-      const payload = { delivery_date: deliveryDate, driver_id: driverId };
-      if (!dayCompatibility) {
-        payload.trip_no = tripNo;
-      }
+      const payload = { delivery_date: deliveryDate, driver_id: driverId, trip_no: tripNo };
       let updatedBoard;
       try {
-        if (dayCompatibility) {
-          updatedBoard = vehicleId
-            ? await api.assignDeliveryDayVehicle({ ...payload, vehicle_id: vehicleId })
-            : await api.clearDeliveryDayVehicle(payload);
-        } else {
-          updatedBoard = vehicleId
-            ? await api.assignDeliveryWorkspaceVehicle({ ...payload, vehicle_id: vehicleId })
-            : await api.clearDeliveryWorkspaceVehicle(payload);
-        }
+        updatedBoard = vehicleId
+          ? await api.assignDeliveryWorkspaceVehicle({ ...payload, vehicle_id: vehicleId })
+          : await api.clearDeliveryWorkspaceVehicle(payload);
       } catch (error) {
         if (!isDeliveryVehicleQueueCurrent(key, entry)) {
           return;
@@ -184,7 +161,7 @@ export function createDeliveryVehicleQueue(context) {
       if (!isDeliveryVehicleQueueCurrent(key, entry)) {
         return;
       }
-      applyDeliveryVehicleBoardUpdate(updatedBoard, deliveryDate, driverId, tripNo, dayCompatibility);
+      applyDeliveryVehicleBoardUpdate(updatedBoard, deliveryDate, driverId, tripNo);
       if (keys.every((scopeKey) => state.deliveryVehicleDrafts?.[scopeKey] === vehicleId)) {
         keys.forEach((scopeKey) => {
           removeDeliveryVehicleDraft(scopeKey);
@@ -206,8 +183,8 @@ export function createDeliveryVehicleQueue(context) {
           return;
         }
         const { deliveryDate, driverId, tripNo } = scope;
-        if (!selectionConflicts(currentDeliveryBoard(), deliveryDate, driverId, tripNo, claim.vehicle_id, claim.day_compatibility).length) {
-          queueSelection(deliveryDate, driverId, tripNo, Boolean(claim.day_compatibility));
+        if (!selectionConflicts(currentDeliveryBoard(), deliveryDate, driverId, tripNo, claim.vehicle_id).length) {
+          queueSelection(deliveryDate, driverId, tripNo);
         }
       });
   }
@@ -222,19 +199,19 @@ export function createDeliveryVehicleQueue(context) {
       && (state.deliveryTripSummaryDate || entry.deliveryDate) === entry.deliveryDate;
   }
 
-  function updateDeliveryVehicleClaim(key, vehicleId, dayCompatibility = false) {
+  function updateDeliveryVehicleClaim(key, vehicleId) {
     if (!vehicleId) {
       removeDeliveryVehicleClaim(key);
       return;
     }
     const existing = state.deliveryVehicleClaims?.[key];
-    if (existing?.vehicle_id === vehicleId && Boolean(existing.day_compatibility) === dayCompatibility) {
+    if (existing?.vehicle_id === vehicleId) {
       return;
     }
     state.deliveryVehicleClaimSequence = Number(state.deliveryVehicleClaimSequence || 0) + 1;
     state.deliveryVehicleClaims = {
       ...(state.deliveryVehicleClaims || {}),
-      [key]: { vehicle_id: vehicleId, sequence: state.deliveryVehicleClaimSequence, day_compatibility: dayCompatibility },
+      [key]: { vehicle_id: vehicleId, sequence: state.deliveryVehicleClaimSequence },
     };
   }
 
@@ -251,24 +228,18 @@ export function createDeliveryVehicleQueue(context) {
     state.deliveryVehicleErrors = remaining;
   }
 
-  function applyDeliveryVehicleBoardUpdate(updatedBoard, deliveryDate, driverId, tripNo, dayCompatibility = false) {
+  function applyDeliveryVehicleBoardUpdate(updatedBoard, deliveryDate, driverId, tripNo) {
     if (!updatedBoard) {
       return;
     }
     const targetBoard = currentDeliveryBoard();
     const matches = (row) => row.delivery_date === deliveryDate && row.driver_id === driverId
-      && (dayCompatibility ? DELIVERY_VEHICLE_TRIPS.includes(row.trip_no) : row.trip_no === tripNo);
+      && row.trip_no === tripNo;
     const nextBoard = {
       ...(targetBoard || {}),
       driver_vehicle_assignments: (targetBoard?.driver_vehicle_assignments || []).filter((row) => !matches(row))
         .concat((updatedBoard.driver_vehicle_assignments || []).filter(matches)),
     };
-    if (dayCompatibility) {
-      const dayMatches = (row) => row.delivery_date === deliveryDate && row.driver_id === driverId;
-      nextBoard.legacy_driver_vehicle_assignments = (targetBoard?.legacy_driver_vehicle_assignments || [])
-        .filter((row) => !dayMatches(row))
-        .concat((updatedBoard.legacy_driver_vehicle_assignments || []).filter(dayMatches));
-    }
     if (state.workspaceRoute === "delivery/trip-summary" && state.deliveryTripSummaryBoard) {
       state.deliveryTripSummaryBoard = nextBoard;
     } else {
@@ -296,7 +267,7 @@ export function createDeliveryVehicleQueue(context) {
         return false;
       }
       const { deliveryDate, driverId, tripNo } = scope;
-      const assignment = selectionAssignment(board, deliveryDate, driverId, tripNo, state.deliveryVehicleClaims?.[key]?.day_compatibility);
+      const assignment = selectionAssignment(board, deliveryDate, driverId, tripNo);
       return assignment?.vehicle_id !== vehicleId;
     }));
     state.deliveryVehicleClaims = Object.fromEntries(Object.entries(state.deliveryVehicleClaims || {}).filter(([key, claim]) =>
@@ -315,8 +286,45 @@ export function createDeliveryVehicleQueue(context) {
     state.deliveryVehiclePendingKeys = {};
   }
 
+  async function ensureDeliveryVehicleSelectionSettled(deliveryDate, driverId, tripNo) {
+    const key = deliveryVehicleKey(deliveryDate, driverId, tripNo);
+    const mutationVersion = context.deliveryVehicleMutationVersion;
+    const authSessionVersion = state.authSessionVersion;
+    const isCurrent = () => mutationVersion === context.deliveryVehicleMutationVersion
+      && authSessionVersion === state.authSessionVersion && state.isLoggedIn
+      && state.activeWorkspace === "delivery" && state.workspaceRoute === "delivery/trip-summary"
+      && (state.deliveryTripSummaryDate || state.dispatchDate) === deliveryDate;
+    while (isCurrent()) {
+      const pending = context.deliveryVehicleQueues.get(key)?.promise
+        || context.deliveryVehiclePhysicalTails.get(key);
+      if (!pending) {
+        break;
+      }
+      await pending;
+    }
+    if (!isCurrent()) {
+      throw new Error("Delivery context changed. Review the trip again.");
+    }
+    const error = state.deliveryVehicleErrors?.[key];
+    if (error) {
+      throw new Error(error);
+    }
+    if (state.deliveryVehiclePendingKeys?.[key]) {
+      throw new Error("Vehicle update is still pending.");
+    }
+    const persisted = selectionAssignment(currentDeliveryBoard(), deliveryDate, driverId, tripNo)?.vehicle_id || "";
+    const selected = state.deliveryVehicleDrafts?.[key] ?? persisted;
+    if (selectionConflicts(currentDeliveryBoard(), deliveryDate, driverId, tripNo, selected).length) {
+      throw new Error("Selected vehicle conflicts with another driver in this trip.");
+    }
+    if (selected !== persisted) {
+      throw new Error("Vehicle selection has not been saved. Retry the vehicle update.");
+    }
+    return persisted;
+  }
+
   return {
-    updateDeliveryVehicleSelection, updateDeliveryDayVehicleSelection, queueDeliveryVehicleUpdate,
+    updateDeliveryVehicleSelection, queueDeliveryVehicleUpdate, ensureDeliveryVehicleSelectionSettled,
     enqueueDeliveryVehiclePhysicalWrite, processDeliveryVehicleQueue, retryAvailableDeliveryVehicleClaims,
     isDeliveryVehicleQueueCurrent, updateDeliveryVehicleClaim, removeDeliveryVehicleDraft,
     removeDeliveryVehicleClaim, clearDeliveryVehicleError, applyDeliveryVehicleBoardUpdate,

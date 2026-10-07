@@ -57,12 +57,12 @@ class RefactorContractBaselineTest(unittest.TestCase):
             if getattr(route, "path", None)
         )
 
-        self.assertEqual(106, len(routes))
+        self.assertEqual(104, len(routes))
         day_routes = {
             ("/api/manual-dispatch/delivery/day-vehicle-assignments", ("POST",)),
             ("/api/manual-dispatch/delivery/day-vehicle-assignments/clear", ("POST",)),
         }
-        self.assertTrue(day_routes.issubset(routes))
+        self.assertFalse(day_routes & set(routes))
         lookup_route = ("/api/manual-dispatch/delivery/orders/lookup", ("GET",))
         self.assertIn(lookup_route, routes)
         self.assertIn(
@@ -160,10 +160,10 @@ class RefactorContractBaselineTest(unittest.TestCase):
         )
 
         public_methods = self._public_methods(ManualDispatchService)
-        self.assertEqual(101, len(public_methods))
+        self.assertEqual(99, len(public_methods))
         day_methods = {"assign_delivery_day_vehicle", "clear_delivery_day_vehicle"}
         for name in day_methods:
-            self.assertIn({"name": name, "signature": "(self, request)"}, public_methods)
+            self.assertNotIn({"name": name, "signature": "(self, request)"}, public_methods)
         self.assertIn(
             {"name": "clear_driver_vehicle_assignment",
              "signature": "(self, dispatch_date, driver_id, delivery_date=None, trip_no=None)"},
@@ -213,6 +213,11 @@ class RefactorContractBaselineTest(unittest.TestCase):
             "get_delivery_run_sheet_for_driver": "(self, dispatch_date, delivery_date, driver_id, trip_no=None)",
             "has_saved_delivery_run_sheet": "(self, dispatch_date, driver_id, delivery_date, trip_no=None)",
         }
+        selected_assignment_query = {
+            "name": "list_delivery_order_assignments_for_delivery_date",
+            "signature": "(self, delivery_date, driver_id=None, trip_no=None)",
+        }
+        self.assertIn(selected_assignment_query, sqlite_methods)
         self.assertEqual(121 + len(per_trip_methods), len(sqlite_methods))
         for name, signature in {**per_trip_methods, **extended_trip_methods}.items():
             self.assertIn({"name": name, "signature": signature}, sqlite_methods)
@@ -247,7 +252,9 @@ class RefactorContractBaselineTest(unittest.TestCase):
                     **method,
                     "signature": method["signature"].replace(
                         ", trip_no=None)", ")"
-                    ) if method["name"] in extended_trip_methods else method["signature"],
+                    ) if method["name"] in extended_trip_methods else
+                    method["signature"].replace(", driver_id=None, trip_no=None)", ")")
+                    if method["name"] == selected_assignment_query["name"] else method["signature"],
                 }
                 for method in sqlite_methods
                 if method["name"] not in lookup_methods and method["name"] not in per_trip_methods
@@ -325,9 +332,9 @@ class RefactorContractBaselineTest(unittest.TestCase):
         contract = json.loads(completed.stdout)
 
         self.assertEqual(["function", "function"], contract["rendererTypes"])
-        self.assertEqual(111, len(contract["apiExportNames"]))
+        self.assertEqual(109, len(contract["apiExportNames"]))
         day_api_names = {"apiAssignDeliveryDayVehicle", "apiClearDeliveryDayVehicle"}
-        self.assertTrue(day_api_names.issubset(contract["apiExportNames"]))
+        self.assertFalse(day_api_names & set(contract["apiExportNames"]))
         self.assertIn("apiLookupDeliveryOrdersByInvoice", contract["apiExportNames"])
         self.assertIn("apiPreviewDirectAttacheInvoice", contract["apiExportNames"])
         self.assertIn(
@@ -352,7 +359,8 @@ class RefactorContractBaselineTest(unittest.TestCase):
                                    if name != "apiLookupDeliveryOrdersByInvoice" and name not in day_api_names]),
         )
         self.assertEqual(134, len(contract["actionNames"]))
-        self.assertIn("updateDeliveryDayVehicleSelection", contract["actionNames"])
+        self.assertNotIn("updateDeliveryDayVehicleSelection", contract["actionNames"])
+        self.assertIn("ensureDeliveryVehicleSelectionSettled", contract["actionNames"])
         lookup_actions = {
             "openDeliveryOrderLookup", "closeDeliveryOrderLookup",
             "updateDeliveryOrderLookupQuery", "searchDeliveryOrderLookup",
@@ -392,7 +400,7 @@ class RefactorContractBaselineTest(unittest.TestCase):
         )
         self.assertEqual(
             "4c884899f951370a5d4a8e7defa1e9459b05dd19db70f41b3a70aafcd0a4e55b",
-            self._contract_digest([name for name in contract["actionNames"] if name not in lookup_actions and name != "updateDeliveryDayVehicleSelection"]),
+            self._contract_digest([name for name in contract["actionNames"] if name not in lookup_actions and name != "ensureDeliveryVehicleSelectionSettled"]),
         )
         self.assertEqual(194, len(contract["stateFields"]))
         self.assertIn("deliveryOrderLookup", contract["stateFields"])

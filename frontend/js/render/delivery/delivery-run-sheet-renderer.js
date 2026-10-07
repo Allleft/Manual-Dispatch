@@ -268,10 +268,14 @@ export function createDailyRunSheetHeaderField(labelText, valueText, className =
 export function createDailyRunSheetDriverHeader(runSheet) {
   const field = document.createElement("div");
   field.className = "workspace-daily-run-sheet-header-field workspace-daily-run-sheet-driver";
-  [
+  const fields = [
     ["DRIVER:", formatOptional(runSheet.driver_name_snapshot, runSheet.driver_id)],
     ["REGO#:", formatOptional(runSheet.vehicle_rego_snapshot, "Not selected")],
-  ].forEach(([labelText, valueText]) => {
+  ];
+  if (runSheet.trip_no != null) {
+    fields.push(["Trip:", runSheet.trip_no === "trip1" ? "Trip 1" : "Trip 2"]);
+  }
+  fields.forEach(([labelText, valueText]) => {
     const row = document.createElement("div");
     row.className = "workspace-daily-run-sheet-driver-line";
     const line = document.createElement("strong");
@@ -356,6 +360,9 @@ export function createRunSheetDocumentCard(runSheet, state, actions) {
   kicker.textContent = runSheet.delivery_date;
   const heading = document.createElement("h3");
   heading.textContent = formatOptional(runSheet.driver_name_snapshot, runSheet.driver_id);
+  if (runSheet.trip_no != null) {
+    heading.textContent += runSheet.trip_no === "trip1" ? " — Trip 1" : " — Trip 2";
+  }
   identity.append(kicker, heading);
   const badges = document.createElement("div");
   badges.className = "workspace-run-sheet-badges";

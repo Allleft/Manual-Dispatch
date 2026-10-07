@@ -338,6 +338,7 @@ class DeliveryEventRecorder(FacadeAuditRecorder):
             run_sheet_id=run_sheet.run_sheet_id,
             metadata={
                 "run_sheet_id": run_sheet.run_sheet_id,
+                "trip_no": run_sheet.trip_no,
                 "delivery_date": run_sheet.delivery_date,
                 "driver": run_sheet.driver_name_snapshot,
                 "delivered_count": summary.delivered_count,
@@ -499,6 +500,7 @@ class DeliveryEventRecorder(FacadeAuditRecorder):
             run_sheet_id=run_sheet.run_sheet_id,
             metadata={
                 "order_count": order_count,
+                "trip_no": run_sheet.trip_no,
                 "trip1_count": trip_counts.get("trip1", 0),
                 "trip2_count": trip_counts.get("trip2", 0),
                 "total_pallets": run_sheet.total_pallets,
