@@ -83,6 +83,9 @@ export function createDeliveryHistoryActions(context) {
           left.driver_name_snapshot || left.driver_id,
           right.driver_name_snapshot || right.driver_id,
         )
+        || String(left.driver_id || "").localeCompare(String(right.driver_id || ""))
+        || ({ trip1: 1, trip2: 2 }[left.trip_no] || 0)
+          - ({ trip1: 1, trip2: 2 }[right.trip_no] || 0)
         || compareHistoryText(left.run_sheet_id, right.run_sheet_id),
       );
   }

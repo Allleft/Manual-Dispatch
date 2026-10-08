@@ -7,6 +7,7 @@ import re
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.worksheet.page import PageMargins
+from backend.services.manual_dispatch.delivery_run_sheet_ordering import delivery_run_sheet_driver_trip_key
 
 
 DAILY_RUN_SHEET_HEADERS = [
@@ -60,7 +61,10 @@ _PACKAGE_UNIT_BAG_WEIGHT = re.compile(
 def build_delivery_run_sheet_excel(run_sheet):
     workbook = Workbook()
     worksheet = workbook.active
-    worksheet.title = "Daily Run Sheet"
+    worksheet.title = (
+        _unique_sheet_name(run_sheet.driver_name_snapshot, set(), run_sheet.trip_no)
+        if run_sheet.trip_no is not None else "Daily Run Sheet"
+    )
     _configure_print_layout(worksheet)
     _write_daily_run_sheet_form(worksheet, run_sheet, run_sheet.delivery_date)
     return _save(workbook)
@@ -75,9 +79,9 @@ def build_delivery_run_sheets_excel(run_sheets, delivery_date):
     workbook = Workbook()
     workbook.remove(workbook.active)
     used_sheet_names = set()
-    for run_sheet in run_sheets:
+    for run_sheet in sorted(run_sheets, key=delivery_run_sheet_driver_trip_key):
         worksheet = workbook.create_sheet(
-            _unique_sheet_name(run_sheet.driver_name_snapshot, used_sheet_names)
+            _unique_sheet_name(run_sheet.driver_name_snapshot, used_sheet_names, run_sheet.trip_no)
         )
         _configure_print_layout(worksheet)
         _write_daily_run_sheet_form(worksheet, run_sheet, delivery_date)
@@ -120,6 +124,11 @@ def _write_daily_run_sheet_form(worksheet, run_sheet, delivery_date):
     highlight_fill = PatternFill(fill_type="solid", fgColor="C6E0B4")
     worksheet["F1"].fill = highlight_fill
     worksheet["L1"].fill = highlight_fill
+
+    if run_sheet.trip_no is not None:
+        worksheet["F2"] = f"TRIP: TRIP {1 if run_sheet.trip_no == 'trip1' else 2}"
+        worksheet["F2"].font = Font(bold=True, size=11)
+        worksheet["F2"].alignment = Alignment(vertical="center")
 
     worksheet["B3"] = "START TIME: ____________________________________"
     worksheet.merge_cells("B5:E5")
@@ -266,15 +275,17 @@ def _wrapped_line_count(value, column_width, font_size=BODY_FONT_SIZE):
     )
 
 
-def _unique_sheet_name(driver_name, used_sheet_names):
+def _unique_sheet_name(driver_name, used_sheet_names, trip_no=None):
     base_name = _INVALID_SHEET_NAME_CHARACTERS.sub(" ", str(driver_name or "Driver"))
     base_name = " ".join(base_name.split()).strip("'") or "Driver"
-    base_name = base_name[:31]
-    candidate = base_name
+    if trip_no is not None:
+        base_name = base_name.strip() or "Driver"
+    trip_suffix = f" - Trip {1 if trip_no == 'trip1' else 2}" if trip_no is not None else ""
+    candidate = f"{base_name[:31 - len(trip_suffix)]}{trip_suffix}"
     sequence = 2
     while candidate.casefold() in used_sheet_names:
         suffix = f" ({sequence})"
-        candidate = f"{base_name[:31 - len(suffix)]}{suffix}"
+        candidate = f"{base_name[:31 - len(suffix) - len(trip_suffix)]}{suffix}{trip_suffix}"
         sequence += 1
     used_sheet_names.add(candidate.casefold())
     return candidate

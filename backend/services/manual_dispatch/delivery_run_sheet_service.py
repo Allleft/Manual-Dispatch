@@ -21,6 +21,7 @@ from backend.services.manual_dispatch.normalization import (
     clean_required_text,
 )
 from backend.services.manual_dispatch.transaction import immediate_transactional
+from backend.services.manual_dispatch.delivery_run_sheet_ordering import order_delivery_run_sheets
 
 
 DELIVERY_RUN_SHEET_OUTCOMES = frozenset({"DELIVERED", "RETURN_TO_POOL"})
@@ -111,11 +112,11 @@ class DeliveryRunSheetService:
             ) from error
 
     def list(self, dispatch_date=None, delivery_date=None, status=None):
-        return self.repository.list_delivery_run_sheets(
+        return order_delivery_run_sheets(self.repository.list_delivery_run_sheets(
             clean_optional_iso_date(dispatch_date, "dispatch_date"),
             clean_optional_iso_date(delivery_date, "delivery_date"),
             clean_optional_text(status).upper() if clean_optional_text(status) else None,
-        )
+        ))
 
     def get(self, run_sheet_id):
         run_sheet_id = clean_required_text(run_sheet_id, "run_sheet_id")
@@ -237,7 +238,7 @@ class DeliveryRunSheetService:
             raise ValueError(
                 "No Generated or Saved Delivery Run Sheets are available for this Delivery Date."
             )
-        return run_sheets
+        return order_delivery_run_sheets(run_sheets)
 
     def _raise_transition_error(self, run_sheet_id, action):
         current = self.repository.get_delivery_run_sheet(run_sheet_id)
