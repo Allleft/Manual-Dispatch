@@ -240,6 +240,7 @@ class ManualDispatchDeliveryDocketImportTest(unittest.TestCase):
         )
         run_sheet = reloaded_service.create_generated_delivery_run_sheet(
             GenerateDeliveryRunSheetRequest(
+                trip_no="trip1",
                 dispatch_date="2026-08-24",
                 delivery_date="2026-08-24",
                 driver_id="DOCKET-DRIVER",

@@ -168,6 +168,7 @@ class DriverVehicleSpecificationTest(unittest.TestCase):
     def test_vehicle_availability_false_is_rejected_when_selected(self):
         self.service.assign_vehicle_to_driver(
             AssignDriverVehicleRequest(
+                trip_no="trip1",
                 dispatch_date=self.dispatch_date,
                 driver_id="D001",
                 vehicle_id="V001",
@@ -194,6 +195,7 @@ class DriverVehicleSpecificationTest(unittest.TestCase):
     def test_delete_selected_vehicle_is_rejected(self):
         self.service.assign_vehicle_to_driver(
             AssignDriverVehicleRequest(
+                trip_no="trip1",
                 dispatch_date=self.dispatch_date,
                 driver_id="D001",
                 vehicle_id="V001",
@@ -217,6 +219,7 @@ class DriverVehicleSpecificationTest(unittest.TestCase):
         assignment = self._assign_order("ORD-001", "D001", "trip1")
         vehicle_assignment = self.service.assign_vehicle_to_driver(
             AssignDriverVehicleRequest(
+                trip_no="trip1",
                 dispatch_date=self.dispatch_date,
                 driver_id="D001",
                 vehicle_id="V001",

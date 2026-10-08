@@ -246,6 +246,7 @@ def create_delivery_router(
                 delivery_date=payload.get("delivery_date"),
                 driver_id=payload.get("driver_id"),
                 vehicle_id=payload.get("vehicle_id"),
+                trip_no=payload.get("trip_no"),
             )
             return with_logbook_actor(
                 service,
@@ -267,6 +268,7 @@ def create_delivery_router(
                 dispatch_date=payload.get("dispatch_date"),
                 delivery_date=payload.get("delivery_date"),
                 driver_id=payload.get("driver_id"),
+                trip_no=payload.get("trip_no"),
             )
             return with_logbook_actor(
                 service,

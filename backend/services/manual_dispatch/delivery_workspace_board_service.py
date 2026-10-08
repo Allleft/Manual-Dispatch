@@ -30,6 +30,7 @@ class DeliveryWorkspaceBoardService:
             rollover_events
         )
         run_sheets = self.repository.list_delivery_run_sheets(dispatch_date)
+        lock_run_sheets = self.repository.list_delivery_run_sheets()
         reserved_task_ids = self.repository.list_reserved_delivery_order_ids()
 
         orders = [
@@ -57,11 +58,13 @@ class DeliveryWorkspaceBoardService:
                 delivery_date=run_sheet.delivery_date,
                 driver_id=run_sheet.driver_id,
                 run_sheet_id=run_sheet.run_sheet_id,
+                trip_no=run_sheet.trip_no,
             )
-            for run_sheet in run_sheets
+            for run_sheet in lock_run_sheets
             if run_sheet.status == "SAVED"
         ]
 
+        vehicle_assignments = self.repository.list_delivery_vehicle_assignments()
         return DeliveryWorkspaceBoardResponse(
             dispatch_date=dispatch_date,
             orders=orders,
@@ -72,9 +75,8 @@ class DeliveryWorkspaceBoardService:
             ),
             vehicles=self.repository.list_vehicles(),
             assignments=assignments,
-            driver_vehicle_assignments=(
-                self.repository.list_driver_vehicle_assignments(dispatch_date)
-            ),
+            driver_vehicle_assignments=[row for row in vehicle_assignments if row.trip_no is not None],
+            legacy_driver_vehicle_assignments=[row for row in vehicle_assignments if row.trip_no is None],
             saved_vehicle_assignment_locks=saved_locks,
         )
 
@@ -111,11 +113,13 @@ class DeliveryWorkspaceBoardService:
                 delivery_date=run_sheet.delivery_date,
                 driver_id=run_sheet.driver_id,
                 run_sheet_id=run_sheet.run_sheet_id,
+                trip_no=run_sheet.trip_no,
             )
             for run_sheet in run_sheets
             if run_sheet.status == "SAVED"
         ]
 
+        vehicle_assignments = self.repository.list_delivery_vehicle_assignments(delivery_date=delivery_date)
         return DeliveryTripSummaryResponse(
             delivery_date=delivery_date,
             orders=orders,
@@ -126,10 +130,7 @@ class DeliveryWorkspaceBoardService:
             ),
             vehicles=self.repository.list_vehicles(),
             assignments=assignments,
-            driver_vehicle_assignments=(
-                self.repository.list_driver_vehicle_assignments_for_delivery_date(
-                    delivery_date
-                )
-            ),
+            driver_vehicle_assignments=[row for row in vehicle_assignments if row.trip_no is not None],
+            legacy_driver_vehicle_assignments=[row for row in vehicle_assignments if row.trip_no is None],
             saved_vehicle_assignment_locks=saved_locks,
         )

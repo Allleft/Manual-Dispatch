@@ -31,6 +31,7 @@ from backend.schemas import (
     OpShopWorkspaceUnassignPickupRequest,
 )
 from backend.services.manual_dispatch_service import ManualDispatchService
+from tests.manual_dispatch_api_test_helpers import assign_equal_trip_vehicle_fixture
 
 
 class H2SQLiteTransactionPrimitiveTest(unittest.TestCase):
@@ -139,6 +140,7 @@ class H2SQLiteTransactionPrimitiveTest(unittest.TestCase):
             try:
                 return service.create_generated_delivery_run_sheet(
                     GenerateDeliveryRunSheetRequest(
+                        trip_no="trip1",
                         dispatch_date="2026-07-20",
                         delivery_date="2026-05-05",
                         driver_id="D001",
@@ -186,6 +188,7 @@ class H2SQLiteTransactionPrimitiveTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "injected delivery child failure"):
                 service.create_generated_delivery_run_sheet(
                     GenerateDeliveryRunSheetRequest(
+                        trip_no="trip1",
                         dispatch_date="2026-07-20",
                         delivery_date="2026-05-05",
                         driver_id="D001",
@@ -258,6 +261,7 @@ class H2SQLiteTransactionPrimitiveTest(unittest.TestCase):
         run_sheet, conflict = self._generate_wins_against(
             lambda: mutation_service.assign_delivery_workspace_vehicle(
                 DeliveryWorkspaceVehicleAssignmentRequest(
+                    trip_no="trip1",
                     dispatch_date="2026-07-20",
                     delivery_date="2026-05-05",
                     driver_id="D001",
@@ -271,8 +275,9 @@ class H2SQLiteTransactionPrimitiveTest(unittest.TestCase):
 
     def test_vehicle_clear_vs_generate_revalidates_after_generate_commit(self):
         service = self._assign_seed_order_with_cross_dispatch_date()
-        service.assign_delivery_workspace_vehicle(
+        assign_equal_trip_vehicle_fixture(service.assign_delivery_workspace_vehicle,
             DeliveryWorkspaceVehicleAssignmentRequest(
+                trip_no="trip1",
                 dispatch_date="2026-07-15",
                 delivery_date="2026-05-05",
                 driver_id="D001",
@@ -283,6 +288,7 @@ class H2SQLiteTransactionPrimitiveTest(unittest.TestCase):
         run_sheet, conflict = self._generate_wins_against(
             lambda: mutation_service.clear_delivery_workspace_vehicle(
                 DeliveryWorkspaceVehicleClearRequest(
+                    trip_no="trip1",
                     dispatch_date="2026-07-20",
                     delivery_date="2026-05-05",
                     driver_id="D001",
@@ -505,7 +511,7 @@ class H2SQLiteTransactionPrimitiveTest(unittest.TestCase):
         )
         entered_snapshot_build = Event()
         release_snapshot_build = Event()
-        original_build = generation_service.delivery_run_sheet_service._build_trips
+        original_build = generation_service.delivery_run_sheet_service._build_trip
 
         def gated_build(*args, **kwargs):
             entered_snapshot_build.set()
@@ -513,11 +519,12 @@ class H2SQLiteTransactionPrimitiveTest(unittest.TestCase):
                 raise RuntimeError("test coordination timed out")
             return original_build(*args, **kwargs)
 
-        generation_service.delivery_run_sheet_service._build_trips = gated_build
+        generation_service.delivery_run_sheet_service._build_trip = gated_build
 
         def generate():
             return generation_service.create_generated_delivery_run_sheet(
                 GenerateDeliveryRunSheetRequest(
+                    trip_no="trip1",
                     dispatch_date="2026-07-20",
                     delivery_date="2026-05-05",
                     driver_id="D001",

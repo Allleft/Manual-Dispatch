@@ -1,4 +1,4 @@
-from backend.errors import StateChangedConflictError
+from backend.services.manual_dispatch.delivery_vehicle_assignment_service import DeliveryVehicleAssignmentService
 from backend.services.manual_dispatch.delivery_run_sheet_lock import (
     ensure_delivery_run_sheet_key_mutable,
     ensure_order_not_reserved,
@@ -19,6 +19,7 @@ class DeliveryWorkspaceMutationService:
         self.repository = repository
         self.validator = validator
         self.board_service = board_service
+        self.vehicle_service = DeliveryVehicleAssignmentService(repository, validator)
         self.rollover_service = rollover_service or DeliveryOrderDateRolloverService(
             repository
         )
@@ -54,12 +55,14 @@ class DeliveryWorkspaceMutationService:
                 dispatch_date,
                 current.driver_id,
                 order.delivery_date,
+                current.trip_no,
             )
         ensure_delivery_run_sheet_key_mutable(
             self.repository,
             dispatch_date,
             driver_id,
             order.delivery_date,
+            trip_no,
         )
         self.repository.upsert_assignment(
             dispatch_date,
@@ -94,6 +97,7 @@ class DeliveryWorkspaceMutationService:
                 dispatch_date,
                 current.driver_id,
                 order.delivery_date,
+                current.trip_no,
             )
             self.repository.remove_assignments_for_task(
                 "ORDER",
@@ -113,70 +117,18 @@ class DeliveryWorkspaceMutationService:
 
     @immediate_transactional
     def assign_vehicle(self, request):
-        delivery_date = clean_required_iso_date(request.delivery_date, "delivery_date")
-        request_dispatch_date = clean_optional_iso_date(
-            request.dispatch_date,
-            "dispatch_date",
-        )
-        dispatch_date = request_dispatch_date or delivery_date
-        driver_id = clean_required_text(request.driver_id, "driver_id")
-        vehicle_id = clean_required_text(request.vehicle_id, "vehicle_id")
-        self.validator.validate_driver_exists(driver_id)
-        self.validator.validate_vehicle_exists(vehicle_id)
-        ensure_delivery_run_sheet_key_mutable(
-            self.repository,
-            dispatch_date,
-            driver_id,
-            delivery_date,
-        )
-        _, conflicting_driver_id = (
-            self.repository.upsert_delivery_workspace_vehicle_assignment(
-                dispatch_date,
-                delivery_date,
-                driver_id,
-                vehicle_id,
-            )
-        )
-        if conflicting_driver_id:
-            vehicle = self.repository.get_vehicle(vehicle_id)
-            driver = self.repository.get_driver(conflicting_driver_id)
-            vehicle_name = vehicle.rego if vehicle else vehicle_id
-            driver_name = driver.name if driver else conflicting_driver_id
-            raise StateChangedConflictError(
-                f"Vehicle {vehicle_name} is already assigned to "
-                f"{driver_name} for this delivery date."
-            )
-        return self._response_board(
-            request_dispatch_date,
-            dispatch_date,
-            delivery_date,
-        )
+        self.vehicle_service.assign(request)
+        return self._vehicle_response_board(request)
 
     @immediate_transactional
     def clear_vehicle(self, request):
-        delivery_date = clean_required_iso_date(request.delivery_date, "delivery_date")
-        request_dispatch_date = clean_optional_iso_date(
-            request.dispatch_date,
-            "dispatch_date",
-        )
-        dispatch_date = request_dispatch_date or delivery_date
-        driver_id = clean_required_text(request.driver_id, "driver_id")
-        self.validator.validate_driver_exists(driver_id)
-        ensure_delivery_run_sheet_key_mutable(
-            self.repository,
-            dispatch_date,
-            driver_id,
-            delivery_date,
-        )
-        self.repository.remove_driver_vehicle_assignment(
-            dispatch_date,
-            driver_id,
-            delivery_date,
-        )
+        self.vehicle_service.clear(request)
+        return self._vehicle_response_board(request)
+
+    def _vehicle_response_board(self, request):
+        dispatch_date = clean_optional_iso_date(request.dispatch_date, "dispatch_date")
         return self._response_board(
-            request_dispatch_date,
-            dispatch_date,
-            delivery_date,
+            dispatch_date, dispatch_date or request.delivery_date, request.delivery_date,
         )
 
     def _response_board(

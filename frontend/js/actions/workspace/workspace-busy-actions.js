@@ -1,3 +1,5 @@
+import { deliveryVehicleKey } from "../../utils/delivery-vehicle-utils.js";
+
 export function createWorkspaceBusyActions(context) {
   const {
     api,
@@ -101,7 +103,7 @@ export function createWorkspaceBusyActions(context) {
 
   function isDeliveryGenerationBusy(confirmation) {
     return Boolean(state.deliveryBusyActionKeys?.[
-      `delivery-generate:${confirmation.delivery_date}:${confirmation.driver_id}`
+      `delivery-generate:${deliveryVehicleKey(confirmation.delivery_date, confirmation.driver_id, confirmation.trip_no)}`
     ]);
   }
 
@@ -125,6 +127,7 @@ export function createWorkspaceBusyActions(context) {
       ).find(
         (item) =>
           item.dataset.driverId === confirmation.driver_id
+          && (workspace !== "delivery" || item.dataset.tripNo === confirmation.trip_no)
           && item.dataset.serviceDate === (
             confirmation.delivery_date || confirmation.pickup_date
           ),

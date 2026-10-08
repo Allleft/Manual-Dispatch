@@ -1,3 +1,4 @@
+from backend.services.manual_dispatch.normalization import clean_required_text
 from backend.services.manual_dispatch.delivery_run_sheet_lock import ensure_order_not_reserved
 from . import FacadeApplicationService
 
@@ -115,10 +116,14 @@ class DeliveryApplicationService(FacadeApplicationService):
 
     def assign_delivery_workspace_vehicle(self, request):
         self._ensure_workspace_ready("delivery")
+        self.workspace_migration_readiness_service.ensure_per_trip_ready()
+        trip_no = clean_required_text(request.trip_no, "trip_no")
+        self.validator.validate_trip_no(trip_no)
         before = self._vehicle_assignment_snapshot(
             request.dispatch_date,
             request.delivery_date,
             request.driver_id,
+            trip_no,
         )
         try:
             board = self.delivery_workspace_mutation_service.assign_vehicle(request)
@@ -136,13 +141,14 @@ class DeliveryApplicationService(FacadeApplicationService):
                 delivery_date=request.delivery_date,
                 driver=self._driver_name(request.driver_id),
                 vehicle=self._vehicle_label(request.vehicle_id),
-                metadata={"failure_reason": str(error)},
+                metadata={"failure_reason": str(error), "trip_no": trip_no},
             )
             raise
         after = self._vehicle_assignment_snapshot(
             request.dispatch_date,
             request.delivery_date,
             request.driver_id,
+            trip_no,
         )
         self._record_vehicle_assignment_change(
             request.dispatch_date,
@@ -155,10 +161,14 @@ class DeliveryApplicationService(FacadeApplicationService):
 
     def clear_delivery_workspace_vehicle(self, request):
         self._ensure_workspace_ready("delivery")
+        self.workspace_migration_readiness_service.ensure_per_trip_ready()
+        trip_no = clean_required_text(request.trip_no, "trip_no")
+        self.validator.validate_trip_no(trip_no)
         before = self._vehicle_assignment_snapshot(
             request.dispatch_date,
             request.delivery_date,
             request.driver_id,
+            trip_no,
         )
         try:
             board = self.delivery_workspace_mutation_service.clear_vehicle(request)
@@ -176,7 +186,7 @@ class DeliveryApplicationService(FacadeApplicationService):
                 delivery_date=request.delivery_date,
                 driver=self._driver_name(request.driver_id),
                 vehicle=before.get("vehicle") if before else None,
-                metadata={"failure_reason": str(error)},
+                metadata={"failure_reason": str(error), "trip_no": trip_no},
             )
             raise
         if before:
@@ -202,7 +212,7 @@ class DeliveryApplicationService(FacadeApplicationService):
                 dispatch_date=request.dispatch_date or request.delivery_date,
                 delivery_date=request.delivery_date,
                 driver=self._driver_name(request.driver_id),
-                metadata={"failure_reason": str(error)},
+                metadata={"failure_reason": str(error), "trip_no": request.trip_no},
             )
             raise
         self._record_delivery_run_sheet_event(
@@ -245,7 +255,7 @@ class DeliveryApplicationService(FacadeApplicationService):
                 dispatch_date=current.dispatch_date if current else None,
                 delivery_date=current.delivery_date if current else None,
                 driver=self._driver_name(current.driver_id) if current else None,
-                metadata={"failure_reason": str(error)},
+                metadata={"failure_reason": str(error), "trip_no": current.trip_no if current else None},
             )
             raise
         self._record_delivery_run_sheet_event(
@@ -283,7 +293,7 @@ class DeliveryApplicationService(FacadeApplicationService):
                     else None
                 ),
                 run_sheet_id=run_sheet_id,
-                metadata={"failure_reason": str(error)},
+                metadata={"failure_reason": str(error), "trip_no": current.trip_no if current else None},
             )
             raise
         self.delivery_event_recorder.record_delivery_run_sheet_closeout(run_sheet)
@@ -304,7 +314,7 @@ class DeliveryApplicationService(FacadeApplicationService):
                 dispatch_date=current.dispatch_date if current else None,
                 delivery_date=current.delivery_date if current else None,
                 driver=self._driver_name(current.driver_id) if current else None,
-                metadata={"failure_reason": str(error)},
+                metadata={"failure_reason": str(error), "trip_no": current.trip_no if current else None},
             )
             raise
         if current:

@@ -1,6 +1,12 @@
 class InMemoryLegacyRepositoryMixin:
     """Legacy in-memory responsibilities."""
 
+    def get_delivery_per_trip_schema_status(self):
+        return {"ready": True, "version": 1, "issues": []}
+
+    def require_delivery_per_trip_schema(self):
+        return self.get_delivery_per_trip_schema_status()
+
     def get_workspace_migration_status(self):
         generated = [
             summary
@@ -24,6 +30,7 @@ class InMemoryLegacyRepositoryMixin:
                 and run_sheet.dispatch_date == summary.dispatch_date
                 and run_sheet.delivery_date == summary.delivery_date
                 and run_sheet.driver_id == summary.driver_id
+                and run_sheet.trip_no is None
                 and sum(len(trip.orders) for trip in (run_sheet.trips or []))
                 == delivery_row_count
                 for run_sheet in self.delivery_run_sheets
@@ -53,6 +60,8 @@ class InMemoryLegacyRepositoryMixin:
             "opshop_unmigrated_summary_count": len(opshop_unmigrated_ids),
             "delivery_unmigrated_summary_ids": delivery_unmigrated_ids,
             "opshop_unmigrated_summary_ids": opshop_unmigrated_ids,
+            "delivery_per_trip_schema": self.get_delivery_per_trip_schema_status(),
+            "delivery_per_trip_ready": not generated_count and not delivery_unmigrated_ids,
         }
 
     def get_task(self, task_type, task_id):

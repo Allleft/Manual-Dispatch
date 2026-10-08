@@ -193,7 +193,7 @@ class DriverAvailabilityFrontendTest(unittest.TestCase):
             assert(card.textContent.includes('Existing driver'));
             assert(card.textContent.includes('Unavailable'));
             assert(card.textContent.includes('Existing customer'));
-            const generate = card.querySelectorAll('button').find(button => button.textContent.includes('Generate Run Sheet'));
+            const generate = card.querySelectorAll('button').find(button => button.textContent.includes('Generate Trip 1 Run Sheet'));
             assert(generate && !generate.disabled);
         """)
 

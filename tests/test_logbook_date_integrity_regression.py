@@ -116,6 +116,7 @@ class LogbookDateIntegrityRegressionTest(unittest.TestCase):
                 ):
                     service.create_generated_delivery_run_sheet(
                         GenerateDeliveryRunSheetRequest(
+                            trip_no="trip1",
                             dispatch_date="24-06-2026",
                             delivery_date="2026-06-24",
                             driver_id="DRIVER-1",
@@ -228,6 +229,7 @@ class LogbookDateIntegrityRegressionTest(unittest.TestCase):
             ):
                 service.create_generated_delivery_run_sheet(
                     GenerateDeliveryRunSheetRequest(
+                        trip_no="trip1",
                         dispatch_date="24-06-2026",
                         delivery_date="2026-06-24",
                         driver_id="DRIVER-1",

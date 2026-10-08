@@ -392,8 +392,8 @@ class ManualDispatchService:
     def _assignment_label(self, snapshot):
         return self.delivery_event_recorder._assignment_label(snapshot)
 
-    def _vehicle_assignment_snapshot(self, _dispatch_date, delivery_date, driver_id):
-        return self.delivery_event_recorder._vehicle_assignment_snapshot(_dispatch_date, delivery_date, driver_id)
+    def _vehicle_assignment_snapshot(self, _dispatch_date, delivery_date, driver_id, trip_no=None):
+        return self.delivery_event_recorder._vehicle_assignment_snapshot(_dispatch_date, delivery_date, driver_id, trip_no)
 
     def _driver_name(self, driver_id):
         return self.specification_event_recorder._driver_name(driver_id)
@@ -444,8 +444,8 @@ class ManualDispatchService:
     def assign_vehicle_to_driver(self, request):
         return self.legacy_application_service.assign_vehicle_to_driver(request)
 
-    def clear_driver_vehicle_assignment(self, dispatch_date, driver_id, delivery_date=None):
-        return self.legacy_application_service.clear_driver_vehicle_assignment(dispatch_date, driver_id, delivery_date)
+    def clear_driver_vehicle_assignment(self, dispatch_date, driver_id, delivery_date=None, trip_no=None):
+        return self.legacy_application_service.clear_driver_vehicle_assignment(dispatch_date, driver_id, delivery_date, trip_no)
 
     def create_order(self, request):
         return self.legacy_application_service.create_order(request)

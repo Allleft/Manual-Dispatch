@@ -9,7 +9,7 @@ from hashlib import sha256
 
 from fastapi import HTTPException, Request
 
-from backend.errors import StateChangedConflictError
+from backend.errors import DeliveryRunSheetLockedError, StateChangedConflictError
 from backend.schemas import (
     AssignDriverVehicleRequest,
     OperatorAccountIdentity,
@@ -46,6 +46,7 @@ def assign_driver_vehicle_request_from_payload(payload):
         delivery_date=payload.get("delivery_date"),
         driver_id=payload.get("driver_id"),
         vehicle_id=payload.get("vehicle_id") or None,
+        trip_no=payload.get("trip_no"),
     )
 
 def save_final_trip_summary_request_from_payload(payload, identity=None):
@@ -216,7 +217,17 @@ def to_http_exception(error):
         status_code = 409
     else:
         status_code = 404 if "does not exist" in message else 400
-    return HTTPException(status_code=status_code, detail=message)
+    code = (
+        "workspace_migration_required" if isinstance(error, WorkspaceMigrationRequiredError)
+        else "delivery_run_sheet_locked" if isinstance(error, DeliveryRunSheetLockedError)
+        else "state_changed_conflict" if isinstance(error, StateChangedConflictError)
+        else None
+    )
+    headers = {
+        "X-Manual-Dispatch-Error-Code": code,
+        "Access-Control-Expose-Headers": "X-Manual-Dispatch-Error-Code",
+    } if code else None
+    return HTTPException(status_code=status_code, detail=message, headers=headers)
 
 def reject_scoped_fields(payload, forbidden_fields):
     for field_name in forbidden_fields:

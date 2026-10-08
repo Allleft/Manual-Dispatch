@@ -7,13 +7,14 @@ import {
   formatDeliveryVehicleConflictMessage,
   formatDeliveryVehicleOptionLabel,
   getDeliveryVehicleConflictDriverNames,
+  deliveryVehicleKey,
 } from "../../utils/delivery-vehicle-utils.js";
 
 import { createDeliveryGenerationCandidate } from "./delivery-generation-modal-renderer.js";
 
 import {
   assignedOrdersForDriver,
-  findRunSheetForDriver,
+  findRunSheetForDriverTrip,
   findVehicleAssignment,
   orderTotals,
   scopedDeliveryDate,
@@ -94,87 +95,48 @@ export function createDriverTripSummaryCard(driver, board, deliveryDate, state, 
   card.append(top);
 
   const driverOrders = assignedOrdersForDriver(board, deliveryDate, driver.driver_id);
-  const runSheet = findRunSheetForDriver(
-    state.deliveryTripSummaryRunSheets,
-    deliveryDate,
-    driver.driver_id,
-  );
-  const isLocked = Boolean(runSheet && ["GENERATED", "SAVED"].includes(runSheet.status));
   const totals = orderTotals(driverOrders);
   const facts = document.createElement("dl");
   facts.className = "workspace-fact-grid";
   appendFact(facts, "Pallet total", totals.pallets);
   appendFact(facts, "Loose-bag total", totals.bags);
   appendFact(facts, "Carton total", totals.cartons);
-  appendFact(facts, "Trip 1 orders", driverOrders.filter((item) => item.assignment.trip_no !== "trip2").length);
+  appendFact(facts, "Trip 1 orders", driverOrders.filter((item) => item.assignment.trip_no === "trip1").length);
   appendFact(facts, "Trip 2 orders", driverOrders.filter((item) => item.assignment.trip_no === "trip2").length);
-  card.append(facts, createDriverVehicleControl(driver, board, deliveryDate, isLocked, state, actions));
-
-  if (isLocked) {
-    card.append(createStatus(
-      runSheet.status === "SAVED"
-        ? "Saved Delivery Run Sheet locks this driver and delivery date."
-        : "Generated Delivery Run Sheet is shown on the Run Sheets page.",
-      "loading",
-    ));
-  }
+  card.append(facts);
 
   card.append(
-    createTripPanel("trip1", driver, board, deliveryDate, isLocked, state, actions),
-    createTripPanel("trip2", driver, board, deliveryDate, isLocked, state, actions),
+    createTripPanel("trip1", driver, board, deliveryDate, state, actions),
+    createTripPanel("trip2", driver, board, deliveryDate, state, actions),
   );
-
-  const actionsRow = document.createElement("div");
-  actionsRow.className = "workspace-action-row";
-  if (driverOrders.length && !isLocked) {
-    const generateButton = createActionButton(
-      "Generate Run Sheet",
-      () => actions.generateDeliveryRunSheet(
-        createDeliveryGenerationCandidate(
-          driver,
-          board,
-          deliveryDate,
-          driverOrders,
-          state,
-        ),
-      ),
-      {
-        disabled: isBusy(state, `delivery-generate:${deliveryDate}:${driver.driver_id}`),
-        primary: true,
-      },
-    );
-    generateButton.dataset.workspaceGenerate = "delivery";
-    generateButton.dataset.driverId = driver.driver_id;
-    generateButton.dataset.serviceDate = deliveryDate;
-    actionsRow.append(generateButton);
-  }
-  card.append(actionsRow);
   return card;
 }
 
-export function createDriverVehicleControl(driver, board, deliveryDate, isLocked, state, actions) {
+export function createTripVehicleControl(driver, board, deliveryDate, tripNo, isLocked, state, actions) {
   const section = document.createElement("div");
   section.className = "workspace-context-row workspace-vehicle-control";
   const currentAssignment = findVehicleAssignment(
     board,
     deliveryDate,
     driver.driver_id,
+    tripNo,
   );
-  const draftKey = `${deliveryDate}|${driver.driver_id}`;
+  const key = deliveryVehicleKey(deliveryDate, driver.driver_id, tripNo);
   const selectedVehicleId =
-    state.deliveryVehicleDrafts[draftKey] ?? currentAssignment?.vehicle_id ?? "";
+    state.deliveryVehicleDrafts?.[key] ?? currentAssignment?.vehicle_id ?? "";
   const conflictDriverNames = getDeliveryVehicleConflictDriverNames({
     board,
     claims: state.deliveryVehicleClaims,
     deliveryDate,
     driverId: driver.driver_id,
+    tripNo,
     vehicleId: selectedVehicleId,
   });
   const localConflictMessage = formatDeliveryVehicleConflictMessage(conflictDriverNames);
-  const backendConflictMessage = state.deliveryVehicleErrors?.[draftKey] || "";
+  const backendConflictMessage = state.deliveryVehicleErrors?.[key] || "";
   const conflictMessage = localConflictMessage || backendConflictMessage;
   const hasVehicleConflict = Boolean(conflictMessage);
-  const isUpdatingVehicle = Boolean(state.deliveryVehiclePendingKeys?.[draftKey]);
+  const isUpdatingVehicle = Boolean(state.deliveryVehiclePendingKeys?.[key]);
   const vehicleSelect = createSelect(
     "Vehicle",
     selectedVehicleId,
@@ -188,6 +150,7 @@ export function createDriverVehicleControl(driver, board, deliveryDate, isLocked
             claims: state.deliveryVehicleClaims,
             deliveryDate,
             driverId: driver.driver_id,
+            tripNo,
             vehicleId: vehicle.vehicle_id,
           }),
         ),
@@ -196,13 +159,16 @@ export function createDriverVehicleControl(driver, board, deliveryDate, isLocked
     (value) => actions.updateDeliveryVehicleSelection(
       deliveryDate,
       driver.driver_id,
+      tripNo,
       value,
     ),
   );
   const select = vehicleSelect.querySelector("select");
-  const warningId = `delivery-vehicle-conflict-${deliveryDate}-${driver.driver_id}`
+  const warningId = `delivery-vehicle-conflict-${deliveryDate}-${driver.driver_id}-${tripNo}`
     .replace(/[^a-zA-Z0-9_-]/g, "-");
   select.disabled = isLocked || isUpdatingVehicle;
+  select.dataset.tripNo = tripNo;
+  select.dataset.driverId = driver.driver_id;
   select.classList.toggle("workspace-vehicle-select-invalid", hasVehicleConflict);
   select.setAttribute("aria-invalid", hasVehicleConflict ? "true" : "false");
   if (hasVehicleConflict) {
@@ -227,19 +193,53 @@ export function createDriverVehicleControl(driver, board, deliveryDate, isLocked
   return section;
 }
 
-export function createTripPanel(tripNo, driver, board, deliveryDate, isLocked, state, actions) {
+export function createTripPanel(tripNo, driver, board, deliveryDate, state, actions) {
   const panel = document.createElement("section");
   panel.className = "workspace-trip-panel";
+  panel.dataset.tripNo = tripNo;
+  panel.dataset.driverId = driver.driver_id;
   const title = document.createElement("h4");
   title.textContent = tripNo === "trip2" ? "Trip 2" : "Trip 1";
-  panel.append(title);
+  const runSheet = findRunSheetForDriverTrip(state.deliveryTripSummaryRunSheets, deliveryDate, driver.driver_id, tripNo);
+  const isLocked = Boolean(runSheet);
+  const key = deliveryVehicleKey(deliveryDate, driver.driver_id, tripNo);
+  const isGenerating = isBusy(state, `delivery-generate:${key}`);
+  panel.append(title, createTripVehicleControl(driver, board, deliveryDate, tripNo, isLocked || isGenerating, state, actions));
+  if (isLocked) {
+    panel.append(createStatus(
+      runSheet.status === "SAVED"
+        ? "Saved Delivery Run Sheet locks this trip."
+        : "Generated Delivery Run Sheet is shown on the Run Sheets page.",
+      "loading",
+    ));
+  }
   const assigned = assignedOrdersForDriver(board, deliveryDate, driver.driver_id).filter(
-    (item) => (tripNo === "trip2" ? item.assignment.trip_no === "trip2" : item.assignment.trip_no !== "trip2"),
+    (item) => item.assignment.trip_no === tripNo,
   );
   if (!assigned.length) {
     panel.append(createEmptyState("No orders assigned", "document"));
   } else {
-    assigned.forEach((item) => panel.append(createAssignedOrderRow(item.order, item.assignment, driver, isLocked, state, actions)));
+    assigned.forEach((item) => panel.append(createAssignedOrderRow(item.order, item.assignment, driver, isLocked || isGenerating, state, actions)));
+  }
+  if (assigned.length && !isLocked) {
+    const vehicleId = state.deliveryVehicleDrafts?.[key]
+      ?? findVehicleAssignment(board, deliveryDate, driver.driver_id, tripNo)?.vehicle_id ?? "";
+    const vehicleConflict = getDeliveryVehicleConflictDriverNames({
+      board, claims: state.deliveryVehicleClaims, deliveryDate, driverId: driver.driver_id, tripNo, vehicleId,
+    }).length > 0;
+    const generateButton = createActionButton(
+      tripNo === "trip1" ? "Generate Trip 1 Run Sheet" : "Generate Trip 2 Run Sheet",
+      () => actions.generateDeliveryRunSheet(createDeliveryGenerationCandidate(driver, board, deliveryDate, tripNo, assigned, state)),
+      { disabled: isGenerating || Boolean(state.deliveryVehiclePendingKeys?.[key] || state.deliveryVehicleErrors?.[key]) || vehicleConflict, primary: true },
+    );
+    generateButton.dataset.workspaceGenerate = "delivery";
+    generateButton.dataset.driverId = driver.driver_id;
+    generateButton.dataset.serviceDate = deliveryDate;
+    generateButton.dataset.tripNo = tripNo;
+    const actionsRow = document.createElement("div");
+    actionsRow.className = "workspace-action-row";
+    actionsRow.append(generateButton);
+    panel.append(actionsRow);
   }
   return panel;
 }
@@ -271,12 +271,15 @@ export function createAssignedOrderRow(order, assignment, driver, isLocked, stat
   const actionsRow = document.createElement("div");
   actionsRow.className = "workspace-action-row";
   const targetTrip = assignment.trip_no === "trip2" ? "trip1" : "trip2";
+  const targetLocked = Boolean(findRunSheetForDriverTrip(
+    state.deliveryTripSummaryRunSheets, order.delivery_date, driver.driver_id, targetTrip,
+  )) || isBusy(state, `delivery-generate:${deliveryVehicleKey(order.delivery_date, driver.driver_id, targetTrip)}`);
   actionsRow.append(
     createActionButton(
       targetTrip === "trip2" ? "Move to Trip 2" : "Move to Trip 1",
       () => actions.moveDeliveryOrderToTrip(order.order_id, driver.driver_id, targetTrip),
       {
-        disabled: isLocked || isBusy(state, `delivery-move:${order.order_id}:${targetTrip}`),
+        disabled: isLocked || targetLocked || isBusy(state, `delivery-move:${order.order_id}:${targetTrip}`),
       },
     ),
     createActionButton(

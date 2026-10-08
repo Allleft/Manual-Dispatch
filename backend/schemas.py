@@ -145,6 +145,7 @@ class ManualDriverVehicleAssignment:
     delivery_date: str
     driver_id: str
     vehicle_id: str
+    trip_no: Optional[str] = None
 
 
 @dataclass
@@ -543,6 +544,7 @@ class DeliveryVehicleAssignmentLock:
     delivery_date: str
     driver_id: str
     run_sheet_id: str
+    trip_no: Optional[str] = None
 
 
 @dataclass
@@ -554,6 +556,7 @@ class DeliveryWorkspaceBoardResponse:
     assignments: List[ManualDispatchAssignment]
     driver_vehicle_assignments: List[ManualDriverVehicleAssignment]
     saved_vehicle_assignment_locks: List[DeliveryVehicleAssignmentLock]
+    legacy_driver_vehicle_assignments: List[ManualDriverVehicleAssignment] = field(default_factory=list)
 
 
 @dataclass
@@ -566,6 +569,7 @@ class DeliveryTripSummaryResponse:
     driver_vehicle_assignments: List[ManualDriverVehicleAssignment]
     saved_vehicle_assignment_locks: List[DeliveryVehicleAssignmentLock]
     dispatch_date: Optional[str] = None
+    legacy_driver_vehicle_assignments: List[ManualDriverVehicleAssignment] = field(default_factory=list)
 
 
 @dataclass
@@ -607,6 +611,7 @@ class DeliveryWorkspaceVehicleAssignmentRequest:
     delivery_date: Optional[str] = None
     driver_id: Optional[str] = None
     vehicle_id: Optional[str] = None
+    trip_no: Optional[str] = None
 
 
 @dataclass
@@ -614,6 +619,7 @@ class DeliveryWorkspaceVehicleClearRequest:
     dispatch_date: Optional[str] = None
     delivery_date: Optional[str] = None
     driver_id: Optional[str] = None
+    trip_no: Optional[str] = None
 
 
 @dataclass
@@ -657,6 +663,7 @@ class AssignDriverVehicleRequest:
     driver_id: str
     vehicle_id: Optional[str] = None
     delivery_date: Optional[str] = None
+    trip_no: Optional[str] = None
 
 
 @dataclass
@@ -666,6 +673,7 @@ class ManualDriverVehicleClearResponse:
     delivery_date: Optional[str] = None
     vehicle_id: Optional[str] = None
     cleared: bool = True
+    trip_no: Optional[str] = None
 
 
 @dataclass
@@ -852,6 +860,7 @@ class DeliveryRunSheet:
     closeout_summary: DeliveryRunSheetCloseoutSummary = field(
         default_factory=DeliveryRunSheetCloseoutSummary
     )
+    trip_no: Optional[str] = None
 
 
 @dataclass
@@ -914,6 +923,7 @@ class UpdateOpShopPickupCollectionRowsRequest:
 
 @dataclass
 class GenerateDeliveryRunSheetRequest:
+    trip_no: str
     dispatch_date: Optional[str] = None
     delivery_date: Optional[str] = None
     driver_id: Optional[str] = None

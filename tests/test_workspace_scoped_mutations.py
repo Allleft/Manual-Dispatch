@@ -32,7 +32,9 @@ from backend.schemas import (
     Vehicle,
 )
 from backend.services.manual_dispatch_service import ManualDispatchService
-from tests.manual_dispatch_api_test_helpers import authenticate_test_client
+from tests.manual_dispatch_api_test_helpers import (
+    assign_equal_trip_vehicle_fixture, authenticate_test_client,
+)
 
 try:
     from fastapi import FastAPI
@@ -113,6 +115,7 @@ class WorkspaceScopedMutationsTest(unittest.TestCase):
                 "assignments",
                 "driver_vehicle_assignments",
                 "saved_vehicle_assignment_locks",
+                "legacy_driver_vehicle_assignments",
             },
             set(delivery.json()),
         )
@@ -230,6 +233,7 @@ class WorkspaceScopedMutationsTest(unittest.TestCase):
                 "delivery_date": self.dispatch_date,
                 "driver_id": "DRIVER-1",
                 "vehicle_id": "VEHICLE-1",
+                "trip_no": "trip1",
             },
         )
         self.assertEqual(200, first.status_code, first.text)
@@ -241,11 +245,12 @@ class WorkspaceScopedMutationsTest(unittest.TestCase):
                 "delivery_date": self.dispatch_date,
                 "driver_id": "DRIVER-2",
                 "vehicle_id": "VEHICLE-1",
+                "trip_no": "trip1",
             },
         )
         self.assertEqual(409, duplicate.status_code, duplicate.text)
         self.assertEqual(
-            "Vehicle TEST01 is already assigned to Driver 1 for this delivery date.",
+            "Vehicle TEST01 is already assigned to Driver 1 for this delivery date and trip1.",
             duplicate.json()["detail"],
         )
 
@@ -256,6 +261,7 @@ class WorkspaceScopedMutationsTest(unittest.TestCase):
                 "delivery_date": "2026-06-17",
                 "driver_id": "DRIVER-2",
                 "vehicle_id": "VEHICLE-1",
+                "trip_no": "trip1",
             },
         )
         self.assertEqual(200, other_date.status_code, other_date.text)
@@ -279,11 +285,12 @@ class WorkspaceScopedMutationsTest(unittest.TestCase):
         self.assertIn("already assigned", rejection)
         assignments = [
             assignment
-            for assignment in self.repository.list_driver_vehicle_assignments(
+            for assignment in self.repository.list_delivery_trip_vehicle_assignments(
                 self.dispatch_date
             )
             if assignment.delivery_date == self.dispatch_date
             and assignment.vehicle_id == "VEHICLE-1"
+            and assignment.trip_no == "trip1"
         ]
         self.assertEqual(1, len(assignments))
 
@@ -304,6 +311,7 @@ class WorkspaceScopedMutationsTest(unittest.TestCase):
             lambda: self._assign_vehicle("DRIVER-1", "VEHICLE-2"),
             lambda: self.service.clear_delivery_workspace_vehicle(
                 DeliveryWorkspaceVehicleClearRequest(
+                    trip_no="trip1",
                     dispatch_date=self.dispatch_date,
                     delivery_date=self.dispatch_date,
                     driver_id="DRIVER-1",
@@ -342,6 +350,7 @@ class WorkspaceScopedMutationsTest(unittest.TestCase):
             lambda: self._assign_vehicle("DRIVER-1", "VEHICLE-2"),
             lambda: self.service.clear_delivery_workspace_vehicle(
                 DeliveryWorkspaceVehicleClearRequest(
+                    trip_no="trip1",
                     dispatch_date=self.dispatch_date,
                     delivery_date=self.dispatch_date,
                     driver_id="DRIVER-1",
@@ -530,8 +539,9 @@ class WorkspaceScopedMutationsTest(unittest.TestCase):
         )
 
     def _assign_vehicle(self, driver_id, vehicle_id):
-        return self.service.assign_delivery_workspace_vehicle(
+        return assign_equal_trip_vehicle_fixture(self.service.assign_delivery_workspace_vehicle,
             DeliveryWorkspaceVehicleAssignmentRequest(
+                trip_no="trip1",
                 dispatch_date=self.dispatch_date,
                 delivery_date=self.dispatch_date,
                 driver_id=driver_id,
@@ -552,6 +562,7 @@ class WorkspaceScopedMutationsTest(unittest.TestCase):
     def _generate_delivery(self, driver_id):
         return self.service.create_generated_delivery_run_sheet(
             GenerateDeliveryRunSheetRequest(
+                trip_no="trip1",
                 dispatch_date=self.dispatch_date,
                 delivery_date=self.dispatch_date,
                 driver_id=driver_id,

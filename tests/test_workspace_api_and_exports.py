@@ -37,7 +37,10 @@ from backend.services.manual_dispatch_service import ManualDispatchService
 from backend.services.opshop_pickup_collection_excel_export_service import (
     build_opshop_pickup_collection_excel,
 )
-from tests.manual_dispatch_api_test_helpers import authenticate_test_client
+from tests.manual_dispatch_api_test_helpers import (
+    create_legacy_combined_delivery_fixture,
+    assign_equal_trip_vehicle_fixture, authenticate_test_client,
+)
 
 try:
     from fastapi import FastAPI
@@ -938,7 +941,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             response.json()["detail"],
         )
 
-    def test_delivery_export_uses_daily_run_sheet_form_layout(self):
+    def test_legacy_delivery_export_uses_daily_run_sheet_form_layout(self):
         self._assign_delivery_vehicle("D001", "V001")
         self._set_product_lines(
             "ORD-001",
@@ -969,7 +972,9 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
                 trip_no="trip2",
             )
         )
-        run_sheet_id = self._generate_and_save_delivery()
+        run_sheet_id = create_legacy_combined_delivery_fixture(self.service, self.dispatch_date, "D001").run_sheet_id
+        saved = self.client.post(f"/api/manual-dispatch/delivery/run-sheets/{run_sheet_id}/save", json=self._save_payload())
+        self.assertEqual(200, saved.status_code)
         with sqlite3.connect(self.db_path) as connection:
             connection.execute(
                 "UPDATE manual_vehicles SET rego = ? WHERE vehicle_id = ?",
@@ -1096,7 +1101,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         for manual_column in range(7, 14):
             self.assertIsNone(customer_a_row[manual_column])
 
-    def test_delivery_date_export_uses_snapshot_rows_and_one_sheet_per_driver(self):
+    def test_delivery_date_export_uses_snapshot_rows_and_one_sheet_per_run_sheet(self):
         self._assign_delivery_vehicle("D001", "V001")
         self._assign_delivery_vehicle("D002", "V002")
         self._set_product_lines(
@@ -1151,6 +1156,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         tony = self.client.post(
             "/api/manual-dispatch/delivery/run-sheets/generated",
             json={
+                "trip_no": "trip1",
                 "dispatch_date": self.dispatch_date,
                 "delivery_date": self.dispatch_date,
                 "driver_id": "D002",
@@ -1185,7 +1191,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         )
         workbook = load_workbook(BytesIO(response.content))
         self.assertEqual(2, len(workbook.worksheets))
-        self.assertEqual({"John", "Tony"}, set(workbook.sheetnames))
+        self.assertEqual({"John - Trip 1", "Tony - Trip 1"}, set(workbook.sheetnames))
         self.assertNotIn("Sheet", workbook.sheetnames)
 
         expected_headers = [
@@ -1249,10 +1255,11 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             self.assertIn("RETND", values)
             self.assertFalse(any(str(value).startswith("Edited Live") for value in values))
 
-        john_rows = list(workbook["John"].iter_rows(values_only=True))
+        john_rows = list(workbook["John - Trip 1"].iter_rows(values_only=True))
         self.assertEqual(1, john_rows[8][0])
         self.assertEqual("Demo Customer A", john_rows[8][1])
-        self.assertEqual("Demo Customer C", john_rows[9][1])
+        self.assertIsNone(john_rows[9][1])
+        self.assertNotIn("Demo Customer C", self._workbook_values(response.content))
         self.assertEqual("INV-1001", john_rows[8][3])
         self.assertEqual(
             "RWIND - 45 BAG10\n"
@@ -1262,16 +1269,16 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         )
         self.assertEqual(450, john_rows[8][5])
         self.assertEqual(2, john_rows[8][6])
-        self.assertEqual(450, workbook["John"]["F9"].value)
-        self.assertEqual("General", workbook["John"]["G9"].number_format)
-        self.assertTrue(workbook["John"]["E9"].alignment.wrap_text)
-        self.assertGreaterEqual(workbook["John"].row_dimensions[9].height, 30)
-        self.assertGreater(workbook["John"].column_dimensions["B"].width, 25)
+        self.assertEqual(450, workbook["John - Trip 1"]["F9"].value)
+        self.assertEqual("General", workbook["John - Trip 1"]["G9"].number_format)
+        self.assertTrue(workbook["John - Trip 1"]["E9"].alignment.wrap_text)
+        self.assertGreaterEqual(workbook["John - Trip 1"].row_dimensions[9].height, 30)
+        self.assertGreater(workbook["John - Trip 1"].column_dimensions["B"].width, 25)
         self.assertNotIn("Edited Live Product ORD-001", self._workbook_values(response.content))
-        self.assertEqual("DRIVER: John", workbook["John"]["F1"].value)
-        self.assertEqual("REGO #: ABC123", workbook["John"]["L1"].value)
-        self.assertEqual("DRIVER: Tony", workbook["Tony"]["F1"].value)
-        self.assertEqual("REGO #: XYZ888", workbook["Tony"]["L1"].value)
+        self.assertEqual("DRIVER: John", workbook["John - Trip 1"]["F1"].value)
+        self.assertEqual("REGO #: ABC123", workbook["John - Trip 1"]["L1"].value)
+        self.assertEqual("DRIVER: Tony", workbook["Tony - Trip 1"]["F1"].value)
+        self.assertEqual("REGO #: XYZ888", workbook["Tony - Trip 1"]["L1"].value)
         self.assertNotIn("EDITED-LIVE-REGO", self._workbook_values(response.content))
 
         statuses = {
@@ -2012,8 +2019,9 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         )
 
     def _assign_delivery_vehicle(self, driver_id, vehicle_id):
-        self.service.assign_delivery_workspace_vehicle(
+        assign_equal_trip_vehicle_fixture(self.service.assign_delivery_workspace_vehicle,
             DeliveryWorkspaceVehicleAssignmentRequest(
+                trip_no="trip1",
                 dispatch_date=self.dispatch_date,
                 delivery_date=self.dispatch_date,
                 driver_id=driver_id,
@@ -2154,6 +2162,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
 
     def _delivery_generate_payload(self):
         return {
+            "trip_no": "trip1",
             "dispatch_date": self.dispatch_date,
             "delivery_date": self.dispatch_date,
             "driver_id": "D001",

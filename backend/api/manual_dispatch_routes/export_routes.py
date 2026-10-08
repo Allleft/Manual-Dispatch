@@ -90,8 +90,11 @@ def create_export_router(
         workbook_bytes = get_dependency("build_delivery_run_sheet_excel")(run_sheet)
         filename = (
             f"Delivery_Run_Sheet_{safe_filename_part(run_sheet.delivery_date)}_"
-            f"{safe_filename_part(run_sheet.driver_name_snapshot)}.xlsx"
+            f"{safe_filename_part(run_sheet.driver_name_snapshot)}"
         )
+        if getattr(run_sheet, "trip_no", None) is not None:
+            filename += f"_Trip_{1 if run_sheet.trip_no == 'trip1' else 2}"
+        filename += ".xlsx"
         with_logbook_actor(
             service,
             http_request,

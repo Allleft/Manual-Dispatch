@@ -6,6 +6,7 @@ from contextvars import ContextVar
 from pathlib import Path
 
 from backend.db.invariants import create_invariant_indexes
+from backend.db.delivery_per_trip import mark_per_trip_schema_ready
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -136,6 +137,10 @@ def _same_path(left, right):
 def initialize_database(db_path=None):
     with connect(db_path) as connection:
         is_fresh_database = not _table_exists(connection, "manual_orders")
+        has_existing_delivery_tables = any(
+            _table_exists(connection, table)
+            for table in ("manual_driver_vehicle_assignments", "delivery_run_sheets")
+        )
         schema = SCHEMA_PATH.read_text(encoding="utf-8")
         schema_statements, seed_statements = _split_schema_and_seed(schema)
         connection.executescript(schema_statements)
@@ -147,6 +152,8 @@ def initialize_database(db_path=None):
         )
         if is_fresh_database:
             create_invariant_indexes(connection)
+            if not has_existing_delivery_tables:
+                mark_per_trip_schema_ready(connection)
         if _is_env_flag_enabled(SEED_DEMO_DATA_ENV, default=False):
             connection.executescript(seed_statements)
         connection.commit()
@@ -659,6 +666,20 @@ def _ensure_driver_vehicle_assignment_key(connection):
         )
         if row["pk"]
     ]
+    if primary_key_columns == [
+        "dispatch_date", "delivery_date", "driver_id", "trip_no"
+    ]:
+        return
+    columns = {
+        row["name"]
+        for row in connection.execute(
+            "PRAGMA table_info(manual_driver_vehicle_assignments)"
+        ).fetchall()
+    }
+    if "trip_no" in columns:
+        raise RuntimeError(
+            "Unexpected per-trip vehicle schema; explicit migration is required."
+        )
     if primary_key_columns == ["dispatch_date", "delivery_date", "driver_id"]:
         return
 

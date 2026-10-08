@@ -98,6 +98,7 @@ class SQLiteRowMapperMixin:
             delivery_date=row["delivery_date"],
             driver_id=row["driver_id"],
             vehicle_id=row["vehicle_id"],
+            trip_no=_row_value(row, "trip_no"),
         )
 
     def _row_to_final_trip_summary(self, row):
@@ -298,6 +299,7 @@ class SQLiteRowMapperMixin:
             dispatch_date=row["dispatch_date"],
             delivery_date=row["delivery_date"],
             driver_id=row["driver_id"],
+            trip_no=_row_value(row, "trip_no"),
             driver_name_snapshot=row["driver_name_snapshot"],
             vehicle_id=row["vehicle_id"],
             vehicle_rego_snapshot=row["vehicle_rego_snapshot"],

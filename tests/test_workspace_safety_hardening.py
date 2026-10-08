@@ -107,6 +107,8 @@ class WorkspaceSafetyHardeningTest(unittest.TestCase):
             "opshop_unmigrated_summary_count": 0,
             "delivery_unmigrated_summary_ids": [],
             "opshop_unmigrated_summary_ids": [],
+            "delivery_per_trip_schema": {"ready": True, "version": 1, "issues": []},
+            "delivery_per_trip_ready": True,
         }
         self.assertEqual(expected, self.service.get_workspace_migration_status())
         response = self.client.get(
@@ -461,7 +463,7 @@ class WorkspaceSafetyHardeningTest(unittest.TestCase):
             ("post", "/api/manual-dispatch/opshop/pickups/assignments/apply", {"json": {}}),
             ("post", "/api/manual-dispatch/opshop/pickups/assignments/unassign", {"json": {}}),
             ("post", "/api/manual-dispatch/opshop/countryside-route-groups/ROUTE-1/assign", {"json": {}}),
-            ("post", "/api/manual-dispatch/delivery/run-sheets/generated", {"json": {}}),
+            ("post", "/api/manual-dispatch/delivery/run-sheets/generated", {"json": {"trip_no": "trip1"}}),
             ("get", "/api/manual-dispatch/delivery/run-sheets", {}),
             ("post", "/api/manual-dispatch/opshop/pickup-collections/generated", {"json": {}}),
             ("get", "/api/manual-dispatch/opshop/pickup-collections", {}),
@@ -653,6 +655,7 @@ class WorkspaceSafetyHardeningTest(unittest.TestCase):
             self.client.post(
                 "/api/manual-dispatch/delivery/run-sheets/generated",
                 json={
+                    "trip_no": "trip1",
                     "dispatch_date": "24-06-2026",
                     "delivery_date": "2026-06-24",
                     "driver_id": "DRIVER-1",
@@ -789,14 +792,15 @@ class WorkspaceSafetyHardeningTest(unittest.TestCase):
             delivery_repository,
             _NoOpValidator(),
         )
-        delivery_service._build_trips = lambda *_: self._run_sheet(
+        delivery_service._build_trip = lambda *_: self._run_sheet(
             "RACE",
             "GENERATED",
-        ).trips
+        ).trips[0]
         delivery_service._vehicle_snapshot = lambda *_: (None, None)
         with self.assertRaisesRegex(ValueError, "already exists"):
             delivery_service.create_generated(
                 GenerateDeliveryRunSheetRequest(
+                    trip_no="trip1",
                     dispatch_date="2026-06-24",
                     delivery_date="2026-06-24",
                     driver_id="DRIVER-1",
@@ -1094,6 +1098,11 @@ class _NoOpValidator:
     def validate_driver_exists(_driver_id):
         return None
 
+    @staticmethod
+    def validate_trip_no(trip_no):
+        if trip_no not in ("trip1", "trip2"):
+            raise ValueError("Invalid trip")
+
 
 class _RaceDeliveryRepository:
     def __init__(self):
@@ -1106,7 +1115,7 @@ class _RaceDeliveryRepository:
     def get_driver(_driver_id):
         return SimpleNamespace(name="Driver One")
 
-    def upsert_delivery_run_sheet(self, run_sheet):
+    def create_delivery_run_sheet(self, run_sheet):
         self.created = run_sheet
         raise sqlite3.IntegrityError(
             "UNIQUE constraint failed: delivery_run_sheets.dispatch_date, "
