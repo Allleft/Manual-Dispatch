@@ -8033,3 +8033,161 @@ select:disabled {
     font-size: 0.58rem;
   }
 }
+
+/* Delivery documents use printable columns while the screen table keeps horizontal scrolling. */
+@media print {
+  :where(body:has(#workspace-root:not([hidden]):not(.board-locked) > .workspace-page-delivery .workspace-run-sheet-paper-list .workspace-daily-run-sheet)) > .workspace-app-header {
+    display: none !important;
+  }
+  :where(body:has(#workspace-root:not([hidden]):not(.board-locked) > .workspace-page-delivery .workspace-run-sheet-paper-list .workspace-daily-run-sheet)) :is(.workspace-page-delivery > .workspace-page-heading, .workspace-tabs-delivery, .workspace-run-sheet-intro, .workspace-history-toolbar, .workspace-status, .workspace-run-sheet-date-group-header, .workspace-history-results > .workspace-section-heading, .workspace-run-sheet-document-card > .workspace-record-card-top, .workspace-run-sheet-card-meta, .workspace-run-sheet-actions, .workspace-daily-run-sheet-actions, .workspace-daily-run-sheet-scroll-hint, #legacy-board-shell, #order-detail-root, #add-order-root, #specification-root, #auth-root, .workspace-modal-backdrop) {
+    display: none !important;
+  }
+  :where(body:has(#workspace-root:not([hidden]):not(.board-locked) > .workspace-page-delivery .workspace-run-sheet-paper-list .workspace-daily-run-sheet)) :is(#workspace-root, .workspace-page-delivery, .workspace-content, .workspace-run-sheets, .workspace-saved-history, .workspace-run-sheet-date-group, .workspace-history-results, .workspace-run-sheet-paper-list, .workspace-run-sheet-document-card, .workspace-daily-run-sheet) {
+    display: block;
+    width: auto;
+    max-width: none;
+    min-width: 0;
+    min-height: 0;
+    height: auto;
+    margin: 0;
+    padding: 0;
+    gap: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    overflow: visible;
+    background: #fff;
+    break-inside: auto;
+  }
+  :where(body:has(#workspace-root:not([hidden]):not(.board-locked) > .workspace-page-delivery .workspace-run-sheet-paper-list .workspace-daily-run-sheet)) .workspace-daily-run-sheet-table-scroll {
+    overflow: visible;
+    max-width: none;
+    border: 0;
+  }
+  :where(body:has(#workspace-root:not([hidden]):not(.board-locked) > .workspace-page-delivery .workspace-run-sheet-paper-list .workspace-daily-run-sheet)) .workspace-daily-run-sheet-table {
+    width: 100%;
+    min-width: 0;
+    table-layout: fixed;
+  }
+  :where(body:has(#workspace-root:not([hidden]):not(.board-locked) > .workspace-page-delivery .workspace-run-sheet-paper-list .workspace-daily-run-sheet)) .workspace-daily-run-sheet-table :is(th, td) {
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+    word-break: normal;
+    padding: 1mm;
+    font-size: 9pt;
+    line-height: 1.25;
+    vertical-align: top;
+  }
+  :where(body:has(#workspace-root:not([hidden]):not(.board-locked) > .workspace-page-delivery .workspace-run-sheet-paper-list .workspace-daily-run-sheet)) .workspace-daily-run-sheet-table th {
+    font-size: 8pt;
+  }
+  :where(body:has(#workspace-root:not([hidden]):not(.board-locked) > .workspace-page-delivery .workspace-run-sheet-paper-list .workspace-daily-run-sheet)) :is(.workspace-daily-run-sheet-product-cell, .workspace-daily-run-sheet-table td:nth-child(10)) {
+    white-space: pre-line !important;
+  }
+  :where(body:has(#workspace-root:not([hidden]):not(.board-locked) > .workspace-page-delivery .workspace-run-sheet-paper-list .workspace-daily-run-sheet)) .workspace-daily-run-sheet-table :is(th, td):nth-child(1) {
+    width: 3% !important;
+  }
+  :where(body:has(#workspace-root:not([hidden]):not(.board-locked) > .workspace-page-delivery .workspace-run-sheet-paper-list .workspace-daily-run-sheet)) .workspace-daily-run-sheet-table :is(th, td):nth-child(2) {
+    width: 10.5% !important;
+  }
+  :where(body:has(#workspace-root:not([hidden]):not(.board-locked) > .workspace-page-delivery .workspace-run-sheet-paper-list .workspace-daily-run-sheet)) .workspace-daily-run-sheet-table :is(th, td):nth-child(3) {
+    width: 7% !important;
+  }
+  :where(body:has(#workspace-root:not([hidden]):not(.board-locked) > .workspace-page-delivery .workspace-run-sheet-paper-list .workspace-daily-run-sheet)) .workspace-daily-run-sheet-table :is(th, td):nth-child(4) {
+    width: 6% !important;
+  }
+  :where(body:has(#workspace-root:not([hidden]):not(.board-locked) > .workspace-page-delivery .workspace-run-sheet-paper-list .workspace-daily-run-sheet)) .workspace-daily-run-sheet-table :is(th, td):nth-child(5) {
+    width: 13% !important;
+  }
+  :where(body:has(#workspace-root:not([hidden]):not(.board-locked) > .workspace-page-delivery .workspace-run-sheet-paper-list .workspace-daily-run-sheet)) .workspace-daily-run-sheet-table :is(th, td):nth-child(6) {
+    width: 4% !important;
+  }
+  :where(body:has(#workspace-root:not([hidden]):not(.board-locked) > .workspace-page-delivery .workspace-run-sheet-paper-list .workspace-daily-run-sheet)) .workspace-daily-run-sheet-table :is(th, td):nth-child(7) {
+    width: 4.5% !important;
+  }
+  :where(body:has(#workspace-root:not([hidden]):not(.board-locked) > .workspace-page-delivery .workspace-run-sheet-paper-list .workspace-daily-run-sheet)) .workspace-daily-run-sheet-table :is(th, td):nth-child(8) {
+    width: 5% !important;
+  }
+  :where(body:has(#workspace-root:not([hidden]):not(.board-locked) > .workspace-page-delivery .workspace-run-sheet-paper-list .workspace-daily-run-sheet)) .workspace-daily-run-sheet-table :is(th, td):nth-child(9) {
+    width: 4.5% !important;
+  }
+  :where(body:has(#workspace-root:not([hidden]):not(.board-locked) > .workspace-page-delivery .workspace-run-sheet-paper-list .workspace-daily-run-sheet)) .workspace-daily-run-sheet-table :is(th, td):nth-child(10) {
+    width: 10% !important;
+  }
+  :where(body:has(#workspace-root:not([hidden]):not(.board-locked) > .workspace-page-delivery .workspace-run-sheet-paper-list .workspace-daily-run-sheet)) .workspace-daily-run-sheet-table :is(th, td):nth-child(11) {
+    width: 3% !important;
+  }
+  :where(body:has(#workspace-root:not([hidden]):not(.board-locked) > .workspace-page-delivery .workspace-run-sheet-paper-list .workspace-daily-run-sheet)) .workspace-daily-run-sheet-table :is(th, td):nth-child(12) {
+    width: 3% !important;
+  }
+  :where(body:has(#workspace-root:not([hidden]):not(.board-locked) > .workspace-page-delivery .workspace-run-sheet-paper-list .workspace-daily-run-sheet)) .workspace-daily-run-sheet-table :is(th, td):nth-child(13) {
+    width: 4% !important;
+  }
+  :where(body:has(#workspace-root:not([hidden]):not(.board-locked) > .workspace-page-delivery .workspace-run-sheet-paper-list .workspace-daily-run-sheet)) .workspace-daily-run-sheet-table :is(th, td):nth-child(14) {
+    width: 4% !important;
+  }
+  :where(body:has(#workspace-root:not([hidden]):not(.board-locked) > .workspace-page-delivery .workspace-run-sheet-paper-list .workspace-daily-run-sheet)) .workspace-daily-run-sheet-table :is(th, td):nth-child(15) {
+    width: 6% !important;
+  }
+  :where(body:has(#workspace-root:not([hidden]):not(.board-locked) > .workspace-page-delivery .workspace-run-sheet-paper-list .workspace-daily-run-sheet)) .workspace-daily-run-sheet-table :is(th, td):nth-child(16) {
+    width: 7% !important;
+  }
+  :where(body:has(#workspace-root:not([hidden]):not(.board-locked) > .workspace-page-delivery .workspace-run-sheet-paper-list .workspace-daily-run-sheet)) .workspace-daily-run-sheet-table :is(th, td):nth-child(17) {
+    width: 5.5% !important;
+  }
+  @page delivery-run-sheet {
+    size: A4 landscape;
+    margin: 8mm;
+  }
+  body:has(#workspace-root:not([hidden]):not(.board-locked) > .workspace-page-delivery .workspace-run-sheet-paper-list .workspace-daily-run-sheet) {
+    page: delivery-run-sheet;
+    min-height: 0;
+    height: auto;
+    margin: 0;
+    background: #fff;
+  }
+  :where(body:has(#workspace-root:not([hidden]):not(.board-locked) > .workspace-page-delivery .workspace-run-sheet-paper-list .workspace-daily-run-sheet)) :is(.workspace-run-sheet-paper-list > .workspace-run-sheet-document-card + .workspace-run-sheet-document-card, .workspace-run-sheet-paper-list > .workspace-daily-run-sheet + .workspace-daily-run-sheet) {
+    break-before: page;
+    page-break-before: always;
+  }
+  :where(body:has(#workspace-root:not([hidden]):not(.board-locked) > .workspace-page-delivery .workspace-run-sheet-paper-list .workspace-daily-run-sheet)) :is(.workspace-daily-run-sheet-header, .workspace-daily-run-sheet-metadata, .workspace-daily-run-sheet-operational-fields) {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+  :where(body:has(#workspace-root:not([hidden]):not(.board-locked) > .workspace-page-delivery .workspace-run-sheet-paper-list .workspace-daily-run-sheet)) .workspace-daily-run-sheet-header {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1fr);
+    gap: 3mm;
+    margin-bottom: 3mm;
+  }
+  :where(body:has(#workspace-root:not([hidden]):not(.board-locked) > .workspace-page-delivery .workspace-run-sheet-paper-list .workspace-daily-run-sheet)) .workspace-daily-run-sheet-title {
+    font-size: 14pt;
+  }
+  :where(body:has(#workspace-root:not([hidden]):not(.board-locked) > .workspace-page-delivery .workspace-run-sheet-paper-list .workspace-daily-run-sheet)) .workspace-daily-run-sheet-header-field {
+    font-size: 9pt;
+  }
+  :where(body:has(#workspace-root:not([hidden]):not(.board-locked) > .workspace-page-delivery .workspace-run-sheet-paper-list .workspace-daily-run-sheet)) .workspace-daily-run-sheet-metadata {
+    font-size: 8pt;
+    margin-bottom: 2mm;
+  }
+  :where(body:has(#workspace-root:not([hidden]):not(.board-locked) > .workspace-page-delivery .workspace-run-sheet-paper-list .workspace-daily-run-sheet)) .workspace-daily-run-sheet-operational-fields {
+    margin-bottom: 3mm;
+  }
+  :where(body:has(#workspace-root:not([hidden]):not(.board-locked) > .workspace-page-delivery .workspace-run-sheet-paper-list .workspace-daily-run-sheet)) .workspace-daily-run-sheet-table-region {
+    break-before: avoid;
+    break-inside: auto;
+  }
+  :where(body:has(#workspace-root:not([hidden]):not(.board-locked) > .workspace-page-delivery .workspace-run-sheet-paper-list .workspace-daily-run-sheet)) .workspace-daily-run-sheet-table thead {
+    display: table-header-group;
+  }
+  :where(body:has(#workspace-root:not([hidden]):not(.board-locked) > .workspace-page-delivery .workspace-run-sheet-paper-list .workspace-daily-run-sheet)) .workspace-daily-run-sheet-table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  :where(body:has(#workspace-root:not([hidden]):not(.board-locked) > .workspace-page-delivery .workspace-run-sheet-paper-list .workspace-daily-run-sheet)) .workspace-daily-run-sheet-finish {
+    break-inside: avoid;
+    break-before: avoid;
+    margin-top: 3mm;
+  }
+}
