@@ -992,7 +992,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertEqual("landscape", worksheet.page_setup.orientation)
         self.assertEqual(str(worksheet.PAPERSIZE_A4), str(worksheet.page_setup.paperSize))
         self.assertEqual(1, worksheet.page_setup.fitToWidth)
-        self.assertEqual(1, worksheet.page_setup.fitToHeight)
+        self.assertEqual(0, worksheet.page_setup.fitToHeight)
         self.assertEqual(16, worksheet["A1"].font.sz)
         for coordinate in ("C1", "F1"):
             self.assertEqual(11, worksheet[coordinate].font.sz)
@@ -1062,10 +1062,11 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             header_row,
         )
         self.assertEqual(14, worksheet.max_column)
-        self.assertIn("$A$1:$N$28", worksheet.print_area)
+        self.assertIn(f"$A$1:$N${worksheet.max_row}", worksheet.print_area)
+        self.assertEqual("FINISH TIME:____________________________________", worksheet.cell(worksheet.max_row, 2).value)
         self.assertEqual("$7:$8", worksheet.print_title_rows)
         self.assertEqual(
-            [3.855, 27.57, 15, 12, 16, 5.57, 6.855, 5.855, 3, 8, 8, 12.57, 17.285, 7.71],
+            [3.855, 27.57, 15, 12, 20, 5.57, 6.855, 5.855, 3, 8, 8, 12.57, 17.285, 7.71],
             [worksheet.column_dimensions[column].width for column in "ABCDEFGHIJKLMN"],
         )
 
@@ -1081,7 +1082,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertEqual(1, customer_a_row[0])
         self.assertEqual("INV-1001", customer_a_row[3])
         self.assertEqual(
-            "RWIND - 45 BAG10\n"
+            "Snapshot Alpha Product - 10kg x 45Bag\n"
             "Snapshot Beta Product - 3 BAGS\n"
             "Snapshot Alpha Product - 1 PALLETS",
             customer_a_row[4],
@@ -1097,7 +1098,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             worksheet.cell(row=customer_a_index + 1, column=5).alignment.shrink_to_fit
         )
         self.assertGreater(worksheet.row_dimensions[customer_a_index + 1].height, 21.95)
-        self.assertLessEqual(worksheet.row_dimensions[customer_a_index + 1].height, 60)
+        self.assertGreater(worksheet.row_dimensions[customer_a_index + 1].height, 60)
         for manual_column in range(7, 14):
             self.assertIsNone(customer_a_row[manual_column])
 
@@ -1217,7 +1218,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
                 str(worksheet.page_setup.paperSize),
             )
             self.assertEqual(1, worksheet.page_setup.fitToWidth)
-            self.assertEqual(1, worksheet.page_setup.fitToHeight)
+            self.assertEqual(0, worksheet.page_setup.fitToHeight)
             self.assertEqual("$7:$8", worksheet.print_title_rows)
             self.assertEqual(expected_headers, [cell.value for cell in worksheet[8]])
             self.assertEqual("PRODUCT", worksheet["E8"].value)
@@ -1226,7 +1227,8 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             self.assertEqual(7.5, worksheet["E9"].font.sz)
             self.assertFalse(worksheet["B9"].font.bold)
             self.assertEqual(14, worksheet.max_column)
-            self.assertIn("$A$1:$N$28", worksheet.print_area)
+            self.assertIn(f"$A$1:$N${worksheet.max_row}", worksheet.print_area)
+            self.assertEqual("FINISH TIME:____________________________________", worksheet.cell(worksheet.max_row, 2).value)
             self.assertEqual("DAILY RUN SHEET", worksheet["A1"].value)
             self.assertEqual("DATE  05/05/2026", worksheet["C1"].value)
             self.assertTrue(str(worksheet["F1"].value).startswith("DRIVER: "))
@@ -1262,7 +1264,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertNotIn("Demo Customer C", self._workbook_values(response.content))
         self.assertEqual("INV-1001", john_rows[8][3])
         self.assertEqual(
-            "RWIND - 45 BAG10\n"
+            "Snapshot Alpha Product - 10kg x 45Bag\n"
             "Snapshot Beta Product - 3 BAGS\n"
             "Snapshot Alpha Product - 9 PALLETS",
             john_rows[8][4],
@@ -1366,9 +1368,9 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             ],
         )
         self.assertEqual(
-            "RSING - 20 BAG10\n"
-            "MIC-MICROF - 10 PKT25\n"
-            "FIN-3PLY - 1 BAG\n"
+            "COLOR TSHIRT RAGS - 10kg x 20Bag\n"
+            "MICRO FIBRE CLOTH 40 X 40 - 10 PKT25\n"
+            "FINESSE-3PLY T/PAPER 180 SHTS x 72 ROLLS - 1 BAG\n"
             "Product B - 2 BAGS",
             delivery_run_sheet_product_display(order),
         )
@@ -1636,9 +1638,9 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertIsNone(worksheet["F10"].value)
         self.assertEqual(10.5, worksheet["F11"].value)
         self.assertIsInstance(worksheet["F11"].value, (int, float))
-        self.assertEqual("RWBATH - 5 BAG10", worksheet["E9"].value)
+        self.assertEqual("WHITE BATH TOWEL - 10kg x 5Bag", worksheet["E9"].value)
         self.assertEqual(
-            "FIN-HANDTOWEL - 2 CTN\nFIN-3PLY - 3 BAG",
+            "HAND TOWEL - 2 CTN\n3PLY - 3 BAG",
             worksheet["E10"].value,
         )
         self.assertFalse(worksheet["E8"].font.bold)
@@ -1666,7 +1668,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             product_lines_snapshot=product_lines,
         )
 
-    def test_delivery_export_keeps_all_compact_bag_and_packet_lines_on_one_page(self):
+    def test_delivery_export_keeps_all_bag_and_packet_lines_with_natural_pagination(self):
         def order_snapshot(row_no, company_name, product_lines):
             return DeliveryRunSheetOrderSnapshot(
                 row_id=f"ROW-{row_no}",
@@ -1776,31 +1778,30 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         worksheet = load_workbook(BytesIO(build_delivery_run_sheet_excel(run_sheet))).active
 
         self.assertEqual(
-            "RSING5KG - 1 BAG5\n"
-            "RWTSHIRT10 - 1 BAG10\n"
-            "RFLAN10KG - 1 BAG10\n"
-            "RWBATH10KG - 1 BAG10\n"
-            "RBATH10KG - 1 BAG10",
+            "COLOR RAGS 5KG BAG - 5kg x 1Bag\n"
+            "WHITE T-SHIRT RAGS 10KG NET - 10kg x 1Bag\n"
+            "FLANNEL RAGS 10KG - 10kg x 1Bag\n"
+            "WHITE BATH TOWEL 10KG NET - 10kg x 1Bag\n"
+            "COLOUR BATH TOWEL 10KG - 10kg x 1Bag",
             worksheet["E9"].value,
         )
-        self.assertEqual("RWORK - 30 BAG10\nRWCOTT - 20 BAG10", worksheet["E10"].value)
-        self.assertEqual("RPWSING - 45 BAG10\nRSING - 45 BAG10", worksheet["E11"].value)
-        self.assertEqual("RBATH - 45 BAG10\nMIC-MICROF - 10 PKT25", worksheet["E12"].value)
-        self.assertEqual("RSING - 2 BAG10\nFIN-3PLY - 1 BAG", worksheet["E13"].value)
+        self.assertEqual("WORKSHOP MIX #29 - 10kg x 30Bag\nWHITE COTTON #1 - 10kg x 20Bag", worksheet["E10"].value)
+        self.assertEqual("PURE WHITE SINGLET - 10kg x 45Bag\nCOLOR TSHIRT RAGS - 10kg x 45Bag", worksheet["E11"].value)
+        self.assertEqual("COLOURED TOWEL MIX #10 - 10kg x 45Bag\nMICRO FIBRE CLOTH 40 X 40 - 10 PKT25", worksheet["E12"].value)
+        self.assertEqual("COLOR TSHIRT RAGS - 10kg x 2Bag\nFINESSE-3PLY T/PAPER 180 SHTS x 72 ROLLS - 1 BAG", worksheet["E13"].value)
         self.assertNotIn("Packaging:", "\n".join(str(worksheet[f"E{row}"].value or "") for row in range(9, 27)))
         self.assertEqual(1, worksheet.page_setup.fitToWidth)
-        self.assertEqual(1, worksheet.page_setup.fitToHeight)
-        self.assertIn("$A$1:$N$28", worksheet.print_area)
-        self.assertEqual(18, len(range(9, 27)))
+        self.assertEqual(0, worksheet.page_setup.fitToHeight)
+        finish_row = next(cell.row for row in worksheet.iter_rows() for cell in row
+                          if cell.value == "FINISH TIME:____________________________________")
+        self.assertIn(f"$A$1:$N${finish_row}", worksheet.print_area)
+        self.assertTrue(all(cell.value is None for row in worksheet.iter_rows(min_row=finish_row + 1) for cell in row))
+        self.assertEqual(5, len([row for row in worksheet.iter_rows(min_row=9, values_only=True) if row[3]]))
         self.assertGreaterEqual(worksheet.row_dimensions[9].height, 45)
-        self.assertLessEqual(worksheet.row_dimensions[9].height, 60)
-        self.assertLessEqual(
-            max(worksheet.row_dimensions[row].height for row in range(9, 27)),
-            60,
-        )
+        self.assertGreater(worksheet.row_dimensions[9].height, 60)
         self.assertEqual(7.5, worksheet["E9"].font.sz)
         self.assertEqual(8.5, worksheet["B9"].font.sz)
-        self.assertEqual(21.95, worksheet.row_dimensions[14].height)
+        self.assertEqual(21, worksheet.row_dimensions[finish_row].height)
 
     def test_delivery_export_uses_content_aware_data_row_heights(self):
         base_order = DeliveryRunSheetOrderSnapshot(
@@ -1912,11 +1913,11 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertGreater(two_line_height, single_height)
         self.assertGreater(long_text_height, two_line_height)
         self.assertEqual(21.95, single_height)
-        self.assertLessEqual(long_text_height, 60)
+        self.assertGreater(long_text_height, 60)
         self.assertEqual(21.95, worksheet.row_dimensions[12].height)
-        self.assertEqual(1, worksheet.page_setup.fitToHeight)
-        self.assertIn("RSING10KG - 45 BAG10", worksheet["E10"].value)
-        self.assertIn("RSING1.5KG - 28 BAG1.5", worksheet["E10"].value)
+        self.assertEqual(0, worksheet.page_setup.fitToHeight)
+        self.assertIn("COLOUR RAGS 10KG NET - 10kg x 45Bag", worksheet["E10"].value)
+        self.assertIn("COLOR RAGS 1.5KG BAG - 1.5kg x 28Bag", worksheet["E10"].value)
         self.assertIn("\n", worksheet["E10"].value)
         for coordinate in ("B11", "C11", "D11", "E11"):
             self.assertTrue(worksheet[coordinate].alignment.wrap_text)

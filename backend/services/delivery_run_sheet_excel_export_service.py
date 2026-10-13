@@ -3,8 +3,11 @@
 from datetime import datetime
 import math
 import re
+import unicodedata
 
 from openpyxl import Workbook
+from openpyxl.cell.rich_text import CellRichText, TextBlock
+from openpyxl.cell.text import InlineFont
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.worksheet.page import PageMargins
 from backend.services.manual_dispatch.delivery_run_sheet_ordering import delivery_run_sheet_driver_trip_key
@@ -29,17 +32,18 @@ DAILY_RUN_SHEET_HEADERS = [
 MIN_TABLE_ROWS = 18
 BODY_FONT_SIZE = 8.5
 PRODUCT_FONT_SIZE = 7.5
+PRODUCT_QUANTITY_COLOR = "C00000"
 MIN_BODY_ROW_HEIGHT = 21.95
 BODY_LINE_HEIGHT = 10.5
 PRODUCT_LINE_HEIGHT = 10.5
-BODY_ROW_PADDING = 2
-MAX_BODY_ROW_HEIGHT = 60
+BODY_ROW_PADDING = 4
+EXCEL_MAX_ROW_HEIGHT = 409.5
 COLUMN_WIDTHS = {
     "A": 3.855,
     "B": 27.57,
     "C": 15,
     "D": 12,
-    "E": 16,
+    "E": 20,
     "F": 5.57,
     "G": 6.855,
     "H": 5.855,
@@ -92,7 +96,7 @@ def _configure_print_layout(worksheet):
     worksheet.page_setup.orientation = "landscape"
     worksheet.page_setup.paperSize = worksheet.PAPERSIZE_A4
     worksheet.page_setup.fitToWidth = 1
-    worksheet.page_setup.fitToHeight = 1
+    worksheet.page_setup.fitToHeight = 0
     worksheet.sheet_properties.pageSetUpPr.fitToPage = True
     worksheet.page_margins = PageMargins(
         left=0.118,
@@ -105,6 +109,8 @@ def _configure_print_layout(worksheet):
 
 
 def _write_daily_run_sheet_form(worksheet, run_sheet, delivery_date):
+    _apply_column_widths(worksheet)
+    _apply_row_heights(worksheet)
     worksheet.sheet_view.showGridLines = False
     worksheet.print_options.horizontalCentered = False
     worksheet.print_title_rows = "7:8"
@@ -167,9 +173,9 @@ def _write_daily_run_sheet_form(worksheet, run_sheet, delivery_date):
     snapshot_rows = _ordered_snapshot_rows(run_sheet)
     row_index = header_row + 1
     for row_no, order in enumerate(snapshot_rows, start=1):
-        _write_order_row(worksheet, row_index, row_no, order, border)
-        row_index += 1
-    for row_no in range(len(snapshot_rows) + 1, MIN_TABLE_ROWS + 1):
+        row_index += _write_order_row(worksheet, row_index, row_no, order, border)
+    blank_rows = _handwriting_row_count(worksheet, row_index, len(snapshot_rows))
+    for row_no in range(len(snapshot_rows) + 1, len(snapshot_rows) + blank_rows + 1):
         _write_empty_row(worksheet, row_index, row_no, border)
         row_index += 1
 
@@ -178,9 +184,18 @@ def _write_daily_run_sheet_form(worksheet, run_sheet, delivery_date):
     finish.alignment = Alignment(vertical="center")
     worksheet.row_dimensions[row_index + 1].height = 21
     worksheet.print_area = f"A1:N{row_index + 1}"
-    _apply_column_widths(worksheet)
-    _apply_row_heights(worksheet)
-    worksheet.page_setup.fitToHeight = 1 if len(snapshot_rows) <= MIN_TABLE_ROWS else 0
+
+
+def _handwriting_row_count(worksheet, row_index, order_count):
+    # Blank handwriting rows must not push only the finish field onto a new page.
+    width_points = sum((width * 7 + 5) * 0.75 for width in COLUMN_WIDTHS.values())
+    page_width = 297 / 25.4 * 72 - (worksheet.page_margins.left + worksheet.page_margins.right) * 72
+    width_scale = min(1, page_width / width_points)
+    page_height = 210 / 25.4 * 72 - (worksheet.page_margins.top + worksheet.page_margins.bottom) * 72
+    used_height = sum(worksheet.row_dimensions[index].height for index in range(1, row_index))
+    finish_height = (worksheet.sheet_format.defaultRowHeight or 15) + 21
+    available = page_height / width_scale - used_height - finish_height - BODY_ROW_PADDING
+    return min(max(0, MIN_TABLE_ROWS - order_count), max(0, int(available / MIN_BODY_ROW_HEIGHT)))
 
 
 def _ordered_snapshot_rows(run_sheet):
@@ -192,7 +207,11 @@ def _ordered_snapshot_rows(run_sheet):
 
 
 def delivery_run_sheet_product_display(order):
-    displays = []
+    return "".join(text for text, _ in _product_display_parts(order))
+
+
+def _product_display_parts(order):
+    parts = []
     for line in getattr(order, "product_lines_snapshot", None) or []:
         product_name = str(getattr(line, "product_name", "") or "").strip()
         product_code = str(getattr(line, "product_code", "") or "").strip()
@@ -200,23 +219,58 @@ def delivery_run_sheet_product_display(order):
         unit = str(getattr(line, "unit", "") or "").strip()
         if not product_name and not product_code:
             continue
-        identity = product_code or product_name
+        identity = product_name or product_code
         quantity_text = " ".join(
             part for part in (_display_number(quantity), unit) if part
         )
         package_quantity = getattr(line, "package_quantity", None)
         package_unit = str(getattr(line, "package_unit", "") or "").strip()
-        package_text = (
-            f"{_display_number(package_quantity)} {package_unit}"
-            if package_quantity is not None and package_unit
-            else ""
-        )
+        package_text = _package_display(package_quantity, package_unit)
         detail = package_text or quantity_text
-        display = f"{identity} - {detail}" if detail else identity
-        displays.append(display)
-    if displays:
-        return "\n".join(displays)
-    return str(getattr(order, "product_snapshot", "") or "").strip()
+        if parts:
+            parts.append(("\n", False))
+        parts.append((identity, False))
+        if detail:
+            parts.append((" - ", False))
+            has_quantity = bool(package_text) or (
+                _numeric_value(quantity) is not None and not isinstance(quantity, bool)
+            )
+            parts.append((detail, has_quantity))
+    if parts:
+        return parts
+    return [(str(getattr(order, "product_snapshot", "") or "").strip(), False)]
+
+
+def _product_rich_text(parts, offset, length):
+    blocks = []
+    position = 0
+    for text, is_quantity in parts:
+        stop = position + len(text)
+        start = max(offset, position)
+        end = min(offset + length, stop)
+        if start < end:
+            font = InlineFont(b=True, sz=PRODUCT_FONT_SIZE,
+                              color=PRODUCT_QUANTITY_COLOR if is_quantity else "000000")
+            fragment = text[start - position:end - position]
+            if blocks and blocks[-1].font == font:
+                blocks[-1].text += fragment
+            else:
+                blocks.append(TextBlock(font, fragment))
+        position = stop
+    # Excel rejects formatted whitespace-only runs; inherit the black cell style.
+    return CellRichText([block.text if block.text.isspace() else block for block in blocks])
+
+
+def _package_display(quantity, unit):
+    numeric = _numeric_value(quantity)
+    if numeric is None or isinstance(quantity, bool) or not unit:
+        return ""
+    weight_match = _PACKAGE_UNIT_BAG_WEIGHT.fullmatch(unit)
+    if weight_match and numeric >= 0:
+        weight = _numeric_value(weight_match.group(1))
+        if weight is not None and weight > 0:
+            return f"{_display_number(weight)}kg x {_display_number(numeric)}Bag"
+    return f"{_display_number(numeric)} {unit}"
 
 
 def _delivery_run_sheet_line_weight_kg(line):
@@ -268,11 +322,45 @@ def _display_number(value):
 
 
 def _wrapped_line_count(value, column_width, font_size=BODY_FONT_SIZE):
-    usable_width = max(1, int(float(column_width) * 11 / font_size))
-    return sum(
-        max(1, math.ceil(len(line) / usable_width))
-        for line in str(value or "").split("\n")
-    )
+    return len(_wrapped_lines(value, column_width, font_size))
+
+
+def _wrapped_lines(value, column_width, font_size=BODY_FONT_SIZE):
+    # Excel column units use the default 11pt font's digit width (~7px).
+    usable_width = max(font_size, (float(column_width) * 7 + 5) * 0.75 - 6)
+    lines = []
+    paragraphs = str(value or "").split("\n")
+    for paragraph_index, paragraph in enumerate(paragraphs):
+        if not paragraph:
+            lines.append("")
+        while paragraph:
+            width = 0
+            end = 0
+            last_break = 0
+            for index, character in enumerate(paragraph):
+                if unicodedata.combining(character):
+                    em = 0
+                elif unicodedata.east_asian_width(character) in {"W", "F"}:
+                    em = 1
+                elif character in "MW@#%&":
+                    em = 0.9
+                elif character in "ilI.,'!:;|" or character.isspace():
+                    em = 0.3
+                else:
+                    em = 0.68 if character.isupper() else 0.56
+                width += em * font_size * 1.05
+                if end and width > usable_width:
+                    break
+                end = index + 1
+                if character.isspace():
+                    last_break = end
+            if end < len(paragraph) and last_break:
+                end = last_break
+            lines.append(paragraph[:end])
+            paragraph = paragraph[end:]
+        if paragraph_index < len(paragraphs) - 1:
+            lines[-1] += "\n"
+    return lines
 
 
 def _unique_sheet_name(driver_name, used_sheet_names, trip_no=None):
@@ -296,7 +384,8 @@ def _display_date(value):
 
 
 def _write_order_row(worksheet, row_index, row_no, order, border):
-    product_display = delivery_run_sheet_product_display(order)
+    product_parts = _product_display_parts(order)
+    product_display = "".join(text for text, _ in product_parts)
     values = [
         row_no,
         order.company_name_snapshot or "",
@@ -313,6 +402,44 @@ def _write_order_row(worksheet, row_index, row_no, order, border):
         "",
         "",
     ]
+    text_lines = {
+        column: _wrapped_lines(values[column - 1], COLUMN_WIDTHS[letter], size)
+        for column, letter, size in (
+            (2, "B", BODY_FONT_SIZE), (3, "C", BODY_FONT_SIZE),
+            (4, "D", BODY_FONT_SIZE), (5, "E", PRODUCT_FONT_SIZE),
+        )
+    }
+    # A row must fit both Excel's native limit and the first page below the form.
+    usable_height = (
+        210 / 25.4 * 72
+        - (worksheet.page_margins.top + worksheet.page_margins.bottom) * 72
+        - sum(worksheet.row_dimensions[index].height for index in range(1, 9))
+        - 12
+    )
+    max_lines = max(1, int((min(EXCEL_MAX_ROW_HEIGHT, usable_height) - BODY_ROW_PADDING)
+                           / max(BODY_LINE_HEIGHT, PRODUCT_LINE_HEIGHT)))
+    line_count = max(map(len, text_lines.values()))
+    if line_count > max_lines:
+        # A fragment can end in an original newline; reserve its trailing line.
+        max_lines = max(1, max_lines - 1)
+    parts = math.ceil(line_count / max_lines)
+    product_offset = 0
+    for part in range(parts):
+        row_values = list(values) if part == 0 else [""] * 14
+        if parts > 1:
+            row_values[0] = row_no if part == 0 else f"{row_no}\ncont."
+            for column, lines in text_lines.items():
+                row_values[column - 1] = "".join(lines[part * max_lines:(part + 1) * max_lines])
+        product_fragment = row_values[4]
+        if product_fragment:
+            # Slice semantic runs at the existing continuation's character boundaries.
+            row_values[4] = _product_rich_text(product_parts, product_offset, len(product_fragment))
+        product_offset += len(product_fragment)
+        _write_order_cells(worksheet, row_index + part, row_values, border)
+    return parts
+
+
+def _write_order_cells(worksheet, row_index, values, border):
     for column_index, value in enumerate(values, start=1):
         cell = worksheet.cell(row=row_index, column=column_index, value=value)
         cell.font = Font(
@@ -325,28 +452,26 @@ def _write_order_row(worksheet, row_index, row_no, order, border):
             if column_index in {1, 4, 6, 7, 8, 9, 10, 11, 14}
             else "left",
             vertical="top",
-            wrap_text=column_index in {2, 3, 4, 5, 13},
+            wrap_text=column_index in {2, 3, 4, 5, 13} or column_index == 1 and isinstance(value, str),
             shrink_to_fit=False,
         )
         if column_index in {6, 7, 14} and value != "":
             cell.number_format = "General"
     body_lines = max(
-        _wrapped_line_count(order.company_name_snapshot, COLUMN_WIDTHS["B"]),
-        _wrapped_line_count(order.suburb_snapshot, COLUMN_WIDTHS["C"]),
-        _wrapped_line_count(order.invoice_number_snapshot, COLUMN_WIDTHS["D"]),
+        _wrapped_line_count(values[0], COLUMN_WIDTHS["A"]),
+        _wrapped_line_count(values[1], COLUMN_WIDTHS["B"]),
+        _wrapped_line_count(values[2], COLUMN_WIDTHS["C"]),
+        _wrapped_line_count(values[3], COLUMN_WIDTHS["D"]),
     )
     product_lines = _wrapped_line_count(
-        product_display,
+        values[4],
         COLUMN_WIDTHS["E"],
         PRODUCT_FONT_SIZE,
     )
-    worksheet.row_dimensions[row_index].height = min(
-        MAX_BODY_ROW_HEIGHT,
-        max(
-            MIN_BODY_ROW_HEIGHT,
-            BODY_LINE_HEIGHT * body_lines + BODY_ROW_PADDING,
-            PRODUCT_LINE_HEIGHT * product_lines + BODY_ROW_PADDING,
-        ),
+    worksheet.row_dimensions[row_index].height = max(
+        MIN_BODY_ROW_HEIGHT,
+        BODY_LINE_HEIGHT * body_lines + BODY_ROW_PADDING,
+        PRODUCT_LINE_HEIGHT * product_lines + BODY_ROW_PADDING,
     )
 
 
