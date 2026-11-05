@@ -25,6 +25,11 @@ export function assignedOrdersForDriver(board, deliveryDate, driverId) {
       if (tripCompare) {
         return tripCompare;
       }
+      const palletCompare = Number(Number(right.order.pallet_quantity) > 0)
+        - Number(Number(left.order.pallet_quantity) > 0);
+      if (palletCompare) {
+        return palletCompare;
+      }
       return formatOptional(left.order.invoice_number, left.order.order_id).localeCompare(
         formatOptional(right.order.invoice_number, right.order.order_id),
       );

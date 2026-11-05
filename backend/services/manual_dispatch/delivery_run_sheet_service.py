@@ -377,12 +377,18 @@ class DeliveryRunSheetService:
             if assignment.driver_id == driver_id
             and assignment.trip_no == trip_no
         ]
-        orders = []
-        row_no = 1
+        eligible_orders = []
         for assignment in assignments:
             order = self.repository.get_order(assignment.task_id)
             if not order or order.status != "ACTIVE" or order.delivery_date != delivery_date:
                 continue
+            eligible_orders.append(order)
+        eligible_orders.sort(key=lambda order: (
+            not (order.pallet_quantity > 0),
+            str(order.invoice_number or order.order_id),
+        ))
+        orders = []
+        for row_no, order in enumerate(eligible_orders, start=1):
             orders.append(
                 DeliveryRunSheetOrderSnapshot(
                     row_id=f"DRR-{uuid4().hex.upper()}",
@@ -416,7 +422,6 @@ class DeliveryRunSheetService:
                     ),
                 )
             )
-            row_no += 1
         return DeliveryRunSheetTrip(trip_no=trip_no, orders=orders)
 
     def _vehicle_snapshot(self, delivery_date, driver_id, trip_no):

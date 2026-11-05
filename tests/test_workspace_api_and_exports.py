@@ -999,7 +999,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertEqual(14, worksheet["L1"].font.sz)
         self.assertEqual(9, worksheet["A8"].font.sz)
         self.assertEqual(8.5, worksheet["B9"].font.sz)
-        self.assertEqual(7.5, worksheet["E9"].font.sz)
+        self.assertEqual(8.0, worksheet["E9"].font.sz)
         self.assertEqual("PRODUCT", worksheet["E8"].value)
         self.assertFalse(worksheet["E8"].font.bold)
         self.assertTrue(worksheet["E9"].font.bold)
@@ -1039,7 +1039,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertEqual("DRIVER: John", worksheet["F1"].value)
         self.assertEqual("REGO #: ABC123", worksheet["L1"].value)
         merged_ranges = {str(cell_range) for cell_range in worksheet.merged_cells.ranges}
-        self.assertEqual({"B5:E5", "F5:N5"}, merged_ranges)
+        self.assertTrue({"B5:E5", "F5:N5"}.issubset(merged_ranges))
 
         header_row = [cell.value for cell in worksheet[8]]
         self.assertEqual(
@@ -1063,7 +1063,8 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         )
         self.assertEqual(14, worksheet.max_column)
         self.assertIn(f"$A$1:$N${worksheet.max_row}", worksheet.print_area)
-        self.assertEqual("FINISH TIME:____________________________________", worksheet.cell(worksheet.max_row, 2).value)
+        self.assertIn("FINISH TIME:____________________________________", [cell.value for row in worksheet for cell in row])
+        self.assertIn("LOOSE BAG SUMMARY BY PRODUCT", [cell.value for row in worksheet for cell in row])
         self.assertEqual("$7:$8", worksheet.print_title_rows)
         self.assertEqual(
             [3.855, 27.57, 15, 12, 20, 5.57, 6.855, 5.855, 3, 8, 8, 12.57, 17.285, 7.71],
@@ -1224,11 +1225,12 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             self.assertEqual("PRODUCT", worksheet["E8"].value)
             self.assertFalse(worksheet["E8"].font.bold)
             self.assertTrue(worksheet["E9"].font.bold)
-            self.assertEqual(7.5, worksheet["E9"].font.sz)
+            self.assertEqual(8.0, worksheet["E9"].font.sz)
             self.assertFalse(worksheet["B9"].font.bold)
             self.assertEqual(14, worksheet.max_column)
             self.assertIn(f"$A$1:$N${worksheet.max_row}", worksheet.print_area)
-            self.assertEqual("FINISH TIME:____________________________________", worksheet.cell(worksheet.max_row, 2).value)
+            self.assertIn("FINISH TIME:____________________________________", [cell.value for row in worksheet for cell in row])
+            self.assertIn("LOOSE BAG SUMMARY BY PRODUCT", [cell.value for row in worksheet for cell in row])
             self.assertEqual("DAILY RUN SHEET", worksheet["A1"].value)
             self.assertEqual("DATE  05/05/2026", worksheet["C1"].value)
             self.assertTrue(str(worksheet["F1"].value).startswith("DRIVER: "))
@@ -1645,7 +1647,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         )
         self.assertFalse(worksheet["E8"].font.bold)
         self.assertTrue(worksheet["E9"].font.bold)
-        self.assertEqual(7.5, worksheet["E9"].font.sz)
+        self.assertEqual(8.0, worksheet["E9"].font.sz)
         self.assertFalse(worksheet["B9"].font.bold)
 
     def _delivery_order_snapshot(self, suffix, product_lines):
@@ -1794,12 +1796,14 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertEqual(0, worksheet.page_setup.fitToHeight)
         finish_row = next(cell.row for row in worksheet.iter_rows() for cell in row
                           if cell.value == "FINISH TIME:____________________________________")
-        self.assertIn(f"$A$1:$N${finish_row}", worksheet.print_area)
-        self.assertTrue(all(cell.value is None for row in worksheet.iter_rows(min_row=finish_row + 1) for cell in row))
+        summary_end = max(cell.row for row in worksheet for cell in row if cell.value is not None)
+        self.assertIn(f"$A$1:$N${summary_end}", worksheet.print_area)
+        self.assertTrue(all(cell.value is None for cell in worksheet[finish_row + 1]))
+        self.assertEqual("LOOSE BAG SUMMARY BY PRODUCT", worksheet.cell(finish_row + 2, 1).value)
         self.assertEqual(5, len([row for row in worksheet.iter_rows(min_row=9, values_only=True) if row[3]]))
         self.assertGreaterEqual(worksheet.row_dimensions[9].height, 45)
         self.assertGreater(worksheet.row_dimensions[9].height, 60)
-        self.assertEqual(7.5, worksheet["E9"].font.sz)
+        self.assertEqual(8.0, worksheet["E9"].font.sz)
         self.assertEqual(8.5, worksheet["B9"].font.sz)
         self.assertEqual(21, worksheet.row_dimensions[finish_row].height)
 
@@ -1914,7 +1918,11 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertGreater(long_text_height, two_line_height)
         self.assertEqual(21.95, single_height)
         self.assertGreater(long_text_height, 60)
-        self.assertEqual(21.95, worksheet.row_dimensions[12].height)
+        finish_row = next(cell.row for row in worksheet for cell in row
+                          if cell.value == "FINISH TIME:____________________________________")
+        for row in range(12, finish_row - 1):
+            self.assertEqual(21.95, worksheet.row_dimensions[row].height)
+            self.assertEqual(8.5, worksheet.cell(row, 2).font.sz)
         self.assertEqual(0, worksheet.page_setup.fitToHeight)
         self.assertIn("COLOUR RAGS 10KG NET - 10kg x 45Bag", worksheet["E10"].value)
         self.assertIn("COLOR RAGS 1.5KG BAG - 1.5kg x 28Bag", worksheet["E10"].value)
@@ -1923,9 +1931,9 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             self.assertTrue(worksheet[coordinate].alignment.wrap_text)
             self.assertEqual("top", worksheet[coordinate].alignment.vertical)
         self.assertFalse(worksheet["E10"].alignment.shrink_to_fit)
-        for coordinate in ("A9", "B9", "M9", "B12"):
+        for coordinate in ("A9", "B9", "M9"):
             self.assertEqual(8.5, worksheet[coordinate].font.sz)
-        self.assertEqual(7.5, worksheet["E9"].font.sz)
+        self.assertEqual(8.0, worksheet["E9"].font.sz)
         self.assertEqual("DRIVER: Epaminondas Tsatsoulis", worksheet["F1"].value)
         self.assertEqual("REGO #: Not selected", worksheet["L1"].value)
         self.assertFalse(worksheet["F1"].alignment.wrap_text)
@@ -1966,7 +1974,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         ).active
         self.assertEqual(0, large_worksheet.page_setup.fitToHeight)
         self.assertEqual(1, large_worksheet.page_setup.fitToWidth)
-        self.assertTrue(str(large_worksheet.print_area).endswith("$N$29"))
+        self.assertIn(f"$A$1:$N${large_worksheet.max_row}", large_worksheet.print_area)
 
     def test_delivery_date_export_rejects_empty_scope_without_mutation(self):
         response = self.client.get(

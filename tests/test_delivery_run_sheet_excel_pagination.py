@@ -20,6 +20,12 @@ from backend.services.delivery_run_sheet_excel_export_service import (
 DATE = "2026-10-13"
 
 
+def finish_row(worksheet):
+    return next(cell.row for row in worksheet for cell in row
+                if cell.value == "FINISH TIME:____________________________________")
+
+
+
 def synthetic_order(number=1, lines=None, **changes):
     return replace(DeliveryRunSheetOrderSnapshot(
         row_id=f"QA-ROW-{number}", trip_no="trip1", row_no=number,
@@ -125,12 +131,12 @@ class DeliveryRunSheetExcelPaginationTest(unittest.TestCase):
     def test_short_rows_keep_handwriting_space_and_original_form_fields(self):
         worksheet = self.workbook(synthetic_sheet([synthetic_order(lines=[ProductDetailLine("Short", 1, "EA")])])).active
         self.assertEqual(21.95, worksheet.row_dimensions[9].height)
-        self.assertEqual(21.95, worksheet.row_dimensions[26].height)
+        self.assertEqual(21.95, worksheet.row_dimensions[finish_row(worksheet) - 2].height)
         self.assertEqual(DAILY_RUN_SHEET_HEADERS, [cell.value for cell in worksheet[8]])
         self.assertEqual("DRIVER: Synthetic Driver", worksheet["F1"].value)
         self.assertEqual("REGO #: QA-ONLY", worksheet["L1"].value)
         self.assertEqual("TRIP: TRIP 1", worksheet["F2"].value)
-        self.assertEqual({"B5:E5", "F5:N5"}, {str(item) for item in worksheet.merged_cells.ranges})
+        self.assertTrue({"B5:E5", "F5:N5"}.issubset({str(item) for item in worksheet.merged_cells.ranges}))
         for column in range(8, 15):
             self.assertIsNone(worksheet.cell(9, column).value)
 
@@ -184,9 +190,9 @@ class DeliveryRunSheetExcelPaginationTest(unittest.TestCase):
                 self.assertEqual(str(worksheet.PAPERSIZE_A4), str(worksheet.page_setup.paperSize))
                 self.assertEqual("$7:$8", worksheet.print_title_rows)
                 self.assertEqual(14, worksheet.max_column)
-                self.assertIn(f"$A$1:$N${count + 10}", worksheet.print_area)
+                self.assertIn(f"$A$1:$N${worksheet.max_row}", worksheet.print_area)
                 self.assertEqual("FINISH TIME:____________________________________", worksheet.cell(count + 10, 2).value)
-                self.assertEqual(count + 10, worksheet.max_row)
+                self.assertEqual(count + 10, finish_row(worksheet))
                 self.assertEqual([], worksheet.row_breaks.brk)
 
     def test_over_page_product_uses_labelled_continuations_without_repeating_totals(self):
@@ -195,7 +201,7 @@ class DeliveryRunSheetExcelPaginationTest(unittest.TestCase):
         sheet = synthetic_sheet([order])
         before = deepcopy(sheet)
         worksheet = self.workbook(sheet).active
-        continuation_rows = [row for row in range(10, worksheet.max_row) if isinstance(worksheet.cell(row, 1).value, str)]
+        continuation_rows = [row for row in range(10, finish_row(worksheet)) if isinstance(worksheet.cell(row, 1).value, str)]
         self.assertGreater(len(continuation_rows), 0)
         rows = [9] + continuation_rows
         content = "".join(str(worksheet.cell(row, 5).value or "") for row in rows)
@@ -213,7 +219,7 @@ class DeliveryRunSheetExcelPaginationTest(unittest.TestCase):
     def test_over_page_customer_text_is_preserved_in_continuations(self):
         customer = "Synthetic extraordinarily long customer name " * 100
         worksheet = self.workbook(synthetic_sheet([synthetic_order(company_name_snapshot=customer)])).active
-        rows = [9] + [row for row in range(10, worksheet.max_row) if isinstance(worksheet.cell(row, 1).value, str)]
+        rows = [9] + [row for row in range(10, finish_row(worksheet)) if isinstance(worksheet.cell(row, 1).value, str)]
         text = "".join(str(worksheet.cell(row, 2).value or "") for row in rows)
         self.assertEqual(customer, text)
         self.assertGreater(len(rows), 1)
@@ -221,7 +227,7 @@ class DeliveryRunSheetExcelPaginationTest(unittest.TestCase):
     def test_over_page_unbroken_product_text_is_not_truncated_or_rewritten(self):
         order = synthetic_order(lines=[ProductDetailLine("W" * 2000 + "FINAL", 1, "EA")])
         worksheet = self.workbook(synthetic_sheet([order])).active
-        rows = [9] + [row for row in range(10, worksheet.max_row) if isinstance(worksheet.cell(row, 1).value, str)]
+        rows = [9] + [row for row in range(10, finish_row(worksheet)) if isinstance(worksheet.cell(row, 1).value, str)]
         content = "".join(str(worksheet.cell(row, 5).value or "") for row in rows)
         self.assertEqual(delivery_run_sheet_product_display(order), content)
         self.assertGreater(len(rows), 1)
@@ -231,16 +237,16 @@ class DeliveryRunSheetExcelPaginationTest(unittest.TestCase):
         worksheet = self.workbook(synthetic_sheet([order])).active
         self.assertLess(worksheet.max_row, 28)
         self.assertEqual(delivery_run_sheet_product_display(order), worksheet["E9"].value)
-        self.assertEqual("FINISH TIME:____________________________________", worksheet.cell(worksheet.max_row, 2).value)
+        self.assertEqual("FINISH TIME:____________________________________", worksheet.cell(finish_row(worksheet), 2).value)
         self.assertEqual(0, worksheet.page_setup.fitToHeight)
 
     def test_over_page_continuations_are_not_followed_by_blank_customer_padding(self):
         order = synthetic_order(lines=[ProductDetailLine("Synthetic text\n" * 120, 10, "KG")])
         worksheet = self.workbook(synthetic_sheet([order])).active
-        continuation_rows = [row for row in range(10, worksheet.max_row) if isinstance(worksheet.cell(row, 1).value, str)]
+        continuation_rows = [row for row in range(10, finish_row(worksheet)) if isinstance(worksheet.cell(row, 1).value, str)]
         self.assertGreater(len(continuation_rows), 0)
-        self.assertEqual(continuation_rows[-1] + 2, worksheet.max_row)
-        self.assertEqual([1], [worksheet.cell(row, 1).value for row in range(9, worksheet.max_row)
+        self.assertEqual(continuation_rows[-1] + 2, finish_row(worksheet))
+        self.assertEqual([1], [worksheet.cell(row, 1).value for row in range(9, finish_row(worksheet))
                               if isinstance(worksheet.cell(row, 1).value, int)])
 
     def test_single_date_trip1_trip2_and_legacy_exports_share_layout(self):
@@ -287,7 +293,7 @@ class DeliveryRunSheetRedQuantityTest(unittest.TestCase):
         for block in cell.value:
             if isinstance(block, TextBlock):
                 self.assertTrue(block.font.b)
-                self.assertEqual(7.5, block.font.sz)
+                self.assertEqual(8.0, block.font.sz)
                 self.assertEqual("rgb", block.font.color.type)
                 color = block.font.color.rgb[-6:]
                 text = block.text
@@ -295,7 +301,7 @@ class DeliveryRunSheetRedQuantityTest(unittest.TestCase):
                 color, text = "000000", block
             colors.extend([color] * len(text))
         self.assertTrue(cell.font.bold)
-        self.assertEqual(7.5, cell.font.sz)
+        self.assertEqual(8.0, cell.font.sz)
         self.assertTrue(cell.alignment.wrap_text)
         self.assertEqual("top", cell.alignment.vertical)
         self.assertFalse(cell.alignment.shrink_to_fit)
@@ -375,7 +381,7 @@ class DeliveryRunSheetRedQuantityTest(unittest.TestCase):
         name = "\n".join(f"Synthetic product #29 10KG NET line {number}" for number in range(120))
         order = synthetic_order(lines=[ProductDetailLine(name, 10, "KG")])
         worksheet = self.workbook(synthetic_sheet([order])).active
-        cells = [worksheet.cell(row, 5) for row in range(9, worksheet.max_row) if worksheet.cell(row, 5).value]
+        cells = [worksheet.cell(row, 5) for row in range(9, finish_row(worksheet)) if worksheet.cell(row, 5).value]
         self.assertGreater(len(cells), 1)
         text, colors = "", []
         for cell in cells:
@@ -384,17 +390,17 @@ class DeliveryRunSheetRedQuantityTest(unittest.TestCase):
             colors.extend(fragment_colors)
         self.assertEqual(delivery_run_sheet_product_display(order), text)
         self.assertEqual(["000000"] * len(name + " - ") + ["C00000"] * len("10 KG"), colors)
-        for row in range(10, worksheet.max_row):
+        for row in range(10, finish_row(worksheet)):
             if worksheet.cell(row, 1).value == "1\ncont.":
                 self.assertTrue(worksheet.cell(row, 1).font.color is None)
-        self.assertEqual(10, sum(worksheet.cell(row, 6).value or 0 for row in range(9, worksheet.max_row)))
-        self.assertEqual(2, sum(worksheet.cell(row, 7).value or 0 for row in range(9, worksheet.max_row)))
+        self.assertEqual(10, sum(worksheet.cell(row, 6).value or 0 for row in range(9, finish_row(worksheet))))
+        self.assertEqual(2, sum(worksheet.cell(row, 7).value or 0 for row in range(9, finish_row(worksheet))))
 
     def test_quantity_run_can_span_multiple_continuations_without_text_loss(self):
         quantity = "9 UNIT-" + "X" * 2000
         order = synthetic_order(lines=[ProductDetailLine("Snapshot name", 10, "KG", "CODE", 9, "UNIT-" + "X" * 2000)])
         worksheet = self.workbook(synthetic_sheet([order])).active
-        cells = [worksheet.cell(row, 5) for row in range(9, worksheet.max_row) if worksheet.cell(row, 5).value]
+        cells = [worksheet.cell(row, 5) for row in range(9, finish_row(worksheet)) if worksheet.cell(row, 5).value]
         self.assertGreater(len(cells), 1)
         text, colors = "", []
         for cell in cells:
