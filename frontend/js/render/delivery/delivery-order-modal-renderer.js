@@ -61,13 +61,13 @@ export function createDeliveryOrderModal(state, actions) {
       modal.querySelector(".workspace-modal")?.append(footer);
     }
   } else {
-    const locked = isOrderCapturedByRunSheet(order, runSheets);
+    const locks = deliveryOrderActionLocks(order, board, runSheets, state.deliveryOrderCancellation);
     body.append(
       readOnly
         ? createDeliveryOrderReadOnlyActions(actions)
-        : createDeliveryOrderActions(order, locked, state, actions),
-      locked && !readOnly
-        ? createStatus("This Delivery Order is captured by a Generated or Saved Delivery Run Sheet. Edit and Cancel are locked.", "loading")
+        : createDeliveryOrderActions(order, locks, state, actions),
+      locks.message && !readOnly
+        ? createStatus(locks.message, locks.error ? "error" : "loading")
         : document.createDocumentFragment(),
       createDeliveryOrderReadOnly(order, state, board),
     );
@@ -85,6 +85,28 @@ export function deliveryModalRunSheets(state) {
   return state.workspaceRoute === "delivery/trip-summary"
     ? state.deliveryTripSummaryRunSheets || state.deliveryRunSheets
     : state.deliveryRunSheets;
+}
+
+export function deliveryOrderActionLocks(order, board, runSheets, cancellation) {
+  const current = cancellation?.orderId === order.order_id ? cancellation : null;
+  const editLocked = isOrderCapturedByRunSheet(order, runSheets)
+    || current?.has_run_sheet_history === true;
+  const assigned = (board?.assignments || []).some(
+    (item) => item.task_type === "ORDER" && item.task_id === order.order_id,
+  );
+  const cancelLocked = order.status !== "ACTIVE" || assigned
+    || !current || current.pending || current.can_cancel !== true;
+  let message = current?.error || current?.reason || "";
+  if (!current || current.pending) {
+    message = "Checking cancellation eligibility...";
+  } else if (!message && order.status !== "ACTIVE") {
+    message = `Order is ${order.status}. Only ACTIVE orders can be cancelled.`;
+  } else if (!message && assigned) {
+    message = "Order must be unassigned before cancellation.";
+  } else if (!message && !cancelLocked && editLocked && current.returned_to_pool) {
+    message = "This Delivery Order was included in a closed Delivery Run Sheet. Editing remains locked, but the order can be cancelled.";
+  }
+  return { editLocked, cancelLocked, message, error: Boolean(current?.error) };
 }
 
 export function createDeliveryOrderReadOnlyActions(actions) {
@@ -144,7 +166,7 @@ export function deliveryOrderAssignmentFacts(order, board) {
   ];
 }
 
-export function createDeliveryOrderActions(order, locked, state, actions) {
+export function createDeliveryOrderActions(order, { editLocked, cancelLocked }, state, actions) {
   const row = document.createElement("div");
   row.className = "workspace-modal-action-bar";
   row.append(
@@ -152,13 +174,13 @@ export function createDeliveryOrderActions(order, locked, state, actions) {
       className: "workspace-modal-action-button workspace-modal-action-neutral",
     }),
     createActionButton("Edit Order", () => actions.startEditDeliveryOrder(order.order_id), {
-      disabled: locked || isBusy(state, `delivery-order-edit:${order.order_id}`),
+      disabled: editLocked || isBusy(state, `delivery-order-edit:${order.order_id}`),
       primary: true,
       iconName: "edit",
       className: "workspace-modal-action-button workspace-modal-action-primary",
     }),
     createActionButton("Cancel Order", () => actions.cancelActiveDeliveryOrder(order.order_id), {
-      disabled: locked || isBusy(state, `delivery-order-cancel:${order.order_id}`),
+      disabled: cancelLocked || isBusy(state, `delivery-order-cancel:${order.order_id}`),
       iconName: "trash",
       className: "workspace-modal-action-button workspace-modal-action-danger",
     }),
@@ -168,7 +190,7 @@ export function createDeliveryOrderActions(order, locked, state, actions) {
       "Reset to Automatic",
       () => actions.resetDeliveryOrderArea(order.order_id),
       {
-        disabled: locked || isBusy(state, `delivery-area:${order.order_id}`),
+        disabled: editLocked || isBusy(state, `delivery-area:${order.order_id}`),
         className: "workspace-modal-action-button workspace-modal-action-neutral",
       },
     ));

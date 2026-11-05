@@ -76,6 +76,37 @@ export function createDeliveryTaskPoolActions(context) {
     state.deliveryOrderFormMode = "";
     state.deliveryOrderForm = {};
     state.deliveryOrderModalError = "";
+    const request = { orderId, pending: !readOnly, can_cancel: false };
+    state.deliveryOrderCancellation = request;
+    renderWorkspace();
+    if (!readOnly) {
+      return loadDeliveryOrderCancellation(orderId, request);
+    }
+  }
+
+  async function loadDeliveryOrderCancellation(orderId, request) {
+    const authVersion = state.authSessionVersion;
+    const route = state.workspaceRoute;
+    const isCurrent = () => state.isLoggedIn
+      && state.authSessionVersion === authVersion
+      && state.workspaceRoute === route
+      && state.deliveryOrderDetailId === orderId
+      && state.deliveryOrderCancellation === request
+      && !state.deliveryOrderDetailReadOnly;
+    try {
+      const result = await api.getDeliveryOrderCancellationEligibility(orderId);
+      if (!isCurrent()) return;
+      if (result?.order_id !== orderId || typeof result.can_cancel !== "boolean") {
+        throw new Error("Invalid cancellation eligibility response.");
+      }
+      state.deliveryOrderCancellation = { ...result, orderId, pending: false };
+    } catch (error) {
+      if (!isCurrent()) return;
+      state.deliveryOrderCancellation = {
+        orderId, pending: false, can_cancel: false,
+        error: `Unable to verify cancellation eligibility. ${error.message}`,
+      };
+    }
     renderWorkspace();
   }
 
@@ -88,6 +119,7 @@ export function createDeliveryTaskPoolActions(context) {
       : "";
     state.deliveryOrderDetailId = "";
     state.deliveryOrderDetailReadOnly = false;
+    state.deliveryOrderCancellation = null;
     state.deliveryOrderFormMode = "";
     state.deliveryOrderForm = {};
     state.deliveryOrderModalError = "";

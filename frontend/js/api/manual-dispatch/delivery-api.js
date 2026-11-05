@@ -23,6 +23,10 @@ export async function apiLookupDeliveryOrdersByInvoice(invoiceNumber) {
   });
 }
 
+export async function apiGetDeliveryOrderCancellationEligibility(orderId) {
+  return requestJson(`/api/manual-dispatch/delivery/orders/${encodeURIComponent(orderId)}/cancellation-eligibility`);
+}
+
 export async function apiClassifyDeliveryArea(suburb, postcode) {
   return requestJson("/api/manual-dispatch/delivery/area-classification", {
     method: "POST",

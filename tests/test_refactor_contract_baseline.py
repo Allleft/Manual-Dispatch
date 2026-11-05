@@ -57,7 +57,7 @@ class RefactorContractBaselineTest(unittest.TestCase):
             if getattr(route, "path", None)
         )
 
-        self.assertEqual(104, len(routes))
+        self.assertEqual(105, len(routes))
         day_routes = {
             ("/api/manual-dispatch/delivery/day-vehicle-assignments", ("POST",)),
             ("/api/manual-dispatch/delivery/day-vehicle-assignments/clear", ("POST",)),
@@ -65,6 +65,8 @@ class RefactorContractBaselineTest(unittest.TestCase):
         self.assertFalse(day_routes & set(routes))
         lookup_route = ("/api/manual-dispatch/delivery/orders/lookup", ("GET",))
         self.assertIn(lookup_route, routes)
+        cancellation_route = ("/api/manual-dispatch/delivery/orders/{order_id}/cancellation-eligibility", ("GET",))
+        self.assertIn(cancellation_route, routes)
         self.assertIn(
             (
                 "/api/manual-dispatch/opshop/pickups/countryside-order",
@@ -123,7 +125,7 @@ class RefactorContractBaselineTest(unittest.TestCase):
         )
         self.assertEqual(
             "159e9852377a51178aedfe583951f866ee9154d4f0cc6a86c0cdb96ee00fe903",
-            self._contract_digest([route for route in routes if route != lookup_route and route not in day_routes]),
+            self._contract_digest([route for route in routes if route not in {lookup_route, cancellation_route} and route not in day_routes]),
         )
 
     def test_manual_dispatch_service_facade_contract(self):
@@ -160,7 +162,9 @@ class RefactorContractBaselineTest(unittest.TestCase):
         )
 
         public_methods = self._public_methods(ManualDispatchService)
-        self.assertEqual(99, len(public_methods))
+        self.assertEqual(100, len(public_methods))
+        cancellation_method = {"name": "get_delivery_order_cancellation_eligibility", "signature": "(self, order_id)"}
+        self.assertIn(cancellation_method, public_methods)
         day_methods = {"assign_delivery_day_vehicle", "clear_delivery_day_vehicle"}
         for name in day_methods:
             self.assertNotIn({"name": name, "signature": "(self, request)"}, public_methods)
@@ -188,7 +192,7 @@ class RefactorContractBaselineTest(unittest.TestCase):
                 {**method, "signature": method["signature"].replace(", trip_no=None)", ")")
                  if method["name"] == "clear_driver_vehicle_assignment" else method["signature"]}
                 for method in public_methods
-                if method["name"] != "lookup_delivery_orders_by_invoice" and method["name"] not in day_methods
+                if method["name"] not in {"lookup_delivery_orders_by_invoice", cancellation_method["name"]} and method["name"] not in day_methods
             ]),
         )
 
@@ -332,7 +336,8 @@ class RefactorContractBaselineTest(unittest.TestCase):
         contract = json.loads(completed.stdout)
 
         self.assertEqual(["function", "function"], contract["rendererTypes"])
-        self.assertEqual(109, len(contract["apiExportNames"]))
+        self.assertEqual(110, len(contract["apiExportNames"]))
+        self.assertIn("apiGetDeliveryOrderCancellationEligibility", contract["apiExportNames"])
         day_api_names = {"apiAssignDeliveryDayVehicle", "apiClearDeliveryDayVehicle"}
         self.assertFalse(day_api_names & set(contract["apiExportNames"]))
         self.assertIn("apiLookupDeliveryOrdersByInvoice", contract["apiExportNames"])
@@ -356,7 +361,7 @@ class RefactorContractBaselineTest(unittest.TestCase):
         self.assertEqual(
             "a04f41e7d5467dff4982de13bbc8495755452e3c63367110c1d8bb0b5b16e269",
             self._contract_digest([name for name in contract["apiExportNames"]
-                                   if name != "apiLookupDeliveryOrdersByInvoice" and name not in day_api_names]),
+                                   if name not in {"apiLookupDeliveryOrdersByInvoice", "apiGetDeliveryOrderCancellationEligibility"} and name not in day_api_names]),
         )
         self.assertEqual(134, len(contract["actionNames"]))
         self.assertNotIn("updateDeliveryDayVehicleSelection", contract["actionNames"])

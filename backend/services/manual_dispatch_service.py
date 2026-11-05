@@ -465,6 +465,9 @@ class ManualDispatchService:
     def cancel_delivery_order(self, order_id):
         return self.delivery_application_service.cancel_delivery_order(order_id)
 
+    def get_delivery_order_cancellation_eligibility(self, order_id):
+        return self.delivery_application_service.get_delivery_order_cancellation_eligibility(order_id)
+
     def ensure_opshop_pickup_tasks_for_window(self, request):
         return self.opshop_application_service.ensure_opshop_pickup_tasks_for_window(request)
 

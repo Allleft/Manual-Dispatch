@@ -161,10 +161,46 @@ class OrderService:
         if existing.status == "CANCELLED":
             return existing
 
+        if existing.status != "ACTIVE":
+            raise ValueError("Only ACTIVE orders can be cancelled")
+
         if self.repository.has_assignment_for_task("ORDER", order_id):
             raise ValueError("Order must be unassigned before cancellation")
 
         return self.repository.cancel_order(order_id)
+
+    def get_cancellation_eligibility(self, order_id):
+        order = self.repository.get_order(order_id)
+        if not order:
+            raise ValueError(f"Order does not exist: {order_id}")
+        history = [
+            row for row in self.repository.list_delivery_run_sheet_history_for_order(order_id)
+            if row.status in {"GENERATED", "SAVED"}
+        ]
+        closed = [row for row in history if row.execution_status == "CLOSED"]
+        returned = bool(closed) and all(
+            row.status == "SAVED"
+            and row.outcome == "RETURN_TO_POOL"
+            and row.order_id_snapshot == order_id
+            and row.closed_at and row.recorded_at and row.next_delivery_date
+            for row in closed
+        )
+        reason = ""
+        if order.status != "ACTIVE":
+            reason = f"Order is {order.status}. Only ACTIVE orders can be cancelled."
+        elif self.repository.get_delivery_run_sheet_reserving_order(order_id):
+            reason = "This Delivery Order is reserved by a Generated or Saved/Open Delivery Run Sheet."
+        elif self.repository.has_assignment_for_task("ORDER", order_id):
+            reason = "Order must be unassigned before cancellation."
+        elif closed and not returned:
+            reason = "The closed Run Sheet does not have a verified RETURN_TO_POOL outcome for this Order."
+        return {
+            "order_id": order_id,
+            "can_cancel": not reason,
+            "reason": reason,
+            "has_run_sheet_history": bool(history),
+            "returned_to_pool": returned,
+        }
 
 
 def _optional_patch_text(request, fields, field_name, existing_value):

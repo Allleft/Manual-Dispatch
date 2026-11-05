@@ -79,6 +79,10 @@ class OrderProductLineRuntimeTest(unittest.TestCase):
                     "orders": [ORDER], "drivers": [], "vehicles": [],
                     "assignments": [], "driver_vehicle_assignments": [],
                 },
+                "/api/manual-dispatch/delivery/orders/SYN-ORDER/cancellation-eligibility": {
+                    "order_id": "SYN-ORDER", "can_cancel": True, "reason": "",
+                    "has_run_sheet_history": False, "returned_to_pool": False,
+                },
             }
             if request.method != "GET" or url.path not in responses:
                 self.unexpected_requests.append((request.method, request.url))

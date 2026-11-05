@@ -420,7 +420,21 @@ class DeliveryApplicationService(FacadeApplicationService):
 
     def cancel_delivery_order(self, order_id):
         self._ensure_workspace_ready("delivery")
-        ensure_order_not_reserved(self.repository, None, order_id)
-        order = self.order_service.cancel_order(order_id)
-        self._record_order_event("ORDER_CANCELLED", order)
+        # Recheck lifecycle and reservations in the same transaction as cancellation.
+        with self.repository._immediate_transaction():
+            ensure_order_not_reserved(self.repository, None, order_id)
+            existing = self.repository.get_order(order_id)
+            record_cancellation = bool(existing and existing.status != "CANCELLED")
+            if existing and existing.status != "CANCELLED":
+                eligibility = self.order_service.get_cancellation_eligibility(order_id)
+                if not eligibility["can_cancel"]:
+                    raise ValueError(eligibility["reason"])
+            order = self.order_service.cancel_order(order_id)
+        if record_cancellation:
+            self._record_order_event("ORDER_CANCELLED", order)
         return order
+
+    def get_delivery_order_cancellation_eligibility(self, order_id):
+        self._ensure_workspace_ready("delivery")
+        with self.repository.delivery_order_lookup_snapshot():
+            return self.order_service.get_cancellation_eligibility(order_id)

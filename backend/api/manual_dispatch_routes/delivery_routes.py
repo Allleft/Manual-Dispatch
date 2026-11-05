@@ -163,6 +163,13 @@ def create_delivery_router(
         except ValueError as error:
             raise to_http_exception(error) from error
 
+    @router.get("/delivery/orders/{order_id}/cancellation-eligibility")
+    def get_delivery_order_cancellation_eligibility(order_id: str):
+        try:
+            return get_service().get_delivery_order_cancellation_eligibility(order_id)
+        except ValueError as error:
+            raise to_http_exception(error) from error
+
     @router.post("/delivery/orders/{order_id}/cancel")
     def cancel_delivery_order(order_id: str, http_request: Request = None):
         service = get_service()
