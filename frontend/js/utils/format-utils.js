@@ -72,6 +72,44 @@ export function formatProductDetailLine(line, index) {
   return (prefix + identity + " - " + quantity + " " + unit + packageText).trim();
 }
 
+function originalCartonizedBagQuantity(line) {
+  const bags = Number(line.quantity);
+  const identity = `${line.product_code || ""} ${line.product_name || ""}`;
+  const weights = [...identity.matchAll(/(?<![0-9.])([0-9]+(?:\.[0-9]+)?)\s*KG\b/gi)]
+    .map((match) => Number(match[1]));
+  return ["BAG", "BAGS"].includes(String(line.unit || "").trim().toUpperCase())
+    && String(line.package_unit || "").trim().toUpperCase() === "CARTON"
+    && typeof line.quantity !== "boolean" && Number.isSafeInteger(bags) && bags > 0
+    && weights.length > 0 && weights.every((weight) => weight === 1.5)
+    ? bags : null;
+}
+
+export function getCartonizedInnerBagQuantity(line) {
+  const bags = originalCartonizedBagQuantity(line);
+  const cartons = Number(line.package_quantity);
+  return bags !== null && typeof line.package_quantity !== "boolean"
+    && Number.isSafeInteger(cartons) && cartons > 0 && bags === cartons * 14
+    ? bags : null;
+}
+
+export function getDeliveryProductWeightKg(line) {
+  const innerBags = originalCartonizedBagQuantity(line);
+  if (innerBags !== null) return innerBags * 1.5;
+  if (!["KG", "KGS"].includes(String(line.unit || "").toUpperCase())) return 0;
+  const quantity = Number(line.quantity || 0);
+  return Number.isFinite(quantity) ? quantity : 0;
+}
+
+export function formatDeliveryProductDetailLine(line, index) {
+  if (getCartonizedInnerBagQuantity(line) === null) return formatProductDetailLine(line, index);
+  const prefix = index === undefined || index === null ? "" : `${index}. `;
+  const code = String(line.product_code || "").trim();
+  const name = String(line.product_name || "").trim();
+  const identity = [code ? `[${code}]` : "", name].filter(Boolean).join(" ");
+  const cartons = Number(line.package_quantity);
+  return `${prefix}${identity} - ${cartons} ${formatPluralLoadUnit("CARTON", cartons)}`;
+}
+
 export function formatOptional(value, fallback = "-") {
   return value === undefined || value === null || value === "" ? fallback : value;
 }

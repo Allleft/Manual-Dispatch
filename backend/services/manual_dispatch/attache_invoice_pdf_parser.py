@@ -5,6 +5,9 @@ from io import BytesIO
 import re
 
 from backend.schemas import AttacheInvoicePdfPreviewItem
+from backend.services.manual_dispatch.attache_carton_packaging import (
+    is_1_5kg_bag_package, normalize_attache_carton_packages,
+)
 from backend.services.manual_dispatch.delivery_import_date import (
     current_melbourne_business_date,
     next_delivery_business_date,
@@ -712,6 +715,9 @@ def normalize_attache_classified_rows(classified_rows):
     packaging_bags = 0
     preceding_product = None
     pending_packet = None
+    companion_counts = {}
+    carton_rows = 0
+    source_requires_review = False
 
     for line, classification in classified_rows:
         category = classification["category"]
@@ -727,9 +733,15 @@ def normalize_attache_classified_rows(classified_rows):
         if category == "PACKAGING":
             packaging_bags += classification["quantity"]
             if preceding_product is not None:
+                if (str(preceding_product.get("package_unit") or "").upper() == "BAG"
+                        and is_1_5kg_bag_package(classification["unit"])):
+                    packaging_bags -= int(preceding_product.get("package_quantity") or 0)
+                index = len(products) - 1
+                companion_counts[index] = companion_counts.get(index, 0) + 1
                 preceding_product["package_quantity"] = classification["quantity"]
                 preceding_product["package_unit"] = classification["unit"]
             else:
+                source_requires_review = True
                 warnings.append(_unknown_row_warning(line))
             preceding_product = None
             continue
@@ -761,10 +773,12 @@ def normalize_attache_classified_rows(classified_rows):
                 pallet_quantity += classification["quantity"]
             elif load_kind == "CARTON":
                 carton_quantity += classification["quantity"]
+                carton_rows += 1
             elif load_kind == "LOOSE_BAG":
                 explicit_loose_bags += classification["quantity"]
             continue
         if category == "UNKNOWN":
+            source_requires_review = True
             warnings.append(_unknown_row_warning(line))
 
     if pending_packet is not None:
@@ -773,6 +787,13 @@ def normalize_attache_classified_rows(classified_rows):
     loose_bags_quantity = explicit_loose_bags
     if pallet_quantity == 0 and carton_quantity == 0:
         loose_bags_quantity += packaging_bags
+
+    products, carton_warnings = normalize_attache_carton_packages(
+        products, pallet_quantity=pallet_quantity, loose_bags_quantity=explicit_loose_bags,
+        carton_quantity=carton_quantity, companion_counts=companion_counts,
+        carton_rows=carton_rows, source_requires_review=source_requires_review,
+    )
+    warnings.extend(carton_warnings)
 
     return {
         "pallet_quantity": pallet_quantity,
@@ -1408,6 +1429,7 @@ def _build_warnings(invoice_number, company_name, delivery_date, suburb, product
     if (
         product_result["pallet_quantity"] <= 0
         and product_result["loose_bags_quantity"] <= 0
+        and product_result.get("carton_quantity", 0) <= 0
     ):
         warnings.append("No delivery load quantity was found.")
     return warnings

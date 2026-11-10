@@ -2,7 +2,7 @@ import { deliveryVehicleKey } from "../../utils/delivery-vehicle-utils.js";
 
 import {
   formatOptional,
-  formatProductDetailLine,
+  formatDeliveryProductDetailLine as formatProductDetailLine,
 } from "../../utils/format-utils.js";
 
 import {

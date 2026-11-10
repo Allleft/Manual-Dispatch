@@ -1064,7 +1064,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         self.assertEqual(14, worksheet.max_column)
         self.assertIn(f"$A$1:$N${worksheet.max_row}", worksheet.print_area)
         self.assertIn("FINISH TIME:____________________________________", [cell.value for row in worksheet for cell in row])
-        self.assertIn("LOOSE BAG SUMMARY BY PRODUCT", [cell.value for row in worksheet for cell in row])
+        self.assertNotIn("PRODUCT QUANTITY SUMMARY (EXCLUDING PALLETS)", [cell.value for row in worksheet for cell in row])
         self.assertEqual("$7:$8", worksheet.print_title_rows)
         self.assertEqual(
             [3.855, 27.57, 15, 12, 20, 5.57, 6.855, 5.855, 3, 8, 8, 12.57, 17.285, 7.71],
@@ -1230,7 +1230,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
             self.assertEqual(14, worksheet.max_column)
             self.assertIn(f"$A$1:$N${worksheet.max_row}", worksheet.print_area)
             self.assertIn("FINISH TIME:____________________________________", [cell.value for row in worksheet for cell in row])
-            self.assertIn("LOOSE BAG SUMMARY BY PRODUCT", [cell.value for row in worksheet for cell in row])
+            self.assertNotIn("PRODUCT QUANTITY SUMMARY (EXCLUDING PALLETS)", [cell.value for row in worksheet for cell in row])
             self.assertEqual("DAILY RUN SHEET", worksheet["A1"].value)
             self.assertEqual("DATE  05/05/2026", worksheet["C1"].value)
             self.assertTrue(str(worksheet["F1"].value).startswith("DRIVER: "))
@@ -1799,7 +1799,7 @@ class WorkspaceApiAndExportsTest(unittest.TestCase):
         summary_end = max(cell.row for row in worksheet for cell in row if cell.value is not None)
         self.assertIn(f"$A$1:$N${summary_end}", worksheet.print_area)
         self.assertTrue(all(cell.value is None for cell in worksheet[finish_row + 1]))
-        self.assertEqual("LOOSE BAG SUMMARY BY PRODUCT", worksheet.cell(finish_row + 2, 1).value)
+        self.assertEqual("PRODUCT QUANTITY SUMMARY (EXCLUDING PALLETS)", worksheet.cell(finish_row + 2, 1).value)
         self.assertEqual(5, len([row for row in worksheet.iter_rows(min_row=9, values_only=True) if row[3]]))
         self.assertGreaterEqual(worksheet.row_dimensions[9].height, 45)
         self.assertGreater(worksheet.row_dimensions[9].height, 60)

@@ -5,7 +5,7 @@ import { createIcon } from "../../utils/icon-utils.js";
 import {
   formatOptional,
   formatOrderLoadQuantity,
-  formatProductDetailLine,
+  formatDeliveryProductDetailLine as formatProductDetailLine,
 } from "../../utils/format-utils.js";
 
 export function ordersForDeliveryDate(board, deliveryDate) {

@@ -9,9 +9,11 @@ import unicodedata
 from openpyxl import Workbook
 from openpyxl.cell.rich_text import CellRichText, TextBlock
 from openpyxl.cell.text import InlineFont
-from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Protection, Side
 from openpyxl.worksheet.page import PageMargins
+from openpyxl.worksheet.pagebreak import Break
 from backend.services.manual_dispatch.delivery_run_sheet_ordering import delivery_run_sheet_driver_trip_key
+from backend.services.manual_dispatch.attache_carton_packaging import cartonized_product_weight_kg
 
 
 DAILY_RUN_SHEET_HEADERS = [
@@ -30,7 +32,10 @@ DAILY_RUN_SHEET_HEADERS = [
     "SIGNATURE",
     "RETND",
 ]
-MIN_TABLE_ROWS = 18
+HANDWRITING_ROW_COUNT = 2
+PRODUCT_SUMMARY_HEADING = "PRODUCT QUANTITY SUMMARY (EXCLUDING PALLETS)"
+PRODUCT_SUMMARY_FONT_SIZE = 12
+PRODUCT_SUMMARY_LINE_HEIGHT = PRODUCT_SUMMARY_FONT_SIZE * 1.4
 BODY_FONT_SIZE = 8.5
 PRODUCT_FONT_SIZE = 8.0
 PRODUCT_QUANTITY_COLOR = "C00000"
@@ -172,15 +177,12 @@ def _write_daily_run_sheet_form(worksheet, run_sheet, delivery_date):
     worksheet.row_dimensions[header_row].height = 21
 
     snapshot_rows = _ordered_snapshot_rows(run_sheet)
-    summary_rows = _loose_bag_summary_rows(snapshot_rows)
+    summary_rows = _product_quantity_summary_rows(snapshot_rows)
     row_index = header_row + 1
     for row_no, order in enumerate(snapshot_rows, start=1):
         row_index += _write_order_row(worksheet, row_index, row_no, order, border)
-    blank_rows = _handwriting_row_count(
-        worksheet, row_index, len(snapshot_rows),
-        sum(row[3] for row in summary_rows) + 15,
-    )
-    for row_no in range(len(snapshot_rows) + 1, len(snapshot_rows) + blank_rows + 1):
+    handwriting_start = row_index
+    for row_no in range(len(snapshot_rows) + 1, len(snapshot_rows) + HANDWRITING_ROW_COUNT + 1):
         _write_empty_row(worksheet, row_index, row_no, border)
         row_index += 1
 
@@ -188,21 +190,61 @@ def _write_daily_run_sheet_form(worksheet, run_sheet, delivery_date):
     finish.font = Font(bold=True, size=16)
     finish.alignment = Alignment(vertical="center")
     worksheet.row_dimensions[row_index + 1].height = 21
+    worksheet.row_dimensions[row_index].height = 15
+    handwriting_layout = _PrintLayout(worksheet, handwriting_start)
+    handwriting_height = sum(_print_row_height(worksheet, row) for row in range(handwriting_start, finish.row + 1))
+    if handwriting_height > handwriting_layout.remaining:
+        handwriting_layout.new_page(handwriting_start)
     summary_start = row_index + 3
-    _write_loose_bag_summary(worksheet, summary_start, summary_rows, border)
-    worksheet.print_area = f"A1:N{summary_start + len(summary_rows) - 1}"
+    print_end = finish.row
+    if summary_rows:
+        worksheet.row_dimensions[finish.row + 1].height = 15
+        print_end = _write_product_quantity_summary(worksheet, summary_start, summary_rows, border)
+    worksheet.print_area = f"A1:N{print_end}"
 
 
-def _handwriting_row_count(worksheet, row_index, order_count, summary_height=0):
-    # Blank handwriting rows must not push only the finish field onto a new page.
-    width_points = sum((width * 7 + 5) * 0.75 for width in COLUMN_WIDTHS.values())
-    page_width = 297 / 25.4 * 72 - (worksheet.page_margins.left + worksheet.page_margins.right) * 72
-    width_scale = min(1, page_width / width_points)
-    page_height = 210 / 25.4 * 72 - (worksheet.page_margins.top + worksheet.page_margins.bottom) * 72
-    used_height = sum(worksheet.row_dimensions[index].height for index in range(1, row_index))
-    finish_height = (worksheet.sheet_format.defaultRowHeight or 15) + 21
-    available = page_height / width_scale - used_height - finish_height - BODY_ROW_PADDING - summary_height
-    return min(max(0, MIN_TABLE_ROWS - order_count), max(0, int(available / MIN_BODY_ROW_HEIGHT)))
+def _print_row_height(worksheet, row):
+    dimension = worksheet.row_dimensions[row]
+    if dimension.hidden:
+        return 0
+    height = dimension.height or worksheet.sheet_format.defaultRowHeight or 15
+    return math.ceil(height * 5 - 1e-9) / 5
+
+
+class _PrintLayout:
+    def __init__(self, worksheet, next_row):
+        self.worksheet = worksheet
+        # Calibri 11 column metrics include padding/gridlines. Fit-to-width uses
+        # a whole percentage; leave room for printer/row-height rounding.
+        width = sum((worksheet.column_dimensions[column].width * 7 + 6) * 0.75
+                    for column in COLUMN_WIDTHS)
+        margins = worksheet.page_margins
+        scale = min(1, math.floor((297 / 25.4 * 72 - (margins.left + margins.right) * 72) / width * 100) / 100)
+        self.page_height = (210 / 25.4 * 72 - (max(margins.top, 0.2) + max(margins.bottom, 0.2)) * 72) / scale - 1.5
+        # Native Excel reserves an additional print gap around repeated titles.
+        self.repeated_height = sum(_print_row_height(worksheet, row) for row in (7, 8)) + 4
+        self.used = 0
+        breaks = {item.id + 1 for item in worksheet.row_breaks.brk}
+        for row in range(1, next_row):
+            height = _print_row_height(worksheet, row)
+            if row in breaks or height > self.remaining:
+                self.used = self.repeated_height
+            self.used += height
+
+    @property
+    def remaining(self):
+        return self.page_height - self.used
+
+    @property
+    def fresh_space(self):
+        return self.page_height - self.repeated_height
+
+    def new_page(self, row):
+        self.worksheet.row_breaks.append(Break(id=row - 1))
+        self.used = self.repeated_height
+
+    def consume(self, height):
+        self.used += math.ceil(height * 5 - 1e-9) / 5
 
 
 def _ordered_snapshot_rows(run_sheet):
@@ -272,47 +314,176 @@ def _loose_bag_summary(snapshot_rows):
     return products, total - unallocated, unallocated, total
 
 
-def _loose_bag_summary_rows(snapshot_rows):
-    products, allocated, unallocated, total = _loose_bag_summary(snapshot_rows)
-    rows = [("LOOSE BAG SUMMARY BY PRODUCT", None, None, 21),
-            ("PRODUCT", "BAG SIZE / TYPE", "LOOSE BAG QTY", 21)]
+def _summary_package_type(unit):
+    unit = str(unit or "").strip().upper()
+    if unit in {"BAG", "BAGS"}:
+        return "BAG"
+    bag_type = _bag_type(unit)
+    if bag_type:
+        return bag_type
+    # Weight/volume/length measurements cannot establish a package count.
+    measurements = {
+        "KG", "KGS", "G", "GRAM", "GRAMS", "MG", "T", "TON", "TONNE", "TONNES",
+        "LB", "LBS", "OZ", "L", "LT", "LTR", "LITRE", "LITRES", "ML",
+        "M", "CM", "MM", "M2", "M3", "SQM", "CBM",
+    }
+    if (unit in measurements or unit in {"UNKNOWN", "N/A", "NA"}
+            or unit.startswith("BAG") or len(unit) > 20
+            or not re.fullmatch(r"[A-Z][A-Z0-9./_-]*", unit)):
+        return None
+    return unit
+
+
+def _summary_package(line):
+    quantity = getattr(line, "package_quantity", None)
+    unit = str(getattr(line, "package_unit", "") or "").strip()
+    # Fall back only when both optional package fields are absent.
+    if quantity in (None, "") and not unit:
+        quantity = getattr(line, "quantity", None)
+        unit = getattr(line, "unit", None)
+    count = _bag_count(quantity)
+    package_type = _summary_package_type(unit)
+    return (count, package_type) if count is not None and package_type else None
+
+
+def _product_quantity_summary(snapshot_rows):
+    products = {}
+    names = {}
+    for order in snapshot_rows:
+        pallets = getattr(order, "pallet_quantity_snapshot", None)
+        if not isinstance(pallets, int) or isinstance(pallets, bool) or pallets < 0:
+            raise ValueError("Pallet snapshot quantity must be a non-negative integer.")
+        if pallets > 0:
+            continue
+        for line in getattr(order, "product_lines_snapshot", None) or []:
+            name = str(getattr(line, "product_name", "") or "").strip()
+            code = str(getattr(line, "product_code", "") or "").strip().upper()
+            package = _summary_package(line)
+            if not (name or code) or package is None:
+                continue
+            count, package_type = package
+            # A frozen SKU identifies the product even when its name is absent.
+            identity = ("code", code) if code else ("name", name)
+            key = (identity, code, package_type)
+            products[key] = products.get(key, 0) + count
+            names.setdefault(identity, set())
+            if name:
+                names[identity].add(name)
+    result = {}
+    for (identity, code, package_type), count in products.items():
+        name = min(names[identity], key=lambda value: (value.casefold(), value)) if names[identity] else code
+        result[(name, code, package_type)] = count
+    return dict(sorted(result.items(), key=lambda item: (
+        item[0][0].casefold(), item[0][0], item[0][1], item[0][2],
+    )))
+
+
+def _summary_quantity_format(package_type, quantity):
+    if package_type.endswith("kg Bag"):
+        unit = "Bag" if quantity == 1 else "Bags"
+    elif package_type == "CARTON":
+        unit = "Carton" if quantity == 1 else "Cartons"
+    else:
+        unit = package_type
+    return '#,##0" ' + unit + '"', unit
+
+
+def _product_quantity_summary_rows(snapshot_rows):
+    products = _product_quantity_summary(snapshot_rows)
+    if not products:
+        return []
+    rows = [(PRODUCT_SUMMARY_HEADING, None, None, 21, "General"),
+            ("PRODUCT", "PACKAGE TYPE", "QTY", 21, "General")]
     product_width = sum(COLUMN_WIDTHS[column] for column in "ABCDE")
-    for (name, code, bag_type), quantity in products.items():
-        ambiguous = len({key[1] for key in products if key[0] == name and key[2] == bag_type}) > 1
+    package_width = sum(COLUMN_WIDTHS[column] for column in "FGHI")
+    quantity_width = sum(COLUMN_WIDTHS[column] for column in "JKLMN")
+    for (name, code, package_type), quantity in products.items():
+        ambiguous = len({key[1] for key in products if key[0] == name and key[2] == package_type}) > 1
         label = f"{name} ({code or 'code not recorded'})" if ambiguous else name
-        lines = _wrapped_lines(label, product_width, 9)
-        # Split exceptionally long names into printable rows; count bags once.
+        number_format, unit = _summary_quantity_format(package_type, quantity)
+        # Excel numeric cells retain only 15 significant decimal digits.
+        value = quantity if quantity < 10 ** 15 else f"{quantity:,} {unit}"
+        lines = _wrapped_lines(label, product_width, PRODUCT_SUMMARY_FONT_SIZE)
         for offset in range(0, len(lines), 24):
             fragment = lines[offset:offset + 24]
-            rows.append(("".join(fragment), bag_type if not offset else "continued",
-                         quantity if not offset else None, max(21, len(fragment) * 12 + 6)))
-    rows.extend((label, None, value, 21) for label, value in (
-        ("Known product total", allocated),
-        ("UNALLOCATED loose bags", unallocated),
-        ("Total loose bags", total),
-    ))
+            line_count = max(
+                len(fragment),
+                _wrapped_line_count(package_type if not offset else "continued", package_width, PRODUCT_SUMMARY_FONT_SIZE),
+                _wrapped_line_count(f"{quantity:,} {unit}" if not offset else "", quantity_width, PRODUCT_SUMMARY_FONT_SIZE),
+            )
+            rows.append(("".join(fragment), package_type if not offset else "continued",
+                         value if not offset else None, max(21, line_count * PRODUCT_SUMMARY_LINE_HEIGHT + 6), number_format))
     return rows
 
 
-def _write_loose_bag_summary(worksheet, start, rows, border):
-    for offset, (product, bag_type, quantity, height) in enumerate(rows):
-        row = start + offset
-        ranges = ((1, 14, product),) if offset == 0 else (
-            ((1, 9, product), (10, 14, quantity)) if bag_type is None else
-            ((1, 5, product), (6, 9, bag_type), (10, 14, quantity))
-        )
-        for first, last, value in ranges:
-            worksheet.merge_cells(start_row=row, start_column=first, end_row=row, end_column=last)
-            for column in range(first, last + 1):
-                worksheet.cell(row, column).border = border
-            cell = worksheet.cell(row, first, value)
-            if isinstance(value, str):
-                cell.data_type = "s"
-            cell.font = Font(size=10 if offset == 0 else 9, bold=offset < 2 or bag_type is None)
-            cell.alignment = Alignment(vertical="top", horizontal="right" if first == 10 else "left", wrap_text=True)
-            if offset < 2 or offset == len(rows) - 1:
-                cell.fill = PatternFill(fill_type="solid", fgColor="E7E6E6")
-        worksheet.row_dimensions[row].height = height
+def _write_product_quantity_summary(worksheet, start, rows, border):
+    layout = _PrintLayout(worksheet, start)
+    headers = rows[:2]
+    header_height = sum(row[3] for row in headers)
+    groups = []
+    for item in rows[2:]:
+        if item[1] != "continued":
+            groups.append([])
+        groups[-1].append(item)
+    total_height = sum(item[3] for item in rows)
+    first_group = sum(item[3] for item in groups[0])
+    # Keep the whole summary when it fits a fresh page; otherwise keep the
+    # heading/columns with at least the first printable product fragment.
+    first_height = first_group if first_group <= layout.fresh_space - header_height else groups[0][0][3]
+    required = total_height if total_height <= layout.fresh_space else header_height + first_height
+    if required > layout.remaining:
+        layout.new_page(start)
+    cursor = start
+
+    def write(item):
+        nonlocal cursor
+        _write_product_quantity_summary_row(worksheet, cursor, item, border)
+        layout.consume(item[3])
+        cursor += 1
+
+    def next_page():
+        layout.new_page(cursor)
+        for header in headers:
+            write(header)
+
+    for header in headers:
+        write(header)
+    for group in groups:
+        group_height = sum(item[3] for item in group)
+        if group_height <= layout.fresh_space - header_height and group_height > layout.remaining:
+            next_page()
+        for item in group:
+            if item[3] > layout.remaining:
+                next_page()
+            write(item)
+    return cursor - 1
+
+
+def _write_product_quantity_summary_row(worksheet, row, item, border):
+    product, package_type, quantity, height, number_format = item
+    title = package_type is None
+    heading = title or package_type == "PACKAGE TYPE"
+    ranges = ((1, 14, product),) if title else (
+        (1, 5, product), (6, 9, package_type), (10, 14, quantity)
+    )
+    for first, last, value in ranges:
+        worksheet.merge_cells(start_row=row, start_column=first, end_row=row, end_column=last)
+        font = Font(size=10 if title else PRODUCT_SUMMARY_FONT_SIZE, bold=heading,
+                    color=PRODUCT_QUANTITY_COLOR if not heading and first == 10 else "000000")
+        for column in range(first, last + 1):
+            worksheet.cell(row, column).border = border
+            if not title:
+                worksheet.cell(row, column).font = font
+        cell = worksheet.cell(row, first, value)
+        if isinstance(value, str):
+            cell.data_type = "s"
+        cell.font = font
+        if first == 10 and not heading:
+            cell.number_format = number_format
+        cell.alignment = Alignment(vertical="top", horizontal="right" if first == 10 else "left", wrap_text=True)
+        if heading:
+            cell.fill = PatternFill(fill_type="solid", fgColor="E7E6E6")
+    worksheet.row_dimensions[row].height = height
 
 
 def delivery_run_sheet_product_display(order):
@@ -374,6 +545,8 @@ def _package_display(quantity, unit):
     numeric = _numeric_value(quantity)
     if numeric is None or isinstance(quantity, bool) or not unit:
         return ""
+    if str(unit).strip().upper() == "CARTON":
+        return f"{_display_number(numeric)} {'Carton' if numeric == 1 else 'Cartons'}"
     weight_match = _PACKAGE_UNIT_BAG_WEIGHT.fullmatch(unit)
     if weight_match and numeric >= 0:
         weight = _numeric_value(weight_match.group(1))
@@ -383,6 +556,9 @@ def _package_display(quantity, unit):
 
 
 def _delivery_run_sheet_line_weight_kg(line):
+    carton_weight = cartonized_product_weight_kg(line)
+    if carton_weight is not None:
+        return carton_weight
     unit = str(getattr(line, "unit", "") or "").strip().upper()
     if unit in {"KG", "KGS"}:
         return _numeric_value(getattr(line, "quantity", None))
@@ -589,6 +765,7 @@ def _write_empty_row(worksheet, row_index, row_no, border):
         cell = worksheet.cell(row=row_index, column=column_index, value=row_no if column_index == 1 else "")
         cell.font = Font(size=BODY_FONT_SIZE)
         cell.border = border
+        cell.protection = Protection(locked=False)
         cell.alignment = Alignment(horizontal="center" if column_index == 1 else "left", vertical="top")
     worksheet.row_dimensions[row_index].height = MIN_BODY_ROW_HEIGHT
 

@@ -1,7 +1,7 @@
 import { createIcon } from "../../utils/icon-utils.js";
 
 import {
-  formatProductDetailLine,
+  formatDeliveryProductDetailLine as formatProductDetailLine,
   formatOptional,
 } from "../../utils/format-utils.js";
 import {

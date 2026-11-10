@@ -1,6 +1,6 @@
 import {
   formatOptional,
-  formatProductDetailLine,
+  formatDeliveryProductDetailLine as formatProductDetailLine,
 } from "../../utils/format-utils.js";
 
 import {

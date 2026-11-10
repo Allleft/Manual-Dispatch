@@ -1,6 +1,7 @@
 import {
   formatOptional,
-  formatProductDetailLine,
+  formatDeliveryProductDetailLine as formatProductDetailLine,
+  getDeliveryProductWeightKg,
 } from "../../utils/format-utils.js";
 
 import {
@@ -331,8 +332,7 @@ export function formatRunSheetProduct(order) {
 
 export function formatRunSheetKgTotal(order) {
   const total = (order.product_lines_snapshot || [])
-    .filter((line) => ["KG", "KGS"].includes(String(line.unit || "").toUpperCase()))
-    .reduce((sum, line) => sum + Number(line.quantity || 0), 0);
+    .reduce((sum, line) => sum + getDeliveryProductWeightKg(line), 0);
   return total > 0 ? formatRunSheetNumber(total) : "";
 }
 

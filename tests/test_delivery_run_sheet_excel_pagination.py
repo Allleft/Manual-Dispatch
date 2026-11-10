@@ -191,9 +191,9 @@ class DeliveryRunSheetExcelPaginationTest(unittest.TestCase):
                 self.assertEqual("$7:$8", worksheet.print_title_rows)
                 self.assertEqual(14, worksheet.max_column)
                 self.assertIn(f"$A$1:$N${worksheet.max_row}", worksheet.print_area)
-                self.assertEqual("FINISH TIME:____________________________________", worksheet.cell(count + 10, 2).value)
-                self.assertEqual(count + 10, finish_row(worksheet))
-                self.assertEqual([], worksheet.row_breaks.brk)
+                self.assertEqual("FINISH TIME:____________________________________", worksheet.cell(count + 12, 2).value)
+                self.assertEqual(count + 12, finish_row(worksheet))
+                self.assertTrue(all(item.id == count + 8 for item in worksheet.row_breaks.brk))
 
     def test_over_page_product_uses_labelled_continuations_without_repeating_totals(self):
         name = "\n".join(f"Synthetic extended product line {number} FINAL-{number}" for number in range(1, 121))
@@ -232,7 +232,7 @@ class DeliveryRunSheetExcelPaginationTest(unittest.TestCase):
         self.assertEqual(delivery_run_sheet_product_display(order), content)
         self.assertGreater(len(rows), 1)
 
-    def test_multiline_order_uses_only_handwriting_rows_that_fit(self):
+    def test_multiline_order_retains_two_handwriting_rows(self):
         order = synthetic_order(lines=[ProductDetailLine("Synthetic extended product description " * 10, 1, "EA")])
         worksheet = self.workbook(synthetic_sheet([order])).active
         self.assertLess(worksheet.max_row, 28)
@@ -240,13 +240,13 @@ class DeliveryRunSheetExcelPaginationTest(unittest.TestCase):
         self.assertEqual("FINISH TIME:____________________________________", worksheet.cell(finish_row(worksheet), 2).value)
         self.assertEqual(0, worksheet.page_setup.fitToHeight)
 
-    def test_over_page_continuations_are_not_followed_by_blank_customer_padding(self):
+    def test_over_page_continuations_are_followed_by_exactly_two_handwriting_rows(self):
         order = synthetic_order(lines=[ProductDetailLine("Synthetic text\n" * 120, 10, "KG")])
         worksheet = self.workbook(synthetic_sheet([order])).active
         continuation_rows = [row for row in range(10, finish_row(worksheet)) if isinstance(worksheet.cell(row, 1).value, str)]
         self.assertGreater(len(continuation_rows), 0)
-        self.assertEqual(continuation_rows[-1] + 2, finish_row(worksheet))
-        self.assertEqual([1], [worksheet.cell(row, 1).value for row in range(9, finish_row(worksheet))
+        self.assertEqual(continuation_rows[-1] + 4, finish_row(worksheet))
+        self.assertEqual([1, 2, 3], [worksheet.cell(row, 1).value for row in range(9, finish_row(worksheet))
                               if isinstance(worksheet.cell(row, 1).value, int)])
 
     def test_single_date_trip1_trip2_and_legacy_exports_share_layout(self):
@@ -443,4 +443,4 @@ class DeliveryRunSheetRedQuantityTest(unittest.TestCase):
                 self.assertEqual(0, worksheet.page_setup.fitToHeight)
                 self.assertEqual(1, worksheet.page_setup.fitToWidth)
                 self.assertEqual("$7:$8", worksheet.print_title_rows)
-                self.assertEqual("FINISH TIME:____________________________________", worksheet.cell(count + 10, 2).value)
+                self.assertEqual("FINISH TIME:____________________________________", worksheet.cell(count + 12, 2).value)
