@@ -94,10 +94,10 @@ class DeliveryOrderDateRolloverTest(unittest.TestCase):
                 ).roll_forward_eligible_unassigned_delivery_orders()
 
                 self.assertEqual(
-                    {"PAST", "TODAY"},
+                    {"PAST"},
                     {change["order_id"] for change in changes},
                 )
-                self.assertEqual("2026-08-26", repository.get_order("TODAY").delivery_date)
+                self.assertEqual("2026-08-25", repository.get_order("TODAY").delivery_date)
                 self.assertEqual("2026-08-26", repository.get_order("PAST").delivery_date)
                 self.assertEqual("2026-08-26", repository.get_order("FUTURE").delivery_date)
                 self.assertEqual("2026-08-24", repository.get_order("ASSIGNED").delivery_date)
@@ -108,7 +108,7 @@ class DeliveryOrderDateRolloverTest(unittest.TestCase):
     def test_repository_parity_is_idempotent_and_rolls_back_failures(self):
         for label, repository in self._repositories():
             with self.subTest(repository=label):
-                repository.create_order(self._order("ROLLBACK", "2026-08-25"))
+                repository.create_order(self._order("ROLLBACK", "2026-08-24"))
                 service = DeliveryOrderDateRolloverService(
                     repository,
                     today_provider=lambda: date(2026, 8, 25),
@@ -126,7 +126,7 @@ class DeliveryOrderDateRolloverTest(unittest.TestCase):
                 ):
                     with self.assertRaisesRegex(RuntimeError, "injected rollover failure"):
                         service.roll_forward_eligible_unassigned_delivery_orders()
-                self.assertEqual("2026-08-25", repository.get_order("ROLLBACK").delivery_date)
+                self.assertEqual("2026-08-24", repository.get_order("ROLLBACK").delivery_date)
 
                 first = service.roll_forward_eligible_unassigned_delivery_orders()
                 second = service.roll_forward_eligible_unassigned_delivery_orders()
@@ -136,7 +136,7 @@ class DeliveryOrderDateRolloverTest(unittest.TestCase):
 
     def test_board_rolls_persisted_date_once_and_records_one_system_event(self):
         repository = InMemoryManualDispatchRepository()
-        repository.update_order(replace(repository.get_order("ORD-001"), delivery_date="2026-08-25"))
+        repository.update_order(replace(repository.get_order("ORD-001"), delivery_date="2026-08-24"))
         for order_id in ("ORD-002", "ORD-003"):
             repository.update_order(
                 replace(repository.get_order(order_id), delivery_date="2026-09-01")
@@ -161,7 +161,7 @@ class DeliveryOrderDateRolloverTest(unittest.TestCase):
         entry = entries[0]
         self.assertEqual("System", entry["actor"])
         self.assertEqual("2026-08-26", entry["delivery_date"])
-        self.assertEqual("2026-08-25", entry["metadata"]["previous_delivery_date"])
+        self.assertEqual("2026-08-24", entry["metadata"]["previous_delivery_date"])
         self.assertEqual("2026-08-26", entry["metadata"]["new_delivery_date"])
         self.assertEqual("unassigned_daily_rollover", entry["metadata"]["reason"])
         self.assertIn(ROLLOVER_ACTION, KNOWN_ACTIONS)
@@ -222,9 +222,9 @@ class DeliveryOrderDateRolloverTest(unittest.TestCase):
             next(order.delivery_date for order in board.orders if order.order_id == "ORD-001"),
         )
 
-    def test_workspace_unassign_on_friday_rolls_to_monday(self):
+    def test_workspace_unassign_of_past_order_on_friday_rolls_to_monday(self):
         repository = InMemoryManualDispatchRepository()
-        repository.update_order(replace(repository.get_order("ORD-001"), delivery_date="2026-08-28"))
+        repository.update_order(replace(repository.get_order("ORD-001"), delivery_date="2026-08-27"))
         repository.upsert_assignment(
             "2026-08-01",
             "ORDER",
@@ -315,7 +315,7 @@ class DeliveryOrderDateRolloverTest(unittest.TestCase):
     def test_rollover_logbook_event_passes_the_existing_integrity_contract(self):
         repository = InMemoryManualDispatchRepository()
         repository.update_order(
-            replace(repository.get_order("ORD-001"), delivery_date="2026-08-25")
+            replace(repository.get_order("ORD-001"), delivery_date="2026-08-24")
         )
         for order_id in ("ORD-002", "ORD-003"):
             repository.update_order(

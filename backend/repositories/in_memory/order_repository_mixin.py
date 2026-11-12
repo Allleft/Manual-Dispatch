@@ -61,7 +61,7 @@ class InMemoryOrderRepositoryMixin:
         for order in sorted(self.orders, key=lambda item: item.order_id):
             if (
                 order.status != "ACTIVE"
-                or order.delivery_date > current_date
+                or order.delivery_date >= current_date
                 or (order_id is not None and order.order_id != order_id)
                 or order.order_id in assigned_order_ids
                 or order.order_id in reserved_order_ids

@@ -198,7 +198,7 @@ class SQLiteOrderRepositoryMixin:
                     manual_order.delivery_date
                 FROM manual_orders AS manual_order
                 WHERE manual_order.status = 'ACTIVE'
-                    AND manual_order.delivery_date <= ?
+                    AND manual_order.delivery_date < ?
                     AND (? IS NULL OR manual_order.order_id = ?)
                     AND NOT EXISTS (
                         SELECT 1
@@ -234,7 +234,7 @@ class SQLiteOrderRepositoryMixin:
                     WHERE order_id = ?
                         AND status = 'ACTIVE'
                         AND delivery_date = ?
-                        AND delivery_date <= ?
+                        AND delivery_date < ?
                         AND NOT EXISTS (
                             SELECT 1
                             FROM manual_dispatch_assignments AS assignment
